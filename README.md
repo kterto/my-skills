@@ -33,7 +33,7 @@ my-skills/
 ## Install (consumers)
 
 ```text
-/plugin marketplace add <github-owner>/my-skills
+/plugin marketplace add kterto/my-skills
 /plugin install my-skills@my-skills
 ```
 
@@ -77,7 +77,6 @@ Quick alternative without symlinks:
 claude --plugin-dir ./plugins/my-skills
 ```
 
-## TODO after first push
+## Repository
 
-- Add `"homepage"` and `"repository"` to `plugins/my-skills/.claude-plugin/plugin.json` once the GitHub repo URL is known.
-- Replace `<github-owner>` above with the real owner.
+<https://github.com/kterto/my-skills>
