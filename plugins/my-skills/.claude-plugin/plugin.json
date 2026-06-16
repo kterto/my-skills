@@ -1,0 +1,16 @@
+{
+  "name": "my-skills",
+  "description": "Clean-code quality gates, commit/PR-to-dev helper, validation-error fixer, and design-to-code translator.",
+  "author": {
+    "name": "Kainã Terto",
+    "email": "kaintp@gmail.com"
+  },
+  "license": "MIT",
+  "keywords": [
+    "skills",
+    "clean-code",
+    "quality-gates",
+    "tdd",
+    "workflow"
+  ]
+}

@@ -1,0 +1,10 @@
+.DS_Store
+**/.DS_Store
+
+# generated gate output / caches from clean-code-gates runs
+**/.cleancode/
+**/.dart_mutant_cache
+**/mutation-reports/
+
+# local symlink backups created by sync.sh
+*.bak-*

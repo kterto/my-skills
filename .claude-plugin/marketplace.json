@@ -1,0 +1,15 @@
+{
+  "name": "my-skills",
+  "owner": {
+    "name": "Kainã Terto",
+    "email": "kaintp@gmail.com"
+  },
+  "description": "Authored Claude Code skills by Kainã Terto.",
+  "plugins": [
+    {
+      "name": "my-skills",
+      "source": "./plugins/my-skills",
+      "description": "Clean-code quality gates, commit/PR-to-dev helper, validation-error fixer, and design-to-code translator."
+    }
+  ]
+}
