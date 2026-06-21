@@ -96,7 +96,7 @@ roadmap/
 
 ### Config
 
-Stored in `/roadmap/config.yml`; overridable per-run via CLI flags.
+Stored in `/roadmap/roadmap.config.json`; overridable per-run via CLI flags.
 
 | Key | Default | CLI flag | Description |
 |---|---|---|---|
