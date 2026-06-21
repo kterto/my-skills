@@ -8,7 +8,10 @@
   <p><strong>Sequence:</strong> {{sequence}}</p>
   <p><strong>Depends on:</strong> {{depends_on}}</p>
   <details open><summary>Phases (in execution order)</summary>
-    <ul>{{phase_list_ordered_by_sequence}}</ul>
+    <ul>
+      <!-- renderer emits one <li> per phase in sequence order: <li>{phase_id} — {phase_title} [{rollup_status}]</li> -->
+      {{phase_list_ordered_by_sequence}}
+    </ul>
   </details>
   <details open><summary>Audit log</summary>
     <table><thead><tr><th>when (ISO-8601)</th><th>status</th><th>who</th><th>evidence</th></tr></thead>

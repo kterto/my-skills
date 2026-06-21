@@ -9,7 +9,8 @@
   <p><strong>Depends on:</strong> {{depends_on}}</p>
   <details open><summary>Tasks (in execution order)</summary>
     <ul>
-      <li><input type="checkbox" disabled {{checked}}> {{task_title}}</li>
+      <!-- renderer emits one <li> per task in sequence order: <li><input type="checkbox" disabled {checked}> {task_title}</li> -->
+      {{task_list_ordered_by_sequence}}
     </ul>
   </details>
   <details open><summary>Audit log</summary>
