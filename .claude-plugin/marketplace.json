@@ -9,7 +9,7 @@
     {
       "name": "my-skills",
       "source": "./plugins/my-skills",
-      "description": "Clean-code quality gates, commit/PR-to-dev helper, validation-error fixer, and design-to-code translator."
+      "description": "Clean-code quality gates, commit/PR-to-dev helper, validation-error fixer, design-to-code translator, and a roadmap planner."
     }
   ]
 }
