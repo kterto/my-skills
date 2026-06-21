@@ -1,0 +1,59 @@
+# Orchestrator — Artifact Format Reference
+
+All six role templates (brainstormer, architect, coder, tester, reviewer, qa) write artifacts in one of two formats controlled by `output_format`. This document is the single source of truth — role templates reference it instead of duplicating emission rules.
+
+## md mode (default)
+
+- Filename: `<ID>-<slug>.md` (e.g. `B1-brainstorm-ideas.md`)
+- Structure: YAML frontmatter block followed by a markdown body.
+
+Frontmatter fields:
+
+```yaml
+---
+id: <ID>
+status: <status>          # e.g. DRAFT | READY | APPROVED | BLOCKED
+created_at: <ISO-8601>
+updated_at: <ISO-8601>
+cycle: <integer>          # review or qa cycle number (0-based)
+---
+```
+
+Body: free-form markdown with headings, lists, and fenced code blocks as appropriate for the role.
+
+## html mode
+
+- Filename: `<ID>-<slug>.html` (e.g. `B1-brainstorm-ideas.html`)
+- One self-contained file — no external assets, no CDN links.
+- The root element is `<main>` with `data-*` attributes mirroring the md frontmatter:
+
+```html
+<main
+  data-id="<ID>"
+  data-status="<status>"
+  data-created-at="<ISO-8601>"
+  data-updated-at="<ISO-8601>"
+  data-cycle="<integer>"
+>
+```
+
+- Sections are wrapped in `<details><summary>Section Title</summary>…</details>` to make them collapsible.
+- Task lists rendered as `<input type="checkbox" disabled>` checkboxes.
+- Cycle counters displayed as inline `<span class="badge">cycle N</span>` badges; style the badge inline (no external CSS).
+
+## Stdout header-line contract (identical in both modes)
+
+The orchestrator parses stdout for control flow, not the artifact file. Each role prints a fixed set of header lines; these lines are the same regardless of `output_format` (only the on-disk artifact file changes between `md` and `html`).
+
+Required header lines per role:
+
+| Role         | ID header line                              | Status line                                                   | Path line           |
+| ------------ | ------------------------------------------- | ------------------------------------------------------------- | ------------------- |
+| brainstormer | `BRAINSTORMER — SPEC-{NNN} created`         | `Status: READY_FOR_PLANNING \| DRAFT`                         | `Spec: {path}`      |
+| architect    | `ARCHITECT — {ID} created`                  | —                                                             | `Plan: {path}`      |
+| coder        | `CODER — {PLAN-ID} session complete`        | `Status: IN_PROGRESS \| DONE \| BLOCKED`                      | —                   |
+| tester       | `TESTER — TEST-{NNN} created`               | `Status: PASS \| BELOW_FLOOR \| BLOCKED`                      | `Report: {path}`    |
+| reviewer     | `REVIEWER — CR-{NNN} created`               | `Status: APPROVED \| REQUEST_CHANGES`                         | `CR file: {path}`   |
+| qa           | `QA — QA-{NNN} created`                    | `Status: READY_TO_COMMIT \| BLOCKED \| READY_WITH_WARNINGS`   | `Report: {path}`    |
+
+Roles that have a path line also print it immediately after the Status line (or after the ID line for architect, which has no Status line). Additional informational lines (e.g. `Coverage:`, `Next:`) may follow but are not parsed by the orchestrator for control flow.

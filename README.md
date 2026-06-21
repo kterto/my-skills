@@ -10,6 +10,48 @@ Authored [Claude Code](https://code.claude.com) skills, packaged as a plugin mar
 | `commit-pr-dev` | Stage, commit, push the current branch, and open a PR targeting `dev`. Confirms before any remote mutation. |
 | `validation-fixer` | Routes recorded user-validation bugs through a chosen framework (superpowers / gsd / orchestrator) and tracks each fix in-file. |
 | `design-to-code` | Translates Claude design output files (self-contained HTML with tokens, reviewer comments, component states) into pixel-perfect, correctly-behaving code. |
+| `orchestrator` | Project-agnostic 6-agent pipeline (brainstormer → architect → coder → tester → reviewer → qa) with a context-confidence gate, spec-driven-eval integration, and a final Markdown/HTML report. Auto-detects first-run bootstrap vs. straight pipeline execution. |
+
+## orchestrator
+
+A project-agnostic 6-agent pipeline that takes a plain-language task description and drives it through brainstorming, architecture, coding, testing, code review, and QA — all as real subagents — then produces a final Markdown or HTML report.
+
+### Usage
+
+```text
+/orchestrator "<task description>"          # auto-detects bootstrap vs. pipeline
+/orchestrator "<task description>" --setup  # force re-bootstrap (re-interview + regenerate context)
+```
+
+On the first run (or when `.orchestrator/config.json` is absent) the skill runs **bootstrap** automatically: it scans the repo, interviews you about missing context until confidence ≥ `context_threshold`, writes `.orchestrator/PROJECT-CONTEXT.md`, renders the six role templates into `.claude/agents/`, and writes `.orchestrator/config.json`. Subsequent invocations skip straight to the pipeline.
+
+### Pipeline
+
+```
+brainstormer → architect → coder → tester → reviewer ──(APPROVED)──→ qa ──(READY_TO_COMMIT)──→ report
+                              ↑                         │                   ↑        │
+                              └── REQUEST_CHANGES loop ─┘                   └── BLOCKED loop ──┘
+                                  (max_review_cycles)                           (max_qa_cycles)
+```
+
+The skill never commits or pushes.
+
+### Config
+
+Stored in `.orchestrator/config.json`; overridable per-run via CLI args.
+
+| Key | Default | CLI arg | Description |
+|---|---|---|---|
+| `context_threshold` | `0.95` | `--threshold` | Minimum holistic-confidence score (0–1) before bootstrap writes PROJECT-CONTEXT.md |
+| `output_format` | `"md"` | `--format` | Final report format: `md` or `html` |
+| `max_review_cycles` | `10` | `--max-review` | Max architect→coder→reviewer cycles before the pipeline hard-stops |
+| `max_qa_cycles` | `5` | `--max-qa` | Max qa-remediation cycles before the pipeline hard-stops |
+
+### Dependencies
+
+- **spec-driven-eval** skill — used at `READY_TO_COMMIT` to evaluate the deliverable against the original spec. Bootstrap checks availability and offers to install it. The pipeline degrades gracefully if the skill is absent (eval step is skipped with a warning).
+
+---
 
 ## Layout
 
@@ -25,7 +67,8 @@ my-skills/
 │           ├── clean-code-gates/SKILL.md
 │           ├── commit-pr-dev/SKILL.md
 │           ├── validation-fixer/SKILL.md
-│           └── design-to-code/SKILL.md
+│           ├── design-to-code/SKILL.md
+│           └── orchestrator/SKILL.md
 ├── sync.sh                      # author-side: symlink skills into ~/.claude/skills
 └── README.md
 ```
@@ -44,7 +87,7 @@ A local checkout works too:
 /plugin install my-skills@my-skills
 ```
 
-Skills are then invocable as `/my-skills:clean-code-gates`, `/my-skills:commit-pr-dev`, etc.
+Skills are then invocable as `/my-skills:clean-code-gates`, `/my-skills:commit-pr-dev`, `/my-skills:orchestrator`, etc.
 
 ## Updating (consumers)
 
