@@ -61,7 +61,7 @@ Record availability in memory for the current run. Do **not** block bootstrap on
 brainstormer → architect → coder → tester → reviewer ──(APPROVED)──→ qa ──(READY_TO_COMMIT)──→ DONE
                              ↑                          │                   ↑        │
                              └──(REQUEST_CHANGES: architect→coder→[tester?]→reviewer)┘        └──(BLOCKED: architect→coder→reviewer→qa)
-                                [max max_review_cycles review cycles]                            [max max_qa_cycles QA cycles]
+                                [max_review_cycles review cycles]                            [max_qa_cycles QA cycles]
 ```
 
 Brainstormer runs once at the start of every pipeline. It produces a spec, which the architect turns into a plan. The fix and QA-remediation loops do not re-run brainstormer — they reuse the original spec via the plan's `related_to` field.
@@ -271,7 +271,7 @@ Follow your full tester workflow and print the structured output summary.
 Parse the tester's output to extract:
 
 - `tester_status` — `PASS`, `BELOW_FLOOR`, or `BLOCKED`
-- `test_report_path` — e.g. `plans/tests/TEST-{NNN}-slug.md` (from line `Report: {path}`)
+- `test_report_path` — e.g. `plans/test/TEST-{NNN}-slug.md` (from line `Report: {path}`)
 
 **File verification (mandatory before continuing):**
 
@@ -397,6 +397,21 @@ Read the QA report file at `qa_report_path` (expect `.md` or `.html` extension p
 
 #### If READY_TO_COMMIT → proceed to Spec eval + report (Step 7).
 
+#### If READY_WITH_WARNINGS:
+
+All blocking gates passed; the plan is safe to commit. This status indicates that the G8 rework-risk gate scored > 0.5 (HIGH_REWORK), which is advisory only. Treat this as equivalent to READY_TO_COMMIT for flow purposes:
+
+1. Surface the warning to the user:
+
+   ```
+   ORCHESTRATOR — QA READY_WITH_WARNINGS
+   QA report: {qa_report_path}
+   Warning: G8 HIGH_REWORK — rework risk above threshold (non-blocking). Review the QA report before committing.
+   ```
+
+2. Carry the warning into the final report (Step 7).
+3. Proceed to Spec eval + report (Step 7).
+
 #### If BLOCKED_STALE:
 
 A `BLOCKED_STALE` status means one or more gates exceeded their wall-clock budget (per QA Step 0). The result is unknown, not failed. Do NOT enter the QA-remediation loop — gate timeouts are an operator decision, not an architect remediation target. Stop and report to the user:
@@ -470,9 +485,11 @@ Extract plan IDs and file paths from subagent output using these patterns:
 | coder        | `CODER — {ID} session complete`       | `Status: IN_PROGRESS \| DONE \| BLOCKED`        | —                        |
 | tester       | `TESTER — TEST-{NNN} created`         | `Status: PASS \| BELOW_FLOOR \| BLOCKED`        | `Report: {path}`         |
 | reviewer     | `REVIEWER — CR-{NNN} created`         | `Status: APPROVED \| REQUEST_CHANGES`           | `CR file: {path}`        |
-| qa           | `QA — QA-{NNN} created`              | `Status: READY_TO_COMMIT \| BLOCKED`            | `Report: {path}`         |
+| qa           | `QA — QA-{NNN} created`              | `Status: READY_TO_COMMIT \| READY_WITH_WARNINGS \| BLOCKED` | `Report: {path}` |
 
 If an agent output is ambiguous or missing the expected pattern, re-read the relevant plan file directly to determine status before continuing.
+
+> **Note — BLOCKED_STALE is orchestrator-synthesized:** the qa agent never emits the literal string `BLOCKED_STALE`. The orchestrator infers it from the QA report's `stale_gates:` frontmatter (gate wall-clock timeout exceeded). Do not expect this value in the qa agent's `Status:` output line.
 
 ### Rules
 
