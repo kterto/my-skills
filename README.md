@@ -73,24 +73,24 @@ On the first run the skill runs a **context gate**: if `.orchestrator/PROJECT-CO
 roadmap/
 ├── CONTEXT.md                     # roadmap addendum (milestones/sequencing decisions)
 ├── README.md                      # top-level progress rollup (md or html)
-├── M1-<slug>/
+├── 001-<slug>/
 │   ├── README.md                  # milestone rollup
-│   ├── P1-<slug>/
+│   ├── 001.1-<slug>/
 │   │   ├── README.md              # phase rollup
-│   │   └── T1-<slug>.md          # task brief (orchestrator-ready)
+│   │   └── 001.1.1-<slug>.md     # task brief (orchestrator-ready)
 │   └── …
 └── …
 ```
 
 ### Orchestrator handoff
 
-1. Open a task brief, e.g. `roadmap/M1-foundation/P1-schema/T1-db-model.md`.
-2. Run it through the orchestrator: `/orchestrator "$(cat roadmap/M1-foundation/P1-schema/T1-db-model.md)"`.
+1. Open a task brief, e.g. `roadmap/001-foundation/001.1-schema/001.1.1-db-model.md`.
+2. Run it through the orchestrator: `/orchestrator "$(cat roadmap/001-foundation/001.1-schema/001.1.1-db-model.md)"`.
 3. When done, commit with the `Roadmap-Task:` trailer so `/roadmap sync` can pick it up:
    ```text
    git commit -m "feat: implement db model
 
-   Roadmap-Task: M1-P1-T1"
+   Roadmap-Task: 001.1.1"
    ```
 4. Run `/roadmap sync` — the skill scans trailer stamps, marks the task `done`, rolls up phase and milestone statuses, and refreshes progress in each `README.md`.
 

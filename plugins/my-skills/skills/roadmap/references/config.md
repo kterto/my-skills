@@ -2,7 +2,7 @@
 
 ## Keys, Types, and Defaults
 
-| Key | Type | Default | Inheritance source | CLI flag |
+| Key | Type | Default | Override file | CLI flag |
 |---|---|---|---|---|
 | `output_format` | `md`\|`html` | inherit `.orchestrator/config.json`, else `md` | `/roadmap/roadmap.config.json` | `--format` |
 | `context_threshold` | float 0–1 | inherit `.orchestrator/config.json`, else `0.95` | `/roadmap/roadmap.config.json` | `--threshold` |

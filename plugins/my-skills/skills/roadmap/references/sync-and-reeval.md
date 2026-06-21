@@ -29,7 +29,7 @@ Rollup derives a phase status from its tasks, and a milestone status from its ph
 
 1. Read `last_synced_sha` from `roadmap.lock.json`.
 2. Run the git trailer scan (see command below). When `last_synced_sha` is `null`, scan full history. Per commit, extract: matched task id(s), author name/email, author date (ISO-8601), sha.
-3. For each matched task not already `done` or `superseded`: set `status: done`, append an audit row (`who` = author name/email, `evidence` = sha).
+3. For each matched task not already `done` or `superseded`: set `status: done`, append a full audit row (`when` = commit author date, `status` = `done`, `who` = author name/email, `evidence` = commit sha).
 4. Roll up phase and milestone statuses (see Rollup rules above); append rollup audit rows only where the derived status changed.
 5. Update `last_synced_sha` to `HEAD`, refresh README progress %, print a summary of stamped tasks.
 
