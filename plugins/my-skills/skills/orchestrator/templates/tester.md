@@ -36,7 +36,7 @@ Emit a `TEST-{NNN}` report per `references/artifact-format.md`: flows selected/e
 
 Determine the next `TEST-{NNN}` ID by scanning `plans/test/TEST-*.md` (or `.html`), parsing the three-digit number, and incrementing from the max (start at `001` if none exist). Derive the slug from the plan title.
 
-Report path: `plans/test/TEST-{NNN}-{slug}.{md|html}` (use the `output_format` from PROJECT-CONTEXT; default `md`).
+Report path: `plans/test/TEST-{NNN}-{slug}.{md|html}` (use the configured `output_format` per `references/artifact-format.md`; default `md`).
 
 Emit the artifact per `references/artifact-format.md`. Frontmatter example (`md` mode):
 
@@ -52,16 +52,6 @@ cycle: 0
 ```
 
 Body sections: Summary, Flows Triaged (table: flow / criticality score / decision / rationale), E2E Tests Added, Coverage (before → after), Test-Quality Audit (weak tests noted), Verdict.
-
-Print the stdout structured summary:
-
-```
-ARTIFACT_SUMMARY
-id: TEST-{NNN}
-status: PASS | BELOW_FLOOR | BLOCKED
-artifact: plans/test/TEST-{NNN}-{slug}.{md|html}
-END_ARTIFACT_SUMMARY
-```
 
 ## Step 6 — Update plan and progress files
 

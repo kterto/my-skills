@@ -480,12 +480,12 @@ Extract plan IDs and file paths from subagent output using these patterns:
 
 | Agent        | ID line pattern                       | Status line pattern                             | Extra line pattern       |
 | ------------ | ------------------------------------- | ----------------------------------------------- | ------------------------ |
-| brainstormer | `BRAINSTORMER — SPEC-{NNN} created`   | `Status: READY_FOR_PLANNING \| DRAFT`           | `Spec: {path}`           |
-| architect    | `ARCHITECT — {ID} created`            | —                                               | —                        |
-| coder        | `CODER — {ID} session complete`       | `Status: IN_PROGRESS \| DONE \| BLOCKED`        | —                        |
-| tester       | `TESTER — TEST-{NNN} created`         | `Status: PASS \| BELOW_FLOOR \| BLOCKED`        | `Report: {path}`         |
-| reviewer     | `REVIEWER — CR-{NNN} created`         | `Status: APPROVED \| REQUEST_CHANGES`           | `CR file: {path}`        |
-| qa           | `QA — QA-{NNN} created`              | `Status: READY_TO_COMMIT \| READY_WITH_WARNINGS \| BLOCKED` | `Report: {path}` |
+| brainstormer | `BRAINSTORMER — SPEC-{NNN} created`   | `Status: READY_FOR_PLANNING \| DRAFT`                        | `Spec: {path}`           |
+| architect    | `ARCHITECT — {ID} created`            | —                                                            | `Plan: {path}`           |
+| coder        | `CODER — {ID} session complete`       | `Status: IN_PROGRESS \| DONE \| BLOCKED`                     | —                        |
+| tester       | `TESTER — TEST-{NNN} created`         | `Status: PASS \| BELOW_FLOOR \| BLOCKED`                     | `Report: {path}`         |
+| reviewer     | `REVIEWER — CR-{NNN} created`         | `Status: APPROVED \| REQUEST_CHANGES`                        | `CR file: {path}`        |
+| qa           | `QA — QA-{NNN} created`              | `Status: READY_TO_COMMIT \| BLOCKED \| READY_WITH_WARNINGS`  | `Report: {path}`         |
 
 If an agent output is ambiguous or missing the expected pattern, re-read the relevant plan file directly to determine status before continuing.
 
