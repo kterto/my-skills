@@ -503,4 +503,46 @@ If an agent output is ambiguous or missing the expected pattern, re-read the rel
 
 ## Spec eval + report
 
-<!-- filled by Task 4 -->
+### Step 7a — Spec-driven-eval invocation
+
+On READY_TO_COMMIT (or READY_WITH_WARNINGS):
+
+1. If spec-driven-eval is unavailable (user declined install at bootstrap B2) → skip eval,
+   note "eval skipped — skill not installed" in the report, continue to Step 7b.
+2. Else invoke the `spec-driven-eval` skill, passing the brainstormer SPEC-{NNN} path and the
+   accumulated diff (`git diff` against the pre-flight base recorded in Step 0). Capture its
+   validation result.
+   NOTE: the SPEC-{NNN} format may not match spec-driven-eval's expected input — verify its
+   expected input shape; if it does not accept SPEC-{NNN} directly, adapt by passing the spec's
+   Functional requirements section as the criteria.
+
+### Step 7b — Final report composer
+
+Compose and PRINT (do not write files, EXCEPT when `output_format=html` also write an html
+report) the following report. If READY_WITH_WARNINGS arrived from QA, carry the G8 warning
+into the Issues found list.
+
+```
+ORCHESTRATOR — pipeline complete
+Spec: {spec_path}
+Final plan: {plan_id}
+Tester: {tester_status} (coverage {after}%)
+QA report: {qa_report_path}
+Spec eval: {PASS | ISSUES | SKIPPED}
+Issues found:
+  - {issue} (or "none")
+
+Proposed commit message:
+  {Conventional-Commit subject + body derived from the spec + diff}
+
+Proposed PR message:
+  ## Summary
+  {what changed, why}
+  ## Test plan
+  {e2e flows covered, coverage %, gate results}
+
+Review cycles used: {review_cycle} / {max_review_cycles}
+QA cycles used: {qa_cycle} / {max_qa_cycles}
+
+Output only — review the diff, then commit and open the PR yourself.
+```
