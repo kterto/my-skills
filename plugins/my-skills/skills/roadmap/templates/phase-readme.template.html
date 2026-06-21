@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Phase {{id}} — {{title}}</title>
+<style>body{font:14px/1.5 system-ui;margin:2rem;max-width:60rem}.badge{display:inline-block;padding:.1em .5em;border-radius:.4em;background:#eee}table{border-collapse:collapse}td,th{border:1px solid #ccc;padding:.3em .6em}details{margin:.5rem 0}summary{cursor:pointer;font-weight:600}ul{list-style:none;padding-left:0}li{margin:.25rem 0}</style>
+</head><body>
+<main data-id="{{id}}" data-kind="phase" data-status="{{rollup_status}}"
+      data-created-at="{{created_at}}" data-updated-at="{{updated_at}}">
+  <h1>Phase {{id}} — {{title}} <span class="badge">{{rollup_status}}</span></h1>
+  <p><strong>Milestone:</strong> {{milestone}} &nbsp; <strong>Sequence:</strong> {{sequence}}</p>
+  <p><strong>Depends on:</strong> {{depends_on}}</p>
+  <details open><summary>Tasks (in execution order)</summary>
+    <ul>
+      <li><input type="checkbox" disabled {{checked}}> {{task_title}}</li>
+    </ul>
+  </details>
+  <details open><summary>Audit log</summary>
+    <table><thead><tr><th>when (ISO-8601)</th><th>status</th><th>who</th><th>evidence</th></tr></thead>
+    <tbody><tr><td>{{created_at}}</td><td>{{rollup_status}}</td><td>roadmap-skill</td><td>/roadmap plan</td></tr></tbody></table>
+  </details>
+</main></body></html>
