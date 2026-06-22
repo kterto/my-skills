@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Test Report — TEST-042</title>
+<style>
+/* ============================================================
+   EDITORIAL DESIGN SYSTEM v1 — Color tokens
+   ============================================================ */
+:root {
+  --bg-page:        #faf9f7;
+  --bg-surface:     #f3f1ee;
+  --bg-overlay:     #ece9e4;
+
+  --text-primary:   #1a1917;
+  --text-secondary: #4a4844;
+  --text-muted:     #8a8680;
+
+  --accent:         #3730a3;
+  --accent-subtle:  #e0e7ff;
+  --accent-focus:   #4f46e5;
+
+  --rule:           #d6d2cb;
+  --rule-heavy:     #b5b0a8;
+
+  --status-success: #166534;
+  --status-success-bg: #dcfce7;
+  --status-active:  #92400e;
+  --status-active-bg: #fef3c7;
+  --status-warning: #9a3412;
+  --status-warning-bg: #ffedd5;
+  --status-danger:  #991b1b;
+  --status-danger-bg: #fee2e2;
+  --status-muted:   #374151;
+  --status-muted-bg: #f3f4f6;
+
+  --font-serif: Georgia, "Times New Roman", serif;
+  --font-sans:  -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                "Helvetica Neue", Arial, sans-serif;
+  --font-mono:  ui-monospace, "SF Mono", "Cascadia Code", "Fira Mono",
+                Menlo, Consolas, monospace;
+
+  --text-xs:   0.75rem;
+  --text-sm:   0.875rem;
+  --text-base: 1rem;
+  --text-lg:   1.125rem;
+  --text-xl:   1.25rem;
+  --text-2xl:  1.5rem;
+  --text-3xl:  2rem;
+
+  --sp-1:  0.25rem;
+  --sp-2:  0.5rem;
+  --sp-3:  0.75rem;
+  --sp-4:  1rem;
+  --sp-6:  1.5rem;
+  --sp-8:  2rem;
+  --sp-12: 3rem;
+  --sp-16: 4rem;
+
+  --measure: 70ch;
+  --line-height-body: 1.65;
+  --line-height-heading: 1.2;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-page:        #141312;
+    --bg-surface:     #1e1c1a;
+    --bg-overlay:     #272420;
+
+    --text-primary:   #f0ece6;
+    --text-secondary: #b8b3ab;
+    --text-muted:     #7a7570;
+
+    --accent:         #818cf8;
+    --accent-subtle:  #1e1b4b;
+    --accent-focus:   #a5b4fc;
+
+    --rule:           #2e2b28;
+    --rule-heavy:     #3d3a36;
+
+    --status-success: #86efac;
+    --status-success-bg: #14532d;
+    --status-active:  #fcd34d;
+    --status-active-bg: #451a03;
+    --status-warning: #fb923c;
+    --status-warning-bg: #431407;
+    --status-danger:  #fca5a5;
+    --status-danger-bg: #450a0a;
+    --status-muted:   #9ca3af;
+    --status-muted-bg: #1f2937;
+  }
+}
+
+/* ============================================================
+   Base reset
+   ============================================================ */
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--line-height-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main {
+  max-width: 56rem;
+  margin: 0 auto;
+  padding: var(--sp-16) var(--sp-8);
+}
+
+@media (max-width: 640px) {
+  main { padding: var(--sp-12) var(--sp-6); }
+}
+
+::selection { background: var(--accent-subtle); color: var(--accent); }
+a { color: var(--accent); }
+
+/* ============================================================
+   Masthead
+   ============================================================ */
+.masthead { margin-bottom: var(--sp-8); }
+
+.masthead__kicker {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--text-muted);
+  margin: 0 0 var(--sp-4);
+}
+
+h1 {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: clamp(2rem, 5vw, 3rem);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  margin: 0;
+  color: var(--text-primary);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-4);
+  text-wrap: balance;
+}
+
+h1 .h1__id {
+  font-family: var(--font-mono);
+  font-size: 0.46em;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--accent);
+  background: var(--accent-subtle);
+  padding: 0.15em 0.5em;
+  border-radius: 6px;
+  align-self: center;
+}
+
+h1 .h1__pill { align-self: center; }
+
+/* ID / meta header block */
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  padding: var(--sp-4) 0;
+  margin-top: var(--sp-6);
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+
+.meta__id { color: var(--text-secondary); font-weight: 600; }
+
+.meta__fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-3);
+  margin-left: auto;
+}
+
+.meta__sep { color: var(--rule-heavy); }
+.meta__key { color: var(--text-muted); }
+.meta__val { color: var(--text-secondary); }
+
+.badge {
+  font-family: var(--font-mono);
+  background: var(--accent-subtle);
+  color: var(--accent);
+  font-size: var(--text-xs);
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   Status pill
+   ============================================================ */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+  line-height: 1.6;
+}
+
+.pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+.pill--success { background: var(--status-success-bg); color: var(--status-success); }
+.pill--active  { background: var(--status-active-bg);  color: var(--status-active);  }
+.pill--warning { background: var(--status-warning-bg); color: var(--status-warning); }
+.pill--danger  { background: var(--status-danger-bg);  color: var(--status-danger);  }
+.pill--muted   { background: var(--status-muted-bg);   color: var(--status-muted);   }
+
+/* ============================================================
+   Coverage overview
+   ============================================================ */
+.coverage {
+  margin-top: var(--sp-8);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--sp-6) var(--sp-8);
+  align-items: center;
+}
+
+@media (max-width: 560px) {
+  .coverage { grid-template-columns: 1fr; gap: var(--sp-4); }
+}
+
+.coverage__figure {
+  font-family: var(--font-mono);
+  font-size: clamp(2.5rem, 8vw, 3.5rem);
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.coverage__figure[data-cov="success"] { color: var(--status-success); }
+.coverage__figure[data-cov="warning"] { color: var(--status-warning); }
+.coverage__figure[data-cov="danger"]  { color: var(--status-danger); }
+
+.coverage__figcap {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+  margin-top: var(--sp-2);
+}
+
+.coverage__bars { min-width: 0; }
+
+/* gauge with floor marker */
+.gauge {
+  position: relative;
+  height: 12px;
+  border-radius: 6px;
+  background: var(--bg-overlay);
+  overflow: visible;
+  margin-top: var(--sp-8);
+}
+
+.gauge__fill {
+  height: 100%;
+  border-radius: 6px;
+  background: var(--status-success);
+}
+
+.gauge__fill[data-cov="warning"] { background: var(--status-warning); }
+.gauge__fill[data-cov="danger"]  { background: var(--status-danger); }
+
+.gauge__floor {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  background: var(--rule-heavy);
+  border-radius: 1px;
+}
+
+.gauge__floor-label {
+  position: absolute;
+  top: -1.7rem;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.gauge__floor-label--below { color: var(--status-warning); font-weight: 600; }
+
+.coverage__sub {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  margin-top: var(--sp-3);
+}
+
+/* ============================================================
+   Section scaffolding
+   ============================================================ */
+.section { margin-top: var(--sp-12); }
+
+.section__label {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-muted);
+  margin: 0 0 var(--sp-4);
+}
+
+/* ============================================================
+   Per-suite results table
+   ============================================================ */
+.table-wrap { overflow-x: auto; }
+
+.suites {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.suites thead th {
+  text-align: left;
+  background: var(--bg-surface);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: var(--sp-2) var(--sp-4);
+  border-bottom: 1px solid var(--rule-heavy);
+  white-space: nowrap;
+}
+
+.suites thead th.num,
+.suites tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.suites tbody td {
+  padding: var(--sp-2) var(--sp-4);
+  border-bottom: 1px solid var(--rule);
+  vertical-align: baseline;
+  color: var(--text-secondary);
+}
+
+.suites tbody tr:nth-child(odd)  td { background: var(--bg-page); }
+.suites tbody tr:nth-child(even) td { background: var(--bg-surface); }
+.suites tbody tr:last-child td { border-bottom: none; }
+
+.suites .col-suite { font-family: var(--font-mono); color: var(--text-primary); white-space: nowrap; }
+.suites .fail-zero { color: var(--text-muted); }
+.suites .fail-some { color: var(--status-danger); font-weight: 700; }
+.suites .col-cov { font-family: var(--font-mono); }
+
+/* ============================================================
+   Blocked reason inset
+   ============================================================ */
+.blocked-inset {
+  background: var(--status-danger-bg);
+  color: var(--status-danger);
+  border-radius: 6px;
+  padding: var(--sp-4) var(--sp-6);
+  font-size: var(--text-lg);
+}
+
+.blocked-inset strong { font-weight: 700; }
+
+.blocked-inset code { background: rgba(0,0,0,0.06); color: inherit; }
+
+/* ============================================================
+   Notes prose
+   ============================================================ */
+.prose {
+  max-width: var(--measure);
+  color: var(--text-secondary);
+  font-size: var(--text-lg);
+}
+
+.prose p { margin: 0 0 var(--sp-4); }
+.prose p:last-child { margin-bottom: 0; }
+.prose ul { margin: 0 0 var(--sp-4); padding-left: var(--sp-6); }
+.prose li { margin-bottom: var(--sp-2); }
+.prose strong { color: var(--text-primary); }
+
+/* ============================================================
+   Collapsible <details>
+   ============================================================ */
+details { border-top: 1px solid var(--rule); }
+
+summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-4) 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: var(--text-primary);
+  user-select: none;
+}
+
+summary::-webkit-details-marker { display: none; }
+
+summary::before {
+  content: "\25B6";
+  font-size: 0.7em;
+  color: var(--accent);
+  transition: transform 0.18s ease;
+  flex: none;
+}
+
+details[open] > summary::before { transform: rotate(90deg); }
+
+summary:focus-visible {
+  outline: 2px solid var(--accent-focus);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+summary .summary__meta {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.details__body {
+  border-left: 3px solid var(--accent);
+  padding-left: var(--sp-6);
+  margin: 0 0 var(--sp-6) 2px;
+}
+
+details.blocked-section > summary { color: var(--status-danger); }
+details.blocked-section { border-top-color: var(--rule); }
+details.blocked-section > summary::before { color: var(--status-danger); }
+details.blocked-section > .details__body { border-left-color: var(--status-danger); }
+
+/* ============================================================
+   Inline code / path
+   ============================================================ */
+code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--bg-overlay);
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: var(--text-secondary);
+}
+</style>
+</head>
+<body>
+<main
+  data-id="TEST-042"
+  data-status="PASS"
+  data-created-at="2026-06-20T08:00:00Z"
+  data-updated-at="2026-06-22T18:05:00Z"
+  data-cycle="2"
+>
+
+  <!-- ============================================================
+       1. Page header
+       ============================================================ -->
+  <header class="masthead">
+    <p class="masthead__kicker">
+      <span>Test Report</span>
+      <span class="meta__sep">·</span>
+      <span>Tester</span>
+    </p>
+    <h1>
+      <span class="h1__id">TEST-042</span>
+      <span>Async export pipeline — suite run</span>
+      <span class="h1__pill"><span class="pill pill--success">PASS</span></span>
+    </h1>
+
+    <!-- 2. ID / meta header block -->
+    <div class="meta">
+      <span class="meta__id">TEST-042</span>
+      <span class="meta__fields">
+        <span><span class="meta__key">created:</span> <span class="meta__val">2026-06-20</span></span>
+        <span class="meta__sep">·</span>
+        <span><span class="meta__key">updated:</span> <span class="meta__val">2026-06-22</span></span>
+        <span class="meta__sep">·</span>
+        <span class="badge">cycle 2</span>
+      </span>
+    </div>
+  </header>
+
+  <!-- ============================================================
+       3. Coverage overview
+       ============================================================ -->
+  <section aria-label="Coverage overview">
+    <div class="coverage">
+      <div>
+        <div class="coverage__figure" data-cov="success">87.4%</div>
+        <span class="coverage__figcap">Line coverage</span>
+      </div>
+      <div class="coverage__bars">
+        <div class="gauge" role="img" aria-label="Coverage 87.4 percent, floor 80 percent, meets floor">
+          <div class="gauge__fill" data-cov="success" style="width: 87.4%;"></div>
+          <div class="gauge__floor" style="left: 80%;">
+            <span class="gauge__floor-label">floor: 80%</span>
+          </div>
+        </div>
+        <p class="coverage__sub">3,142 / 3,595 lines covered</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       4. Per-suite results table
+       ============================================================ -->
+  <section class="section">
+    <p class="section__label">Per-suite results</p>
+    <div class="table-wrap">
+      <table class="suites">
+        <thead>
+          <tr>
+            <th>Suite</th>
+            <th class="num">Tests</th>
+            <th class="num">Passed</th>
+            <th class="num">Failed</th>
+            <th class="num">Skipped</th>
+            <th class="num">Coverage</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="col-suite">export.request</td>
+            <td class="num">42</td>
+            <td class="num">42</td>
+            <td class="num fail-zero">0</td>
+            <td class="num">0</td>
+            <td class="num col-cov">96.1%</td>
+            <td><span class="pill pill--success">PASS</span></td>
+          </tr>
+          <tr>
+            <td class="col-suite">export.worker</td>
+            <td class="num">58</td>
+            <td class="num">58</td>
+            <td class="num fail-zero">0</td>
+            <td class="num">0</td>
+            <td class="num col-cov">91.7%</td>
+            <td><span class="pill pill--success">PASS</span></td>
+          </tr>
+          <tr>
+            <td class="col-suite">export.download</td>
+            <td class="num">31</td>
+            <td class="num">31</td>
+            <td class="num fail-zero">0</td>
+            <td class="num">2</td>
+            <td class="num col-cov">88.4%</td>
+            <td><span class="pill pill--success">PASS</span></td>
+          </tr>
+          <tr>
+            <td class="col-suite">export.notify</td>
+            <td class="num">24</td>
+            <td class="num">24</td>
+            <td class="num fail-zero">0</td>
+            <td class="num">0</td>
+            <td class="num col-cov">82.0%</td>
+            <td><span class="pill pill--success">PASS</span></td>
+          </tr>
+          <tr>
+            <td class="col-suite">export.expiry</td>
+            <td class="num">19</td>
+            <td class="num">19</td>
+            <td class="num fail-zero">0</td>
+            <td class="num">1</td>
+            <td class="num col-cov">80.6%</td>
+            <td><span class="pill pill--success">PASS</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       5. Notes & Observations (collapsed)
+       ============================================================ -->
+  <section class="section">
+    <details>
+      <summary>Notes &amp; Observations</summary>
+      <div class="details__body">
+        <div class="prose">
+          <p>Overall line coverage clears the 80% floor with headroom. Three tests were skipped intentionally:</p>
+          <ul>
+            <li><strong>export.download</strong> — 2 skipped: range-request edge cases pending a fixture for partial-content responses larger than 2&nbsp;GB.</li>
+            <li><strong>export.expiry</strong> — 1 skipped: a flaky timezone test that fails only under the CI runner's UTC offset; tracked separately.</li>
+          </ul>
+          <p>No flakiness observed across three consecutive runs of the non-skipped suites.</p>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <!-- Blocked — Reason section is omitted: data-status is PASS, not BLOCKED. -->
+
+</main>
+
+<script>
+/* Editorial Design System v1 — tester test report
+   Vanilla JS only. No libraries, no inline handlers.
+   Maps data-status (PASS | BELOW_FLOOR | BLOCKED) to the header pill class. */
+(function () {
+  "use strict";
+
+  var STATUS_TO_TOKEN = {
+    PASS: "success",
+    BELOW_FLOOR: "warning",
+    BLOCKED: "danger"
+  };
+
+  function syncHeaderPill() {
+    var root = document.querySelector("main[data-id][data-cycle]");
+    if (!root) return;
+    var status = root.getAttribute("data-status");
+    var token = STATUS_TO_TOKEN[status];
+    if (!token) return;
+    var pill = document.querySelector(".h1__pill .pill");
+    if (pill) {
+      pill.className = "pill pill--" + token;
+      pill.textContent = status;
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", syncHeaderPill);
+  } else {
+    syncHeaderPill();
+  }
+})();
+</script>
+</body>
+</html>

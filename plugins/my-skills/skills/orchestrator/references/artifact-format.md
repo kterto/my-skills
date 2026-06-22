@@ -41,6 +41,8 @@ Body: free-form markdown with headings, lists, and fenced code blocks as appropr
 - Task lists rendered as `<input type="checkbox" disabled>` checkboxes.
 - Cycle counters displayed as inline `<span class="badge">cycle N</span>` badges; style the badge inline (no external CSS).
 
+**Styled templates.** In `html` mode, each role fills the matching self-contained scaffold in `templates/html/<artifact>.template.html` (spec, plan, test-report, code-review, qa-report, final-report). These define the Editorial Design System v1 look and the required `<main data-*>` shell; roles replace the sample content with the real artifact content, preserving the `data-*` attributes, `<details><summary>` sections, disabled checkboxes, and the `<span class="badge">cycle N</span>` badge. `progress-timeline.template.html` is provided for a future progress-as-HTML artifact; `.progress.md` remains markdown-only today.
+
 ## Stdout header-line contract (identical in both modes)
 
 The orchestrator parses stdout for control flow, not the artifact file. Each role prints a fixed set of header lines; these lines are the same regardless of `output_format` (only the on-disk artifact file changes between `md` and `html`).

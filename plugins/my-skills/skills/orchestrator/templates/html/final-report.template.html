@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Final Report — P1-async-export</title>
+<style>
+/* ============================================================
+   EDITORIAL DESIGN SYSTEM v1 — Color tokens
+   ============================================================ */
+:root {
+  --bg-page:        #faf9f7;
+  --bg-surface:     #f3f1ee;
+  --bg-overlay:     #ece9e4;
+
+  --text-primary:   #1a1917;
+  --text-secondary: #4a4844;
+  --text-muted:     #8a8680;
+
+  --accent:         #3730a3;
+  --accent-subtle:  #e0e7ff;
+  --accent-focus:   #4f46e5;
+
+  --rule:           #d6d2cb;
+  --rule-heavy:     #b5b0a8;
+
+  --status-success: #166534;
+  --status-success-bg: #dcfce7;
+  --status-active:  #92400e;
+  --status-active-bg: #fef3c7;
+  --status-warning: #9a3412;
+  --status-warning-bg: #ffedd5;
+  --status-danger:  #991b1b;
+  --status-danger-bg: #fee2e2;
+  --status-muted:   #374151;
+  --status-muted-bg: #f3f4f6;
+
+  --font-serif: Georgia, "Times New Roman", serif;
+  --font-sans:  -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                "Helvetica Neue", Arial, sans-serif;
+  --font-mono:  ui-monospace, "SF Mono", "Cascadia Code", "Fira Mono",
+                Menlo, Consolas, monospace;
+
+  --text-xs:   0.75rem;
+  --text-sm:   0.875rem;
+  --text-base: 1rem;
+  --text-lg:   1.125rem;
+  --text-xl:   1.25rem;
+  --text-2xl:  1.5rem;
+  --text-3xl:  2rem;
+
+  --sp-1:  0.25rem;
+  --sp-2:  0.5rem;
+  --sp-3:  0.75rem;
+  --sp-4:  1rem;
+  --sp-6:  1.5rem;
+  --sp-8:  2rem;
+  --sp-12: 3rem;
+  --sp-16: 4rem;
+
+  --measure: 70ch;
+  --line-height-body: 1.65;
+  --line-height-heading: 1.2;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-page:        #141312;
+    --bg-surface:     #1e1c1a;
+    --bg-overlay:     #272420;
+
+    --text-primary:   #f0ece6;
+    --text-secondary: #b8b3ab;
+    --text-muted:     #7a7570;
+
+    --accent:         #818cf8;
+    --accent-subtle:  #1e1b4b;
+    --accent-focus:   #a5b4fc;
+
+    --rule:           #2e2b28;
+    --rule-heavy:     #3d3a36;
+
+    --status-success: #86efac;
+    --status-success-bg: #14532d;
+    --status-active:  #fcd34d;
+    --status-active-bg: #451a03;
+    --status-warning: #fb923c;
+    --status-warning-bg: #431407;
+    --status-danger:  #fca5a5;
+    --status-danger-bg: #450a0a;
+    --status-muted:   #9ca3af;
+    --status-muted-bg: #1f2937;
+  }
+}
+
+/* ============================================================
+   Base reset
+   ============================================================ */
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--line-height-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main {
+  max-width: 54rem;
+  margin: 0 auto;
+  padding: var(--sp-16) var(--sp-8);
+}
+
+@media (max-width: 640px) {
+  main { padding: var(--sp-12) var(--sp-6); }
+}
+
+::selection { background: var(--accent-subtle); color: var(--accent); }
+a { color: var(--accent); }
+
+/* ============================================================
+   Masthead
+   ============================================================ */
+.masthead { margin-bottom: var(--sp-8); }
+
+.masthead__kicker {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--text-muted);
+  margin: 0 0 var(--sp-4);
+}
+
+h1 {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: clamp(2rem, 5vw, 3rem);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  margin: 0;
+  color: var(--text-primary);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-4);
+  text-wrap: balance;
+}
+
+h1 .h1__id {
+  font-family: var(--font-mono);
+  font-size: 0.44em;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--accent);
+  background: var(--accent-subtle);
+  padding: 0.15em 0.5em;
+  border-radius: 6px;
+  align-self: center;
+}
+
+h1 .h1__pill { align-self: center; }
+
+/* ID / meta header block */
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  padding: var(--sp-4) 0;
+  margin-top: var(--sp-6);
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+
+.meta__id { color: var(--text-secondary); font-weight: 600; }
+
+.meta__fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-3);
+  margin-left: auto;
+}
+
+.meta__sep { color: var(--rule-heavy); }
+.meta__key { color: var(--text-muted); }
+.meta__val { color: var(--text-secondary); }
+
+.badge {
+  font-family: var(--font-mono);
+  background: var(--accent-subtle);
+  color: var(--accent);
+  font-size: var(--text-xs);
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   Status pill
+   ============================================================ */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+  line-height: 1.6;
+}
+
+.pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+.pill--success { background: var(--status-success-bg); color: var(--status-success); }
+.pill--active  { background: var(--status-active-bg);  color: var(--status-active);  }
+.pill--warning { background: var(--status-warning-bg); color: var(--status-warning); }
+.pill--danger  { background: var(--status-danger-bg);  color: var(--status-danger);  }
+.pill--muted   { background: var(--status-muted-bg);   color: var(--status-muted);   }
+
+/* ============================================================
+   Outcome summary grid
+   ============================================================ */
+.outcome {
+  margin-top: var(--sp-8);
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.outcome__key,
+.outcome__val {
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--rule);
+  display: flex;
+  align-items: center;
+}
+
+.outcome__key {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  background: var(--bg-surface);
+  white-space: nowrap;
+}
+
+.outcome__val { color: var(--text-secondary); gap: var(--sp-2); }
+
+.outcome > :nth-last-child(1),
+.outcome > :nth-last-child(2) { border-bottom: none; }
+
+@media (max-width: 480px) {
+  .outcome { grid-template-columns: 1fr; }
+  .outcome__key { border-bottom: none; padding-bottom: 0; background: transparent; }
+  .outcome__val { padding-top: var(--sp-1); }
+}
+
+/* ============================================================
+   Section headings
+   ============================================================ */
+.block-section { margin-top: var(--sp-12); }
+
+h2 {
+  font-family: var(--font-serif);
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+  margin: 0 0 var(--sp-3);
+}
+
+/* ============================================================
+   Copy-paste code blocks
+   ============================================================ */
+.codeblock {
+  position: relative;
+}
+
+.codeblock__copy {
+  position: absolute;
+  top: var(--sp-3);
+  right: var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  background: var(--bg-page);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 3px 10px;
+  cursor: pointer;
+  z-index: 2;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.codeblock__copy:hover { background: var(--accent-subtle); }
+.codeblock__copy:focus-visible { outline: 2px solid var(--accent-focus); outline-offset: 2px; }
+.codeblock__copy[data-copied="true"] { color: var(--status-success); border-color: var(--status-success); background: var(--status-success-bg); }
+
+pre.code {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.7;
+  background: var(--bg-overlay);
+  color: var(--text-secondary);
+  padding: var(--sp-4);
+  padding-top: calc(var(--sp-4) + 1.4rem);
+  border-radius: 6px;
+  white-space: pre;
+  overflow-x: auto;
+  margin: 0;
+}
+
+pre.code code {
+  font-family: inherit;
+  font-size: inherit;
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  color: inherit;
+}
+
+/* ============================================================
+   Conditional inset
+   ============================================================ */
+.inset {
+  border-radius: 6px;
+  padding: var(--sp-4) var(--sp-6);
+  font-size: var(--text-lg);
+  max-width: var(--measure);
+}
+
+.inset--warning { background: var(--status-warning-bg); color: var(--status-warning); }
+.inset strong { font-weight: 700; }
+.inset code { background: rgba(0,0,0,0.06); color: inherit; }
+.inset .warn-item { display: flex; gap: var(--sp-3); align-items: baseline; }
+.inset .warn-item::before { content: "\26A0"; flex: none; }
+.inset .warn-item + .warn-item { margin-top: var(--sp-3); }
+
+/* ============================================================
+   Collapsible <details>
+   ============================================================ */
+.section { margin-top: var(--sp-12); }
+
+details { border-top: 1px solid var(--rule); }
+
+summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-4) 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: var(--text-primary);
+  user-select: none;
+}
+
+summary::-webkit-details-marker { display: none; }
+
+summary::before {
+  content: "\25B6";
+  font-size: 0.7em;
+  color: var(--accent);
+  transition: transform 0.18s ease;
+  flex: none;
+}
+
+details[open] > summary::before { transform: rotate(90deg); }
+
+summary:focus-visible {
+  outline: 2px solid var(--accent-focus);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+summary .summary__meta {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.details__body {
+  border-left: 3px solid var(--accent);
+  padding-left: var(--sp-6);
+  margin: 0 0 var(--sp-6) 2px;
+}
+
+details.warning-section > summary { color: var(--status-warning); }
+details.warning-section > summary::before { color: var(--status-warning); }
+details.warning-section > .details__body { border-left-color: var(--status-warning); }
+
+/* ============================================================
+   Audit-log table (pipeline events)
+   ============================================================ */
+.table-wrap { overflow-x: auto; }
+
+.audit {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.audit thead th {
+  text-align: left;
+  background: var(--bg-surface);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: var(--sp-2) var(--sp-4);
+  border-bottom: 1px solid var(--rule-heavy);
+  white-space: nowrap;
+}
+
+.audit tbody td {
+  padding: var(--sp-2) var(--sp-4);
+  border-bottom: 1px solid var(--rule);
+  vertical-align: baseline;
+  color: var(--text-secondary);
+}
+
+.audit tbody tr:nth-child(odd)  td { background: var(--bg-page); }
+.audit tbody tr:nth-child(even) td { background: var(--bg-surface); }
+.audit tbody tr:last-child td { border-bottom: none; }
+
+.audit .col-when { font-family: var(--font-mono); color: var(--text-muted); white-space: nowrap; }
+.audit .col-role { font-family: var(--font-mono); color: var(--text-secondary); }
+
+/* ============================================================
+   Prose
+   ============================================================ */
+.prose { max-width: var(--measure); color: var(--text-secondary); font-size: var(--text-lg); }
+.prose p { margin: 0 0 var(--sp-4); }
+.prose p:last-child { margin-bottom: 0; }
+.prose strong { color: var(--text-primary); }
+.prose ul { margin: 0 0 var(--sp-4); padding-left: var(--sp-6); }
+.prose li { margin-bottom: var(--sp-2); }
+
+/* ============================================================
+   Inline code / path
+   ============================================================ */
+code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--bg-overlay);
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: var(--text-secondary);
+}
+</style>
+</head>
+<body>
+<main
+  data-id="P1-async-export"
+  data-status="READY_TO_COMMIT"
+  data-created-at="2026-06-21T14:00:01Z"
+  data-updated-at="2026-06-21T14:07:11Z"
+  data-cycle="1"
+>
+
+  <!-- ============================================================
+       1. Page header
+       ============================================================ -->
+  <header class="masthead">
+    <p class="masthead__kicker">
+      <span>Final Report</span>
+      <span class="meta__sep">·</span>
+      <span>Orchestrator</span>
+    </p>
+    <h1>
+      <span class="h1__id">P1-async-export</span>
+      <span>Final Report</span>
+      <span class="h1__pill"><span class="pill pill--success">READY_TO_COMMIT</span></span>
+    </h1>
+
+    <!-- 2. ID / meta header block -->
+    <div class="meta">
+      <span class="meta__id">P1-async-export</span>
+      <span class="meta__fields">
+        <span><span class="meta__key">created:</span> <span class="meta__val">2026-06-21</span></span>
+        <span class="meta__sep">·</span>
+        <span><span class="meta__key">updated:</span> <span class="meta__val">2026-06-21</span></span>
+        <span class="meta__sep">·</span>
+        <span class="badge">cycle 1</span>
+      </span>
+    </div>
+  </header>
+
+  <!-- ============================================================
+       3. Pipeline outcome summary
+       ============================================================ -->
+  <section aria-label="Pipeline outcome">
+    <div class="outcome">
+      <div class="outcome__key">Outcome</div>
+      <div class="outcome__val"><span class="pill pill--success">READY_TO_COMMIT</span></div>
+
+      <div class="outcome__key">Spec-eval</div>
+      <div class="outcome__val"><span class="pill pill--success">PASS</span></div>
+
+      <div class="outcome__key">Cycles used</div>
+      <div class="outcome__val"><span class="badge">cycle 1</span></div>
+
+      <div class="outcome__key">Plan ID</div>
+      <div class="outcome__val"><code>P1-async-export</code></div>
+
+      <div class="outcome__key">Spec ID</div>
+      <div class="outcome__val"><code>SPEC-001</code></div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       4. Commit-message block
+       ============================================================ -->
+  <section class="block-section">
+    <h2>Proposed Commit Message</h2>
+    <div class="codeblock">
+      <button type="button" class="codeblock__copy" data-copy-target="commit-msg">Copy</button>
+<pre class="code"><code id="commit-msg">feat(export): add async, resumable export pipeline
+
+Decouples large exports from the request path: a request returns a
+tracking ID, a background worker writes the artifact to object store,
+and downloads support HTTP range requests so they resume rather than
+restart. Adds expiry, idempotency, and completion notifications.
+
+Roadmap-Task: T1.1.2</code></pre>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       5. PR-message block
+       ============================================================ -->
+  <section class="block-section">
+    <h2>Proposed PR Message</h2>
+    <div class="codeblock">
+      <button type="button" class="codeblock__copy" data-copy-target="pr-msg">Copy</button>
+<pre class="code"><code id="pr-msg">## Summary
+
+- Add asynchronous export request endpoint that returns a tracking ID
+- Background worker produces a resumable artifact with expiry + idempotency
+
+## Test plan
+
+- [ ] Request an export and confirm a tracking ID is returned immediately
+- [ ] Interrupt a download mid-transfer and confirm it resumes via range request
+- [ ] Re-request an identical export and confirm the existing artifact is reused</code></pre>
+    </div>
+  </section>
+
+  <!-- Warnings section omitted: data-status is READY_TO_COMMIT, not READY_WITH_WARNINGS. -->
+
+  <!-- ============================================================
+       7. Pipeline Events (collapsed)
+       ============================================================ -->
+  <section class="section">
+    <details>
+      <summary>Pipeline Events <span class="summary__meta">8 steps</span></summary>
+      <div class="details__body">
+        <div class="table-wrap">
+          <table class="audit">
+            <thead>
+              <tr><th>Timestamp</th><th>Role</th><th>Action</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+              <tr><td class="col-when">2026-06-21T14:00:01Z</td><td class="col-role">brainstormer</td><td>SPEC-001 created</td><td><span class="pill pill--success">READY_FOR_PLANNING</span></td></tr>
+              <tr><td class="col-when">2026-06-21T14:00:45Z</td><td class="col-role">architect</td><td>P1-plan created</td><td><span class="pill pill--active">IN_PROGRESS</span></td></tr>
+              <tr><td class="col-when">2026-06-21T14:01:12Z</td><td class="col-role">architect</td><td>P1-plan updated</td><td><span class="pill pill--success">READY</span></td></tr>
+              <tr><td class="col-when">2026-06-21T14:02:03Z</td><td class="col-role">coder</td><td>Coding session started</td><td><span class="pill pill--active">IN_PROGRESS</span></td></tr>
+              <tr><td class="col-when">2026-06-21T14:05:33Z</td><td class="col-role">coder</td><td>Coding session complete</td><td><span class="pill pill--success">done</span></td></tr>
+              <tr><td class="col-when">2026-06-21T14:06:01Z</td><td class="col-role">tester</td><td>TEST-001 created</td><td><span class="pill pill--success">PASS</span></td></tr>
+              <tr><td class="col-when">2026-06-21T14:06:45Z</td><td class="col-role">reviewer</td><td>CR-001 created</td><td><span class="pill pill--success">APPROVED</span></td></tr>
+              <tr><td class="col-when">2026-06-21T14:07:11Z</td><td class="col-role">qa</td><td>QA-001 created</td><td><span class="pill pill--success">READY_TO_COMMIT</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <!-- ============================================================
+       8. Spec-eval Detail (collapsed)
+       ============================================================ -->
+  <section class="section">
+    <details>
+      <summary>Spec-Eval Detail <span class="summary__meta">PASS</span></summary>
+      <div class="details__body">
+        <div class="prose">
+          <p>The implementation was evaluated against <code>SPEC-001</code> and <strong>passed</strong> all functional requirements:</p>
+          <ul>
+            <li><strong>FR-1 – FR-6</strong> all satisfied; asynchronous request, progress visibility, resumable delivery, notification, expiry, and idempotency are each covered by passing tests.</li>
+            <li>No deviations from the spec's constraints (existing queue + object store, CSV/JSON only) were detected.</li>
+          </ul>
+          <p>No issues were raised during spec evaluation.</p>
+        </div>
+      </div>
+    </details>
+  </section>
+
+</main>
+
+<script>
+/* Editorial Design System v1 — final report
+   Vanilla JS only. No libraries, no inline handlers.
+   - Maps data-status to the header pill class.
+   - Wires Copy buttons to copy the target <code> block's innerText verbatim. */
+(function () {
+  "use strict";
+
+  var STATUS_TO_TOKEN = {
+    READY_TO_COMMIT: "success",
+    READY_WITH_WARNINGS: "warning"
+  };
+
+  function syncHeaderPill() {
+    var root = document.querySelector("main[data-id][data-cycle]");
+    if (!root) return;
+    var status = root.getAttribute("data-status");
+    var token = STATUS_TO_TOKEN[status];
+    if (!token) return;
+    var pill = document.querySelector(".h1__pill .pill");
+    if (pill) {
+      pill.className = "pill pill--" + token;
+      pill.textContent = status;
+    }
+  }
+
+  function fallbackCopy(text) {
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "absolute";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); } catch (e) {}
+    document.body.removeChild(ta);
+  }
+
+  function flash(btn) {
+    var original = btn.textContent;
+    btn.textContent = "Copied!";
+    btn.setAttribute("data-copied", "true");
+    setTimeout(function () {
+      btn.textContent = original;
+      btn.removeAttribute("data-copied");
+    }, 1500);
+  }
+
+  function wireCopyButtons() {
+    var buttons = document.querySelectorAll(".codeblock__copy");
+    for (var i = 0; i < buttons.length; i++) {
+      buttons[i].addEventListener("click", function () {
+        var targetId = this.getAttribute("data-copy-target");
+        var target = document.getElementById(targetId);
+        if (!target) return;
+        var text = target.innerText; // innerText preserves plain-text fidelity
+        var btn = this;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function () { flash(btn); }, function () { fallbackCopy(text); flash(btn); });
+        } else {
+          fallbackCopy(text);
+          flash(btn);
+        }
+      });
+    }
+  }
+
+  function init() { syncHeaderPill(); wireCopyButtons(); }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+})();
+</script>
+</body>
+</html>

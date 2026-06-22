@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plan — PLAN-042</title>
+<style>
+/* ============================================================
+   EDITORIAL DESIGN SYSTEM v1 — Color tokens
+   ============================================================ */
+:root {
+  --bg-page:        #faf9f7;
+  --bg-surface:     #f3f1ee;
+  --bg-overlay:     #ece9e4;
+
+  --text-primary:   #1a1917;
+  --text-secondary: #4a4844;
+  --text-muted:     #8a8680;
+
+  --accent:         #3730a3;
+  --accent-subtle:  #e0e7ff;
+  --accent-focus:   #4f46e5;
+
+  --rule:           #d6d2cb;
+  --rule-heavy:     #b5b0a8;
+
+  --status-success: #166534;
+  --status-success-bg: #dcfce7;
+  --status-active:  #92400e;
+  --status-active-bg: #fef3c7;
+  --status-warning: #9a3412;
+  --status-warning-bg: #ffedd5;
+  --status-danger:  #991b1b;
+  --status-danger-bg: #fee2e2;
+  --status-muted:   #374151;
+  --status-muted-bg: #f3f4f6;
+
+  --font-serif: Georgia, "Times New Roman", serif;
+  --font-sans:  -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                "Helvetica Neue", Arial, sans-serif;
+  --font-mono:  ui-monospace, "SF Mono", "Cascadia Code", "Fira Mono",
+                Menlo, Consolas, monospace;
+
+  --text-xs:   0.75rem;
+  --text-sm:   0.875rem;
+  --text-base: 1rem;
+  --text-lg:   1.125rem;
+  --text-xl:   1.25rem;
+  --text-2xl:  1.5rem;
+  --text-3xl:  2rem;
+
+  --sp-1:  0.25rem;
+  --sp-2:  0.5rem;
+  --sp-3:  0.75rem;
+  --sp-4:  1rem;
+  --sp-6:  1.5rem;
+  --sp-8:  2rem;
+  --sp-12: 3rem;
+  --sp-16: 4rem;
+
+  --measure: 70ch;
+  --line-height-body: 1.65;
+  --line-height-heading: 1.2;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-page:        #141312;
+    --bg-surface:     #1e1c1a;
+    --bg-overlay:     #272420;
+
+    --text-primary:   #f0ece6;
+    --text-secondary: #b8b3ab;
+    --text-muted:     #7a7570;
+
+    --accent:         #818cf8;
+    --accent-subtle:  #1e1b4b;
+    --accent-focus:   #a5b4fc;
+
+    --rule:           #2e2b28;
+    --rule-heavy:     #3d3a36;
+
+    --status-success: #86efac;
+    --status-success-bg: #14532d;
+    --status-active:  #fcd34d;
+    --status-active-bg: #451a03;
+    --status-warning: #fb923c;
+    --status-warning-bg: #431407;
+    --status-danger:  #fca5a5;
+    --status-danger-bg: #450a0a;
+    --status-muted:   #9ca3af;
+    --status-muted-bg: #1f2937;
+  }
+}
+
+/* ============================================================
+   Base reset
+   ============================================================ */
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--line-height-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main {
+  max-width: 52rem;
+  margin: 0 auto;
+  padding: var(--sp-16) var(--sp-8);
+}
+
+@media (max-width: 640px) {
+  main { padding: var(--sp-12) var(--sp-6); }
+}
+
+::selection { background: var(--accent-subtle); color: var(--accent); }
+a { color: var(--accent); }
+
+/* ============================================================
+   Masthead
+   ============================================================ */
+.masthead { margin-bottom: var(--sp-8); }
+
+.masthead__kicker {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--text-muted);
+  margin: 0 0 var(--sp-4);
+}
+
+h1 {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: clamp(2rem, 5vw, 3rem);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  margin: 0;
+  color: var(--text-primary);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-4);
+  text-wrap: balance;
+}
+
+h1 .h1__id {
+  font-family: var(--font-mono);
+  font-size: 0.46em;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--accent);
+  background: var(--accent-subtle);
+  padding: 0.15em 0.5em;
+  border-radius: 6px;
+  align-self: center;
+}
+
+.masthead__lede {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: var(--text-lg);
+  color: var(--text-secondary);
+  max-width: 52ch;
+  margin: var(--sp-4) 0 0;
+}
+
+/* ID / meta header block */
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  padding: var(--sp-4) 0;
+  margin-top: var(--sp-6);
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+
+.meta__id { color: var(--text-secondary); font-weight: 600; }
+
+.meta__fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-3);
+  margin-left: auto;
+}
+
+.meta__sep { color: var(--rule-heavy); }
+.meta__key { color: var(--text-muted); }
+.meta__val { color: var(--text-secondary); }
+.meta__val a { color: var(--accent); text-decoration: none; }
+.meta__val a:hover { text-decoration: underline; }
+
+.badge {
+  font-family: var(--font-mono);
+  background: var(--accent-subtle);
+  color: var(--accent);
+  font-size: var(--text-xs);
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   Progress overview
+   ============================================================ */
+.progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin-top: var(--sp-8);
+}
+
+.progress__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-4);
+}
+
+.progress__title {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+}
+
+.progress__label {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.progress__track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-overlay);
+  overflow: hidden;
+}
+
+.progress__fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent);
+}
+
+.progress__fill[data-complete="true"] { background: var(--status-success); }
+
+/* ============================================================
+   Status pill (gallery / general use only)
+   ============================================================ */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+  line-height: 1.6;
+}
+
+.pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+.pill--success { background: var(--status-success-bg); color: var(--status-success); }
+.pill--active  { background: var(--status-active-bg);  color: var(--status-active);  }
+.pill--muted   { background: var(--status-muted-bg);   color: var(--status-muted);   }
+
+/* ============================================================
+   Collapsible <details>
+   ============================================================ */
+.section { margin-top: var(--sp-12); }
+
+details { border-top: 1px solid var(--rule); }
+
+summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-4) 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: var(--text-primary);
+  user-select: none;
+}
+
+summary::-webkit-details-marker { display: none; }
+
+summary::before {
+  content: "\25B6";
+  font-size: 0.7em;
+  color: var(--accent);
+  transition: transform 0.18s ease;
+  flex: none;
+}
+
+details[open] > summary::before { transform: rotate(90deg); }
+
+summary:focus-visible {
+  outline: 2px solid var(--accent-focus);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+summary .summary__meta {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.details__body {
+  border-left: 3px solid var(--accent);
+  padding-left: var(--sp-6);
+  margin: 0 0 var(--sp-6) 2px;
+}
+
+details[open] > .details__body { animation: detailsfade 0.22s ease both; }
+
+@keyframes detailsfade {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   Task category sub-sections + type tags
+   ============================================================ */
+.taskcat { margin-bottom: var(--sp-8); }
+.taskcat:last-child { margin-bottom: 0; }
+
+.taskcat__head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin: 0 0 var(--sp-2);
+}
+
+.taskcat__title {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.taskcat__count {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+/* type label tag */
+.ttag {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.ttag--feat { background: var(--accent-subtle);     color: var(--accent); }
+.ttag--fix  { background: var(--status-warning-bg); color: var(--status-warning); }
+.ttag--qaf  { background: var(--status-success-bg); color: var(--status-success); }
+
+/* task list */
+.tasks { list-style: none; margin: 0; padding: 0; }
+
+.tasks li {
+  display: grid;
+  grid-template-columns: 1.4rem auto 1fr auto;
+  align-items: baseline;
+  gap: var(--sp-3);
+  padding: var(--sp-3) 0;
+  border-bottom: 1px solid var(--rule);
+  color: var(--text-primary);
+  font-size: var(--text-lg);
+}
+
+.tasks li:last-child { border-bottom: none; }
+
+.tasks li input[type="checkbox"] {
+  margin: 0;
+  width: 1rem;
+  height: 1rem;
+  opacity: 0.5;
+  accent-color: var(--accent);
+  position: relative;
+  top: 0.18em;
+}
+
+.tasks .task__desc { min-width: 0; text-wrap: pretty; }
+
+.tasks .task__id {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  align-self: center;
+}
+
+.tasks li:has(input:checked) .task__desc,
+.tasks li.done .task__desc {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+/* ============================================================
+   Dependency notes
+   ============================================================ */
+.deps { list-style: none; margin: 0; padding: 0; max-width: var(--measure); }
+
+.deps li {
+  display: grid;
+  grid-template-columns: 1.6rem 1fr;
+  gap: var(--sp-3);
+  padding: var(--sp-3) 0;
+  border-bottom: 1px solid var(--rule);
+  color: var(--text-secondary);
+  font-size: var(--text-lg);
+}
+
+.deps li:last-child { border-bottom: none; }
+
+.deps li::before {
+  content: "\2192";
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.deps code { font-size: 0.85em; }
+
+/* ============================================================
+   Inline code / path
+   ============================================================ */
+code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--bg-overlay);
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: var(--text-secondary);
+}
+</style>
+</head>
+<body>
+<main
+  data-id="PLAN-042"
+  data-status="in_progress"
+  data-created-at="2026-06-02T10:00:00Z"
+  data-updated-at="2026-06-22T17:10:00Z"
+  data-cycle="2"
+>
+
+  <!-- ============================================================
+       1. Page header — NO status pill
+       ============================================================ -->
+  <header class="masthead">
+    <p class="masthead__kicker">
+      <span>Execution Plan</span>
+      <span class="meta__sep">·</span>
+      <span>Architect</span>
+    </p>
+    <h1>
+      <span class="h1__id">PLAN-042</span>
+      <span>Async export pipeline — task breakdown</span>
+    </h1>
+    <p class="masthead__lede">A work breakdown for the coder: feature, fix, and quality-and-fitness tasks with their ordering constraints.</p>
+
+    <!-- 2. ID / meta header block -->
+    <div class="meta">
+      <span class="meta__id">PLAN-042</span>
+      <span class="meta__fields">
+        <span><span class="meta__key">spec:</span> <span class="meta__val"><a href="#">SPEC-042</a></span></span>
+        <span class="meta__sep">·</span>
+        <span><span class="meta__key">created:</span> <span class="meta__val">2026-06-02</span></span>
+        <span class="meta__sep">·</span>
+        <span><span class="meta__key">updated:</span> <span class="meta__val">2026-06-22</span></span>
+        <span class="meta__sep">·</span>
+        <span class="badge">cycle 2</span>
+      </span>
+    </div>
+
+    <!-- 5. Progress overview -->
+    <div class="progress">
+      <div class="progress__head">
+        <span class="progress__title">Plan progress</span>
+        <span class="progress__label">4 / 8 (50%)</span>
+      </div>
+      <div class="progress__track" role="progressbar" aria-valuenow="50" aria-valuemin="0" aria-valuemax="100">
+        <div class="progress__fill" data-pct="50" style="width: 50%;"></div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============================================================
+       3. Task Breakdown (open) — FEAT / FIX / QAF
+       ============================================================ -->
+  <section class="section">
+    <details open>
+      <summary>Task Breakdown <span class="summary__meta">8 tasks</span></summary>
+      <div class="details__body">
+
+        <!-- FEAT -->
+        <div class="taskcat">
+          <div class="taskcat__head">
+            <span class="ttag ttag--feat">FEAT</span>
+            <span class="taskcat__title">Feature tasks</span>
+            <span class="taskcat__count">3</span>
+          </div>
+          <ul class="tasks">
+            <li><input type="checkbox" disabled checked> <span class="ttag ttag--feat">FEAT</span> <span class="task__desc">Add async export request endpoint returning a tracking ID</span> <span class="task__id">T-01</span></li>
+            <li><input type="checkbox" disabled checked> <span class="ttag ttag--feat">FEAT</span> <span class="task__desc">Implement background export worker writing to object store</span> <span class="task__id">T-02</span></li>
+            <li><input type="checkbox" disabled> <span class="ttag ttag--feat">FEAT</span> <span class="task__desc">Range-request support on the artifact download route</span> <span class="task__id">T-03</span></li>
+          </ul>
+        </div>
+
+        <!-- FIX -->
+        <div class="taskcat">
+          <div class="taskcat__head">
+            <span class="ttag ttag--fix">FIX</span>
+            <span class="taskcat__title">Fix tasks</span>
+            <span class="taskcat__count">2</span>
+          </div>
+          <ul class="tasks">
+            <li><input type="checkbox" disabled checked> <span class="ttag ttag--fix">FIX</span> <span class="task__desc">Gateway timeout no longer leaks a half-written file</span> <span class="task__id">T-04</span></li>
+            <li><input type="checkbox" disabled> <span class="ttag ttag--fix">FIX</span> <span class="task__desc">Correct expiry calculation across daylight-saving boundaries</span> <span class="task__id">T-05</span></li>
+          </ul>
+        </div>
+
+        <!-- QAF -->
+        <div class="taskcat">
+          <div class="taskcat__head">
+            <span class="ttag ttag--qaf">QAF</span>
+            <span class="taskcat__title">Quality &amp; fitness tasks</span>
+            <span class="taskcat__count">3</span>
+          </div>
+          <ul class="tasks">
+            <li><input type="checkbox" disabled checked> <span class="ttag ttag--qaf">QAF</span> <span class="task__desc">Integration test: export → notify → resumable download</span> <span class="task__id">T-06</span></li>
+            <li><input type="checkbox" disabled> <span class="ttag ttag--qaf">QAF</span> <span class="task__desc">Load test worker pool at 50 concurrent exports</span> <span class="task__id">T-07</span></li>
+            <li><input type="checkbox" disabled> <span class="ttag ttag--qaf">QAF</span> <span class="task__desc">Coverage gate ≥ 85% on the export module</span> <span class="task__id">T-08</span></li>
+          </ul>
+        </div>
+
+      </div>
+    </details>
+  </section>
+
+  <!-- ============================================================
+       4. Dependency Notes (collapsed)
+       ============================================================ -->
+  <section class="section">
+    <details>
+      <summary>Dependency Notes <span class="summary__meta">3 constraints</span></summary>
+      <div class="details__body">
+        <ul class="deps">
+          <li><code>T-03</code> (range download) requires <code>T-02</code> (worker writes artifact) to be merged first.</li>
+          <li><code>FIX T-05</code> must complete before <code>QAF T-06</code> can validate the end-to-end flow.</li>
+          <li><code>QAF T-07</code> (load test) is gated on <code>T-02</code> and <code>T-03</code> both landing.</li>
+        </ul>
+      </div>
+    </details>
+  </section>
+
+</main>
+
+<script>
+/* Editorial Design System v1 — orchestrator plan (architect)
+   Vanilla JS only. No libraries, no inline handlers.
+   Plan progress fills are derived from data-pct; no status pill is rendered. */
+(function () {
+  "use strict";
+
+  function syncProgressFills() {
+    var fills = document.querySelectorAll(".progress__fill[data-pct]");
+    for (var i = 0; i < fills.length; i++) {
+      var pct = parseInt(fills[i].getAttribute("data-pct"), 10);
+      if (!isNaN(pct)) {
+        fills[i].style.width = pct + "%";
+        if (pct >= 100) { fills[i].setAttribute("data-complete", "true"); }
+        else { fills[i].removeAttribute("data-complete"); }
+      }
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", syncProgressFills);
+  } else {
+    syncProgressFills();
+  }
+})();
+</script>
+</body>
+</html>
