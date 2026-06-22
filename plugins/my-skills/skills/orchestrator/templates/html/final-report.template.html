@@ -481,6 +481,15 @@ code {
   border-radius: 3px;
   color: var(--text-secondary);
 }
+
+/* ============================================================
+   Related nav region
+   ============================================================ */
+.related { font-size: 0.85rem; margin: 1.5rem 0 0; padding-top: 0.75rem; border-top: 1px solid var(--rule, #e3e0d8); }
+.related .label { color: var(--text-muted, #6b6b6b); margin-right: 0.5em; }
+.related a { color: var(--accent); text-decoration: none; }
+.related a:hover { text-decoration: underline; }
+.related .sep { opacity: 0.5; margin: 0 0.4em; }
 </style>
 </head>
 <body>
@@ -628,6 +637,8 @@ Roadmap-Task: T1.1.2</code></pre>
       </div>
     </details>
   </section>
+
+  <nav class="related"><span class="label">Related:</span> <a href="plans/specs/SPEC-042-stripe-webhooks.html">SPEC-042</a><span class="sep">·</span><a href="plans/feat/FEAT-003-stripe-webhooks.html">FEAT-003</a><span class="sep">·</span><a href="plans/test/TEST-009-stripe-webhooks.html">TEST-009</a><span class="sep">·</span><a href="plans/code-review/CR-005-stripe-webhooks.html">CR-005</a><span class="sep">·</span><a href="plans/qa/QA-003-stripe-webhooks.html">QA-003</a></nav>
 
 </main>
 

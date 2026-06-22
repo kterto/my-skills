@@ -431,6 +431,15 @@ code {
   border-radius: 3px;
   color: var(--text-secondary);
 }
+
+/* ============================================================
+   Related nav region
+   ============================================================ */
+.related { font-size: 0.85rem; margin: 1.5rem 0 0; padding-top: 0.75rem; border-top: 1px solid var(--rule, #e3e0d8); }
+.related .label { color: var(--text-muted, #6b6b6b); margin-right: 0.5em; }
+.related a { color: var(--accent); text-decoration: none; }
+.related a:hover { text-decoration: underline; }
+.related .sep { opacity: 0.5; margin: 0 0.4em; }
 </style>
 </head>
 <body>
@@ -586,6 +595,8 @@ code {
       </div>
     </details>
   </section>
+
+  <nav class="related"><span class="label">Related:</span> <a href="feat/FEAT-003-stripe-webhooks.html">FEAT-003</a></nav>
 
 </main>
 
