@@ -562,7 +562,7 @@ Output only — review the diff, then commit and open the PR yourself.
 When `output_format=html`, after the pipeline reaches a terminal state, render a progress timeline for the active plan:
 
 1. Read the plan's `.progress.md` log entries (each entry is a role/action with a status word and an ISO-8601 timestamp).
-2. Fill `templates/html/progress-timeline.template.html`: emit one timeline row per log entry (role → action/status → timestamp), mapping each status word to its pill class via the standard mapping (`success | active | warning | danger | muted` — done/PASS/APPROVED/READY_TO_COMMIT→success; in_progress/DRAFT→active; BELOW_FLOOR/READY_WITH_WARNINGS→warning; BLOCKED/REQUEST_CHANGES→danger; todo/superseded→muted). Fill the `<main data-*>` shell and the Related link to the plan.
+2. Fill `templates/html/progress-timeline.template.html`: emit one timeline row per log entry (role → action/status → timestamp), mapping each status word to its pill class via the standard mapping (`success | active | warning | danger | muted` — done/PASS/APPROVED/READY_TO_COMMIT→success; in_progress/DRAFT→active; BELOW_FLOOR/READY_WITH_WARNINGS→warning; BLOCKED/BLOCKED_STALE/REQUEST_CHANGES/STALLED→danger; todo/superseded→muted). Fill the `<main data-*>` shell and the Related link to the plan.
 3. Write the result to `<plan-path-without-.md>.progress.html` (e.g. `plans/feat/FEAT-003-slug.progress.html`).
 
 This step ALSO runs at the STALLED/BLOCKED stop points (review-cycle limit, qa-cycle limit, tester BLOCKED, qa BLOCKED_STALE) so a halted run still produces a timeline. In `md` mode this step is skipped — `.progress.md` is the only progress artifact.

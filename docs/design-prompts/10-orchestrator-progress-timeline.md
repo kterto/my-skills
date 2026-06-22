@@ -32,7 +32,7 @@ The visual metaphor is a **vertical timeline**: events are stacked top-to-bottom
 | `success` | `done`, `PASS`, `APPROVED`, `READY_TO_COMMIT`, `READY_FOR_PLANNING`, `READY` |
 | `active` | `in_progress`, `IN_PROGRESS`, `DRAFT` |
 | `warning` | `BELOW_FLOOR`, `READY_WITH_WARNINGS` |
-| `danger` | `blocked`, `BLOCKED`, `REQUEST_CHANGES` |
+| `danger` | `blocked`, `BLOCKED`, `BLOCKED_STALE`, `REQUEST_CHANGES`, `STALLED` |
 | `muted` | `todo`, `superseded` |
 
 **Core components:**
@@ -106,7 +106,7 @@ Each entry in the progress log (and each timeline node) carries:
 | `READY_FOR_PLANNING`, `READY`, `READY_TO_COMMIT`, `PASS`, `APPROVED`, `done` | `success` | Green — stage complete and passing |
 | `IN_PROGRESS`, `DRAFT` | `active` | Amber — stage currently running |
 | `BELOW_FLOOR`, `READY_WITH_WARNINGS` | `warning` | Orange — passed with caveats |
-| `BLOCKED`, `REQUEST_CHANGES` | `danger` | Red — stage blocked or rejected |
+| `BLOCKED`, `BLOCKED_STALE`, `REQUEST_CHANGES`, `STALLED` | `danger` | Red — stage blocked, stalled, or rejected |
 | `todo`, `superseded` | `muted` | Gray — not yet started or superseded |
 
 ### Cycle badge
