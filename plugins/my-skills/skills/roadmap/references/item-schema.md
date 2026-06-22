@@ -1,6 +1,6 @@
 # Roadmap — Item Schema Reference
 
-This document is the single source of truth for the frontmatter, body sections, audit-log format, and html-mode rendering rules for every item (task, phase, milestone) in `/roadmap/`.
+This document is the single source of truth for the frontmatter, body sections, audit-log format, and html-mode rendering rules for every item (user story, phase, milestone) in `/roadmap/`.
 
 ## User-story file (md mode)
 
@@ -59,7 +59,7 @@ Every user-story file has exactly these three sections, in order:
 
 ## Milestone and phase READMEs
 
-Same frontmatter shape as a task, with the following differences:
+Same frontmatter shape as a user-story file, with the following differences:
 
 - `kind: milestone` or `kind: phase` (never `user-story`).
 - No `commit_trailer` key (milestones and phases are not directly implemented by a single commit).

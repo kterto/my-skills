@@ -88,7 +88,7 @@ Stable-identity rule (from `references/directory-layout.md`): a number, once ass
 
 ### Step 2 — Present tree summary
 
-Present a tree summary to the user: per-milestone phase/task counts, sequence order, and a note of any items with `depends_on` constraints. Do not write any files yet.
+Present a tree summary to the user: per-milestone phase/user-story counts, sequence order, and a note of any items with `depends_on` constraints. Do not write any files yet.
 
 ### Step 3 — User confirmation
 
@@ -123,7 +123,7 @@ The full algorithms — rollup rules, the Sync procedure, and the Re-eval proced
 
 | Command | Entry point |
 |---|---|
-| `/roadmap sync` | Run the **Sync procedure** from `references/sync-and-reeval.md`. Scans git trailers from `last_synced_sha` to HEAD, stamps matched tasks `done`, rolls up, updates `roadmap.lock.json`. |
+| `/roadmap sync` | Run the **Sync procedure** from `references/sync-and-reeval.md`. Scans git trailers from `last_synced_sha` to HEAD, stamps matched stories `done`, rolls up, updates `roadmap.lock.json`. |
 | `/roadmap` (when `/roadmap/` exists) | Run the **Re-eval procedure** from `references/sync-and-reeval.md`. Re-derives the target tree, diffs against `roadmap.lock.json`, presents a staged diff (`+ new`, `~ changed`, `! superseded`), and requires user approval before applying. |
 
 ### Global constraints (reaffirmed)
