@@ -168,7 +168,7 @@ Result: {PASS | FAIL | MISSING_TOOL | WARN} — {metric value vs threshold, or v
 
 ## Step 5 — Create the QA report file
 
-Emit the artifact per `references/artifact-format.md` using the configured `output_format`; the stdout summary below is identical regardless of format. The `md`-mode definition follows.
+Emit the artifact per `references/artifact-format.md` using the configured `output_format`; the stdout summary below is identical regardless of format. The `md`-mode definition follows. In the rendered report, fill the Related region with a relative link to the plan, per `artifact-format.md` → Related navigation.
 
 Path: `plans/qa/QA-{NNN}-{slug}.md`
 

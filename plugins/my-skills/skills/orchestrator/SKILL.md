@@ -520,7 +520,7 @@ On READY_TO_COMMIT (or READY_WITH_WARNINGS):
 
 Compose and PRINT (do not write files, EXCEPT when `output_format=html` also write an html
 report) the following report. If READY_WITH_WARNINGS arrived from QA, carry the G8 warning
-into the Issues found list.
+into the Issues found list. When `output_format=html`, the html final report fills its Related region with relative links to the spec, plan, test report, code review, and qa report (per `artifact-format.md` → Related navigation).
 
 ```
 ORCHESTRATOR — pipeline complete

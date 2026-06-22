@@ -43,6 +43,23 @@ Body: free-form markdown with headings, lists, and fenced code blocks as appropr
 
 **Styled templates.** In `html` mode, each role fills the matching self-contained scaffold in `templates/html/<artifact>.template.html` (spec, plan, test-report, code-review, qa-report, final-report). These define the Editorial Design System v1 look and the required `<main data-*>` shell; roles replace the sample content with the real artifact content, preserving the `data-*` attributes, `<details><summary>` sections, disabled checkboxes, and the `<span class="badge">cycle N</span>` badge. `progress-timeline.template.html` is provided for a future progress-as-HTML artifact; `.progress.md` remains markdown-only today.
 
+## Related navigation (md + html)
+
+Each artifact carries a **Related** region linking to the artifact(s) it derives from, using **relative** paths across the `plans/<dir>/` tree (`plans/specs/`, `plans/feat/`, `plans/test/`, `plans/code-review/`, `plans/qa/`). `<ext>` = `md` or `html` per `output_format`.
+
+Edges (each role fills the links it knows the paths of; omit a link when that artifact was not produced):
+
+| Artifact | Related links |
+|---|---|
+| spec | none |
+| plan (FEAT/FIX/QAF) | source spec (and source CR/QA for fix/qa plans) |
+| test report | the plan |
+| code-review | the plan |
+| qa report | the plan |
+| final report | spec, plan, test, code-review, qa |
+
+Compute the relative href from the artifact's own dir to the target's dir, e.g. a CR at `plans/code-review/CR-005-x.<ext>` links to its plan at `../feat/FEAT-003-y.<ext>`. In html the region is `<nav class="related">…<a href="…">ID</a>…</nav>`; in md a `**Related:** [ID](path) · …` line.
+
 ## Stdout header-line contract (identical in both modes)
 
 The orchestrator parses stdout for control flow, not the artifact file. Each role prints a fixed set of header lines; these lines are the same regardless of `output_format` (only the on-disk artifact file changes between `md` and `html`).

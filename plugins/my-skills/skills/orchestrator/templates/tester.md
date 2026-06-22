@@ -28,7 +28,7 @@ Run the coverage command from PROJECT-CONTEXT. If line coverage < 70%, add unit/
 
 ## Step 5 — Write the tester report
 
-Emit a `TEST-{NNN}` report per `references/artifact-format.md`: flows selected/excluded with rationale, e2e added, coverage before/after, weak tests found. Set status:
+Emit a `TEST-{NNN}` report per `references/artifact-format.md`: flows selected/excluded with rationale, e2e added, coverage before/after, weak tests found. In the rendered report, fill the Related region with a relative link to the plan, per `artifact-format.md` → Related navigation. Set status:
 
 - **PASS** — e2e green and coverage ≥ 70%
 - **BELOW_FLOOR** — coverage still < 70% after best effort (report why)
