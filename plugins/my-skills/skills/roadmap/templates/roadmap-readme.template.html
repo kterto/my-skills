@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Roadmap</title>
+<style>body{font:14px/1.5 system-ui;margin:2rem;max-width:60rem}.badge{display:inline-block;padding:.1em .5em;border-radius:.4em;background:#eee}table{border-collapse:collapse}td,th{border:1px solid #ccc;padding:.3em .6em}details{margin:.5rem 0}summary{cursor:pointer;font-weight:600}ul{list-style:none;padding-left:0}li{margin:.25rem 0}</style>
+</head><body>
+<main data-kind="roadmap-index">
+  <h1>Roadmap</h1>
+  <p><strong>Progress:</strong> {{done_count}}/{{total_count}} tasks done ({{pct}}%)</p>
+  <details open><summary>Milestones (in execution order)</summary>
+    <ul>{{milestone_list_ordered_by_sequence}}</ul>
+  </details>
+  <details><summary>Status legend</summary>
+    <table><thead><tr><th>Status</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>todo</code></td><td>Not yet started</td></tr>
+      <tr><td><code>in_progress</code></td><td>Actively being worked on</td></tr>
+      <tr><td><code>done</code></td><td>Completed</td></tr>
+      <tr><td><code>superseded</code></td><td>Replaced by another item; no longer active</td></tr>
+      <tr><td><code>blocked</code></td><td>Cannot proceed — dependency or blocker outstanding</td></tr>
+    </tbody></table>
+  </details>
+</main></body></html>

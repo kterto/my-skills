@@ -11,6 +11,7 @@ Authored [Claude Code](https://code.claude.com) skills, packaged as a plugin mar
 | `validation-fixer` | Routes recorded user-validation bugs through a chosen framework (superpowers / gsd / orchestrator) and tracks each fix in-file. |
 | `design-to-code` | Translates Claude design output files (self-contained HTML with tokens, reviewer comments, component states) into pixel-perfect, correctly-behaving code. |
 | `orchestrator` | Project-agnostic 6-agent pipeline (brainstormer → architect → coder → tester → reviewer → qa) with a context-confidence gate, spec-driven-eval integration, and a final Markdown/HTML report. Auto-detects first-run bootstrap vs. straight pipeline execution. |
+| `roadmap` | Decomposes a project spec into an auditable milestone→phase→task roadmap under `/roadmap/`, with append-only audit logs, orchestrator-ready task briefs, `/roadmap sync` trailer stamping, and diff+preserve re-evaluation. Doc-only. |
 
 ## orchestrator
 
@@ -53,6 +54,57 @@ Stored in `.orchestrator/config.json`; overridable per-run via CLI args.
 
 ---
 
+## roadmap
+
+A doc-only skill that turns a project spec or PRD into an auditable, traceable implementation roadmap of nested milestones → phases → tasks, materialized under `/roadmap/`. Every item carries a status and an append-only audit log (who + when + evidence). Each task is an orchestrator-ready brief that can be fed verbatim to the `orchestrator` skill.
+
+### Usage
+
+```text
+/roadmap                # auto-detect: no /roadmap dir → build; dir exists → re-evaluate (diff + preserve)
+/roadmap sync           # scan git commit trailers, stamp matched tasks done, roll up, refresh progress
+```
+
+On the first run the skill runs a **context gate**: if `.orchestrator/PROJECT-CONTEXT.md` exists it reads it as the base context; otherwise it spawns an `Explore` subagent, then loops `AskUserQuestion` until holistic confidence ≥ `context_threshold` (default 0.95). It then grills only roadmap-specific gaps (milestone boundaries, sequencing, release targets, definition of done) before proposing a decomposition for user confirmation.
+
+### Output layout
+
+```
+roadmap/
+├── CONTEXT.md                     # roadmap addendum (milestones/sequencing decisions)
+├── README.md                      # top-level progress rollup (md or html)
+├── 001-<slug>/
+│   ├── README.md                  # milestone rollup
+│   ├── 001.1-<slug>/
+│   │   ├── README.md              # phase rollup
+│   │   └── 001.1.1-<slug>.md     # task brief (orchestrator-ready)
+│   └── …
+└── …
+```
+
+### Orchestrator handoff
+
+1. Open a task brief, e.g. `roadmap/001-foundation/001.1-schema/001.1.1-db-model.md`.
+2. Run it through the orchestrator: `/orchestrator "$(cat roadmap/001-foundation/001.1-schema/001.1.1-db-model.md)"`.
+3. When done, commit with the `Roadmap-Task:` trailer so `/roadmap sync` can pick it up:
+   ```text
+   git commit -m "feat: implement db model
+
+   Roadmap-Task: 001.1.1"
+   ```
+4. Run `/roadmap sync` — the skill scans trailer stamps, marks the task `done`, rolls up phase and milestone statuses, and refreshes progress in each `README.md`.
+
+### Config
+
+Stored in `/roadmap/roadmap.config.json`; overridable per-run via CLI flags.
+
+| Key | Default | CLI flag | Description |
+|---|---|---|---|
+| `context_threshold` | `0.95` | `--threshold` | Minimum confidence before planning starts |
+| `output_format` | `"md"` | `--format` | Item file format: `md` or `html` |
+
+---
+
 ## Layout
 
 ```
@@ -68,7 +120,8 @@ my-skills/
 │           ├── commit-pr-dev/SKILL.md
 │           ├── validation-fixer/SKILL.md
 │           ├── design-to-code/SKILL.md
-│           └── orchestrator/SKILL.md
+│           ├── orchestrator/SKILL.md
+│           └── roadmap/SKILL.md
 ├── sync.sh                      # author-side: symlink skills into ~/.claude/skills
 └── README.md
 ```
@@ -87,7 +140,7 @@ A local checkout works too:
 /plugin install my-skills@my-skills
 ```
 
-Skills are then invocable as `/my-skills:clean-code-gates`, `/my-skills:commit-pr-dev`, `/my-skills:orchestrator`, etc.
+Skills are then invocable as `/my-skills:clean-code-gates`, `/my-skills:commit-pr-dev`, `/my-skills:orchestrator`, `/my-skills:roadmap`, etc.
 
 ## Updating (consumers)
 
