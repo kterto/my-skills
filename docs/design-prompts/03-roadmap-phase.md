@@ -41,14 +41,14 @@ The existing template is a minimal utility page. Elevate it into a polished edit
 - **Collapsible `<details>`:** `<summary>` with `▶/▼` CSS triangle, `3px var(--accent)` left border on open body.
 - **Audit-log table:** row-separator-only, `Timestamp | Role | Action | Status` columns, status pills in last column.
 - **Disabled-checkbox list:** `<input type="checkbox" disabled>`, completed items struck-through in `--text-muted`.
-- **Cycle badge:** `C{n}` rounded rect, `--accent-subtle` bg, `--accent` text, monospace XS.
+- **Cycle badge:** `<span class="badge">cycle N</span>` — e.g. `cycle 1` — `--accent-subtle` bg, `--accent` text, monospace XS, 4 px radius.
 - **Progress bar:** 6 px track (`--bg-overlay`), accent fill active / success fill at 100%, `X/Y (Z%)` label in mono.
 - **Diff markers:** `+` new (success green) · `~` changed (warning orange) · `!` superseded (danger red, strikethrough); mono font, `::before` or `<span>`.
 - **Inline code/path:** `<code>` — mono 0.9em, `--bg-overlay` bg, 3 px radius, no border.
 
 **GUARDRAIL (non-negotiable):**
 - No external assets: no CDN URLs, no `<link>` to web fonts, no remote `<script>` src.
-- Preserve machine contract verbatim: `<main>` with its `data-*` attrs; `{{token}}` placeholders (roadmap); `disabled` on checkboxes; exact status enum strings.
+- Preserve the machine contract verbatim — the template's root `<main>` hooks (`data-*` attributes and/or `{{token}}` placeholders, as that template defines), `disabled` checkboxes, and the exact status-enum strings. Never rename, remove, or reorder them.
 - Restyle freely; never rename, remove, or reorder contract hooks.
 - Vanilla JS only for interactions (collapsibles, toggles); no libraries.
 
@@ -65,7 +65,8 @@ The phase page is the detail view for one phase within a milestone. It renders:
 ### Root element
 
 ```html
-<main data-id="{{id}}" data-kind="phase" data-status="{{rollup_status}}">
+<main data-id="{{id}}" data-kind="phase" data-status="{{rollup_status}}"
+      data-created-at="{{created_at}}" data-updated-at="{{updated_at}}">
 ```
 
 ### Tokens
@@ -152,11 +153,12 @@ The generated HTML file must be **entirely self-contained**. This means:
 
 The following must appear exactly as shown in the output HTML:
 
-1. **Root element with all three data attributes:**
+1. **Root element with all five data attributes:**
    ```html
-   <main data-id="{{id}}" data-kind="phase" data-status="{{rollup_status}}">
+   <main data-id="{{id}}" data-kind="phase" data-status="{{rollup_status}}"
+         data-created-at="{{created_at}}" data-updated-at="{{updated_at}}">
    ```
-   All three attributes (`data-id`, `data-kind`, `data-status`) must be present on `<main>`. Do not add, remove, rename, or reorder them.
+   all five attributes (`data-id`, `data-kind`, `data-status`, `data-created-at`, `data-updated-at`) must be present on `<main>`. Do not add, remove, rename, or reorder them.
 
 2. **Token placeholders** — all nine must be present, verbatim, in the HTML output:
    - `{{created_at}}`

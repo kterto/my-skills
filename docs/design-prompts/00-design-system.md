@@ -88,36 +88,38 @@ The canonical CSS custom-property scheme. Both `:root` (light) and `@media (pref
 Headings use a **high-contrast serif** system stack; body uses a **humanist sans** stack; IDs, paths, trailers, and code use **system mono**.
 
 ```css
-/* Font stacks */
---font-serif: Georgia, "Times New Roman", serif;
---font-sans:  -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-              "Helvetica Neue", Arial, sans-serif;
---font-mono:  ui-monospace, "SF Mono", "Cascadia Code", "Fira Mono",
-              Menlo, Consolas, monospace;
+:root {
+  /* Font stacks */
+  --font-serif: Georgia, "Times New Roman", serif;
+  --font-sans:  -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                "Helvetica Neue", Arial, sans-serif;
+  --font-mono:  ui-monospace, "SF Mono", "Cascadia Code", "Fira Mono",
+                Menlo, Consolas, monospace;
 
-/* Type scale (rem, 16px base) */
---text-xs:   0.75rem;   /* 12px — labels, captions */
---text-sm:   0.875rem;  /* 14px — meta, secondary */
---text-base: 1rem;      /* 16px — body prose */
---text-lg:   1.125rem;  /* 18px — lead / callout */
---text-xl:   1.25rem;   /* 20px — H3 */
---text-2xl:  1.5rem;    /* 24px — H2 */
---text-3xl:  2rem;      /* 32px — H1 */
+  /* Type scale (rem, 16px base) */
+  --text-xs:   0.75rem;   /* 12px — labels, captions */
+  --text-sm:   0.875rem;  /* 14px — meta, secondary */
+  --text-base: 1rem;      /* 16px — body prose */
+  --text-lg:   1.125rem;  /* 18px — lead / callout */
+  --text-xl:   1.25rem;   /* 20px — H3 */
+  --text-2xl:  1.5rem;    /* 24px — H2 */
+  --text-3xl:  2rem;      /* 32px — H1 */
 
-/* Spacing scale */
---sp-1:  0.25rem;
---sp-2:  0.5rem;
---sp-3:  0.75rem;
---sp-4:  1rem;
---sp-6:  1.5rem;
---sp-8:  2rem;
---sp-12: 3rem;
---sp-16: 4rem;
+  /* Spacing scale */
+  --sp-1:  0.25rem;
+  --sp-2:  0.5rem;
+  --sp-3:  0.75rem;
+  --sp-4:  1rem;
+  --sp-6:  1.5rem;
+  --sp-8:  2rem;
+  --sp-12: 3rem;
+  --sp-16: 4rem;
 
-/* Layout */
---measure: 70ch;        /* max line length for prose */
---line-height-body: 1.65;
---line-height-heading: 1.2;
+  /* Layout */
+  --measure: 70ch;        /* max line length for prose */
+  --line-height-body: 1.65;
+  --line-height-heading: 1.2;
+}
 ```
 
 ---
@@ -129,8 +131,8 @@ Five semantic tokens cover every status enum value across both skills. Every gen
 | Semantic token | CSS variable prefix | Color intent |
 |---|---|---|
 | `success` | `--status-success` | Green |
-| `active` | `--status-active` | Accent amber |
-| `warning` | `--status-warning` | Soft amber/orange |
+| `active` | `--status-active` | Accent / gold-amber |
+| `warning` | `--status-warning` | orange |
 | `danger` | `--status-danger` | Red |
 | `muted` | `--status-muted` | Gray |
 
@@ -245,7 +247,7 @@ This is the canonical block that each per-template prompt (`01`–`11`) pastes v
 
 **GUARDRAIL (non-negotiable):**
 - No external assets: no CDN URLs, no `<link>` to web fonts, no remote `<script>` src.
-- Preserve machine contract verbatim: `<main>` with its `data-*` attrs; `{{token}}` placeholders (roadmap); `disabled` on checkboxes; `<!-- roadmap-index -->` marker; exact status enum strings.
+- Preserve the machine contract verbatim — the template's root `<main>` hooks (`data-*` attributes and/or `{{token}}` placeholders, as that template defines), `disabled` checkboxes, and the exact status-enum strings. Never rename, remove, or reorder them.
 - Restyle freely; never rename, remove, or reorder contract hooks.
 - Vanilla JS only for interactions (collapsibles, toggles); no libraries.
 ````

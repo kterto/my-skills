@@ -48,7 +48,7 @@ The tester report is consumed by the reviewer role and by the orchestrator pipel
 
 **GUARDRAIL (non-negotiable):**
 - No external assets: no CDN URLs, no `<link>` to web fonts, no remote `<script>` src.
-- Preserve machine contract verbatim: `<main>` with its `data-*` attrs; `{{token}}` placeholders (roadmap); `disabled` on checkboxes; exact status enum strings.
+- Preserve the machine contract verbatim — the template's root `<main>` hooks (`data-*` attributes and/or `{{token}}` placeholders, as that template defines), `disabled` checkboxes, and the exact status-enum strings. Never rename, remove, or reorder them.
 - Restyle freely; never rename, remove, or reorder contract hooks.
 - Vanilla JS only for interactions (collapsibles, toggles); no libraries.
 
