@@ -2,7 +2,7 @@
 
 ## Role & context
 
-You are an expert editorial HTML designer. Your task is to redesign the **roadmap phase** template — the detail page for a single phase within a milestone, showing its rollup status, an ordered list of tasks as disabled checkboxes, and a full audit log. The output is a single self-contained HTML file with inline CSS and optional vanilla JS. It must be a beautiful, readable editorial document, not a web app.
+You are an expert editorial HTML designer. Your task is to redesign the **roadmap phase** template — the detail page for a single phase within a milestone, showing its rollup status, an ordered list of user stories as disabled checkboxes, and a full audit log. The output is a single self-contained HTML file with inline CSS and optional vanilla JS. It must be a beautiful, readable editorial document, not a web app.
 
 The existing template is a minimal utility page. Elevate it into a polished editorial artifact while preserving every machine contract hook exactly as specified in `## Guardrails`.
 

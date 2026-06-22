@@ -59,7 +59,7 @@ The existing template is a minimal utility page. Elevate it into a polished edit
 The roadmap index is the entry-point dashboard for an entire project roadmap. It renders:
 
 1. **Page header** — `<h1>Roadmap</h1>` with an overall status summary.
-2. **Progress bar** — Derived from `{{done_count}}` / `{{total_count}}` task counts, displaying `{{done_count}}/{{total_count}} tasks done ({{pct}}%)`. The fill transitions from accent colour (`--accent`) to success green (`--status-success`) when `{{pct}}` reaches 100.
+2. **Progress bar** — Derived from `{{done_count}}` / `{{total_count}}` task counts, displaying `{{done_count}}/{{total_count}} stories done ({{pct}}%)`. The fill transitions from accent colour (`--accent`) to success green (`--status-success`) when `{{pct}}` reaches 100.
 3. **Milestone list** — `{{milestone_list_ordered_by_sequence}}` renders an ordered list of milestone entries sorted by sequence number. Each entry shows: sequence number, milestone ID (monospace), title, and a status pill reflecting its rollup status.
 4. **Status legend** — A collapsible section listing all five enum values with short descriptions.
 
@@ -77,8 +77,8 @@ All of the following `{{token}}` placeholders must appear verbatim in the output
 
 | Token | Description |
 |---|---|
-| `{{done_count}}` | Number of tasks in `done` status |
-| `{{total_count}}` | Total number of tasks across all milestones |
+| `{{done_count}}` | Number of user stories in `done` status |
+| `{{total_count}}` | Total number of user stories across all milestones |
 | `{{pct}}` | Percentage complete (integer, 0–100) |
 | `{{milestone_list_ordered_by_sequence}}` | Renderer-injected list of milestone rows, sorted by sequence |
 

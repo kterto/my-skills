@@ -32,7 +32,7 @@ The directory name uses the full ID pattern as its prefix (e.g. `001-bootstrap/`
 
 ## Stable-identity rule
 
-A directory number, once assigned, is **never renumbered**. It is identity, not position. New milestones, phases, and tasks append as the next available number. Logical execution order is carried by the `sequence` (and `depends_on`) field and rendered in that order in every README.
+A directory number, once assigned, is **never renumbered**. It is identity, not position. New milestones, phases, and user stories append as the next available number. Logical execution order is carried by the `sequence` (and `depends_on`) field and rendered in that order in every README.
 
 **Consequence:** after the first re-evaluation insert, directory number ≠ execution order. This is intentional — it keeps the audit identity of completed work intact (a `done` item is never rewritten by renumbering).
 
@@ -42,7 +42,7 @@ A directory number, once assigned, is **never renumbered**. It is identity, not 
 
 ### Navigation link targets
 
-Items link to each other by relative path derived from the ID scheme: a milestone is `<NNN-slug>/README.<ext>`, a phase is `<NNN.M-slug>/README.<ext>`, a task is `<NNN.M.T-slug>.<ext>` (`<ext>` per `output_format`). See `item-schema.md` → Output navigation.
+Items link to each other by relative path derived from the ID scheme: a milestone is `<NNN-slug>/README.<ext>`, a phase is `<NNN.M-slug>/README.<ext>`, a user story is `<NNN.M.T-slug>.<ext>` (`<ext>` per `output_format`). See `item-schema.md` → Output navigation.
 
 ## `roadmap.lock.json` schema
 
@@ -62,7 +62,7 @@ Keys:
 |---|---|---|
 | `version` | integer | Schema version (currently `1`). |
 | `last_synced_sha` | string \| null | The git SHA of the last `/roadmap sync` run. `null` before first sync. |
-| `items` | array | One entry per tracked milestone, phase, and task. |
+| `items` | array | One entry per tracked milestone, phase, and user story. |
 | `items[].id` | string | Stable ID (e.g. `001.1.1`). |
 | `items[].kind` | string | `milestone` \| `phase` \| `user-story`. |
 | `items[].status` | string | Current status (see item-schema.md for the status enum). |
