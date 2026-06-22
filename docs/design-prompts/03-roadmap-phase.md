@@ -59,7 +59,7 @@ The phase page is the detail view for one phase within a milestone. It renders:
 1. **Page header** — `<h1>` containing the phase ID (`{{id}}`), title (`{{title}}`), and an inline status pill for `{{rollup_status}}`.
 2. **ID / meta header block** — Monospace ID left, then `milestone: {{milestone}} · sequence: {{sequence}} · created: {{created_at}} · updated: {{updated_at}}` meta row with `·` dividers, hairline rule below.
 3. **Dependencies** — A labelled field: `Depends on: {{depends_on}}`. Render as `—` when empty.
-4. **Task list** — `{{task_list_ordered_by_sequence}}` renders an ordered list of task items. Each item is rendered as a **disabled-checkbox row**: `<input type="checkbox" disabled>` followed by the task title and a status pill. Completed tasks (`done`) have the checkbox checked and the text struck through in `--text-muted`. Non-done tasks have the checkbox unchecked and text in `--text-primary`.
+4. **User story list** — `{{story_list_ordered_by_sequence}}` renders an ordered list of user story items. Each item is rendered as a **disabled-checkbox row**: `<input type="checkbox" disabled>` followed by the user story title and a status pill. Completed user stories (`done`) have the checkbox checked and the text struck through in `--text-muted`. Non-done user stories have the checkbox unchecked and text in `--text-primary`.
 5. **Audit log** — A full-width table with exact column headers: `when (ISO-8601)`, `status`, `who`, `evidence`.
 
 ### Root element
@@ -81,19 +81,19 @@ All of the following `{{token}}` placeholders must appear verbatim in the output
 | `{{milestone}}` | Parent milestone ID (e.g. `M1`) |
 | `{{rollup_status}}` | Computed rollup status: `todo`, `in_progress`, `done`, `blocked`, or `superseded` |
 | `{{sequence}}` | Execution order integer within the milestone |
-| `{{task_list_ordered_by_sequence}}` | Renderer-injected list of task rows, sorted by sequence |
+| `{{story_list_ordered_by_sequence}}` | Renderer-injected list of user story rows, sorted by sequence |
 | `{{title}}` | Human-readable phase title |
 | `{{updated_at}}` | ISO-8601 last-updated timestamp |
 
-### Task list — disabled-checkbox rows
+### User story list — disabled-checkbox rows
 
-The task list injection point `{{task_list_ordered_by_sequence}}` is filled by the renderer with one `<li>` per task. Each `<li>` must follow the disabled-checkbox pattern:
+The user story list injection point `{{story_list_ordered_by_sequence}}` is filled by the renderer with one `<li>` per user story. Each `<li>` must follow the disabled-checkbox pattern:
 
 ```html
-<li><input type="checkbox" disabled> Task title</li>
+<li><input type="checkbox" disabled> User story title</li>
 ```
 
-For completed tasks, the renderer adds the `checked` attribute and the design must apply strikethrough + muted colour via CSS (target `li:has(input:checked)` or a `.done` class).
+For completed user stories, the renderer adds the `checked` attribute and the design must apply strikethrough + muted colour via CSS (target `li:has(input:checked)` or a `.done` class).
 
 ### Audit-log table columns
 
@@ -110,9 +110,9 @@ Render a **gallery section** at the bottom of the generated template (inside a `
 Gallery must include:
 
 1. **Rollup status variants** — One phase card stub per rollup status value:
-   - `todo` → muted pill, all tasks unchecked
-   - `in_progress` → active (amber) pill, some tasks checked
-   - `done` → success (green) pill, all tasks checked and struck through
+   - `todo` → muted pill, all user stories unchecked
+   - `in_progress` → active (amber) pill, some user stories checked
+   - `done` → success (green) pill, all user stories checked and struck through
    - `blocked` → danger (red) pill, alert-tinted header
    - `superseded` → muted pill, header text struck through
 
@@ -122,7 +122,7 @@ Gallery must include:
    - Blocked item (status `blocked`) — text in `--status-danger`, checkbox unchecked
    - Superseded item — struck-through text, muted, checkbox unchecked
 
-3. **Empty state** — Phase with zero tasks: centred soft message ("No tasks defined") in `--text-muted` italic inside the task-list `<details>`.
+3. **Empty state** — Phase with zero user stories: centred soft message ("No user stories defined") in `--text-muted` italic inside the user-story-list `<details>`.
 
 4. **Audit-log table** — A sample table with at least three rows showing the `when (ISO-8601) | status | who | evidence` column structure with representative data and status pills in the `status` column.
 
@@ -132,7 +132,7 @@ Gallery must include:
 
 Implement using **vanilla JS only** — no libraries, no frameworks, no external scripts.
 
-- **Task list collapse/expand:** The task list is wrapped in `<details open>`. The `▶/▼` triangle is CSS-driven via `[open]` attribute — no JS needed.
+- **User story list collapse/expand:** The user story list is wrapped in `<details open>`. The `▶/▼` triangle is CSS-driven via `[open]` attribute — no JS needed.
 - **Audit log collapse/expand:** Same `<details open>` pattern; starts open by default.
 - **Smooth open animation (optional):** CSS `@keyframes` fade-in on `<details>` content only — no JS animation libraries.
 - **Keyboard accessibility:** All interactive elements reachable via keyboard. `<details>/<summary>` handles this natively. Checkboxes are `disabled` and therefore not focusable/interactive by design.
@@ -148,7 +148,7 @@ Roadmap (../../README.<ext>) / {{milestone}} (../README.<ext>) / {{id}}
 
 `Roadmap` links to `../../README.<ext>` (the root roadmap index, two directories up). `{{milestone}}` links to `../README.<ext>` (the parent milestone, one directory up). `{{id}}` is the current phase and is not linked. All hrefs are relative — never absolute or external.
 
-The task list section renders task rows as relative links of the form `<NNN.M.T-slug>.<ext>`; these links are injected by the skill renderer via `{{task_list_ordered_by_sequence}}` and must remain relative.
+The user story list section renders user story rows as relative links of the form `<NNN.M.T-slug>.<ext>`; these links are injected by the skill renderer via `{{story_list_ordered_by_sequence}}` and must remain relative.
 
 ## Guardrails
 
@@ -179,13 +179,13 @@ The following must appear exactly as shown in the output HTML:
    - `{{milestone}}`
    - `{{rollup_status}}`
    - `{{sequence}}`
-   - `{{task_list_ordered_by_sequence}}`
+   - `{{story_list_ordered_by_sequence}}`
    - `{{title}}`
    - `{{updated_at}}`
 
-3. **Task list injection point** — `{{task_list_ordered_by_sequence}}` must be the single placeholder for the task list. Do not split or duplicate it.
+3. **User story list injection point** — `{{story_list_ordered_by_sequence}}` must be the single placeholder for the user story list. Do not split or duplicate it.
 
-4. **Disabled-checkbox attribute** — Every task `<input>` element in the task list must carry the `disabled` attribute verbatim. Example: `<input type="checkbox" disabled>`. Removing or omitting `disabled` breaks the contract.
+4. **Disabled-checkbox attribute** — Every user story `<input>` element in the user story list must carry the `disabled` attribute verbatim. Example: `<input type="checkbox" disabled>`. Removing or omitting `disabled` breaks the contract.
 
 5. **Audit-log column order** — The table header must preserve the exact column order: `when (ISO-8601)`, `status`, `who`, `evidence`. Never rename or reorder these columns.
 

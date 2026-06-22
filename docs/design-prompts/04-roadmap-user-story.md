@@ -1,8 +1,8 @@
-# Design Prompt — Roadmap Task (`task`)
+# Design Prompt — Roadmap User Story (`user-story`)
 
 ## Role & context
 
-You are an expert editorial HTML designer. Your task is to redesign the **roadmap task** template — the reading centerpiece for a single task, displaying its brief, acceptance criteria, commit-trailer callout, and audit log. The output is a single self-contained HTML file with inline CSS and optional vanilla JS. It must be a beautiful, readable editorial document optimised for a developer reading and acting on a single work item.
+You are an expert editorial HTML designer. Your task is to redesign the **roadmap user story** template — the reading centerpiece for a single user story, displaying its brief, acceptance criteria, commit-trailer callout, and audit log. The output is a single self-contained HTML file with inline CSS and optional vanilla JS. It must be a beautiful, readable editorial document optimised for a developer reading and acting on a single work item.
 
 The existing template is a minimal utility page. Elevate it into a polished editorial artifact while preserving every machine contract hook exactly as specified in `## Guardrails`.
 
@@ -54,9 +54,9 @@ The existing template is a minimal utility page. Elevate it into a polished edit
 
 ## Content & data contract
 
-The task page is the developer's primary reading artifact for a single work item. It renders:
+The user story page is the developer's primary reading artifact for a single work item. It renders:
 
-1. **Page header** — `<h1>` containing the task ID (`{{id}}`), title (`{{title}}`), and an inline status pill for `{{status}}`.
+1. **Page header** — `<h1>` containing the user story ID (`{{id}}`), title (`{{title}}`), and an inline status pill for `{{status}}`.
 2. **ID / meta header block** — Monospace ID left, then `milestone: {{milestone}} · phase: {{phase}} · sequence: {{sequence}} · created: {{created_at}} · updated: {{updated_at}}` with `·` dividers, hairline rule below.
 3. **Dependencies & spec refs** — Two labelled fields: `Depends on: {{depends_on}}` and `Spec refs: {{spec_refs}}`. Render as `—` when empty.
 4. **Brief section** — A collapsible `<details open>` section labelled "Brief" containing the rich `{{brief}}` prose body. Below the brief body, a visually prominent **commit-trailer callout** showing the exact trailer line the developer must include in their commit message.
@@ -68,19 +68,19 @@ The task page is the developer's primary reading artifact for a single work item
 Inside the Brief section, after `{{brief}}`, render a callout block that displays:
 
 ```
-Roadmap-Task: {{id}}
+Roadmap-Story: {{id}}
 ```
 
-Style this as a visually distinct `<aside>` or `<p class="trailer-callout">` using `--font-mono`, a left `3px solid var(--accent)` border, `--accent-subtle` background, and `--sp-4` padding. This callout must include the exact string `Roadmap-Task: {{id}}` verbatim (with `{{id}}` as the live token, not a literal example).
+Style this as a visually distinct `<aside>` or `<p class="trailer-callout">` using `--font-mono`, a left `3px solid var(--accent)` border, `--accent-subtle` background, and `--sp-4` padding. This callout must include the exact string `Roadmap-Story: {{id}}` verbatim (with `{{id}}` as the live token, not a literal example).
 
 ### Root element
 
 ```html
-<main data-id="{{id}}" data-kind="task" data-status="{{status}}"
+<main data-id="{{id}}" data-kind="user-story" data-status="{{status}}"
       data-created-at="{{created_at}}" data-updated-at="{{updated_at}}">
 ```
 
-Note: this template uses `data-status="{{status}}"` (not `rollup_status`) because tasks carry a direct status rather than a computed rollup.
+Note: this template uses `data-status="{{status}}"` (not `rollup_status`) because user stories carry a direct status rather than a computed rollup.
 
 ### Tokens
 
@@ -89,16 +89,16 @@ All of the following `{{token}}` placeholders must appear verbatim in the output
 | Token | Description |
 |---|---|
 | `{{acceptance}}` | Acceptance criteria (may be HTML list content) |
-| `{{brief}}` | Rich prose description of the task |
+| `{{brief}}` | Rich prose description of the user story |
 | `{{created_at}}` | ISO-8601 creation timestamp |
-| `{{depends_on}}` | Dependency list (task IDs or `—`) |
-| `{{id}}` | Task identifier (e.g. `T1.1.1`) |
+| `{{depends_on}}` | Dependency list (user story IDs or `—`) |
+| `{{id}}` | User story identifier (e.g. `T1.1.1`) |
 | `{{milestone}}` | Parent milestone ID |
 | `{{phase}}` | Parent phase ID |
 | `{{sequence}}` | Execution order integer within the phase |
 | `{{spec_refs}}` | References to spec documents or sections |
-| `{{status}}` | Task status: `todo`, `in_progress`, `done`, `blocked`, or `superseded` |
-| `{{title}}` | Human-readable task title |
+| `{{status}}` | User story status: `todo`, `in_progress`, `done`, `blocked`, or `superseded` |
+| `{{title}}` | Human-readable user story title |
 | `{{updated_at}}` | ISO-8601 last-updated timestamp |
 
 ### Audit-log table columns
@@ -113,7 +113,7 @@ when (ISO-8601) | status | who | evidence
 
 Render a **gallery section** at the bottom of the generated template (inside a `<details>` or a clearly labelled `<section data-gallery>`) demonstrating every visual variant the page can display. The gallery exists only for design review.
 
-Gallery must include all **five task status variants** (unlike index/milestone/phase which show only rollup variants, tasks have a direct status that includes all five values):
+Gallery must include all **five user story status variants** (unlike index/milestone/phase which show only rollup variants, user stories have a direct status that includes all five values):
 
 1. **`todo`** — muted pill, brief reads as future tense, no checked items, neutral header.
 2. **`in_progress`** — active (amber) pill, brief reads as present-tense action, header lightly highlighted.
@@ -123,7 +123,7 @@ Gallery must include all **five task status variants** (unlike index/milestone/p
 
 Additionally include:
 
-6. **Commit-trailer callout** — Show the `Roadmap-Task: {{id}}` callout block styled prominently in the Brief section (accent left border, subtle indigo background).
+6. **Commit-trailer callout** — Show the `Roadmap-Story: {{id}}` callout block styled prominently in the Brief section (accent left border, subtle indigo background).
 7. **Spec refs field variants** — Show both a filled spec-refs field (e.g. `§3.2, §4.1`) and an empty one (`—`).
 8. **Audit-log table** — A sample table with at least three rows showing the `when (ISO-8601) | status | who | evidence` column structure, with status pills in the `status` column cycling through different values.
 9. **Empty acceptance state** — Acceptance section open but showing "No acceptance criteria defined" in `--text-muted` italic.
@@ -133,7 +133,7 @@ Additionally include:
 
 Implement using **vanilla JS only** — no libraries, no frameworks, no external scripts.
 
-- **Brief section collapse/expand:** Wrapped in `<details open>` — starts expanded so developers see the task immediately.
+- **Brief section collapse/expand:** Wrapped in `<details open>` — starts expanded so developers see the user story immediately.
 - **Acceptance section collapse/expand:** Wrapped in `<details>` — starts collapsed by default; open to review criteria.
 - **Audit log collapse/expand:** Wrapped in `<details open>` — starts open.
 - The `▶/▼` triangle indicator on all `<summary>` elements is CSS-driven via the `[open]` attribute — no JS needed for this.
@@ -143,13 +143,13 @@ Implement using **vanilla JS only** — no libraries, no frameworks, no external
 
 ## Navigation
 
-The task page has a **breadcrumb** at the top of the page:
+The user story page has a **breadcrumb** at the top of the page:
 
 ```
 Roadmap (../../README.<ext>) / {{milestone}} (../README.<ext>) / {{phase}} (README.<ext>) / {{id}}
 ```
 
-`Roadmap` links to `../../README.<ext>` (the root roadmap index, two directories up). `{{milestone}}` links to `../README.<ext>` (the parent milestone, one directory up). `{{phase}}` links to `README.<ext>` (the parent phase, same directory). `{{id}}` is the current task and is not linked. All hrefs are relative — never absolute or external.
+`Roadmap` links to `../../README.<ext>` (the root roadmap index, two directories up). `{{milestone}}` links to `../README.<ext>` (the parent milestone, one directory up). `{{phase}}` links to `README.<ext>` (the parent phase, same directory). `{{id}}` is the current user story and is not linked. All hrefs are relative — never absolute or external.
 
 ## Guardrails
 
@@ -168,7 +168,7 @@ The following must appear exactly as shown in the output HTML:
 
 1. **Root element with all five data attributes:**
    ```html
-   <main data-id="{{id}}" data-kind="task" data-status="{{status}}"
+   <main data-id="{{id}}" data-kind="user-story" data-status="{{status}}"
          data-created-at="{{created_at}}" data-updated-at="{{updated_at}}">
    ```
    all five attributes (`data-id`, `data-kind`, `data-status`, `data-created-at`, `data-updated-at`) must be present on `<main>`. Note: the status attribute is `data-status="{{status}}"`, not `data-status="{{rollup_status}}"`. Do not add, remove, rename, or reorder these attributes.
@@ -187,7 +187,7 @@ The following must appear exactly as shown in the output HTML:
    - `{{title}}`
    - `{{updated_at}}`
 
-3. **Commit-trailer callout line** — The exact string `Roadmap-Task: {{id}}` must appear verbatim inside the Brief section. This is the machine-readable commit trailer that git hooks and tooling parse. Do not paraphrase, abbreviate, or move it outside the Brief section.
+3. **Commit-trailer callout line** — The exact string `Roadmap-Story: {{id}}` must appear verbatim inside the Brief section. This is the machine-readable commit trailer that git hooks and tooling parse. Do not paraphrase, abbreviate, or move it outside the Brief section.
 
 4. **Brief and Acceptance as separate sections** — `{{brief}}` and `{{acceptance}}` must remain in distinct `<details>` sections. Do not merge them into one block.
 
