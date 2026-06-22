@@ -47,9 +47,15 @@ Record availability in memory for the current run. Do **not** block bootstrap on
 
 1. **Render agent templates**: copy each of the six files `templates/{role}.md` verbatim into `target/.claude/agents/{role}.md` (roles: brainstormer, architect, coder, tester, reviewer, qa). No substitution is needed — templates are project-agnostic and read `.orchestrator/PROJECT-CONTEXT.md` at runtime.
 
-2. **Write config**: merge `templates/config.template.json` with any CLI overrides (precedence: CLI arg > `.orchestrator/config.json` > default) and write the result to `.orchestrator/config.json`.
+2. **Materialize artifact rules + html scaffolds (load-bearing).** Subagents cannot read the skill's own `references/` or `templates/html/` directories — those paths do not exist in the target project. Copy them into `.orchestrator/` so every role can read them:
+   - `references/artifact-format.md` → `.orchestrator/artifact-format.md`
+   - `templates/html/*.template.html` → `.orchestrator/html-templates/` (all seven: spec, plan, test-report, code-review, qa-report, final-report, progress-timeline)
 
-3. **Print bootstrap summary**: list all created/updated paths and the achieved context confidence.
+   Re-copy these on every bootstrap (including `--setup` re-runs) so they stay in sync with the installed skill version. If this step is skipped, `output_format=html` silently degrades to md because agents cannot find the scaffolds.
+
+3. **Write config**: merge `templates/config.template.json` with any CLI overrides (precedence: CLI arg > `.orchestrator/config.json` > default) and write the result to `.orchestrator/config.json`.
+
+4. **Print bootstrap summary**: list all created/updated paths (including `.orchestrator/artifact-format.md` and `.orchestrator/html-templates/`) and the achieved context confidence.
 
 ## Pipeline
 
@@ -79,6 +85,39 @@ Agent({
 ```
 
 The subagent prompt MUST be self-contained: it does not see this conversation. Include the user's raw input, the spec/plan path or ID, and any locked decisions.
+
+#### Mandatory role-prompt preamble (every spawn)
+
+The subagent cannot see `.orchestrator/config.json` semantics on its own, and self-numbering by subagents is the root cause of duplicate IDs. So the orchestrator resolves both centrally and **prepends this preamble to EVERY role prompt** (brainstormer, architect, coder, tester, reviewer, qa):
+
+```
+ORCHESTRATOR CONTEXT (authoritative — do not recompute):
+output_format={resolved output_format}
+Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
+HTML scaffolds: .orchestrator/html-templates/<artifact>.template.html  (only used when output_format=html)
+ID to use: {PREFIX}-{NNN}      ← producing roles ONLY; use verbatim, do not compute your own
+```
+
+- `output_format` is resolved once per run (CLI arg > `.orchestrator/config.json` > default `md`).
+- `ID to use:` is included for the roles that create a numbered artifact (brainstormer→SPEC, architect→FEAT/FIX/QAF, tester→TEST, reviewer→CR, qa→QA). The coder creates no new artifact, so it gets the preamble WITHOUT an `ID to use:` line.
+- Always emit the `.md` artifact; when `output_format=html`, ALSO emit the `.html` rendered view (per `artifact-format.md`).
+
+#### Computing `{PREFIX}-{NNN}` before each producing spawn
+
+Run this exact command (extension-agnostic, correct across the md→html transition) for the role's (dir, prefix) from `artifact-format.md`'s allow-list, then put the result in the `ID to use:` line:
+
+```bash
+nextid() {  # $1=dir  $2=prefix
+  n=$(ls "$1" 2>/dev/null | grep -oE "^$2-[0-9]{3}" | grep -oE '[0-9]{3}' | sort -n | tail -1)
+  printf "%s-%03d\n" "$2" "$(( 10#${n:-0} + 1 ))"
+}
+# examples:
+# nextid plans/specs SPEC ; nextid plans/feat FEAT ; nextid plans/code-review FIX
+# nextid plans/qa QAF ; nextid plans/test TEST ; nextid plans/code-review CR
+# nextid plans/qa QA ; nextid plans/eval EVAL ; nextid plans/final FINAL
+```
+
+Reviewer/architect-fix runs honor an explicit pre-chosen path env var when set (e.g. `MAESTRO_CR_TARGET_PATH`) — in that case use that path's number and skip `nextid`.
 
 ### Step 0 — Pre-flight
 
@@ -183,11 +222,17 @@ max_qa_cycles: {max_qa_cycles}
 
 ### Step 1 — Brainstormer: capture an unambiguous spec
 
-Invoke the **brainstormer** subagent with the user's raw input.
+Compute the spec ID: `nextid plans/specs SPEC`. Invoke the **brainstormer** subagent with the user's raw input, prepending the mandatory role-prompt preamble.
 
 Prompt to send:
 
 ```
+ORCHESTRATOR CONTEXT (authoritative — do not recompute):
+output_format={resolved output_format}
+Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
+HTML scaffolds: .orchestrator/html-templates/<artifact>.template.html  (only used when output_format=html)
+ID to use: {computed SPEC-NNN}
+
 {user input}
 
 Follow your full brainstormer workflow. Interview the user as needed, then write the spec file. Print the structured output summary.
@@ -217,11 +262,17 @@ Only continue when `spec_status` is `READY_FOR_PLANNING`.
 
 ### Step 2 — Architect: create the initial plan from the spec
 
-Invoke the **architect** subagent with the spec path.
+Compute the plan ID: `nextid plans/feat FEAT`. Invoke the **architect** subagent with the spec path, prepending the role-prompt preamble.
 
 Prompt to send:
 
 ```
+ORCHESTRATOR CONTEXT (authoritative — do not recompute):
+output_format={resolved output_format}
+Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
+HTML scaffolds: .orchestrator/html-templates/<artifact>.template.html  (only used when output_format=html)
+ID to use: {computed FEAT-NNN}
+
 Source spec: {spec_path}
 Type: feat — derive scope from the spec's functional requirements and project-context fit.
 Follow your full architect workflow and print the structured output summary.
@@ -240,9 +291,14 @@ Read the plan file at `plan_path` and the paired `.progress.md` (same path with 
 
 ### Step 3 — Coder: implement the plan
 
-Invoke the **coder** subagent with:
+Invoke the **coder** subagent with the role-prompt preamble (no `ID to use:` line — the coder creates no new artifact; it mutates the existing plan's `.md`):
 
 ```
+ORCHESTRATOR CONTEXT (authoritative — do not recompute):
+output_format={resolved output_format}
+Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
+HTML scaffolds: .orchestrator/html-templates/<artifact>.template.html  (only used when output_format=html)
+
 Implement plan {plan_id}.
 Follow your full coder workflow and print the structured session summary.
 ```
@@ -259,11 +315,17 @@ After coder DONE is confirmed, invoke the `simplify` skill on the changes from t
 
 ### Step 3b — Tester
 
-After coder reports DONE (and the simplification pass has run), invoke the **tester** subagent with the plan ID.
+After coder reports DONE (and the simplification pass has run), compute the report ID: `nextid plans/test TEST`. Invoke the **tester** subagent with the plan ID, prepending the role-prompt preamble.
 
 Prompt to send:
 
 ```
+ORCHESTRATOR CONTEXT (authoritative — do not recompute):
+output_format={resolved output_format}
+Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
+HTML scaffolds: .orchestrator/html-templates/<artifact>.template.html  (only used when output_format=html)
+ID to use: {computed TEST-NNN}
+
 Run tests for plan {plan_id}.
 Follow your full tester workflow and print the structured output summary.
 ```
@@ -305,9 +367,15 @@ Read the test report file at `test_report_path` (expect `.md` or `.html` extensi
 
 Increment `review_cycle` by 1.
 
-Invoke the **reviewer** subagent with:
+Compute the CR ID: `nextid plans/code-review CR` (unless `MAESTRO_CR_TARGET_PATH` is set — then use that path's number). Invoke the **reviewer** subagent with the role-prompt preamble:
 
 ```
+ORCHESTRATOR CONTEXT (authoritative — do not recompute):
+output_format={resolved output_format}
+Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
+HTML scaffolds: .orchestrator/html-templates/<artifact>.template.html  (only used when output_format=html)
+ID to use: {computed CR-NNN}
+
 Review plan {plan_id}. The plan is in DONE status.
 Follow your full reviewer workflow and print the structured output summary.
 ```
@@ -340,9 +408,15 @@ Stop.
 Otherwise:
 
 **4a — Architect on CR:**
-Invoke **architect** with:
+Compute the fix-plan ID: `nextid plans/code-review FIX`. Invoke **architect** with the role-prompt preamble:
 
 ```
+ORCHESTRATOR CONTEXT (authoritative — do not recompute):
+output_format={resolved output_format}
+Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
+HTML scaffolds: .orchestrator/html-templates/<artifact>.template.html  (only used when output_format=html)
+ID to use: {computed FIX-NNN}
+
 Fix plan for code review. Input type: fix.
 Source CR file: {cr_path}
 Follow your full architect workflow and print the structured output summary.
@@ -351,9 +425,14 @@ Follow your full architect workflow and print the structured output summary.
 Extract new `fix_plan_id` and `fix_plan_path`. **Verify** both `fix_plan_path` and its `.progress.md` exist by reading them. If missing, re-invoke architect once; if still missing, stop and report.
 
 **4b — Coder on fix plan:**
-Invoke **coder** with:
+Invoke **coder** with the role-prompt preamble (no `ID to use:` line):
 
 ```
+ORCHESTRATOR CONTEXT (authoritative — do not recompute):
+output_format={resolved output_format}
+Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
+HTML scaffolds: .orchestrator/html-templates/<artifact>.template.html  (only used when output_format=html)
+
 Implement plan {fix_plan_id}.
 Follow your full coder workflow and print the structured session summary.
 ```
@@ -368,9 +447,15 @@ Re-invoke the **tester** before the next reviewer pass ONLY if either condition 
 
 If neither condition applies, skip the tester re-run and proceed directly to 4c.
 
-When re-running tester, use the same prompt as Step 3b but with the active `fix_plan_id`:
+When re-running tester, compute a fresh report ID (`nextid plans/test TEST`) and use the same preamble as Step 3b but with the active `fix_plan_id`:
 
 ```
+ORCHESTRATOR CONTEXT (authoritative — do not recompute):
+output_format={resolved output_format}
+Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
+HTML scaffolds: .orchestrator/html-templates/<artifact>.template.html  (only used when output_format=html)
+ID to use: {computed TEST-NNN}
+
 Run tests for plan {fix_plan_id}.
 Follow your full tester workflow and print the structured output summary.
 ```
@@ -383,9 +468,15 @@ Apply the same `tester_status` logic: `BLOCKED` → stop; `BELOW_FLOOR` → soft
 
 Increment `qa_cycle` by 1.
 
-Invoke the **qa** subagent with:
+Compute the QA report ID: `nextid plans/qa QA`. Invoke the **qa** subagent with the role-prompt preamble:
 
 ```
+ORCHESTRATOR CONTEXT (authoritative — do not recompute):
+output_format={resolved output_format}
+Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
+HTML scaffolds: .orchestrator/html-templates/<artifact>.template.html  (only used when output_format=html)
+ID to use: {computed QA-NNN}
+
 Run the QA suite for plan {plan_id}. The plan is DONE and has an APPROVED CR.
 Follow your full QA workflow and print the structured output summary.
 ```
@@ -448,9 +539,15 @@ Stop.
 Otherwise:
 
 **5a — Architect on QA report:**
-Invoke **architect** with:
+Compute the QAF plan ID: `nextid plans/qa QAF`. Invoke **architect** with the role-prompt preamble:
 
 ```
+ORCHESTRATOR CONTEXT (authoritative — do not recompute):
+output_format={resolved output_format}
+Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
+HTML scaffolds: .orchestrator/html-templates/<artifact>.template.html  (only used when output_format=html)
+ID to use: {computed QAF-NNN}
+
 QA remediation plan. Input type: qa.
 Source QA report: {qa_report_path}
 Follow your full architect workflow and print the structured output summary.
@@ -459,9 +556,14 @@ Follow your full architect workflow and print the structured output summary.
 Extract `qaf_plan_id` and `qaf_plan_path`. **Verify** both `qaf_plan_path` and its `.progress.md` exist by reading them. If missing, re-invoke architect once; if still missing, stop and report.
 
 **5b — Coder on QAF plan:**
-Invoke **coder** with:
+Invoke **coder** with the role-prompt preamble (no `ID to use:` line):
 
 ```
+ORCHESTRATOR CONTEXT (authoritative — do not recompute):
+output_format={resolved output_format}
+Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
+HTML scaffolds: .orchestrator/html-templates/<artifact>.template.html  (only used when output_format=html)
+
 Implement plan {qaf_plan_id}.
 Follow your full coder workflow and print the structured session summary.
 ```
@@ -469,9 +571,15 @@ Follow your full coder workflow and print the structured session summary.
 Confirm `Status: DONE`. **Verify** plan file has `status: DONE` and all tasks `[x]`. If not, re-invoke coder once; if still not DONE, stop and report.
 
 **5c — Reviewer on QAF plan:**
-Invoke **reviewer** with:
+Compute the CR ID: `nextid plans/code-review CR`. Invoke **reviewer** with the role-prompt preamble:
 
 ```
+ORCHESTRATOR CONTEXT (authoritative — do not recompute):
+output_format={resolved output_format}
+Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
+HTML scaffolds: .orchestrator/html-templates/<artifact>.template.html  (only used when output_format=html)
+ID to use: {computed CR-NNN}
+
 Review plan {qaf_plan_id}. The plan is in DONE status.
 Follow your full reviewer workflow and print the structured output summary.
 ```
@@ -523,14 +631,29 @@ On READY_TO_COMMIT (or READY_WITH_WARNINGS):
    NOTE: the SPEC-{NNN} format may not match spec-driven-eval's expected input — verify its
    expected input shape; if it does not accept SPEC-{NNN} directly, adapt by passing the spec's
    Functional requirements section as the criteria.
+3. **Persist the eval artifact** to the canonical `plans/eval/` directory (allow-listed in
+   `artifact-format.md`). Compute the ID with `nextid plans/eval EVAL`, derive the slug from the
+   plan title, and write `plans/eval/EVAL-{NNN}-{slug}.md` (canonical, with frontmatter
+   `id`, `status: PASS | ISSUES | SKIPPED`, `plan`, `created_at`). When `output_format=html`,
+   ALSO render `plans/eval/EVAL-{NNN}-{slug}.html` from
+   `.orchestrator/html-templates/qa-report.template.html` (closest scaffold) following
+   `artifact-format.md`. Never create any directory other than `plans/eval/` for eval output.
 
 ### Step 7b — Final report composer
 
 If `output_format=html`, run Step 7c (progress timeline render).
 
-Compose and PRINT (do not write files, EXCEPT when `output_format=html` also write an html
-report) the following report. If READY_WITH_WARNINGS arrived from QA, carry the G8 warning
-into the Issues found list. When `output_format=html`, the html final report fills its Related region with relative links to the spec, plan, test report, code review, and qa report (per `artifact-format.md` → Related navigation).
+**Persist the final report** to the canonical `plans/final/` directory (allow-listed in
+`artifact-format.md`). Compute the ID with `nextid plans/final FINAL`, derive the slug from the
+plan title, and ALWAYS write `plans/final/FINAL-{NNN}-{slug}.md` (canonical). When
+`output_format=html`, ALSO render `plans/final/FINAL-{NNN}-{slug}.html` from
+`.orchestrator/html-templates/final-report.template.html`, filling its Related region with
+relative links to the spec, plan, test report, code review, and qa report (per
+`artifact-format.md` → Related navigation). Never create any directory other than `plans/final/`
+for the final report.
+
+In addition, PRINT the report below to stdout (the printed summary is the same regardless of
+mode). If READY_WITH_WARNINGS arrived from QA, carry the G8 warning into the Issues found list.
 
 ```
 ORCHESTRATOR — pipeline complete
@@ -562,7 +685,7 @@ Output only — review the diff, then commit and open the PR yourself.
 When `output_format=html`, after the pipeline reaches a terminal state, render a progress timeline for the active plan:
 
 1. Read the plan's `.progress.md` log entries (each entry is a role/action with a status word and an ISO-8601 timestamp).
-2. Fill `templates/html/progress-timeline.template.html`: emit one timeline row per log entry (role → action/status → timestamp), mapping each status word to its pill class via the standard mapping (`success | active | warning | danger | muted` — done/PASS/APPROVED/READY_TO_COMMIT→success; in_progress/DRAFT→active; BELOW_FLOOR/READY_WITH_WARNINGS→warning; BLOCKED/BLOCKED_STALE/REQUEST_CHANGES/STALLED→danger; todo/superseded→muted). Fill the `<main data-*>` shell and the Related link to the plan.
+2. Fill `.orchestrator/html-templates/progress-timeline.template.html`: emit one timeline row per log entry (role → action/status → timestamp), mapping each status word to its pill class via the standard mapping (`success | active | warning | danger | muted` — done/PASS/APPROVED/READY_TO_COMMIT→success; in_progress/DRAFT→active; BELOW_FLOOR/READY_WITH_WARNINGS→warning; BLOCKED/BLOCKED_STALE/REQUEST_CHANGES/STALLED→danger; todo/superseded→muted). Fill the `<main data-*>` shell and the Related link to the plan.
 3. Write the result to `<plan-path-without-.md>.progress.html` (e.g. `plans/feat/FEAT-003-slug.progress.html`).
 
 This step ALSO runs at the STALLED/BLOCKED stop points (review-cycle limit, qa-cycle limit, tester BLOCKED, qa BLOCKED_STALE) so a halted run still produces a timeline. In `md` mode this step is skipped — `.progress.md` is the only progress artifact.

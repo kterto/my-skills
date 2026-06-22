@@ -11,7 +11,9 @@ A plan ID (e.g. `FEAT-001`, `FIX-003`) or a direct path to a plan `.md` file.
 
 ## Step 1 — Locate and read the plan
 
-Search `plans/feat/`, `plans/code-review/`, and `plans/qa/` for a file matching the ID. Read it fully. Also read the paired `.progress.md`.
+Search `plans/feat/`, `plans/code-review/`, and `plans/qa/` for the plan's **`.md`** file matching the ID (e.g. `FEAT-003-*.md`). The `.md` is always the canonical source of truth — read it fully, even if an `.html` view sits beside it. Also read the paired `.progress.md`.
+
+> **html note:** if `output_format=html`, a `<ID>-<slug>.html` rendered view may exist alongside the `.md`. It is a read-only snapshot from creation time. You mutate ONLY the `.md` (status, `updated_at`, task checkboxes) and append ONLY to `.progress.md`. Do not hand-edit the `.html` — it is regenerated downstream.
 
 **If status is not `PLANNED`**: check current status. If `IN_PROGRESS`, continue from the first unchecked `[ ]` task. If `DONE`, inform the user — nothing to implement.
 

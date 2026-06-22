@@ -24,26 +24,28 @@ You will receive one of:
 
 **Hard rules — non-negotiable:**
 
-1. **Never create a new top-level subdirectory under `plans/`.** Only `plans/specs/`, `plans/feat/`, `plans/code-review/`, `plans/qa/` exist. If the target directory in the table above does not exist, the input is wrong — abort and report the mismatch. **Do NOT invent `plans/fix/`, `plans/feature/`, `plans/review/`, or any other variant.**
+1. **Never create a new top-level subdirectory under `plans/`.** The full allow-list lives in `.orchestrator/artifact-format.md` (specs, feat, code-review, qa, test, eval, final). The architect itself only ever writes to `plans/feat/`, `plans/code-review/`, and `plans/qa/` (the three rows in the table above) — `eval/` and `final/` are orchestrator-owned, never the architect's. If the target directory for your type does not exist, the input is wrong — abort and report the mismatch. **Do NOT invent `plans/fix/`, `plans/feature/`, `plans/review/`, or any other variant.**
 2. **`FIX` plans live in `plans/code-review/` alongside their parent CR.** They do not get their own directory.
 3. **`QAF` plans live in `plans/qa/` alongside their parent QA report.** They do not get their own directory.
-4. **Numbering is per-prefix and global within its directory.** Scan the exact glob in the table above, parse the three-digit number from each filename, take `max + 1`. Do NOT scan a different directory for the same prefix.
+4. **Numbering is orchestrator-owned.** Use the `ID to use:` value from your prompt verbatim. Only when run standalone do you compute it yourself — per-prefix, global within the type's directory, via the deterministic command in Step 1 (never scan a different directory for the same prefix).
 
-## Step 0 — Read project context (mandatory)
+## Step 0 — Read orchestrator + project context (mandatory)
 
-Before any planning, read `.orchestrator/PROJECT-CONTEXT.md`, plus any project files it points to.
+1. Read `.orchestrator/config.json` for `output_format` (`md` | `html`; default `md`). If the orchestrator passed an `output_format=` line in your prompt, that value wins.
+2. Read `.orchestrator/artifact-format.md` — emission rules (md always written; html view additional), directory/prefix allow-list, and ID allocation.
+3. Read `.orchestrator/PROJECT-CONTEXT.md`, plus any project files it points to.
 
 Apply the Invariants and Commands sections of `PROJECT-CONTEXT.md`.
 
-## Step 1 — Determine the next ID
+## Step 1 — Determine the ID
 
-Use the `scan glob for next-id` from the canonical table above. Parse the three-digit number from each filename (regex `^{PREFIX}-(\d{3})-`), exclude `.progress.md` files, take `max + 1`, zero-pad to 3 digits. If no files match, start at `001`.
+**Use the ID the orchestrator gave you** in the `ID to use:` line of your prompt (e.g. `FEAT-003`) — verbatim, do not recompute. Only if you were run standalone with no `ID to use:` line, compute it deterministically for your type's (dir, prefix) from the canonical table (extension-agnostic, matches `.md` and `.html`):
 
-Examples:
-
-- `feat`: scan `plans/feat/FEAT-*.md` → files `FEAT-001-foo.md`, `FEAT-002-bar.md` → next is `FEAT-003`.
-- `fix`: scan `plans/code-review/FIX-*.md` → if highest is `FIX-004` → next is `FIX-005`.
-- `qa`: scan `plans/qa/QAF-*.md` → if highest is `QAF-002` → next is `QAF-003`.
+```bash
+# feat → plans/feat FEAT ; fix → plans/code-review FIX ; qa → plans/qa QAF
+n=$(ls {dir} 2>/dev/null | grep -oE '^{PREFIX}-[0-9]{3}' | grep -oE '[0-9]{3}' | sort -n | tail -1)
+printf "{PREFIX}-%03d\n" "$(( 10#${n:-0} + 1 ))"
+```
 
 **Sanity check:** before writing, verify `{full path}` matches `^plans/(feat|code-review|qa)/(FEAT|FIX|QAF)-\d{3}-[a-z0-9-]+\.md$`. If not, recheck the canonical table.
 
@@ -53,9 +55,9 @@ Kebab-case, lowercase, max 5 words from the title. Example: `user-profile-settin
 
 ## Step 3 — Create the plan file
 
-Emit the artifact per `references/artifact-format.md` using the configured `output_format`; the stdout summary below is identical regardless of format. The `md`-mode definition follows. In the rendered plan, fill the Related region with a relative link to the source spec (and source CR/QA for fix/qa plans), per `artifact-format.md` → Related navigation.
+Emit the artifact per `.orchestrator/artifact-format.md`. **Always write the `.md`** (canonical, frontmatter below). When `output_format=html`, ALSO render `plans/{dir}/{PREFIX}-{NNN}-{slug}.html` from `.orchestrator/html-templates/plan.template.html`, preserving the `<main data-*>` shell. The stdout summary below is identical regardless of format. In the rendered plan, fill the Related region with a relative link to the source spec (and source CR/QA for fix/qa plans), per `.orchestrator/artifact-format.md` → Related navigation.
 
-Path: `plans/{dir}/{PREFIX}-{NNN}-{slug}.md`
+Canonical path: `plans/{dir}/{PREFIX}-{NNN}-{slug}.md`
 
 ```markdown
 ---

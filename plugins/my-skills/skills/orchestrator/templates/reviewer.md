@@ -11,6 +11,7 @@ A plan ID (e.g. `FEAT-001`) or path to a plan file. The plan must have `status: 
 
 ## Step 1 — Read all context (mandatory)
 
+0. Read `.orchestrator/config.json` for `output_format` (`md` | `html`; default `md`; an `output_format=` line in your prompt wins) and `.orchestrator/artifact-format.md` for emission rules, the allow-list, and ID allocation.
 1. Locate and fully read the plan file and its `.progress.md`.
 2. Read `.orchestrator/PROJECT-CONTEXT.md`, plus any project files it points to. Extract: stack, code-style guardrails, load-bearing invariants, out-of-scope list, and working principles.
 3. Run `git diff <range> -- $MAESTRO_REVIEWER_DIFF_PATHSPEC` to get changed code. `<range>` is `$MAESTRO_PREV_CR_REF...HEAD` if `MAESTRO_PREV_CR_REF` is set, otherwise `main...HEAD`. `$MAESTRO_REVIEWER_DIFF_PATHSPEC` defaults to `. ':(exclude)plans/'` if unset. The `plans/` directory is excluded by default because plan files, progress logs, FIX files, and CR files are orchestration metadata that you already read directly in Step 1.1, and including them in the diff bloats input without adding review signal.
@@ -22,7 +23,14 @@ A plan ID (e.g. `FEAT-001`) or path to a plan file. The plan must have `status: 
 
 CR files live ONLY in `plans/code-review/`. Never write a CR outside this directory.
 
-If the environment variable `MAESTRO_CR_TARGET_PATH` is set, the CR file path is **already chosen** — write the CR file to that exact absolute path. Do not re-compute the sequence number. Otherwise: scan `plans/code-review/CR-*.md`, parse the three-digit number from each filename (regex `^CR-(\d{3})-`), take `max + 1`, zero-pad to 3 digits. If none match, start at `001`. Derive slug from plan title.
+If the environment variable `MAESTRO_CR_TARGET_PATH` is set, the CR file path is **already chosen** — write the CR file to that exact absolute path. Do not re-compute the sequence number. Otherwise, **use the `CR-{NNN}` ID the orchestrator gave you** in the `ID to use:` line — verbatim, do not recompute. Only if run standalone (no `ID to use:` line and no env var), compute it deterministically:
+
+```bash
+n=$(ls plans/code-review 2>/dev/null | grep -oE '^CR-[0-9]{3}' | grep -oE '[0-9]{3}' | sort -n | tail -1)
+printf "CR-%03d\n" "$(( 10#${n:-0} + 1 ))"
+```
+
+Derive slug from plan title.
 
 CR file path: `plans/code-review/CR-{NNN}-{slug}.md`
 
@@ -47,9 +55,9 @@ Categorize every finding:
 
 ## Step 4 — Create the CR file
 
-Emit the artifact per `references/artifact-format.md` using the configured `output_format`; the stdout summary below is identical regardless of format. The `md`-mode definition follows. In the rendered report, fill the Related region with a relative link to the plan, per `artifact-format.md` → Related navigation.
+Emit the artifact per `.orchestrator/artifact-format.md`. **Always write the `.md`** (canonical, frontmatter below). When `output_format=html`, ALSO render `plans/code-review/CR-{NNN}-{slug}.html` from `.orchestrator/html-templates/code-review.template.html`, preserving the `<main data-*>` shell. The stdout summary below is identical regardless of format. In the rendered report, fill the Related region with a relative link to the plan, per `.orchestrator/artifact-format.md` → Related navigation.
 
-Path: `plans/code-review/CR-{NNN}-{slug}.md`
+Canonical path: `plans/code-review/CR-{NNN}-{slug}.md`
 
 ```markdown
 ---

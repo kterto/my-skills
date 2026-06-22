@@ -12,7 +12,9 @@ A plan ID (e.g. `FEAT-001`). The plan must have `status: DONE` from the coder.
 
 ## Step 1 — Read context and the plan
 
-Read `PROJECT-CONTEXT.md` (Test tooling, Critical flows sections) and the plan file for `{PLAN-ID}`.
+1. Read `.orchestrator/config.json` for `output_format` (`md` | `html`; default `md`). An `output_format=` line in your prompt wins.
+2. Read `.orchestrator/artifact-format.md` — emission rules, allow-list, and ID allocation.
+3. Read `.orchestrator/PROJECT-CONTEXT.md` (Test tooling, Critical flows sections) and the plan file for `{PLAN-ID}`.
 
 ## Step 2 — Critical-flow triage
 
@@ -28,17 +30,24 @@ Run the coverage command from PROJECT-CONTEXT. If line coverage < 70%, add unit/
 
 ## Step 5 — Write the tester report
 
-Emit a `TEST-{NNN}` report per `references/artifact-format.md`: flows selected/excluded with rationale, e2e added, coverage before/after, weak tests found. In the rendered report, fill the Related region with a relative link to the plan, per `artifact-format.md` → Related navigation. Set status:
+Emit a `TEST-{NNN}` report per `.orchestrator/artifact-format.md`: flows selected/excluded with rationale, e2e added, coverage before/after, weak tests found. In the rendered report, fill the Related region with a relative link to the plan, per `.orchestrator/artifact-format.md` → Related navigation. Set status:
 
 - **PASS** — e2e green and coverage ≥ 70%
 - **BELOW_FLOOR** — coverage still < 70% after best effort (report why)
 - **BLOCKED** — cannot run e2e/coverage tooling (missing command in PROJECT-CONTEXT)
 
-Determine the next `TEST-{NNN}` ID by scanning `plans/test/TEST-*.md` (or `.html`), parsing the three-digit number, and incrementing from the max (start at `001` if none exist). Derive the slug from the plan title.
+**Use the `TEST-{NNN}` ID the orchestrator gave you** in the `ID to use:` line — verbatim, do not recompute. Only if run standalone (no `ID to use:` line), compute it deterministically:
 
-Report path: `plans/test/TEST-{NNN}-{slug}.{md|html}` (use the configured `output_format` per `references/artifact-format.md`; default `md`).
+```bash
+n=$(ls plans/test 2>/dev/null | grep -oE '^TEST-[0-9]{3}' | grep -oE '[0-9]{3}' | sort -n | tail -1)
+printf "TEST-%03d\n" "$(( 10#${n:-0} + 1 ))"
+```
 
-Emit the artifact per `references/artifact-format.md`. Frontmatter example (`md` mode):
+Derive the slug from the plan title.
+
+**Always write the `.md`** at `plans/test/TEST-{NNN}-{slug}.md` (canonical, frontmatter below). When `output_format=html`, ALSO render `plans/test/TEST-{NNN}-{slug}.html` from `.orchestrator/html-templates/test-report.template.html`, preserving the `<main data-*>` shell.
+
+Frontmatter example (`md`):
 
 ```yaml
 ---

@@ -11,6 +11,7 @@ A plan ID (e.g. `FEAT-001`). The plan must have `status: DONE` and a correspondi
 
 ## Step 1 — Validate preconditions (mandatory)
 
+0. Read `.orchestrator/config.json` for `output_format` (`md` | `html`; default `md`; an `output_format=` line in your prompt wins) and `.orchestrator/artifact-format.md` for emission rules, the allow-list, and ID allocation.
 1. Locate and read the plan file and its `.progress.md`.
 2. Find the CR file for this plan in `plans/code-review/` (match `plan: {PLAN-ID}` in frontmatter).
 3. Read the CR file.
@@ -31,7 +32,14 @@ Precondition check: Plan {PLAN-ID} status={status}, CR={CR-ID} CR status={cr_sta
 
 QA reports live ONLY in `plans/qa/`. Never write a QA report outside this directory.
 
-Scan `plans/qa/QA-*.md`. Parse the three-digit number from each filename (regex `^QA-(\d{3})-`). New QA ID = `max + 1`, zero-padded to 3 digits. If none match, start at `001`. Derive slug from plan title.
+**Use the `QA-{NNN}` ID the orchestrator gave you** in the `ID to use:` line — verbatim, do not recompute. Only if run standalone (no `ID to use:` line), compute it deterministically:
+
+```bash
+n=$(ls plans/qa 2>/dev/null | grep -oE '^QA-[0-9]{3}' | grep -oE '[0-9]{3}' | sort -n | tail -1)
+printf "QA-%03d\n" "$(( 10#${n:-0} + 1 ))"
+```
+
+Note the `grep -oE '^QA-[0-9]{3}'` deliberately does not match `QAF-` (the regex anchors on `QA-` followed by a digit, while `QAF-` has `F`). Derive slug from plan title.
 
 QA file path: `plans/qa/QA-{NNN}-{slug}.md`
 
@@ -168,9 +176,9 @@ Result: {PASS | FAIL | MISSING_TOOL | WARN} — {metric value vs threshold, or v
 
 ## Step 5 — Create the QA report file
 
-Emit the artifact per `references/artifact-format.md` using the configured `output_format`; the stdout summary below is identical regardless of format. The `md`-mode definition follows. In the rendered report, fill the Related region with a relative link to the plan, per `artifact-format.md` → Related navigation.
+Emit the artifact per `.orchestrator/artifact-format.md`. **Always write the `.md`** (canonical, frontmatter below). When `output_format=html`, ALSO render `plans/qa/QA-{NNN}-{slug}.html` from `.orchestrator/html-templates/qa-report.template.html`, preserving the `<main data-*>` shell. The stdout summary below is identical regardless of format. In the rendered report, fill the Related region with a relative link to the plan, per `.orchestrator/artifact-format.md` → Related navigation.
 
-Path: `plans/qa/QA-{NNN}-{slug}.md`
+Canonical path: `plans/qa/QA-{NNN}-{slug}.md`
 
 ```markdown
 ---
