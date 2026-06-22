@@ -129,7 +129,7 @@ The full algorithms — rollup rules, the Sync procedure, and the Re-eval proced
 ### Global constraints (reaffirmed)
 
 - **Never commit.** The skill writes files and prints proposed commit messages; the user commits.
-- **Never run the orchestrator.** Task briefs are produced for the orchestrator to consume; the roadmap skill does not invoke it.
+- **Never run the orchestrator.** User-story briefs are produced for the orchestrator to consume; the roadmap skill does not invoke it.
 - **Completed work is immutable.** The Re-eval procedure never deletes or renumbers a `done` item — it supersedes or appends, never rewrites.
 
 ---

@@ -119,7 +119,7 @@ html-mode items follow the orchestrator's artifact format (see `orchestrator/ref
 
 - Root element: `<main data-id data-status data-created-at data-updated-at>`.
 - Each body section (`Brief`, `Acceptance`, `Audit log`) is wrapped in a collapsible `<details><summary>Section Title</summary>…</details>`.
-- Task lists rendered as `<input type="checkbox" disabled>` (disabled checkboxes).
+- User-story lists rendered as `<input type="checkbox" disabled>` (disabled checkboxes).
 - Self-contained, no external assets.
 
 ## Output navigation
