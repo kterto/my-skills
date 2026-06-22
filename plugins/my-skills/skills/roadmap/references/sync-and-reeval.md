@@ -36,11 +36,11 @@ Rollup derives a phase status from its tasks, and a milestone status from its ph
 ### Git command
 
 ```bash
-git log "${last_synced_sha:-}"..HEAD --grep 'Roadmap-Task:' \
+git log ${last_synced_sha:+"$last_synced_sha.."}HEAD --grep 'Roadmap-Task:' \
   --pretty=format:'%H%x09%an <%ae>%x09%aI%x09%(trailers:key=Roadmap-Task,valueonly)'
 ```
 
-When `last_synced_sha` is `null` (before first sync), `"${last_synced_sha:-}"` expands to an empty string, making the range `..HEAD` which git interprets as the full history.
+When `last_synced_sha` is set, `${last_synced_sha:+"$last_synced_sha.."}` expands to `<sha>..`, giving the range `<sha>..HEAD`. When it is `null` (before first sync) the prefix expands to nothing, leaving just `HEAD` — which scans the full history reachable from `HEAD`. Do **not** write `"${last_synced_sha:-}"..HEAD`: an empty left side makes `..HEAD`, which git reads as `HEAD..HEAD` (empty), so the first sync would scan nothing.
 
 ### Parse example
 
