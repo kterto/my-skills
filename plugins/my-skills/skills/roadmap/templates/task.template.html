@@ -480,11 +480,21 @@ code {
   border-radius: 3px;
   color: var(--text-secondary);
 }
+
+/* ============================================================
+   Breadcrumb nav
+   ============================================================ */
+.crumbs { font-size: 0.85rem; margin: 0 0 1.25rem; color: var(--text-muted, #6b6b6b); }
+.crumbs a { color: var(--accent); text-decoration: none; }
+.crumbs a:hover { text-decoration: underline; }
+.crumbs .sep { opacity: 0.5; margin: 0 0.4em; }
 </style>
 </head>
 <body>
 <main data-id="{{id}}" data-kind="task" data-status="{{status}}"
       data-created-at="{{created_at}}" data-updated-at="{{updated_at}}">
+
+  <nav class="crumbs"><a href="../../README.html">Roadmap</a><span class="sep">/</span><a href="../README.html">{{milestone}}</a><span class="sep">/</span><a href="README.html">{{phase}}</a><span class="sep">/</span><span>{{id}}</span></nav>
 
   <!-- ============================================================
        1. Page header
