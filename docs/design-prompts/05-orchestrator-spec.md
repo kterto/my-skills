@@ -41,7 +41,7 @@ The spec is the entry point of an orchestration pipeline. Elevate it into a read
 - **Collapsible `<details>`:** `<summary>` with `▶/▼` CSS triangle, `3px var(--accent)` left border on open body.
 - **Audit-log table:** row-separator-only, `Timestamp | Role | Action | Status` columns, status pills in last column.
 - **Disabled-checkbox list:** `<input type="checkbox" disabled>`, completed items struck-through in `--text-muted`.
-- **Cycle badge:** `C{n}` rounded rect, `--accent-subtle` bg, `--accent` text, monospace XS.
+- **Cycle badge:** `<span class="badge">cycle N</span>` — e.g. `cycle 1` — `--accent-subtle` bg, `--accent` text, monospace XS, 4 px radius.
 - **Progress bar:** 6 px track (`--bg-overlay`), accent fill active / success fill at 100%, `X/Y (Z%)` label in mono.
 - **Diff markers:** `+` new (success green) · `~` changed (warning orange) · `!` superseded (danger red, strikethrough); mono font, `::before` or `<span>`.
 - **Inline code/path:** `<code>` — mono 0.9em, `--bg-overlay` bg, 3 px radius, no border.
@@ -150,4 +150,4 @@ The following must appear exactly as shown in the output HTML:
 
 5. **Open questions empty state** — When open questions are absent, render the Open Questions `<details>` section with an empty-state message in `--text-muted` italic. Never omit the section entirely.
 
-6. **No status line for architect** — This guardrail applies to the brainstormer spec only: the spec carries a status (`READY_FOR_PLANNING` or `DRAFT`). The architect plan (a different template) does not show a status pill.
+> **Note:** The spec always carries a visible status pill (`READY_FOR_PLANNING` or `DRAFT`). The architect plan template (a separate artifact) is the one that omits the status pill — that constraint lives in the plan's own guardrails, not here.

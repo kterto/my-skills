@@ -41,7 +41,7 @@ The architect plan is the primary input to the coder role. Elevate it into a pol
 - **Collapsible `<details>`:** `<summary>` with `▶/▼` CSS triangle, `3px var(--accent)` left border on open body.
 - **Audit-log table:** row-separator-only, `Timestamp | Role | Action | Status` columns, status pills in last column.
 - **Disabled-checkbox list:** `<input type="checkbox" disabled>`, completed items struck-through in `--text-muted`.
-- **Cycle badge:** `C{n}` rounded rect, `--accent-subtle` bg, `--accent` text, monospace XS.
+- **Cycle badge:** `<span class="badge">cycle N</span>` — e.g. `cycle 1` — `--accent-subtle` bg, `--accent` text, monospace XS, 4 px radius.
 - **Progress bar:** 6 px track (`--bg-overlay`), accent fill active / success fill at 100%, `X/Y (Z%)` label in mono.
 - **Diff markers:** `+` new (success green) · `~` changed (warning orange) · `!` superseded (danger red, strikethrough); mono font, `::before` or `<span>`.
 - **Inline code/path:** `<code>` — mono 0.9em, `--bg-overlay` bg, 3 px radius, no border.
@@ -107,7 +107,7 @@ Gallery must include:
 4. **Cycle badge variants** — Show `<span class="badge">cycle 1</span>` and `<span class="badge">cycle 2</span>` side-by-side to illustrate the badge component.
 5. **FEAT / FIX / QAF type labels** — All three category type labels shown as inline tags, demonstrating their distinct visual treatment.
 6. **Dependency note** — Dependency Notes section open, showing a sample dependency list (e.g. "Task FIX-02 must complete before QAF-01 can start.").
-7. **No status pill** — Explicitly demonstrate the absence of a status pill in the header, confirming the architect artifact's no-status-line contract.
+7. **Header without status pill** — Show the ID/meta header row only (plan ID, spec reference, dates, cycle badge) with no pill anywhere on the page, confirming the architect artifact's no-status-line contract.
 
 ## Interactions
 
@@ -150,7 +150,7 @@ The following must appear exactly as shown in the output HTML:
 
 2. **Disabled checkboxes** — Every task item must use `<input type="checkbox" disabled>` (or `<input type="checkbox" disabled checked>` for completed tasks). Never replace checkboxes with icons, `✓` characters, or other visual substitutes. The `disabled` attribute is required — tasks are read-only display items, not interactive controls.
 
-3. **Cycle badge markup** — The cycle counter must be rendered as `<span class="badge">cycle N</span>` (where N is the integer from `data-cycle`). Do not substitute a plain text number, a `C{n}` abbreviation, or a different element. Style the badge inline; do not reference external CSS.
+3. **Cycle badge markup** — The cycle counter must be rendered as `<span class="badge">cycle N</span>` (where N is the integer from `data-cycle`), e.g. `cycle 2`. Do not substitute a plain text number, an abbreviated form, or a different element. Style the badge inline; do not reference external CSS.
 
 4. **Collapsible section structure** — The Task Breakdown and Dependency Notes sections must use `<details><summary>Section Title</summary>…</details>`. Do not flatten them into plain `<div>` blocks. This structure is machine-parseable.
 

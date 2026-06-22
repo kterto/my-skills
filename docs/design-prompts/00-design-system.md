@@ -176,7 +176,7 @@ Task lists rendered as `<ul>` with `<input type="checkbox" disabled>` items. Che
 
 ### Cycle badge
 
-A compact rounded rectangle (not a full pill) showing the cycle number: e.g. `C2`. `font-family: var(--font-mono); background: var(--accent-subtle); color: var(--accent); font-size: var(--text-xs); padding: 1px 6px; border-radius: 4px`. Displayed inline next to the artifact title or in the meta header.
+A compact rounded rectangle (not a full pill) rendered as `<span class="badge">cycle N</span>` — e.g. `cycle 1`. `font-family: var(--font-mono); background: var(--accent-subtle); color: var(--accent); font-size: var(--text-xs); padding: 1px 6px; border-radius: 4px`. Displayed inline next to the artifact title or in the meta header.
 
 ### Progress bar
 
@@ -238,7 +238,7 @@ This is the canonical block that each per-template prompt (`01`–`11`) pastes v
 - **Collapsible `<details>`:** `<summary>` with `▶/▼` CSS triangle, `3px var(--accent)` left border on open body.
 - **Audit-log table:** row-separator-only, `Timestamp | Role | Action | Status` columns, status pills in last column.
 - **Disabled-checkbox list:** `<input type="checkbox" disabled>`, completed items struck-through in `--text-muted`.
-- **Cycle badge:** `C{n}` rounded rect, `--accent-subtle` bg, `--accent` text, monospace XS.
+- **Cycle badge:** `<span class="badge">cycle N</span>` — e.g. `cycle 1` — `--accent-subtle` bg, `--accent` text, monospace XS, 4 px radius.
 - **Progress bar:** 6 px track (`--bg-overlay`), accent fill active / success fill at 100%, `X/Y (Z%)` label in mono.
 - **Diff markers:** `+` new (success green) · `~` changed (warning orange) · `!` superseded (danger red, strikethrough); mono font, `::before` or `<span>`.
 - **Inline code/path:** `<code>` — mono 0.9em, `--bg-overlay` bg, 3 px radius, no border.
