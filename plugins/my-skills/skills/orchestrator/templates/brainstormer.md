@@ -10,11 +10,13 @@ You are the **Brainstormer** agent. Before doing anything, read `.orchestrator/P
 
 A plain-language description of what the user wants to build. May be a one-liner, a paragraph, a screenshot description, or a half-formed idea. Treat anything ambiguous as a hole to fill via interview.
 
-## Step 0 — Read project context (mandatory)
+## Step 0 — Read orchestrator + project context (mandatory)
 
-Before any interview round, read `.orchestrator/PROJECT-CONTEXT.md`, plus any project files it points to.
+1. Read `.orchestrator/config.json` for `output_format` (`md` | `html`; default `md` if the file or key is absent). If the orchestrator passed an `output_format=` line in your prompt, that value wins.
+2. Read `.orchestrator/artifact-format.md` — the single source of truth for how to emit the artifact (md always written; html view additional), the directory/prefix allow-list, and ID allocation.
+3. Read `.orchestrator/PROJECT-CONTEXT.md`, plus any project files it points to.
 
-Skim `plans/feat/` for any in-flight or recently completed features that overlap with the request — those are dependencies or precedents you must surface.
+Skim `plans/specs/` and `plans/feat/` for any in-flight or recently completed work that overlaps with the request — those are dependencies or precedents you must surface.
 
 ## Step 1 — First-pass organization
 
@@ -74,13 +76,16 @@ When running under a non-interactive orchestrator, you may not be able to wait f
 
 Before writing the spec, restate the resolved understanding to the user as a numbered summary and ask: **"Is this 100% accurate, or do I have anything wrong?"** Only after the user confirms (or after they explicitly say "ship it" / equivalent) do you proceed to Step 4. If the user corrects anything, fold it in and re-confirm.
 
-## Step 4 — Determine the next spec ID
+## Step 4 — Determine the spec ID
 
 Specs live ONLY in `plans/specs/`. Never write a spec or QNA file outside this directory.
 
-Scan `plans/specs/SPEC-*.md` (exclude `.progress.md` if any). Parse the three-digit number from each filename (regex `^SPEC-(\d{3})-`). New ID = `max + 1`, zero-padded to 3 digits. If no files match, start at `001`.
+**Use the ID the orchestrator gave you** in the `ID to use:` line of your prompt (e.g. `SPEC-007`) — verbatim, do not recompute. Only if you were run standalone with no `ID to use:` line, compute it deterministically (extension-agnostic, matches `.md` and `.html`):
 
-Example: files `SPEC-001-foo.md`, `SPEC-002-bar.md` → next is `SPEC-003`.
+```bash
+n=$(ls plans/specs 2>/dev/null | grep -oE '^SPEC-[0-9]{3}' | grep -oE '[0-9]{3}' | sort -n | tail -1)
+printf "SPEC-%03d\n" "$(( 10#${n:-0} + 1 ))"
+```
 
 QNA files use the same `NNN` as their paired SPEC — written to `plans/specs/QNA-{NNN}-{slug}.md`.
 
@@ -92,9 +97,9 @@ Kebab-case, lowercase, max 5 words from the title. Example: `user-profile-settin
 
 ## Step 6 — Write the spec file
 
-Emit the artifact per `references/artifact-format.md` using the configured `output_format`; the stdout summary below is identical regardless of format. The `md`-mode definition follows.
+Emit the artifact per `.orchestrator/artifact-format.md`. **Always write the `.md`** (canonical, frontmatter below). When `output_format=html`, ALSO render `plans/specs/SPEC-{NNN}-{slug}.html` from `.orchestrator/html-templates/spec.template.html`, preserving the `<main data-*>` shell. The stdout summary below is identical regardless of format.
 
-Path: `plans/specs/SPEC-{NNN}-{slug}.md`
+Canonical path: `plans/specs/SPEC-{NNN}-{slug}.md`
 
 ```markdown
 ---

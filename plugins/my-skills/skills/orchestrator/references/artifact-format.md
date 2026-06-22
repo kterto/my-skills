@@ -1,10 +1,22 @@
 # Orchestrator — Artifact Format Reference
 
-All six role templates (brainstormer, architect, coder, tester, reviewer, qa) write artifacts in one of two formats controlled by `output_format`. This document is the single source of truth — role templates reference it instead of duplicating emission rules.
+All six role templates (brainstormer, architect, coder, tester, reviewer, qa) write artifacts using the format controlled by `output_format`. This document is the single source of truth — role templates reference it instead of duplicating emission rules.
 
-## md mode (default)
+> **Materialized location.** Bootstrap (Step B3) copies this file to `.orchestrator/artifact-format.md` and the html scaffolds to `.orchestrator/html-templates/`. Subagents read those `.orchestrator/` paths — they do NOT have access to the skill's own `references/` or `templates/html/` directories. Always reference the `.orchestrator/` copies in role prompts.
 
-- Filename: `<ID>-<slug>.md` (e.g. `B1-brainstorm-ideas.md`)
+## Core rule — markdown is always the source of truth
+
+**The `.md` artifact is ALWAYS written, in every mode.** Its YAML frontmatter is the canonical state: it is what the orchestrator scans for ID allocation and what the coder/architect mutate (`status:`, `updated_at:`, task checkboxes). When `output_format=html` the role ALSO writes a styled `.html` rendered *view* alongside the `.md`. The html file is a read-only render — never the place state lives.
+
+This means:
+
+- Numbering scans never break, because `<ID>-<slug>.md` always exists.
+- State mutation (status flips, `[ ] → [x]`) always targets the `.md`.
+- The `.html` view is a snapshot rendered from the `.md` at write time.
+
+## md artifact (always written)
+
+- Filename: `<ID>-<slug>.md` (e.g. `FEAT-003-add-list-sharing.md`)
 - Structure: YAML frontmatter block followed by a markdown body.
 
 Frontmatter fields:
@@ -21,11 +33,13 @@ cycle: <integer>          # review or qa cycle number (0-based)
 
 Body: free-form markdown with headings, lists, and fenced code blocks as appropriate for the role.
 
-## html mode
+## html rendered view (additional, only when output_format=html)
 
-- Filename: `<ID>-<slug>.html` (e.g. `B1-brainstorm-ideas.html`)
+Written IN ADDITION to the `.md`, never instead of it.
+
+- Filename: `<ID>-<slug>.html` (same `<ID>-<slug>` stem as the `.md`, sitting beside it).
 - One self-contained file — no external assets, no CDN links.
-- The root element is `<main>` with `data-*` attributes mirroring the md frontmatter:
+- The root element is `<main>` with `data-*` attributes mirroring the md frontmatter (the `.md` is authoritative if the two ever disagree):
 
 ```html
 <main
@@ -41,7 +55,39 @@ Body: free-form markdown with headings, lists, and fenced code blocks as appropr
 - Task lists rendered as `<input type="checkbox" disabled>` checkboxes.
 - Cycle counters displayed as inline `<span class="badge">cycle N</span>` badges; style the badge inline (no external CSS).
 
-**Styled templates.** In `html` mode, each role fills the matching self-contained scaffold in `templates/html/<artifact>.template.html` (spec, plan, test-report, code-review, qa-report, final-report). These define the Editorial Design System v1 look and the required `<main data-*>` shell; roles replace the sample content with the real artifact content, preserving the `data-*` attributes, `<details><summary>` sections, disabled checkboxes, and the `<span class="badge">cycle N</span>` badge. `progress-timeline.template.html` is wired: in `html` mode the orchestrator renders `<plan-path-without-.md>.progress.html` from a plan's `.progress.md` append-log at each pipeline terminal state. `.progress.md` remains the markdown source-of-truth log (roles append to it); the html file is a regenerated read-only view.
+**Styled scaffolds.** In `html` mode, each role fills the matching self-contained scaffold in `.orchestrator/html-templates/<artifact>.template.html` (spec, plan, test-report, code-review, qa-report, final-report, progress-timeline). These define the Editorial Design System v1 look and the required `<main data-*>` shell; roles replace the sample content with the real artifact content, preserving the `data-*` attributes, `<details><summary>` sections, disabled checkboxes, and the `<span class="badge">cycle N</span>` badge. `progress-timeline.template.html` is wired: in `html` mode the orchestrator renders `<plan-path-without-.md>.progress.html` from a plan's `.progress.md` append-log at each pipeline terminal state. `.progress.md` remains the markdown source-of-truth log (roles append to it); the html file is a regenerated read-only view.
+
+## Canonical directories & prefixes (allow-list — load-bearing)
+
+The ONLY directories permitted under `plans/`. No role or step may invent any other directory.
+
+| Artifact      | Directory            | Prefix  | Owner (who creates it)         |
+| ------------- | -------------------- | ------- | ------------------------------ |
+| spec          | `plans/specs/`       | `SPEC`  | brainstormer                   |
+| feature plan  | `plans/feat/`        | `FEAT`  | architect (type `feat`)        |
+| fix plan      | `plans/code-review/` | `FIX`   | architect (type `fix`)         |
+| qa-fix plan   | `plans/qa/`          | `QAF`   | architect (type `qa`)          |
+| test report   | `plans/test/`        | `TEST`  | tester                         |
+| code review   | `plans/code-review/` | `CR`    | reviewer                       |
+| qa report     | `plans/qa/`          | `QA`    | qa                             |
+| spec eval     | `plans/eval/`        | `EVAL`  | orchestrator (Step 7a)         |
+| final report  | `plans/final/`       | `FINAL` | orchestrator (Step 7b)         |
+
+`QNA-{NNN}` files (brainstormer, non-interactive mode) share the paired SPEC's number and live in `plans/specs/`.
+
+## ID allocation — orchestrator-owned, deterministic
+
+IDs are **assigned by the orchestrator and passed into each role's prompt** (`ID to use: <PREFIX>-<NNN>`). A role MUST use the provided ID verbatim and MUST NOT compute its own when one is supplied.
+
+The orchestrator computes the next ID with a fixed, extension-agnostic command (matches `.md`, `.html`, and `.progress.*` alike, so it is correct across the md→html transition):
+
+```bash
+# args: $1 = dir (e.g. plans/feat), $2 = prefix (e.g. FEAT)
+n=$(ls "$1" 2>/dev/null | grep -oE "^$2-[0-9]{3}" | grep -oE '[0-9]{3}' | sort -n | tail -1)
+printf "%s-%03d\n" "$2" "$(( 10#${n:-0} + 1 ))"
+```
+
+Fallback: if a role is run standalone (no `ID to use:` in its prompt), it runs the same command itself for its (dir, prefix) before writing.
 
 ## Related navigation (md + html)
 
