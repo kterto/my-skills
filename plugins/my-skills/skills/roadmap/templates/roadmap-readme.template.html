@@ -1,21 +1,601 @@
-<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>Roadmap</title>
-<style>body{font:14px/1.5 system-ui;margin:2rem;max-width:60rem}.badge{display:inline-block;padding:.1em .5em;border-radius:.4em;background:#eee}table{border-collapse:collapse}td,th{border:1px solid #ccc;padding:.3em .6em}details{margin:.5rem 0}summary{cursor:pointer;font-weight:600}ul{list-style:none;padding-left:0}li{margin:.25rem 0}</style>
-</head><body>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Roadmap</title>
+<style>
+/* ============================================================
+   EDITORIAL DESIGN SYSTEM v1 — Color tokens
+   ============================================================ */
+:root {
+  /* Backgrounds */
+  --bg-page:        #faf9f7;
+  --bg-surface:     #f3f1ee;
+  --bg-overlay:     #ece9e4;
+
+  /* Text */
+  --text-primary:   #1a1917;
+  --text-secondary: #4a4844;
+  --text-muted:     #8a8680;
+
+  /* Accent — deep indigo (used sparingly) */
+  --accent:         #3730a3;
+  --accent-subtle:  #e0e7ff;
+  --accent-focus:   #4f46e5;
+
+  /* Hairlines */
+  --rule:           #d6d2cb;
+  --rule-heavy:     #b5b0a8;
+
+  /* Status semantic tokens */
+  --status-success: #166534;
+  --status-success-bg: #dcfce7;
+  --status-active:  #92400e;
+  --status-active-bg: #fef3c7;
+  --status-warning: #9a3412;
+  --status-warning-bg: #ffedd5;
+  --status-danger:  #991b1b;
+  --status-danger-bg: #fee2e2;
+  --status-muted:   #374151;
+  --status-muted-bg: #f3f4f6;
+
+  /* Font stacks */
+  --font-serif: Georgia, "Times New Roman", serif;
+  --font-sans:  -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                "Helvetica Neue", Arial, sans-serif;
+  --font-mono:  ui-monospace, "SF Mono", "Cascadia Code", "Fira Mono",
+                Menlo, Consolas, monospace;
+
+  /* Type scale */
+  --text-xs:   0.75rem;
+  --text-sm:   0.875rem;
+  --text-base: 1rem;
+  --text-lg:   1.125rem;
+  --text-xl:   1.25rem;
+  --text-2xl:  1.5rem;
+  --text-3xl:  2rem;
+
+  /* Spacing scale */
+  --sp-1:  0.25rem;
+  --sp-2:  0.5rem;
+  --sp-3:  0.75rem;
+  --sp-4:  1rem;
+  --sp-6:  1.5rem;
+  --sp-8:  2rem;
+  --sp-12: 3rem;
+  --sp-16: 4rem;
+
+  /* Layout */
+  --measure: 70ch;
+  --line-height-body: 1.65;
+  --line-height-heading: 1.2;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-page:        #141312;
+    --bg-surface:     #1e1c1a;
+    --bg-overlay:     #272420;
+
+    --text-primary:   #f0ece6;
+    --text-secondary: #b8b3ab;
+    --text-muted:     #7a7570;
+
+    --accent:         #818cf8;
+    --accent-subtle:  #1e1b4b;
+    --accent-focus:   #a5b4fc;
+
+    --rule:           #2e2b28;
+    --rule-heavy:     #3d3a36;
+
+    --status-success: #86efac;
+    --status-success-bg: #14532d;
+    --status-active:  #fcd34d;
+    --status-active-bg: #451a03;
+    --status-warning: #fb923c;
+    --status-warning-bg: #431407;
+    --status-danger:  #fca5a5;
+    --status-danger-bg: #450a0a;
+    --status-muted:   #9ca3af;
+    --status-muted-bg: #1f2937;
+  }
+}
+
+/* ============================================================
+   Base reset
+   ============================================================ */
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--line-height-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main {
+  max-width: 56rem;
+  margin: 0 auto;
+  padding: var(--sp-16) var(--sp-8) var(--sp-16);
+}
+
+@media (max-width: 640px) {
+  main { padding: var(--sp-12) var(--sp-6) var(--sp-12); }
+}
+
+::selection {
+  background: var(--accent-subtle);
+  color: var(--accent);
+}
+
+a { color: var(--accent); }
+
+/* ============================================================
+   Masthead
+   ============================================================ */
+.masthead {
+  margin-bottom: var(--sp-8);
+}
+
+.masthead__eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--text-muted);
+  margin: 0 0 var(--sp-3);
+}
+
+h1 {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: clamp(2.4rem, 6vw, 3.5rem);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  margin: 0 0 var(--sp-4);
+  color: var(--text-primary);
+}
+
+.masthead__summary {
+  font-family: var(--font-serif);
+  font-size: var(--text-lg);
+  font-style: italic;
+  color: var(--text-secondary);
+  max-width: 48ch;
+  margin: 0;
+}
+
+/* ID / meta header block */
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  padding: var(--sp-4) 0;
+  margin-top: var(--sp-6);
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+
+.meta__id {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.meta__fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-left: auto;
+}
+
+.meta__sep {
+  color: var(--rule-heavy);
+}
+
+/* Cycle badge */
+.badge {
+  font-family: var(--font-mono);
+  background: var(--accent-subtle);
+  color: var(--accent);
+  font-size: var(--text-xs);
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   Section scaffolding
+   ============================================================ */
+.section {
+  margin-top: var(--sp-16);
+}
+
+.section__label {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--text-muted);
+  margin: 0 0 var(--sp-6);
+  padding-bottom: var(--sp-2);
+}
+
+/* ============================================================
+   Progress bar
+   ============================================================ */
+.progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.progress__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-4);
+}
+
+.progress__headline {
+  font-family: var(--font-serif);
+  font-size: var(--text-2xl);
+  color: var(--text-primary);
+}
+
+.progress__headline .num {
+  font-variant-numeric: tabular-nums;
+}
+
+.progress__label {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.progress__track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-overlay);
+  overflow: hidden;
+}
+
+.progress__fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent);
+  transition: none;
+}
+
+.progress__fill[data-complete="true"] {
+  background: var(--status-success);
+}
+
+/* ============================================================
+   Status pill
+   ============================================================ */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+  line-height: 1.6;
+}
+
+.pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+.pill--success { background: var(--status-success-bg); color: var(--status-success); }
+.pill--active  { background: var(--status-active-bg);  color: var(--status-active);  }
+.pill--warning { background: var(--status-warning-bg); color: var(--status-warning); }
+.pill--danger  { background: var(--status-danger-bg);  color: var(--status-danger);  }
+.pill--muted   { background: var(--status-muted-bg);   color: var(--status-muted);   }
+
+/* ============================================================
+   Collapsible <details>
+   ============================================================ */
+details {
+  border-top: 1px solid var(--rule);
+}
+
+summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-4) 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: var(--text-primary);
+  user-select: none;
+}
+
+summary::-webkit-details-marker { display: none; }
+
+summary::before {
+  content: "\25B6";
+  font-size: 0.7em;
+  color: var(--accent);
+  transition: transform 0.18s ease;
+  flex: none;
+}
+
+details[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+summary:focus-visible {
+  outline: 2px solid var(--accent-focus);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+summary .summary__meta {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.details__body {
+  border-left: 3px solid var(--accent);
+  padding-left: var(--sp-6);
+  margin: 0 0 var(--sp-6) 2px;
+}
+
+details[open] > .details__body {
+  animation: detailsfade 0.22s ease both;
+}
+
+@keyframes detailsfade {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   Milestone list
+   ============================================================ */
+.milestones {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.milestone {
+  display: grid;
+  grid-template-columns: 2.5rem 1fr auto;
+  align-items: baseline;
+  gap: var(--sp-4);
+  padding: var(--sp-4) 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.milestone:last-child { border-bottom: none; }
+
+.milestone__seq {
+  font-family: var(--font-serif);
+  font-size: var(--text-2xl);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  line-height: 1;
+}
+
+.milestone__body {
+  min-width: 0;
+}
+
+.milestone__id {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+.milestone__title {
+  font-family: var(--font-serif);
+  font-size: var(--text-xl);
+  color: var(--text-primary);
+  margin-top: 1px;
+  text-wrap: pretty;
+}
+
+.milestone[data-status="superseded"] .milestone__title {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+.milestone__status {
+  align-self: center;
+}
+
+/* Empty state */
+.empty {
+  text-align: center;
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: var(--text-lg);
+  color: var(--text-muted);
+  padding: var(--sp-12) var(--sp-4);
+}
+
+/* ============================================================
+   Legend
+   ============================================================ */
+.legend {
+  display: grid;
+  gap: var(--sp-4);
+}
+
+.legend__row {
+  display: grid;
+  grid-template-columns: 9rem 1fr;
+  align-items: baseline;
+  gap: var(--sp-4);
+}
+
+.legend__desc {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.legend__desc code { font-size: 0.85em; }
+
+/* ============================================================
+   Inline code / path
+   ============================================================ */
+code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--bg-overlay);
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: var(--text-secondary);
+}
+</style>
+</head>
+<body>
 <main data-kind="roadmap-index">
-  <h1>Roadmap</h1>
-  <p><strong>Progress:</strong> {{done_count}}/{{total_count}} tasks done ({{pct}}%)</p>
-  <details open><summary>Milestones (in execution order)</summary>
-    <ul>{{milestone_list_ordered_by_sequence}}</ul>
-  </details>
-  <details><summary>Status legend</summary>
-    <table><thead><tr><th>Status</th><th>Meaning</th></tr></thead>
-    <tbody>
-      <tr><td><code>todo</code></td><td>Not yet started</td></tr>
-      <tr><td><code>in_progress</code></td><td>Actively being worked on</td></tr>
-      <tr><td><code>done</code></td><td>Completed</td></tr>
-      <tr><td><code>superseded</code></td><td>Replaced by another item; no longer active</td></tr>
-      <tr><td><code>blocked</code></td><td>Cannot proceed — dependency or blocker outstanding</td></tr>
-    </tbody></table>
-  </details>
-</main></body></html>
+
+  <!-- ============================================================
+       1. Page header
+       ============================================================ -->
+  <header class="masthead">
+    <p class="masthead__eyebrow">Project Roadmap</p>
+    <h1>Roadmap</h1>
+    <p class="masthead__summary">An overview of every milestone in sequence, and how far the work has progressed toward completion.</p>
+    <div class="meta">
+      <span class="meta__id">roadmap-index</span>
+      <span class="meta__fields">
+        <span>created 2026-03-04</span>
+        <span class="meta__sep">·</span>
+        <span>updated 2026-06-22</span>
+        <span class="meta__sep">·</span>
+        <span class="badge">cycle 3</span>
+      </span>
+    </div>
+  </header>
+
+  <!-- ============================================================
+       2. Progress bar
+       ============================================================ -->
+  <section class="section" aria-label="Overall progress">
+    <div class="progress">
+      <div class="progress__head">
+        <div class="progress__headline"><span class="num">{{done_count}}</span> of <span class="num">{{total_count}}</span> tasks done</div>
+        <div class="progress__label">{{done_count}}/{{total_count}} tasks done ({{pct}}%)</div>
+      </div>
+      <div class="progress__track" role="progressbar" aria-valuenow="{{pct}}" aria-valuemin="0" aria-valuemax="100">
+        <div class="progress__fill" data-pct="{{pct}}" style="width: {{pct}}%;"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       3. Milestone list (collapsible, open by default)
+       ============================================================ -->
+  <section class="section">
+    <details open>
+      <summary>Milestones <span class="summary__meta">by sequence</span></summary>
+      <div class="details__body">
+        <ol class="milestones">
+          {{milestone_list_ordered_by_sequence}}
+        </ol>
+      </div>
+    </details>
+  </section>
+
+  <!-- ============================================================
+       4. Status legend (collapsible, collapsed by default)
+       ============================================================ -->
+  <section class="section">
+    <details>
+      <summary>Status legend <span class="summary__meta">5 states</span></summary>
+      <div class="details__body">
+        <div class="legend">
+          <div class="legend__row">
+            <span class="pill pill--muted">todo</span>
+            <span class="legend__desc">Not yet started — queued for a future cycle.</span>
+          </div>
+          <div class="legend__row">
+            <span class="pill pill--active">in_progress</span>
+            <span class="legend__desc">Actively being worked this cycle.</span>
+          </div>
+          <div class="legend__row">
+            <span class="pill pill--success">done</span>
+            <span class="legend__desc">Complete and verified — all tasks closed.</span>
+          </div>
+          <div class="legend__row">
+            <span class="pill pill--muted">superseded</span>
+            <span class="legend__desc">Replaced by a later milestone; retained for history.</span>
+          </div>
+          <div class="legend__row">
+            <span class="pill pill--danger">blocked</span>
+            <span class="legend__desc">Halted by an unresolved dependency or decision.</span>
+          </div>
+        </div>
+      </div>
+    </details>
+  </section>
+
+</main>
+
+<script>
+/* Editorial Design System v1 — roadmap-index
+   Vanilla JS only. No libraries, no inline handlers.
+   Paints the progress fill green at 100% in case the
+   server-rendered {{pct}} token resolves to a literal value. */
+(function () {
+  "use strict";
+
+  function syncProgressFills() {
+    var fills = document.querySelectorAll(".progress__fill[data-pct]");
+    for (var i = 0; i < fills.length; i++) {
+      var raw = fills[i].getAttribute("data-pct");
+      var pct = parseInt(raw, 10);
+      if (!isNaN(pct)) {
+        fills[i].style.width = pct + "%";
+        if (pct >= 100) {
+          fills[i].setAttribute("data-complete", "true");
+        } else {
+          fills[i].removeAttribute("data-complete");
+        }
+      }
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", syncProgressFills);
+  } else {
+    syncProgressFills();
+  }
+})();
+</script>
+</body>
+</html>
