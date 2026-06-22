@@ -146,7 +146,7 @@ Implement using **vanilla JS only** — no libraries, no frameworks, no external
 
 The code review artifact has a **Related region** linking back to the plan it reviewed. The Related region is rendered as a compact link list within the artifact, using relative paths across `plans/<dir>/`:
 
-- **Plan** → `../PLAN-<id>.html` (or `.md`) — the architect plan this code review covers
+- **Plan** → `../feat/FEAT-<id>-<slug>.html` (or `.md`) — the architect plan this code review covers
 
 All hrefs are relative — never absolute or external.
 

@@ -154,11 +154,11 @@ Implement using **vanilla JS only** — no libraries, no frameworks, no external
 
 The final report artifact has a **Related region** consolidating links to all pipeline artifacts from this run. The Related region is rendered as a compact link list within the artifact, using relative paths across `plans/<dir>/`:
 
-- **Spec** → `../SPEC-<id>.html` (or `.md`) — the spec that originated this pipeline run
-- **Plan** → `../PLAN-<id>.html` (or `.md`) — the architect plan executed
-- **Test report** → `../TEST-<id>.html` (or `.md`) — the tester's test report
-- **Code review** → `../CR-<id>.html` (or `.md`) — the reviewer's code-review document
-- **QA report** → `../QA-<id>.html` (or `.md`) — the QA gate results
+- **Spec** → `plans/specs/SPEC-<id>-<slug>.html` (or `.md`) — the spec that originated this pipeline run
+- **Plan** → `plans/feat/FEAT-<id>-<slug>.html` (or `.md`) — the architect plan executed
+- **Test report** → `plans/test/TEST-<id>-<slug>.html` (or `.md`) — the tester's test report
+- **Code review** → `plans/code-review/CR-<id>-<slug>.html` (or `.md`) — the reviewer's code-review document
+- **QA report** → `plans/qa/QA-<id>-<slug>.html` (or `.md`) — the QA gate results
 
 All hrefs are relative — never absolute or external.
 

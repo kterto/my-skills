@@ -125,7 +125,7 @@ Implement using **vanilla JS only** — no libraries, no frameworks, no external
 
 The plan artifact has a **Related region** linking back to its parent spec. The Related region is rendered as a compact link list within the artifact, using relative paths across `plans/<dir>/`:
 
-- **Spec** → `../SPEC-<id>.html` (or `.md`) — the parent spec that originated this plan
+- **Spec** → `../specs/SPEC-<id>-<slug>.html` (or `.md`) — the parent spec that originated this plan
 
 All hrefs are relative — never absolute or external.
 
