@@ -103,8 +103,13 @@ On approval:
    - Milestone READMEs: `templates/milestone-readme.template.md` (or `templates/milestone-readme.template.html`)
    - Phase READMEs: `templates/phase-readme.template.md` (or `templates/phase-readme.template.html`)
    - Task files: `templates/task.template.md` (or `templates/task.template.html`)
-2. Write `/roadmap/roadmap.lock.json` with version, `last_synced_sha: null`, and one entry per item.
-3. Print a summary of all written paths.
+2. **Child navigation links.** When filling the child-list tokens, render each child row as a relative link (`<ext>` = `html` in html mode, `md` in md mode):
+   - index `{{milestone_list_ordered_by_sequence}}` → each milestone links to `<NNN-slug>/README.<ext>`
+   - milestone `{{phase_list_ordered_by_sequence}}` → each phase links to `<NNN.M-slug>/README.<ext>`
+   - phase `{{task_list_ordered_by_sequence}}` → each task links to `<NNN.M.T-slug>.<ext>`
+   In md: `- [<id> — <title>](<target>) <status>`. In html: wrap the row label in `<a href="<target>">…</a>`, keeping the status pill and (phase task rows) the `<input type="checkbox" disabled>` outside the link. `<NNN-slug>` etc. is the same slug used to name the child's directory/file.
+3. Write `/roadmap/roadmap.lock.json` with version, `last_synced_sha: null`, and one entry per item.
+4. Print a summary of all written paths.
 
 Item file schema (frontmatter keys, body sections, audit log format) is defined in `references/item-schema.md`. Every task file has exactly three body sections: `## Brief`, `## Acceptance`, `## Audit log`.
 

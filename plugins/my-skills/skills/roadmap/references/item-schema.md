@@ -121,3 +121,20 @@ html-mode items follow the orchestrator's artifact format (see `orchestrator/ref
 - Each body section (`Brief`, `Acceptance`, `Audit log`) is wrapped in a collapsible `<details><summary>Section Title</summary>…</details>`.
 - Task lists rendered as `<input type="checkbox" disabled>` (disabled checkboxes).
 - Self-contained, no external assets.
+
+## Output navigation
+
+Every rendered item links to its neighbours with **relative** links (md and html). `<ext>` = `md` or `html` per `output_format`.
+
+**Down-links (children)** are emitted by the skill when it fills the child-list tokens (see SKILL.md Step 4): index→`<NNN-slug>/README.<ext>`, milestone→`<NNN.M-slug>/README.<ext>`, phase→`<NNN.M.T-slug>.<ext>`.
+
+**Up-links (breadcrumb)** are template-static, near the top of each non-root item, showing the ID chain plus a `Roadmap` home link (current item unlinked):
+
+| Level | Breadcrumb |
+|---|---|
+| index | none (root) |
+| milestone | `Roadmap`(`../README.<ext>`) / `{{id}}` |
+| phase | `Roadmap`(`../../README.<ext>`) / `{{milestone}}`(`../README.<ext>`) / `{{id}}` |
+| task | `Roadmap`(`../../README.<ext>`) / `{{milestone}}`(`../README.<ext>`) / `{{phase}}`(`README.<ext>`) / `{{id}}` |
+
+Links are plain relative hrefs; an unrendered target simply 404s (no script error).

@@ -40,6 +40,10 @@ A directory number, once assigned, is **never renumbered**. It is identity, not 
 
 `output_format` controls all generated `.md`/`.html` artifacts (every README and item file). `roadmap.lock.json` is always JSON and is machine state, not a deliverable.
 
+### Navigation link targets
+
+Items link to each other by relative path derived from the ID scheme: a milestone is `<NNN-slug>/README.<ext>`, a phase is `<NNN.M-slug>/README.<ext>`, a task is `<NNN.M.T-slug>.<ext>` (`<ext>` per `output_format`). See `item-schema.md` → Output navigation.
+
 ## `roadmap.lock.json` schema
 
 ```json
