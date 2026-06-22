@@ -41,7 +41,7 @@ Body: free-form markdown with headings, lists, and fenced code blocks as appropr
 - Task lists rendered as `<input type="checkbox" disabled>` checkboxes.
 - Cycle counters displayed as inline `<span class="badge">cycle N</span>` badges; style the badge inline (no external CSS).
 
-**Styled templates.** In `html` mode, each role fills the matching self-contained scaffold in `templates/html/<artifact>.template.html` (spec, plan, test-report, code-review, qa-report, final-report). These define the Editorial Design System v1 look and the required `<main data-*>` shell; roles replace the sample content with the real artifact content, preserving the `data-*` attributes, `<details><summary>` sections, disabled checkboxes, and the `<span class="badge">cycle N</span>` badge. `progress-timeline.template.html` is provided for a future progress-as-HTML artifact; `.progress.md` remains markdown-only today.
+**Styled templates.** In `html` mode, each role fills the matching self-contained scaffold in `templates/html/<artifact>.template.html` (spec, plan, test-report, code-review, qa-report, final-report). These define the Editorial Design System v1 look and the required `<main data-*>` shell; roles replace the sample content with the real artifact content, preserving the `data-*` attributes, `<details><summary>` sections, disabled checkboxes, and the `<span class="badge">cycle N</span>` badge. `progress-timeline.template.html` is wired: in `html` mode the orchestrator renders `<plan-path-without-.md>.progress.html` from a plan's `.progress.md` append-log at each pipeline terminal state. `.progress.md` remains the markdown source-of-truth log (roles append to it); the html file is a regenerated read-only view.
 
 ## Related navigation (md + html)
 
