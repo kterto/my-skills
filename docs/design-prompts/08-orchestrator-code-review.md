@@ -142,6 +142,14 @@ Implement using **vanilla JS only** — no libraries, no frameworks, no external
 - **Keyboard accessibility:** All interactive elements reachable via keyboard. `<details>/<summary>` handles this natively.
 - All JS must be in a single `<script>` block at the bottom of `<body>`. No inline event handlers.
 
+## Navigation
+
+The code review artifact has a **Related region** linking back to the plan it reviewed. The Related region is rendered as a compact link list within the artifact, using relative paths across `plans/<dir>/`:
+
+- **Plan** → `../PLAN-<id>.html` (or `.md`) — the architect plan this code review covers
+
+All hrefs are relative — never absolute or external.
+
 ## Guardrails
 
 ### Self-contained mandate
@@ -180,3 +188,5 @@ The following must appear exactly as shown in the output HTML:
 6. **Cycle counter in meta** — The cycle number from `data-cycle` must appear both in the `data-cycle` attribute on `<main>` and as `<span class="badge">cycle N</span>` in the meta header. Both occurrences are required.
 
 7. **Disabled checkboxes** — If any task list or checklist is present, use `<input type="checkbox" disabled>`. Never replace with icons or `✓` characters. The `disabled` attribute is required.
+
+8. **Preserve the navigation region (breadcrumb / Related) and its relative hrefs; never make links absolute or external.**

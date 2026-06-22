@@ -156,6 +156,14 @@ Implement using **vanilla JS only** — no libraries, no frameworks, no external
 - All JS must be in a single `<script>` block at the bottom of `<body>`. No inline event handlers.
 - **Responsive timeline:** The timeline layout is CSS-only. On narrow viewports (< 480px), reduce the `padding-left` on event bodies and shrink the vertical rule left offset so events remain readable.
 
+## Navigation
+
+The progress timeline artifact has a **Related region** linking back to the plan whose pipeline it is tracking. The Related region is rendered as a compact link list within the artifact, using relative paths across `plans/<dir>/`:
+
+- **Plan** → `../PLAN-<id>.html` (or `.md`) — the architect plan this timeline covers
+
+All hrefs are relative — never absolute or external.
+
 ## Guardrails
 
 ### Self-contained mandate
@@ -194,3 +202,5 @@ The following must appear exactly as shown in the output HTML:
 6. **No decorative corruption of log content** — The raw log `<pre><code>` block must render log lines as plain monospace text. No syntax highlighting libraries, no decorative wrapping that alters the text content, no smart-quotes or typography substitutions inside code blocks.
 
 7. **New artifact — no backward-compat HTML hook required** — Because this is a new HTML artifact (the `.progress.md` is markdown-only and has no prior HTML template), there is no legacy `<!-- roadmap-index -->` marker or `{{token}}` placeholder to preserve. Do not add phantom contract hooks from other templates.
+
+8. **Preserve the navigation region (breadcrumb / Related) and its relative hrefs; never make links absolute or external.**

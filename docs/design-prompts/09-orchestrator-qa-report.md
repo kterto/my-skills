@@ -142,6 +142,14 @@ Implement using **vanilla JS only** — no libraries, no frameworks, no external
 - All JS must be in a single `<script>` block at the bottom of `<body>`. No inline event handlers.
 - **Responsive gate grid:** CSS Grid `grid-template-columns: repeat(auto-fill, minmax(240px, 1fr))` — no JS required for responsiveness.
 
+## Navigation
+
+The QA report artifact has a **Related region** linking back to the plan it quality-gated. The Related region is rendered as a compact link list within the artifact, using relative paths across `plans/<dir>/`:
+
+- **Plan** → `../PLAN-<id>.html` (or `.md`) — the architect plan this QA report covers
+
+All hrefs are relative — never absolute or external.
+
 ## Guardrails
 
 ### Self-contained mandate
@@ -180,3 +188,5 @@ The following must appear exactly as shown in the output HTML:
 6. **Stale-gate flag** — The stale flag must be rendered as an inline badge next to the gate name when stale. It must be visually distinct using the `warning` semantic token. Do not omit this indicator when stale gates are present.
 
 7. **Disabled checkboxes** — If any task list or checklist is present, use `<input type="checkbox" disabled>`. Never replace with icons or `✓` characters. The `disabled` attribute is required.
+
+8. **Preserve the navigation region (breadcrumb / Related) and its relative hrefs; never make links absolute or external.**

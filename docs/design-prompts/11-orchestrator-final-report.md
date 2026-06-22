@@ -150,6 +150,18 @@ Implement using **vanilla JS only** — no libraries, no frameworks, no external
 - **Keyboard accessibility:** All interactive elements reachable via keyboard. `<details>/<summary>` and `<button>` handle this natively. The copy button must have `type="button"` to prevent form-submit behavior.
 - All JS must be in a single `<script>` block at the bottom of `<body>`.
 
+## Navigation
+
+The final report artifact has a **Related region** consolidating links to all pipeline artifacts from this run. The Related region is rendered as a compact link list within the artifact, using relative paths across `plans/<dir>/`:
+
+- **Spec** → `../SPEC-<id>.html` (or `.md`) — the spec that originated this pipeline run
+- **Plan** → `../PLAN-<id>.html` (or `.md`) — the architect plan executed
+- **Test report** → `../TEST-<id>.html` (or `.md`) — the tester's test report
+- **Code review** → `../CR-<id>.html` (or `.md`) — the reviewer's code-review document
+- **QA report** → `../QA-<id>.html` (or `.md`) — the QA gate results
+
+All hrefs are relative — never absolute or external.
+
 ## Guardrails
 
 ### Self-contained mandate
@@ -190,3 +202,5 @@ The following must appear exactly as shown in the output HTML:
 7. **PR-message structure** — The PR-message block must include both `## Summary` and `## Test plan` subsections as plain-text markdown headings inside the `<pre><code>` block. These are literal text inside the pre block, not rendered HTML headings.
 
 8. **Disabled checkboxes** — If any task list or checklist is rendered as HTML (outside the plain-text PR-message pre block), use `<input type="checkbox" disabled>`. Never replace with icons or `✓` characters.
+
+9. **Preserve the navigation region (breadcrumb / Related) and its relative hrefs; never make links absolute or external.**

@@ -141,6 +141,16 @@ Implement using **vanilla JS only** — no libraries, no frameworks, no external
 - **Keyboard accessibility:** All interactive elements reachable via keyboard. `<details>/<summary>` handles this natively.
 - All JS must be in a single `<script>` block at the bottom of `<body>`. No inline event handlers.
 
+## Navigation
+
+The task page has a **breadcrumb** at the top of the page:
+
+```
+Roadmap (../../README.<ext>) / {{milestone}} (../README.<ext>) / {{phase}} (README.<ext>) / {{id}}
+```
+
+`Roadmap` links to `../../README.<ext>` (the root roadmap index, two directories up). `{{milestone}}` links to `../README.<ext>` (the parent milestone, one directory up). `{{phase}}` links to `README.<ext>` (the parent phase, same directory). `{{id}}` is the current task and is not linked. All hrefs are relative — never absolute or external.
+
 ## Guardrails
 
 ### Self-contained mandate
@@ -184,3 +194,5 @@ The following must appear exactly as shown in the output HTML:
 5. **Audit-log column order** — The table header must preserve the exact column order: `when (ISO-8601)`, `status`, `who`, `evidence`. Never rename or reorder these columns.
 
 6. **Status enum strings** — Status pills must use the exact enum strings: `todo`, `in_progress`, `done`, `blocked`, `superseded`. Never translate, abbreviate, or recase them.
+
+7. **Preserve the navigation region (breadcrumb / Related) and its relative hrefs; never make links absolute or external.**

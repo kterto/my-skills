@@ -121,6 +121,14 @@ Implement using **vanilla JS only** — no libraries, no frameworks, no external
 - **Keyboard accessibility:** All interactive elements reachable via keyboard. `<details>/<summary>` handles this natively.
 - All JS must be in a single `<script>` block at the bottom of `<body>`. No inline event handlers.
 
+## Navigation
+
+The plan artifact has a **Related region** linking back to its parent spec. The Related region is rendered as a compact link list within the artifact, using relative paths across `plans/<dir>/`:
+
+- **Spec** → `../SPEC-<id>.html` (or `.md`) — the parent spec that originated this plan
+
+All hrefs are relative — never absolute or external.
+
 ## Guardrails
 
 ### Self-contained mandate
@@ -159,3 +167,5 @@ The following must appear exactly as shown in the output HTML:
 6. **Task category labels** — FEAT, FIX, and QAF are the exact category strings for the architect plan. Never rename or reorder them. Each task's category label must appear verbatim as a prefix tag.
 
 7. **Cycle counter in meta** — The cycle number from `data-cycle` must appear in both the `data-cycle` attribute on `<main>` and as a `<span class="badge">cycle N</span>` in the meta header. Both occurrences are required.
+
+8. **Preserve the navigation region (breadcrumb / Related) and its relative hrefs; never make links absolute or external.**

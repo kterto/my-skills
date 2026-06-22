@@ -138,6 +138,18 @@ Implement using **vanilla JS only** — no libraries, no frameworks, no external
 - **Keyboard accessibility:** All interactive elements reachable via keyboard. `<details>/<summary>` handles this natively. Checkboxes are `disabled` and therefore not focusable/interactive by design.
 - All JS must be in a single `<script>` block at the bottom of `<body>`. No inline event handlers.
 
+## Navigation
+
+The phase page has a **breadcrumb** at the top of the page:
+
+```
+Roadmap (../../README.<ext>) / {{milestone}} (../README.<ext>) / {{id}}
+```
+
+`Roadmap` links to `../../README.<ext>` (the root roadmap index, two directories up). `{{milestone}}` links to `../README.<ext>` (the parent milestone, one directory up). `{{id}}` is the current phase and is not linked. All hrefs are relative — never absolute or external.
+
+The task list section renders task rows as relative links of the form `<NNN.M.T-slug>.<ext>`; these links are injected by the skill renderer via `{{task_list_ordered_by_sequence}}` and must remain relative.
+
 ## Guardrails
 
 ### Self-contained mandate
@@ -178,3 +190,5 @@ The following must appear exactly as shown in the output HTML:
 5. **Audit-log column order** — The table header must preserve the exact column order: `when (ISO-8601)`, `status`, `who`, `evidence`. Never rename or reorder these columns.
 
 6. **Status enum strings** — Rollup status pills must use the exact enum strings: `todo`, `in_progress`, `done`, `blocked`, `superseded`. Never translate, abbreviate, or recase them.
+
+7. **Preserve the navigation region (breadcrumb / Related) and its relative hrefs; never make links absolute or external.**

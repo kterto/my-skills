@@ -118,6 +118,10 @@ Implement using **vanilla JS only** — no libraries, no frameworks, no external
 - **Keyboard accessibility:** All interactive elements must be reachable via keyboard. `<details>/<summary>` handles this natively.
 - All JS must be in a single `<script>` block at the bottom of `<body>`. No inline event handlers (`onclick=`, etc.).
 
+## Navigation
+
+The roadmap index is the root of the roadmap hierarchy — it has **no breadcrumb** (it is the top-level page). The milestone list section renders milestone rows as relative links of the form `<NNN-slug>/README.<ext>` (where `<ext>` is `md` or `html` depending on the output format); these links are injected by the skill renderer via `{{milestone_list_ordered_by_sequence}}` and must remain relative.
+
 ## Guardrails
 
 ### Self-contained mandate
@@ -150,3 +154,5 @@ The following must appear exactly as shown in the output HTML:
 4. **Status enum strings** — The status legend must use the exact strings `todo`, `in_progress`, `done`, `superseded`, `blocked`. Never translate, abbreviate, or recase them.
 
 5. **No `<!-- roadmap-index -->` HTML comment required** — That comment is a markdown-only documentation convention. The machine contract is `data-kind="roadmap-index"`, not an HTML comment.
+
+6. **Preserve the navigation region (breadcrumb / Related) and its relative hrefs; never make links absolute or external.**

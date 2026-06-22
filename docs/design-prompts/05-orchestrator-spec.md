@@ -115,6 +115,10 @@ Implement using **vanilla JS only** — no libraries, no frameworks, no external
 - **Keyboard accessibility:** All interactive elements reachable via keyboard. `<details>/<summary>` handles this natively.
 - All JS must be in a single `<script>` block at the bottom of `<body>`. No inline event handlers.
 
+## Navigation
+
+The spec artifact has **no Related region** — it is the entry point of the orchestration pipeline and has no upstream orchestrator artifacts to link back to. No navigation links are rendered on this artifact.
+
 ## Guardrails
 
 ### Self-contained mandate
@@ -151,3 +155,5 @@ The following must appear exactly as shown in the output HTML:
 5. **Open questions empty state** — When open questions are absent, render the Open Questions `<details>` section with an empty-state message in `--text-muted` italic. Never omit the section entirely.
 
 > **Note:** The spec always carries a visible status pill (`READY_FOR_PLANNING` or `DRAFT`). The architect plan template (a separate artifact) is the one that omits the status pill — that constraint lives in the plan's own guardrails, not here.
+
+6. **Preserve the navigation region (breadcrumb / Related) and its relative hrefs; never make links absolute or external.**
