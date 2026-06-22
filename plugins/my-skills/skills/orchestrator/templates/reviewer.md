@@ -47,7 +47,7 @@ Categorize every finding:
 
 ## Step 4 — Create the CR file
 
-Emit the artifact per `references/artifact-format.md` using the configured `output_format`; the stdout summary below is identical regardless of format. The `md`-mode definition follows.
+Emit the artifact per `references/artifact-format.md` using the configured `output_format`; the stdout summary below is identical regardless of format. The `md`-mode definition follows. In the rendered report, fill the Related region with a relative link to the plan, per `artifact-format.md` → Related navigation.
 
 Path: `plans/code-review/CR-{NNN}-{slug}.md`
 

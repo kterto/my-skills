@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pipeline Progress — P1-async-export</title>
+<style>
+/* ============================================================
+   EDITORIAL DESIGN SYSTEM v1 — Color tokens
+   ============================================================ */
+:root {
+  --bg-page:        #faf9f7;
+  --bg-surface:     #f3f1ee;
+  --bg-overlay:     #ece9e4;
+
+  --text-primary:   #1a1917;
+  --text-secondary: #4a4844;
+  --text-muted:     #8a8680;
+
+  --accent:         #3730a3;
+  --accent-subtle:  #e0e7ff;
+  --accent-focus:   #4f46e5;
+
+  --rule:           #d6d2cb;
+  --rule-heavy:     #b5b0a8;
+
+  --status-success: #166534;
+  --status-success-bg: #dcfce7;
+  --status-active:  #92400e;
+  --status-active-bg: #fef3c7;
+  --status-warning: #9a3412;
+  --status-warning-bg: #ffedd5;
+  --status-danger:  #991b1b;
+  --status-danger-bg: #fee2e2;
+  --status-muted:   #374151;
+  --status-muted-bg: #f3f4f6;
+
+  --font-serif: Georgia, "Times New Roman", serif;
+  --font-sans:  -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                "Helvetica Neue", Arial, sans-serif;
+  --font-mono:  ui-monospace, "SF Mono", "Cascadia Code", "Fira Mono",
+                Menlo, Consolas, monospace;
+
+  --text-xs:   0.75rem;
+  --text-sm:   0.875rem;
+  --text-base: 1rem;
+  --text-lg:   1.125rem;
+  --text-xl:   1.25rem;
+  --text-2xl:  1.5rem;
+  --text-3xl:  2rem;
+
+  --sp-1:  0.25rem;
+  --sp-2:  0.5rem;
+  --sp-3:  0.75rem;
+  --sp-4:  1rem;
+  --sp-6:  1.5rem;
+  --sp-8:  2rem;
+  --sp-12: 3rem;
+  --sp-16: 4rem;
+
+  --measure: 70ch;
+  --line-height-body: 1.65;
+  --line-height-heading: 1.2;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-page:        #141312;
+    --bg-surface:     #1e1c1a;
+    --bg-overlay:     #272420;
+
+    --text-primary:   #f0ece6;
+    --text-secondary: #b8b3ab;
+    --text-muted:     #7a7570;
+
+    --accent:         #818cf8;
+    --accent-subtle:  #1e1b4b;
+    --accent-focus:   #a5b4fc;
+
+    --rule:           #2e2b28;
+    --rule-heavy:     #3d3a36;
+
+    --status-success: #86efac;
+    --status-success-bg: #14532d;
+    --status-active:  #fcd34d;
+    --status-active-bg: #451a03;
+    --status-warning: #fb923c;
+    --status-warning-bg: #431407;
+    --status-danger:  #fca5a5;
+    --status-danger-bg: #450a0a;
+    --status-muted:   #9ca3af;
+    --status-muted-bg: #1f2937;
+  }
+}
+
+/* ============================================================
+   Base reset
+   ============================================================ */
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--line-height-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main {
+  max-width: 52rem;
+  margin: 0 auto;
+  padding: var(--sp-16) var(--sp-8);
+}
+
+@media (max-width: 640px) {
+  main { padding: var(--sp-12) var(--sp-6); }
+}
+
+::selection { background: var(--accent-subtle); color: var(--accent); }
+a { color: var(--accent); }
+
+/* ============================================================
+   Masthead
+   ============================================================ */
+.masthead { margin-bottom: var(--sp-6); }
+
+.masthead__kicker {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--text-muted);
+  margin: 0 0 var(--sp-4);
+}
+
+h1 {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: clamp(2rem, 5vw, 3rem);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  margin: 0;
+  color: var(--text-primary);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-4);
+  text-wrap: balance;
+}
+
+h1 .h1__id {
+  font-family: var(--font-mono);
+  font-size: 0.44em;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--accent);
+  background: var(--accent-subtle);
+  padding: 0.15em 0.5em;
+  border-radius: 6px;
+  align-self: center;
+}
+
+h1 .h1__pill { align-self: center; }
+
+/* ID / meta header block */
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  padding: var(--sp-4) 0;
+  margin-top: var(--sp-6);
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+
+.meta__id { color: var(--text-secondary); font-weight: 600; }
+
+.meta__fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-3);
+  margin-left: auto;
+}
+
+.meta__sep { color: var(--rule-heavy); }
+.meta__key { color: var(--text-muted); }
+.meta__val { color: var(--text-secondary); }
+
+.badge {
+  font-family: var(--font-mono);
+  background: var(--accent-subtle);
+  color: var(--accent);
+  font-size: var(--text-xs);
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   Pipeline summary bar
+   ============================================================ */
+.summary-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin-top: var(--sp-4);
+}
+
+.summary-bar .sb-sep { color: var(--rule-heavy); }
+
+/* ============================================================
+   Status pill
+   ============================================================ */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+  line-height: 1.6;
+}
+
+.pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+.pill--success { background: var(--status-success-bg); color: var(--status-success); }
+.pill--active  { background: var(--status-active-bg);  color: var(--status-active);  }
+.pill--warning { background: var(--status-warning-bg); color: var(--status-warning); }
+.pill--danger  { background: var(--status-danger-bg);  color: var(--status-danger);  }
+.pill--muted   { background: var(--status-muted-bg);   color: var(--status-muted);   }
+
+/* ============================================================
+   Vertical timeline
+   ============================================================ */
+.timeline {
+  position: relative;
+  margin-top: var(--sp-8);
+  padding-left: var(--sp-8);
+}
+
+/* continuous vertical rule */
+.timeline::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  background: var(--rule);
+}
+
+.timeline--ended::before { bottom: auto; height: 24px; background: linear-gradient(var(--rule), transparent); }
+
+.event {
+  position: relative;
+  padding: 0 0 var(--sp-6) 0;
+}
+
+.event:last-child { padding-bottom: 0; }
+
+/* timeline dot */
+.event__dot {
+  position: absolute;
+  left: calc(-1 * var(--sp-8) + 0px);
+  top: 4px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--status-muted);
+  box-shadow: 0 0 0 3px var(--bg-page);
+}
+
+.event__dot--success { background: var(--status-success); }
+.event__dot--active  { background: var(--status-active); }
+.event__dot--warning { background: var(--status-warning); }
+.event__dot--danger  { background: var(--status-danger); }
+.event__dot--muted   { background: var(--status-muted); }
+
+/* current event — white center ring */
+.event__dot--current {
+  background: var(--bg-page);
+  border: 3px solid var(--status-active);
+}
+
+.event__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.role-chip {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  background: var(--bg-overlay);
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.event__time {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.event__action {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  margin-top: var(--sp-2);
+}
+
+.event__note {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  margin-top: var(--sp-1);
+}
+
+.event__note code { font-size: 0.9em; }
+
+@media (max-width: 480px) {
+  .timeline { padding-left: var(--sp-6); }
+  .event__dot { left: calc(-1 * var(--sp-6) + 0px); }
+  .timeline::before { left: 4px; }
+  .event__time { margin-left: 0; width: 100%; }
+}
+
+/* ============================================================
+   Collapsible <details>
+   ============================================================ */
+.section { margin-top: var(--sp-12); }
+
+details { border-top: 1px solid var(--rule); }
+
+summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-4) 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: var(--text-primary);
+  user-select: none;
+}
+
+summary::-webkit-details-marker { display: none; }
+
+summary::before {
+  content: "\25B6";
+  font-size: 0.7em;
+  color: var(--accent);
+  transition: transform 0.18s ease;
+  flex: none;
+}
+
+details[open] > summary::before { transform: rotate(90deg); }
+
+summary:focus-visible {
+  outline: 2px solid var(--accent-focus);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+.details__body {
+  border-left: 3px solid var(--accent);
+  padding-left: var(--sp-6);
+  margin: 0 0 var(--sp-6) 2px;
+}
+
+/* ============================================================
+   Raw log block
+   ============================================================ */
+.rawlog {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  background: var(--bg-overlay);
+  color: var(--text-secondary);
+  padding: var(--sp-4);
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 0;
+  line-height: 1.7;
+}
+
+.rawlog code { background: none; padding: 0; border-radius: 0; font-size: inherit; color: inherit; }
+
+/* ============================================================
+   Inline code / path
+   ============================================================ */
+code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--bg-overlay);
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: var(--text-secondary);
+}
+
+/* ============================================================
+   Related nav region
+   ============================================================ */
+.related { font-size: 0.85rem; margin: 1.5rem 0 0; padding-top: 0.75rem; border-top: 1px solid var(--rule, #e3e0d8); }
+.related .label { color: var(--text-muted, #6b6b6b); margin-right: 0.5em; }
+.related a { color: var(--accent); text-decoration: none; }
+.related a:hover { text-decoration: underline; }
+.related .sep { opacity: 0.5; margin: 0 0.4em; }
+</style>
+</head>
+<body>
+<main
+  data-id="P1-async-export"
+  data-status="READY_TO_COMMIT"
+  data-created-at="2026-06-21T14:00:01Z"
+  data-updated-at="2026-06-21T14:07:11Z"
+  data-cycle="2"
+>
+
+  <!-- ============================================================
+       1. Page header
+       ============================================================ -->
+  <header class="masthead">
+    <p class="masthead__kicker">
+      <span>Pipeline Progress</span>
+      <span class="meta__sep">·</span>
+      <span>Orchestrator</span>
+    </p>
+    <h1>
+      <span class="h1__id">P1-async-export</span>
+      <span>Pipeline Progress</span>
+      <span class="h1__pill"><span class="pill pill--success">READY_TO_COMMIT</span></span>
+    </h1>
+
+    <!-- 2. ID / meta header block -->
+    <div class="meta">
+      <span class="meta__id">P1-async-export</span>
+      <span class="meta__fields">
+        <span><span class="meta__key">created:</span> <span class="meta__val">2026-06-21</span></span>
+        <span class="meta__sep">·</span>
+        <span><span class="meta__key">updated:</span> <span class="meta__val">2026-06-21</span></span>
+        <span class="meta__sep">·</span>
+        <span class="badge">cycle 2</span>
+      </span>
+    </div>
+
+    <!-- 3. Pipeline summary bar -->
+    <div class="summary-bar">
+      <span>8 events</span>
+      <span class="sb-sep">·</span>
+      <span>7m 10s elapsed</span>
+      <span class="sb-sep">·</span>
+      <span class="pill pill--success">READY_TO_COMMIT</span>
+    </div>
+  </header>
+
+  <!-- ============================================================
+       4. Vertical timeline
+       ============================================================ -->
+  <section aria-label="Pipeline event timeline">
+    <ol class="timeline" style="list-style:none; margin:0;">
+      <li class="event">
+        <span class="event__dot event__dot--success"></span>
+        <div class="event__top">
+          <span class="role-chip">brainstormer</span>
+          <span class="pill pill--success">READY_FOR_PLANNING</span>
+          <span class="event__time">2026-06-21T14:00:01Z</span>
+        </div>
+        <div class="event__action">SPEC-001 created</div>
+      </li>
+
+      <li class="event">
+        <span class="event__dot event__dot--active"></span>
+        <div class="event__top">
+          <span class="role-chip">architect</span>
+          <span class="pill pill--active">IN_PROGRESS</span>
+          <span class="event__time">2026-06-21T14:00:45Z</span>
+        </div>
+        <div class="event__action">P1-plan created</div>
+      </li>
+
+      <li class="event">
+        <span class="event__dot event__dot--success"></span>
+        <div class="event__top">
+          <span class="role-chip">architect</span>
+          <span class="pill pill--success">READY</span>
+          <span class="event__time">2026-06-21T14:01:12Z</span>
+        </div>
+        <div class="event__action">P1-plan updated</div>
+      </li>
+
+      <li class="event">
+        <span class="event__dot event__dot--active"></span>
+        <div class="event__top">
+          <span class="role-chip">coder</span>
+          <span class="pill pill--active">IN_PROGRESS</span>
+          <span class="event__time">2026-06-21T14:02:03Z</span>
+        </div>
+        <div class="event__action">Coding session started</div>
+      </li>
+
+      <li class="event">
+        <span class="event__dot event__dot--success"></span>
+        <div class="event__top">
+          <span class="role-chip">coder</span>
+          <span class="pill pill--success">done</span>
+          <span class="event__time">2026-06-21T14:05:33Z</span>
+        </div>
+        <div class="event__action">Coding session complete</div>
+      </li>
+
+      <li class="event">
+        <span class="event__dot event__dot--success"></span>
+        <div class="event__top">
+          <span class="role-chip">tester</span>
+          <span class="pill pill--success">PASS</span>
+          <span class="event__time">2026-06-21T14:06:01Z</span>
+        </div>
+        <div class="event__action">TEST-001 created</div>
+        <div class="event__note">Coverage: 91.2%</div>
+      </li>
+
+      <li class="event">
+        <span class="event__dot event__dot--success"></span>
+        <div class="event__top">
+          <span class="role-chip">reviewer</span>
+          <span class="pill pill--success">APPROVED</span>
+          <span class="event__time">2026-06-21T14:06:45Z</span>
+        </div>
+        <div class="event__action">CR-001 created</div>
+      </li>
+
+      <li class="event">
+        <span class="event__dot event__dot--success event__dot--current" style="border-color: var(--status-success);"></span>
+        <div class="event__top">
+          <span class="role-chip">qa</span>
+          <span class="pill pill--success">READY_TO_COMMIT</span>
+          <span class="event__time">2026-06-21T14:07:11Z</span>
+        </div>
+        <div class="event__action">QA-001 created</div>
+        <div class="event__note">All gates green · ready to commit</div>
+      </li>
+    </ol>
+  </section>
+
+  <!-- ============================================================
+       5. Raw progress log (collapsed)
+       ============================================================ -->
+  <section class="section">
+    <details>
+      <summary>Raw Progress Log <span style="margin-left:auto; font-family:var(--font-mono); font-size:var(--text-sm); font-weight:400; color:var(--text-muted);">8 lines</span></summary>
+      <div class="details__body">
+<pre class="rawlog"><code>2026-06-21T14:00:01Z  brainstormer  SPEC-001 created          READY_FOR_PLANNING
+2026-06-21T14:00:45Z  architect     P1-plan created           IN_PROGRESS
+2026-06-21T14:01:12Z  architect     P1-plan updated           READY
+2026-06-21T14:02:03Z  coder         Coding session started    IN_PROGRESS
+2026-06-21T14:05:33Z  coder         Coding session complete   done
+2026-06-21T14:06:01Z  tester        TEST-001 created          PASS  (coverage 91.2%)
+2026-06-21T14:06:45Z  reviewer      CR-001 created            APPROVED
+2026-06-21T14:07:11Z  qa            QA-001 created            READY_TO_COMMIT</code></pre>
+      </div>
+    </details>
+  </section>
+
+  <nav class="related"><span class="label">Related:</span> <a href="feat/FEAT-003-stripe-webhooks.html">FEAT-003</a></nav>
+
+</main>
+
+<script>
+/* Editorial Design System v1 — progress timeline
+   Vanilla JS only. No libraries, no inline handlers.
+   Maps data-status to the header pill class from the orchestrator enum set. */
+(function () {
+  "use strict";
+
+  var STATUS_TO_TOKEN = {
+    READY_FOR_PLANNING: "success",
+    READY: "success",
+    READY_TO_COMMIT: "success",
+    PASS: "success",
+    APPROVED: "success",
+    done: "success",
+    IN_PROGRESS: "active",
+    DRAFT: "active",
+    BELOW_FLOOR: "warning",
+    READY_WITH_WARNINGS: "warning",
+    BLOCKED: "danger",
+    BLOCKED_STALE: "danger",
+    REQUEST_CHANGES: "danger",
+    STALLED: "danger",
+    todo: "muted",
+    superseded: "muted"
+  };
+
+  function syncHeaderPill() {
+    var root = document.querySelector("main[data-id][data-cycle]");
+    if (!root) return;
+    var status = root.getAttribute("data-status");
+    var token = STATUS_TO_TOKEN[status];
+    if (!token) return;
+    var pill = document.querySelector(".h1__pill .pill");
+    if (pill) {
+      pill.className = "pill pill--" + token;
+      pill.textContent = status;
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", syncHeaderPill);
+  } else {
+    syncHeaderPill();
+  }
+})();
+</script>
+</body>
+</html>

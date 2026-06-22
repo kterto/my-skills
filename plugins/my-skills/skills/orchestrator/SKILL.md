@@ -288,6 +288,8 @@ Read the test report file at `test_report_path` (expect `.md` or `.html` extensi
   Status: STALLED — tooling gap; human intervention required before continuing
   ```
 
+  If `output_format=html`, run Step 7c (progress timeline render).
+
 - If `BELOW_FLOOR` → surface a soft warning to the user (coverage floor is advisory, not a hard stop — reviewer and qa still run), then continue to Step 4 (Reviewer):
 
   ```
@@ -330,6 +332,8 @@ ORCHESTRATOR — review cycle limit reached ({max_review_cycles})
 Last CR: {cr_path}
 Status: STALLED — human intervention required
 ```
+
+If `output_format=html`, run Step 7c (progress timeline render).
 
 Stop.
 
@@ -423,6 +427,8 @@ Stale gates: {list from report frontmatter `stale_gates:`}
 Status: STALLED — operator decision required
 ```
 
+If `output_format=html`, run Step 7c (progress timeline render).
+
 The user can choose to re-run QA (perhaps with more budget), commit without the stale gate, or remediate manually.
 
 #### If BLOCKED:
@@ -434,6 +440,8 @@ ORCHESTRATOR — QA cycle limit reached ({max_qa_cycles})
 Last QA report: {qa_report_path}
 Status: STALLED — human intervention required
 ```
+
+If `output_format=html`, run Step 7c (progress timeline render).
 
 Stop.
 
@@ -518,9 +526,11 @@ On READY_TO_COMMIT (or READY_WITH_WARNINGS):
 
 ### Step 7b — Final report composer
 
+If `output_format=html`, run Step 7c (progress timeline render).
+
 Compose and PRINT (do not write files, EXCEPT when `output_format=html` also write an html
 report) the following report. If READY_WITH_WARNINGS arrived from QA, carry the G8 warning
-into the Issues found list.
+into the Issues found list. When `output_format=html`, the html final report fills its Related region with relative links to the spec, plan, test report, code review, and qa report (per `artifact-format.md` → Related navigation).
 
 ```
 ORCHESTRATOR — pipeline complete
@@ -546,3 +556,13 @@ QA cycles used: {qa_cycle} / {max_qa_cycles}
 
 Output only — review the diff, then commit and open the PR yourself.
 ```
+
+### Step 7c — Progress timeline (html mode)
+
+When `output_format=html`, after the pipeline reaches a terminal state, render a progress timeline for the active plan:
+
+1. Read the plan's `.progress.md` log entries (each entry is a role/action with a status word and an ISO-8601 timestamp).
+2. Fill `templates/html/progress-timeline.template.html`: emit one timeline row per log entry (role → action/status → timestamp), mapping each status word to its pill class via the standard mapping (`success | active | warning | danger | muted` — done/PASS/APPROVED/READY_TO_COMMIT→success; in_progress/DRAFT→active; BELOW_FLOOR/READY_WITH_WARNINGS→warning; BLOCKED/BLOCKED_STALE/REQUEST_CHANGES/STALLED→danger; todo/superseded→muted). Fill the `<main data-*>` shell and the Related link to the plan.
+3. Write the result to `<plan-path-without-.md>.progress.html` (e.g. `plans/feat/FEAT-003-slug.progress.html`).
+
+This step ALSO runs at the STALLED/BLOCKED stop points (review-cycle limit, qa-cycle limit, tester BLOCKED, qa BLOCKED_STALE) so a halted run still produces a timeline. In `md` mode this step is skipped — `.progress.md` is the only progress artifact.

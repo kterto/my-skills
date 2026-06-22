@@ -1,13 +1,13 @@
 # Roadmap — Item Schema Reference
 
-This document is the single source of truth for the frontmatter, body sections, audit-log format, and html-mode rendering rules for every item (task, phase, milestone) in `/roadmap/`.
+This document is the single source of truth for the frontmatter, body sections, audit-log format, and html-mode rendering rules for every item (user story, phase, milestone) in `/roadmap/`.
 
-## Task file (md mode)
+## User-story file (md mode)
 
 ```yaml
 ---
 id: 001.1.1
-kind: task
+kind: user-story
 title: Initialize repo
 status: todo            # todo | in_progress | done | superseded | blocked
 milestone: "001"
@@ -15,13 +15,13 @@ phase: "001.1"
 sequence: 1
 depends_on: ["001.1.0"]
 spec_refs: ["FR-3"]
-commit_trailer: "Roadmap-Task: <id>"
+commit_trailer: "Roadmap-Story: <id>"
 created_at: <ISO-8601>
 updated_at: <ISO-8601>
 ---
 ## Brief
 <plain-language orchestrator brief; self-contained;
- ends with: "Commit with trailer: Roadmap-Task: <id>">
+ ends with: "Commit with trailer: Roadmap-Story: <id>">
 
 ## Acceptance
 <criteria derived from spec>
@@ -36,32 +36,32 @@ updated_at: <ISO-8601>
 
 | Key | Type | Notes |
 |---|---|---|
-| `id` | string | Stable task ID (e.g. `001.1.1`). Never changes after assignment. |
-| `kind` | string | Always `task` for task files. |
+| `id` | string | Stable user-story ID (e.g. `001.1.1`). Never changes after assignment. |
+| `kind` | string | Always `user-story` for user-story files. |
 | `title` | string | Short human-readable title. |
 | `status` | string | One of: `todo | in_progress | done | superseded | blocked`. |
 | `milestone` | string | Parent milestone ID (e.g. `"001"`). |
 | `phase` | string | Parent phase ID (e.g. `"001.1"`). |
 | `sequence` | integer | Logical execution order within the phase. Carries order after re-eval inserts. |
-| `depends_on` | array of strings | IDs of tasks that must be `done` before this task starts. |
-| `spec_refs` | array of strings | Requirement / spec identifiers this task satisfies. |
-| `commit_trailer` | string | The exact git trailer line to include in the implementing commit (e.g. `Roadmap-Task: 001.1.1`). |
+| `depends_on` | array of strings | IDs of user stories that must be `done` before this user story starts. |
+| `spec_refs` | array of strings | Requirement / spec identifiers this user story satisfies. |
+| `commit_trailer` | string | The exact git trailer line to include in the implementing commit (e.g. `Roadmap-Story: 001.1.1`). |
 | `created_at` | ISO-8601 | Timestamp when the item was first materialized. |
 | `updated_at` | ISO-8601 | Timestamp of the last frontmatter write. |
 
 ### Body sections
 
-Every task file has exactly these three sections, in order:
+Every user-story file has exactly these three sections, in order:
 
-- `## Brief` — plain-language orchestrator brief; self-contained (the orchestrator subagents never see this conversation). Ends with the line: `Commit with trailer: Roadmap-Task: <id>`.
+- `## Brief` — plain-language orchestrator brief; self-contained (the orchestrator subagents never see this conversation). Ends with the line: `Commit with trailer: Roadmap-Story: <id>`.
 - `## Acceptance` — testable criteria derived from the spec.
 - `## Audit log` — append-only table (see below).
 
 ## Milestone and phase READMEs
 
-Same frontmatter shape as a task, with the following differences:
+Same frontmatter shape as a user-story file, with the following differences:
 
-- `kind: milestone` or `kind: phase` (never `task`).
+- `kind: milestone` or `kind: phase` (never `user-story`).
 - No `commit_trailer` key (milestones and phases are not directly implemented by a single commit).
 - `status` is **derived** (rolled up from children) rather than set directly — see the rollup function below.
 - No `orchestrator_brief` field.
@@ -105,7 +105,7 @@ Columns are written in this order: `when (ISO-8601) | status | who | evidence`.
 
 ### `who` field rules
 
-- For sync-detected `done` (i.e. a commit with `Roadmap-Task: <id>` was found by `/roadmap sync`): `who` = the git commit author (name/email).
+- For sync-detected `done` (i.e. a commit with `Roadmap-Story: <id>` was found by `/roadmap sync`): `who` = the git commit author (name/email).
 - Otherwise: `who` = an actor tag — `roadmap-skill` for automated writes, or a user handle for manual edits.
 
 ### `evidence` field rules
@@ -119,5 +119,22 @@ html-mode items follow the orchestrator's artifact format (see `orchestrator/ref
 
 - Root element: `<main data-id data-status data-created-at data-updated-at>`.
 - Each body section (`Brief`, `Acceptance`, `Audit log`) is wrapped in a collapsible `<details><summary>Section Title</summary>…</details>`.
-- Task lists rendered as `<input type="checkbox" disabled>` (disabled checkboxes).
+- User-story lists rendered as `<input type="checkbox" disabled>` (disabled checkboxes).
 - Self-contained, no external assets.
+
+## Output navigation
+
+Every rendered item links to its neighbours with **relative** links (md and html). `<ext>` = `md` or `html` per `output_format`.
+
+**Down-links (children)** are emitted by the skill when it fills the child-list tokens (see SKILL.md Step 4): index→`<NNN-slug>/README.<ext>`, milestone→`<NNN.M-slug>/README.<ext>`, phase user-story rows→`<NNN.M.T-slug>.<ext>`.
+
+**Up-links (breadcrumb)** are template-static, near the top of each non-root item, showing the ID chain plus a `Roadmap` home link (current item unlinked):
+
+| Level | Breadcrumb |
+|---|---|
+| index | none (root) |
+| milestone | `Roadmap`(`../README.<ext>`) / `{{id}}` |
+| phase | `Roadmap`(`../../README.<ext>`) / `{{milestone}}`(`../README.<ext>`) / `{{id}}` |
+| user story | `Roadmap`(`../../README.<ext>`) / `{{milestone}}`(`../README.<ext>`) / `{{phase}}`(`README.<ext>`) / `{{id}}` |
+
+Links are plain relative hrefs; an unrendered target simply 404s (no script error).

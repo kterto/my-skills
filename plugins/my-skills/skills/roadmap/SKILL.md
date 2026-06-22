@@ -1,13 +1,13 @@
 ---
 name: roadmap
-description: Decomposes a project spec into an auditable milestone→phase→task roadmap under /roadmap/. Use when the user invokes "/roadmap", says "build a roadmap", or "plan the milestones". Reads .orchestrator/PROJECT-CONTEXT.md when present; each task is an orchestrator-ready brief. Doc-only — writes /roadmap docs, never runs code or commits. "/roadmap sync" stamps done tasks from commit trailers; re-running re-evaluates and preserves completed work.
+description: Decomposes a project spec into an auditable milestone→phase→user-story roadmap under /roadmap/. Use when the user invokes "/roadmap", says "build a roadmap", or "plan the milestones". Reads .orchestrator/PROJECT-CONTEXT.md when present; each user story is an orchestrator-ready brief. Doc-only — writes /roadmap docs, never runs code or commits. "/roadmap sync" stamps done stories from commit trailers; re-running re-evaluates and preserves completed work.
 ---
 
 # roadmap
 
 **Doc-only constraint.** This skill writes `/roadmap/` documentation. It never runs code, never invokes the orchestrator pipeline, and never commits. Every action it takes is a file write or an interactive question. If you are looking for a skill that executes tasks, use the `orchestrator` skill.
 
-**Relationship to the orchestrator (§14).** Each task file this skill produces is a self-contained orchestrator-ready brief — it can be fed verbatim to the `orchestrator` skill for implementation. The roadmap skill and the orchestrator skill are complementary: the roadmap skill plans and tracks; the orchestrator skill implements. They share a context root (`.orchestrator/PROJECT-CONTEXT.md`) but have separate outputs.
+**Relationship to the orchestrator (§14).** Each user-story file this skill produces is a self-contained orchestrator-ready brief — it can be fed verbatim to the `orchestrator` skill for implementation. The roadmap skill and the orchestrator skill are complementary: the roadmap skill plans and tracks; the orchestrator skill implements. They share a context root (`.orchestrator/PROJECT-CONTEXT.md`) but have separate outputs.
 
 ---
 
@@ -16,7 +16,7 @@ description: Decomposes a project spec into an auditable milestone→phase→tas
 | Command | Behavior |
 |---|---|
 | `/roadmap` | Auto-detect: `/roadmap/` does not exist → **build** (context gate → decompose → materialize); `/roadmap/` exists → **re-evaluate** (diff + preserve, see Sync + Re-eval). |
-| `/roadmap sync` | Scan git commit trailers, stamp matched tasks `done`, roll up phase/milestone statuses, refresh progress %. |
+| `/roadmap sync` | Scan git commit trailers, stamp matched stories `done`, roll up phase/milestone statuses, refresh progress %. |
 
 **Flags** (override config for the current run):
 
@@ -74,7 +74,7 @@ The decomposition step converts context + spec into a concrete tree and material
 
 ### Step 1 — Derive the tree
 
-From the gathered context and spec, derive a full milestone → phase → task tree. For each task, compose a self-contained `orchestrator_brief` (plain language; never references the roadmap's own structure because the orchestrator subagents never see this conversation). The brief ends with: `Commit with trailer: Roadmap-Task: <id>`.
+From the gathered context and spec, derive a full milestone → phase → user-story tree. For each user story, compose a self-contained `orchestrator_brief` (plain language; never references the roadmap's own structure because the orchestrator subagents never see this conversation). The brief ends with: `Commit with trailer: Roadmap-Story: <id>`.
 
 Assign IDs per the scheme in `references/directory-layout.md`:
 
@@ -82,13 +82,13 @@ Assign IDs per the scheme in `references/directory-layout.md`:
 |---|---|---|
 | Milestone | `NNN-kebab` | `001-bootstrap` |
 | Phase | `NNN.M` | `001.1` |
-| Task | `NNN.M.T` | `001.1.1` |
+| User Story | `NNN.M.T` | `001.1.1` |
 
 Stable-identity rule (from `references/directory-layout.md`): a number, once assigned, is never renumbered. New items append as the next available number. Logical order is carried by the `sequence` field.
 
 ### Step 2 — Present tree summary
 
-Present a tree summary to the user: per-milestone phase/task counts, sequence order, and a note of any items with `depends_on` constraints. Do not write any files yet.
+Present a tree summary to the user: per-milestone phase/user-story counts, sequence order, and a note of any items with `depends_on` constraints. Do not write any files yet.
 
 ### Step 3 — User confirmation
 
@@ -102,11 +102,16 @@ On approval:
    - Top-level index: `templates/roadmap-readme.template.md` (or `templates/roadmap-readme.template.html`)
    - Milestone READMEs: `templates/milestone-readme.template.md` (or `templates/milestone-readme.template.html`)
    - Phase READMEs: `templates/phase-readme.template.md` (or `templates/phase-readme.template.html`)
-   - Task files: `templates/task.template.md` (or `templates/task.template.html`)
-2. Write `/roadmap/roadmap.lock.json` with version, `last_synced_sha: null`, and one entry per item.
-3. Print a summary of all written paths.
+   - User-story files: `templates/user-story.template.md` (or `templates/user-story.template.html`)
+2. **Child navigation links.** When filling the child-list tokens, render each child row as a relative link (`<ext>` = `html` in html mode, `md` in md mode):
+   - index `{{milestone_list_ordered_by_sequence}}` → each milestone links to `<NNN-slug>/README.<ext>`
+   - milestone `{{phase_list_ordered_by_sequence}}` → each phase links to `<NNN.M-slug>/README.<ext>`
+   - phase `{{story_list_ordered_by_sequence}}` → each user story links to `<NNN.M.T-slug>.<ext>`
+   In md: `- [<id> — <title>](<target>) <status>`. In html: wrap the row label in `<a href="<target>">…</a>`, keeping the status pill and (phase user-story rows) the `<input type="checkbox" disabled>` outside the link. `<NNN-slug>` etc. is the same slug used to name the child's directory/file.
+3. Write `/roadmap/roadmap.lock.json` with version, `last_synced_sha: null`, and one entry per item.
+4. Print a summary of all written paths.
 
-Item file schema (frontmatter keys, body sections, audit log format) is defined in `references/item-schema.md`. Every task file has exactly three body sections: `## Brief`, `## Acceptance`, `## Audit log`.
+Item file schema (frontmatter keys, body sections, audit log format) is defined in `references/item-schema.md`. Every user-story file has exactly three body sections: `## Brief`, `## Acceptance`, `## Audit log`.
 
 ---
 
@@ -118,13 +123,13 @@ The full algorithms — rollup rules, the Sync procedure, and the Re-eval proced
 
 | Command | Entry point |
 |---|---|
-| `/roadmap sync` | Run the **Sync procedure** from `references/sync-and-reeval.md`. Scans git trailers from `last_synced_sha` to HEAD, stamps matched tasks `done`, rolls up, updates `roadmap.lock.json`. |
+| `/roadmap sync` | Run the **Sync procedure** from `references/sync-and-reeval.md`. Scans git trailers from `last_synced_sha` to HEAD, stamps matched stories `done`, rolls up, updates `roadmap.lock.json`. |
 | `/roadmap` (when `/roadmap/` exists) | Run the **Re-eval procedure** from `references/sync-and-reeval.md`. Re-derives the target tree, diffs against `roadmap.lock.json`, presents a staged diff (`+ new`, `~ changed`, `! superseded`), and requires user approval before applying. |
 
 ### Global constraints (reaffirmed)
 
 - **Never commit.** The skill writes files and prints proposed commit messages; the user commits.
-- **Never run the orchestrator.** Task briefs are produced for the orchestrator to consume; the roadmap skill does not invoke it.
+- **Never run the orchestrator.** User-story briefs are produced for the orchestrator to consume; the roadmap skill does not invoke it.
 - **Completed work is immutable.** The Re-eval procedure never deletes or renumbers a `done` item — it supersedes or appends, never rewrites.
 
 ---
@@ -150,5 +155,5 @@ Templates (rendered per `output_format`):
 | `templates/milestone-readme.template.html` | Milestone `README.html` (html mode) |
 | `templates/phase-readme.template.md` | Phase `README.md` (md mode) |
 | `templates/phase-readme.template.html` | Phase `README.html` (html mode) |
-| `templates/task.template.md` | Task file (md mode) |
-| `templates/task.template.html` | Task file (html mode) |
+| `templates/user-story.template.md` | User-story file (md mode) |
+| `templates/user-story.template.html` | User-story file (html mode) |

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Milestone — {{id}}</title>
+<title>Code Review — CR-042</title>
 <style>
 /* ============================================================
    EDITORIAL DESIGN SYSTEM v1 — Color tokens
@@ -111,7 +111,7 @@ body {
 }
 
 main {
-  max-width: 58rem;
+  max-width: 54rem;
   margin: 0 auto;
   padding: var(--sp-16) var(--sp-8);
 }
@@ -126,11 +126,12 @@ a { color: var(--accent); }
 /* ============================================================
    Masthead
    ============================================================ */
-.masthead { margin-bottom: var(--sp-8); }
+.masthead { margin-bottom: var(--sp-6); }
 
 .masthead__kicker {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--sp-3);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
@@ -157,7 +158,7 @@ h1 {
 
 h1 .h1__id {
   font-family: var(--font-mono);
-  font-size: 0.5em;
+  font-size: 0.46em;
   font-weight: 500;
   letter-spacing: 0;
   color: var(--accent);
@@ -189,6 +190,7 @@ h1 .h1__pill { align-self: center; }
 .meta__fields {
   display: flex;
   flex-wrap: wrap;
+  align-items: baseline;
   gap: var(--sp-3);
   margin-left: auto;
 }
@@ -208,34 +210,24 @@ h1 .h1__pill { align-self: center; }
 }
 
 /* ============================================================
-   Dependency field
+   Finding count summary
    ============================================================ */
-.depends {
-  display: flex;
-  align-items: baseline;
-  gap: var(--sp-3);
-  margin-top: var(--sp-6);
-  font-size: var(--text-sm);
-}
-
-.depends__label {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--text-muted);
-}
-
-.depends__val {
+.count-summary {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--sp-2);
+  align-items: center;
+  gap: var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin-top: var(--sp-4);
 }
 
-/* ============================================================
-   Section scaffolding
-   ============================================================ */
-.section { margin-top: var(--sp-12); }
+.count-summary .cs-sep { color: var(--rule-heavy); }
+.count-summary .cs--crit-some { color: var(--status-danger); font-weight: 700; }
+.count-summary .cs--imp-some  { color: var(--status-warning); font-weight: 700; }
+.count-summary .cs--minor     { color: var(--text-secondary); }
+.count-summary .cs--zero      { color: var(--text-muted); }
 
 /* ============================================================
    Status pill
@@ -272,6 +264,8 @@ h1 .h1__pill { align-self: center; }
 /* ============================================================
    Collapsible <details>
    ============================================================ */
+.section { margin-top: var(--sp-8); }
+
 details { border-top: 1px solid var(--rule); }
 
 summary {
@@ -306,7 +300,19 @@ summary:focus-visible {
   border-radius: 3px;
 }
 
-summary .summary__meta {
+/* severity-colored summary dot */
+summary .sev-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.sev-dot--crit  { background: var(--status-danger); }
+.sev-dot--imp   { background: var(--status-warning); }
+.sev-dot--minor { background: var(--rule-heavy); }
+
+summary .summary__count {
   margin-left: auto;
   font-family: var(--font-mono);
   font-size: var(--text-sm);
@@ -320,111 +326,115 @@ summary .summary__meta {
   margin: 0 0 var(--sp-6) 2px;
 }
 
-details[open] > .details__body { animation: detailsfade 0.22s ease both; }
-
-@keyframes detailsfade {
-  from { opacity: 0; transform: translateY(-4px); }
-  to   { opacity: 1; transform: translateY(0); }
+details.findings-section > .details__body {
+  border-left: none;
+  padding-left: 0;
+  margin-left: 0;
 }
 
 /* ============================================================
-   Phase list
+   Finding cards
    ============================================================ */
-.phases { list-style: none; margin: 0; padding: 0; }
-
-.phase {
-  display: grid;
-  grid-template-columns: 2.5rem 1fr auto;
-  align-items: baseline;
-  gap: var(--sp-4);
-  padding: var(--sp-4) 0;
-  border-bottom: 1px solid var(--rule);
+.finding {
+  border-left: 3px solid var(--rule-heavy);
+  background: var(--bg-surface);
+  border-radius: 0 6px 6px 0;
+  padding: var(--sp-4) var(--sp-6);
+  margin-bottom: var(--sp-4);
 }
 
-.phase:last-child { border-bottom: none; }
+.finding:last-child { margin-bottom: 0; }
 
-.phase__seq {
-  font-family: var(--font-serif);
-  font-size: var(--text-2xl);
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-  line-height: 1;
-}
+.finding--crit  { border-left-color: var(--status-danger); }
+.finding--imp   { border-left-color: var(--status-warning); }
+.finding--minor { border-left-color: var(--rule-heavy); }
 
-.phase__body { min-width: 0; }
-
-.phase__id {
+.finding__id {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   color: var(--text-muted);
   letter-spacing: 0.02em;
 }
 
-.phase__title {
-  font-family: var(--font-serif);
-  font-size: var(--text-xl);
+.finding__title {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  font-weight: 600;
   color: var(--text-primary);
-  margin-top: 1px;
-  text-wrap: pretty;
+  margin: var(--sp-1) 0 var(--sp-2);
 }
 
-.phase[data-status="superseded"] .phase__title {
-  text-decoration: line-through;
+.finding__loc { margin-bottom: var(--sp-2); }
+
+.finding__desc {
+  color: var(--text-secondary);
+  line-height: var(--line-height-body);
+  max-width: var(--measure);
+}
+
+.finding__suggestion {
+  margin-top: var(--sp-3);
+  padding-left: var(--sp-4);
+  border-left: 2px solid var(--rule);
+  color: var(--text-primary);
+  max-width: var(--measure);
+}
+
+.finding__suggestion .sugg-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   color: var(--text-muted);
+  display: block;
+  margin-bottom: var(--sp-1);
 }
 
-.phase__status { align-self: center; }
+.finding__suggestion .sugg-label::before { content: "\25B6 "; color: var(--accent); }
 
-/* Empty state */
-.empty {
-  text-align: center;
+.tier-empty {
   font-family: var(--font-serif);
   font-style: italic;
   font-size: var(--text-lg);
   color: var(--text-muted);
-  padding: var(--sp-12) var(--sp-4);
+  padding: var(--sp-4) 0;
   margin: 0;
 }
 
 /* ============================================================
-   Audit-log table
+   Clean review callout
    ============================================================ */
-.audit-wrap { overflow-x: auto; }
+.clean-callout {
+  background: var(--status-success-bg);
+  color: var(--status-success);
+  border-radius: 8px;
+  padding: var(--sp-8);
+  text-align: center;
+  font-family: var(--font-serif);
+  font-size: var(--text-2xl);
+  margin-top: var(--sp-8);
+}
 
-.audit {
-  width: 100%;
-  border-collapse: collapse;
+.clean-callout .cc-sub {
+  display: block;
+  font-family: var(--font-mono);
   font-size: var(--text-sm);
+  margin-top: var(--sp-2);
+  opacity: 0.85;
 }
 
-.audit thead th {
-  text-align: left;
-  background: var(--bg-surface);
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  font-weight: 600;
+/* ============================================================
+   Reviewer notes prose
+   ============================================================ */
+.prose {
+  max-width: var(--measure);
   color: var(--text-secondary);
-  padding: var(--sp-2) var(--sp-4);
-  border-bottom: 1px solid var(--rule-heavy);
-  white-space: nowrap;
+  font-size: var(--text-lg);
 }
 
-.audit tbody td {
-  padding: var(--sp-2) var(--sp-4);
-  border-bottom: 1px solid var(--rule);
-  vertical-align: baseline;
-  color: var(--text-secondary);
-}
-
-.audit tbody tr:nth-child(odd)  td { background: var(--bg-page); }
-.audit tbody tr:nth-child(even) td { background: var(--bg-surface); }
-
-.audit tbody tr:last-child td { border-bottom: none; }
-
-.audit .col-when { font-family: var(--font-mono); color: var(--text-muted); white-space: nowrap; }
-.audit .col-who  { font-family: var(--font-mono); color: var(--text-secondary); }
-.audit .col-evidence code { font-size: 0.85em; }
+.prose p { margin: 0 0 var(--sp-4); }
+.prose p:last-child { margin-bottom: 0; }
+.prose strong { color: var(--text-primary); }
 
 /* ============================================================
    Inline code / path
@@ -439,123 +449,173 @@ code {
 }
 
 /* ============================================================
-   Breadcrumb nav
+   Related nav region
    ============================================================ */
-.crumbs { font-size: 0.85rem; margin: 0 0 1.25rem; color: var(--text-muted, #6b6b6b); }
-.crumbs a { color: var(--accent); text-decoration: none; }
-.crumbs a:hover { text-decoration: underline; }
-.crumbs .sep { opacity: 0.5; margin: 0 0.4em; }
+.related { font-size: 0.85rem; margin: 1.5rem 0 0; padding-top: 0.75rem; border-top: 1px solid var(--rule, #e3e0d8); }
+.related .label { color: var(--text-muted, #6b6b6b); margin-right: 0.5em; }
+.related a { color: var(--accent); text-decoration: none; }
+.related a:hover { text-decoration: underline; }
+.related .sep { opacity: 0.5; margin: 0 0.4em; }
 </style>
 </head>
 <body>
-<main data-id="{{id}}" data-kind="milestone" data-status="{{rollup_status}}"
-      data-created-at="{{created_at}}" data-updated-at="{{updated_at}}">
-
-  <nav class="crumbs"><a href="../README.html">Roadmap</a><span class="sep">/</span><span>{{id}}</span></nav>
+<main
+  data-id="CR-042"
+  data-status="REQUEST_CHANGES"
+  data-created-at="2026-06-21T09:00:00Z"
+  data-updated-at="2026-06-22T19:20:00Z"
+  data-cycle="2"
+>
 
   <!-- ============================================================
        1. Page header
        ============================================================ -->
   <header class="masthead">
     <p class="masthead__kicker">
-      <span>Milestone</span>
+      <span>Code Review</span>
       <span class="meta__sep">·</span>
-      <span class="badge">cycle 3</span>
+      <span>Reviewer</span>
     </p>
     <h1>
-      <span class="h1__id">{{id}}</span>
-      <span>{{title}}</span>
-      <span class="h1__pill"><span class="pill pill--active">{{rollup_status}}</span></span>
+      <span class="h1__id">CR-042</span>
+      <span>Async export pipeline — review</span>
+      <span class="h1__pill"><span class="pill pill--danger">REQUEST_CHANGES</span></span>
     </h1>
 
     <!-- 2. ID / meta header block -->
     <div class="meta">
-      <span class="meta__id">{{id}}</span>
+      <span class="meta__id">CR-042</span>
       <span class="meta__fields">
-        <span><span class="meta__key">created:</span> <span class="meta__val">{{created_at}}</span></span>
+        <span><span class="meta__key">created:</span> <span class="meta__val">2026-06-21</span></span>
         <span class="meta__sep">·</span>
-        <span><span class="meta__key">updated:</span> <span class="meta__val">{{updated_at}}</span></span>
+        <span><span class="meta__key">updated:</span> <span class="meta__val">2026-06-22</span></span>
         <span class="meta__sep">·</span>
-        <span><span class="meta__key">sequence:</span> <span class="meta__val">{{sequence}}</span></span>
+        <span class="badge">cycle 2</span>
       </span>
     </div>
 
-    <!-- 3. Dependencies -->
-    <div class="depends">
-      <span class="depends__label">Depends on</span>
-      <span class="depends__val">{{depends_on}}</span>
+    <!-- 3. Finding count summary -->
+    <div class="count-summary">
+      <span class="cs--crit-some">Critical: 1</span>
+      <span class="cs-sep">·</span>
+      <span class="cs--imp-some">Important: 2</span>
+      <span class="cs-sep">·</span>
+      <span class="cs--minor">Minor: 3</span>
     </div>
   </header>
 
   <!-- ============================================================
-       4. Phase list (collapsible, open by default)
+       4. Findings by severity — Critical / Important / Minor
        ============================================================ -->
-  <section class="section">
-    <details open>
-      <summary>Phases <span class="summary__meta">by sequence</span></summary>
-      <div class="details__body">
-        <ol class="phases">
-          {{phase_list_ordered_by_sequence}}
-        </ol>
-      </div>
-    </details>
-  </section>
 
-  <!-- ============================================================
-       5. Audit log (collapsible, open by default)
-       ============================================================ -->
+  <!-- Critical (open, has findings) -->
   <section class="section">
-    <details open>
-      <summary>Audit log</summary>
+    <details class="findings-section" open>
+      <summary><span class="sev-dot sev-dot--crit"></span>Critical Findings <span class="summary__count">1</span></summary>
       <div class="details__body">
-        <div class="audit-wrap">
-          <table class="audit">
-            <thead>
-              <tr>
-                <th>when (ISO-8601)</th>
-                <th>status</th>
-                <th>who</th>
-                <th>evidence</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td class="col-when">{{created_at}}</td>
-                <td><span class="pill">{{rollup_status}}</span></td>
-                <td class="col-who">roadmap-skill</td>
-                <td class="col-evidence">/roadmap plan</td>
-              </tr>
-            </tbody>
-          </table>
+        <div class="finding finding--crit">
+          <span class="finding__id">CR-042-C1</span>
+          <h4 class="finding__title">Export artifact written before the transaction commits</h4>
+          <div class="finding__loc"><code>src/export/worker.ts:212</code></div>
+          <p class="finding__desc">The worker uploads the finished file to the object store and marks the export <code>ready</code> before the surrounding database transaction commits. If the commit fails, the user is notified of a downloadable artifact that points at orphaned state, and a retry produces a duplicate.</p>
+          <div class="finding__suggestion">
+            <span class="sugg-label">Suggestion</span>
+            Move the <code>ready</code> transition and notification into an after-commit hook so the artifact is only advertised once the export row is durably persisted.
+          </div>
         </div>
       </div>
     </details>
   </section>
 
+  <!-- Important (open, has findings) -->
+  <section class="section">
+    <details class="findings-section" open>
+      <summary><span class="sev-dot sev-dot--imp"></span>Important Findings <span class="summary__count">2</span></summary>
+      <div class="details__body">
+        <div class="finding finding--imp">
+          <span class="finding__id">CR-042-I1</span>
+          <h4 class="finding__title">Range requests ignore the <code>If-Range</code> header</h4>
+          <div class="finding__loc"><code>src/export/download.ts:88</code></div>
+          <p class="finding__desc">A resumed download whose artifact was regenerated mid-transfer will silently stitch bytes from two different files. Honoring <code>If-Range</code> against the artifact ETag avoids serving a corrupt blend.</p>
+          <div class="finding__suggestion">
+            <span class="sugg-label">Suggestion</span>
+            Validate <code>If-Range</code> against the stored ETag; fall back to a full <code>200</code> response when it does not match.
+          </div>
+        </div>
+        <div class="finding finding--imp">
+          <span class="finding__id">CR-042-I2</span>
+          <h4 class="finding__title">Idempotency key omits the export format</h4>
+          <div class="finding__loc"><code>src/export/request.ts:54</code></div>
+          <p class="finding__desc">Two requests for the same workspace that differ only in <code>format</code> (CSV vs JSON) collide on the idempotency key and the second returns the first's artifact.</p>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <!-- Minor (collapsed) -->
+  <section class="section">
+    <details class="findings-section">
+      <summary><span class="sev-dot sev-dot--minor"></span>Minor Findings <span class="summary__count">3</span></summary>
+      <div class="details__body">
+        <div class="finding finding--minor">
+          <span class="finding__id">CR-042-M1</span>
+          <h4 class="finding__title">Magic number for expiry window</h4>
+          <div class="finding__loc"><code>src/export/expiry.ts:9</code></div>
+          <p class="finding__desc">The 72-hour expiry is hard-coded; lift it to config alongside the other retention settings.</p>
+        </div>
+        <div class="finding finding--minor">
+          <span class="finding__id">CR-042-M2</span>
+          <h4 class="finding__title">Inconsistent log field casing</h4>
+          <div class="finding__loc"><code>src/export/worker.ts:140</code></div>
+          <p class="finding__desc">Logs mix <code>exportId</code> and <code>export_id</code>; pick one to keep downstream queries simple.</p>
+        </div>
+        <div class="finding finding--minor">
+          <span class="finding__id">CR-042-M3</span>
+          <h4 class="finding__title">Missing JSDoc on the public request helper</h4>
+          <div class="finding__loc"><code>src/export/request.ts:20</code></div>
+          <p class="finding__desc">The exported <code>requestExport</code> helper has no doc comment; add one describing the returned tracking shape.</p>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <!-- ============================================================
+       5. Reviewer Notes (open — REQUEST_CHANGES)
+       ============================================================ -->
+  <section class="section">
+    <details open>
+      <summary>Reviewer Notes</summary>
+      <div class="details__body">
+        <div class="prose">
+          <p>The shape of the pipeline is right and the worker/queue split is clean. The blocking issue is <strong>C1</strong> — advertising an artifact before the transaction commits is a correctness bug that will surface as duplicate exports under load. Please resolve it and the two Important findings; the Minor items are welcome but not required for this cycle.</p>
+          <p>Once C1 and the Important findings are addressed I expect a quick re-review.</p>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <nav class="related"><span class="label">Related:</span> <a href="../feat/FEAT-003-stripe-webhooks.html">FEAT-003</a></nav>
+
 </main>
 
 <script>
-/* Editorial Design System v1 — milestone
+/* Editorial Design System v1 — reviewer code review
    Vanilla JS only. No libraries, no inline handlers.
-   Maps the rendered {{rollup_status}} to the correct pill class
-   on the header pill, in case the server injects a literal status. */
+   Maps data-status (APPROVED | REQUEST_CHANGES) to the header pill class. */
 (function () {
   "use strict";
 
   var STATUS_TO_TOKEN = {
-    todo: "muted",
-    in_progress: "active",
-    done: "success",
-    blocked: "danger",
-    superseded: "muted"
+    APPROVED: "success",
+    REQUEST_CHANGES: "danger"
   };
 
   function syncHeaderPill() {
-    var root = document.querySelector('main[data-kind="milestone"]');
+    var root = document.querySelector("main[data-id][data-cycle]");
     if (!root) return;
     var status = root.getAttribute("data-status");
     var token = STATUS_TO_TOKEN[status];
-    if (!token) return; // unresolved {{rollup_status}} token — leave default
+    if (!token) return;
     var pill = document.querySelector(".h1__pill .pill");
     if (pill) {
       pill.className = "pill pill--" + token;

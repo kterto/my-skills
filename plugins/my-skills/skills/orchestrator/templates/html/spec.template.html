@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Phase — {{id}}</title>
+<title>Spec — SPEC-042</title>
 <style>
 /* ============================================================
    EDITORIAL DESIGN SYSTEM v1 — Color tokens
@@ -111,7 +111,7 @@ body {
 }
 
 main {
-  max-width: 58rem;
+  max-width: 52rem;
   margin: 0 auto;
   padding: var(--sp-16) var(--sp-8);
 }
@@ -131,6 +131,7 @@ a { color: var(--accent); }
 .masthead__kicker {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--sp-3);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
@@ -139,8 +140,6 @@ a { color: var(--accent); }
   color: var(--text-muted);
   margin: 0 0 var(--sp-4);
 }
-
-.masthead__crumb { color: var(--accent); }
 
 h1 {
   font-family: var(--font-serif);
@@ -159,7 +158,7 @@ h1 {
 
 h1 .h1__id {
   font-family: var(--font-mono);
-  font-size: 0.5em;
+  font-size: 0.46em;
   font-weight: 500;
   letter-spacing: 0;
   color: var(--accent);
@@ -170,6 +169,15 @@ h1 .h1__id {
 }
 
 h1 .h1__pill { align-self: center; }
+
+.masthead__lede {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: var(--text-lg);
+  color: var(--text-secondary);
+  max-width: 52ch;
+  margin: var(--sp-4) 0 0;
+}
 
 /* ID / meta header block */
 .meta {
@@ -191,6 +199,7 @@ h1 .h1__pill { align-self: center; }
 .meta__fields {
   display: flex;
   flex-wrap: wrap;
+  align-items: baseline;
   gap: var(--sp-3);
   margin-left: auto;
 }
@@ -208,32 +217,6 @@ h1 .h1__pill { align-self: center; }
   border-radius: 4px;
   white-space: nowrap;
 }
-
-/* ============================================================
-   Dependency field
-   ============================================================ */
-.depends {
-  display: flex;
-  align-items: baseline;
-  gap: var(--sp-3);
-  margin-top: var(--sp-6);
-  font-size: var(--text-sm);
-}
-
-.depends__label {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--text-muted);
-}
-
-.depends__val { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
-
-/* ============================================================
-   Section scaffolding
-   ============================================================ */
-.section { margin-top: var(--sp-12); }
 
 /* ============================================================
    Status pill
@@ -270,6 +253,8 @@ h1 .h1__pill { align-self: center; }
 /* ============================================================
    Collapsible <details>
    ============================================================ */
+.section { margin-top: 0; }
+
 details { border-top: 1px solid var(--rule); }
 
 summary {
@@ -326,110 +311,84 @@ details[open] > .details__body { animation: detailsfade 0.22s ease both; }
 }
 
 /* ============================================================
-   Task list — disabled-checkbox rows
+   Prose
    ============================================================ */
-.tasks {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.tasks li {
-  display: grid;
-  grid-template-columns: 1.4rem 1fr auto;
-  align-items: baseline;
-  gap: var(--sp-3) var(--sp-4);
-  padding: var(--sp-3) 0;
-  border-bottom: 1px solid var(--rule);
-  color: var(--text-primary);
+.prose {
+  max-width: var(--measure);
+  color: var(--text-secondary);
   font-size: var(--text-lg);
 }
 
-.tasks li:last-child { border-bottom: none; }
+.prose p { margin: 0 0 var(--sp-4); }
+.prose p:last-child { margin-bottom: 0; }
+.prose strong { color: var(--text-primary); }
 
-.tasks li input[type="checkbox"] {
+/* Requirements / constraints / questions list */
+.req-list {
+  list-style: none;
   margin: 0;
-  width: 1rem;
-  height: 1rem;
-  opacity: 0.5;
-  accent-color: var(--accent);
-  position: relative;
-  top: 0.18em;
+  padding: 0;
+  max-width: var(--measure);
 }
 
-.tasks .task__title {
-  min-width: 0;
-  text-wrap: pretty;
+.req-list li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--sp-3) var(--sp-4);
+  padding: var(--sp-3) 0;
+  border-bottom: 1px solid var(--rule);
+  color: var(--text-secondary);
+  font-size: var(--text-lg);
 }
 
-.tasks .task__status { align-self: center; }
+.req-list li:last-child { border-bottom: none; }
 
-/* completed tasks: checked OR explicit .done class */
-.tasks li:has(input:checked) .task__title,
-.tasks li.done .task__title {
-  text-decoration: line-through;
-  color: var(--text-muted);
+.req-list .req__tag {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--accent);
+  background: var(--accent-subtle);
+  padding: 0.1em 0.5em;
+  border-radius: 4px;
+  align-self: start;
+  margin-top: 0.2em;
+  white-space: nowrap;
 }
 
-/* blocked tasks */
-.tasks li[data-status="blocked"] .task__title {
-  color: var(--status-danger);
+.req-list .req__body { min-width: 0; text-wrap: pretty; }
+.req-list .req__body strong { color: var(--text-primary); }
+
+/* Questions get a hanging marker */
+.q-list { list-style: none; margin: 0; padding: 0; max-width: var(--measure); }
+
+.q-list li {
+  display: grid;
+  grid-template-columns: 1.6rem 1fr;
+  gap: var(--sp-3);
+  padding: var(--sp-3) 0;
+  border-bottom: 1px solid var(--rule);
+  color: var(--text-secondary);
+  font-size: var(--text-lg);
 }
 
-/* superseded tasks */
-.tasks li[data-status="superseded"] .task__title {
-  text-decoration: line-through;
-  color: var(--text-muted);
+.q-list li:last-child { border-bottom: none; }
+
+.q-list li::before {
+  content: "Q";
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--accent);
 }
 
-/* Empty state */
 .empty {
-  text-align: center;
   font-family: var(--font-serif);
   font-style: italic;
   font-size: var(--text-lg);
   color: var(--text-muted);
-  padding: var(--sp-12) var(--sp-4);
+  padding: var(--sp-4) 0;
   margin: 0;
 }
-
-/* ============================================================
-   Audit-log table
-   ============================================================ */
-.audit-wrap { overflow-x: auto; }
-
-.audit {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--text-sm);
-}
-
-.audit thead th {
-  text-align: left;
-  background: var(--bg-surface);
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  color: var(--text-secondary);
-  padding: var(--sp-2) var(--sp-4);
-  border-bottom: 1px solid var(--rule-heavy);
-  white-space: nowrap;
-}
-
-.audit tbody td {
-  padding: var(--sp-2) var(--sp-4);
-  border-bottom: 1px solid var(--rule);
-  vertical-align: baseline;
-  color: var(--text-secondary);
-}
-
-.audit tbody tr:nth-child(odd)  td { background: var(--bg-page); }
-.audit tbody tr:nth-child(even) td { background: var(--bg-surface); }
-.audit tbody tr:last-child td { border-bottom: none; }
-
-.audit .col-when { font-family: var(--font-mono); color: var(--text-muted); white-space: nowrap; }
-.audit .col-who  { font-family: var(--font-mono); color: var(--text-secondary); }
-.audit .col-evidence code { font-size: 0.85em; }
 
 /* ============================================================
    Inline code / path
@@ -444,127 +403,172 @@ code {
 }
 
 /* ============================================================
-   Breadcrumb nav
+   Related nav region
    ============================================================ */
-.crumbs { font-size: 0.85rem; margin: 0 0 1.25rem; color: var(--text-muted, #6b6b6b); }
-.crumbs a { color: var(--accent); text-decoration: none; }
-.crumbs a:hover { text-decoration: underline; }
-.crumbs .sep { opacity: 0.5; margin: 0 0.4em; }
+.related { font-size: 0.85rem; margin: 1.5rem 0 0; padding-top: 0.75rem; border-top: 1px solid var(--rule, #e3e0d8); }
+.related .label { color: var(--text-muted, #6b6b6b); margin-right: 0.5em; }
+.related a { color: var(--accent); text-decoration: none; }
+.related a:hover { text-decoration: underline; }
+.related .sep { opacity: 0.5; margin: 0 0.4em; }
 </style>
 </head>
 <body>
-<main data-id="{{id}}" data-kind="phase" data-status="{{rollup_status}}"
-      data-created-at="{{created_at}}" data-updated-at="{{updated_at}}">
-
-  <nav class="crumbs"><a href="../../README.html">Roadmap</a><span class="sep">/</span><a href="../README.html">{{milestone}}</a><span class="sep">/</span><span>{{id}}</span></nav>
+<main
+  data-id="SPEC-042"
+  data-status="DRAFT"
+  data-created-at="2026-05-30T09:00:00Z"
+  data-updated-at="2026-06-22T16:40:00Z"
+  data-cycle="2"
+>
 
   <!-- ============================================================
        1. Page header
        ============================================================ -->
   <header class="masthead">
     <p class="masthead__kicker">
-      <span>Phase</span>
+      <span>Functional Specification</span>
       <span class="meta__sep">·</span>
-      <span class="masthead__crumb">{{milestone}}</span>
-      <span class="meta__sep">·</span>
-      <span class="badge">cycle 3</span>
+      <span>Brainstormer</span>
     </p>
     <h1>
-      <span class="h1__id">{{id}}</span>
-      <span>{{title}}</span>
-      <span class="h1__pill"><span class="pill pill--active">{{rollup_status}}</span></span>
+      <span class="h1__id">SPEC-042</span>
+      <span>Async export pipeline for large datasets</span>
+      <span class="h1__pill"><span class="pill pill--active">DRAFT</span></span>
     </h1>
+    <p class="masthead__lede">A functional brief defining what an asynchronous, resumable export pipeline must do before the architect commits it to a plan.</p>
 
     <!-- 2. ID / meta header block -->
     <div class="meta">
-      <span class="meta__id">{{id}}</span>
+      <span class="meta__id">SPEC-042</span>
       <span class="meta__fields">
-        <span><span class="meta__key">milestone:</span> <span class="meta__val">{{milestone}}</span></span>
+        <span><span class="meta__key">created:</span> <span class="meta__val">2026-05-30</span></span>
         <span class="meta__sep">·</span>
-        <span><span class="meta__key">sequence:</span> <span class="meta__val">{{sequence}}</span></span>
+        <span><span class="meta__key">updated:</span> <span class="meta__val">2026-06-22</span></span>
         <span class="meta__sep">·</span>
-        <span><span class="meta__key">created:</span> <span class="meta__val">{{created_at}}</span></span>
-        <span class="meta__sep">·</span>
-        <span><span class="meta__key">updated:</span> <span class="meta__val">{{updated_at}}</span></span>
+        <span class="badge">cycle 2</span>
       </span>
-    </div>
-
-    <!-- 3. Dependencies -->
-    <div class="depends">
-      <span class="depends__label">Depends on</span>
-      <span class="depends__val">{{depends_on}}</span>
     </div>
   </header>
 
   <!-- ============================================================
-       4. User-story list (collapsible, open by default)
+       3. Problem Statement (open)
        ============================================================ -->
   <section class="section">
     <details open>
-      <summary>User stories <span class="summary__meta">by sequence</span></summary>
+      <summary>Problem Statement</summary>
       <div class="details__body">
-        <ol class="tasks">
-          <!-- renderer emits one <li> per user story: <li><input type="checkbox" disabled [checked]> <span class="task__title">…</span><span class="task__status">…</span></li> -->
-          {{story_list_ordered_by_sequence}}
-        </ol>
-      </div>
-    </details>
-  </section>
-
-  <!-- ============================================================
-       5. Audit log (collapsible, open by default)
-       ============================================================ -->
-  <section class="section">
-    <details open>
-      <summary>Audit log</summary>
-      <div class="details__body">
-        <div class="audit-wrap">
-          <table class="audit">
-            <thead>
-              <tr>
-                <th>when (ISO-8601)</th>
-                <th>status</th>
-                <th>who</th>
-                <th>evidence</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td class="col-when">{{created_at}}</td>
-                <td><span class="pill">{{rollup_status}}</span></td>
-                <td class="col-who">roadmap-skill</td>
-                <td class="col-evidence">/roadmap plan</td>
-              </tr>
-            </tbody>
-          </table>
+        <div class="prose">
+          <p>Customers with large workspaces routinely request full data exports that exceed what the current synchronous endpoint can serve. Requests over roughly <strong>200&nbsp;MB</strong> time out at the gateway, leaving users with a failed download and no recourse but to retry — which fails the same way.</p>
+          <p>We need an export mechanism that decouples the request from the delivery: the user asks for an export, the system produces it in the background, and the user is notified when a stable, resumable artifact is ready to download. The experience must remain trustworthy even when an export takes minutes and spans transient infrastructure failures.</p>
         </div>
       </div>
     </details>
   </section>
 
+  <!-- ============================================================
+       4. Functional Requirements (open)
+       ============================================================ -->
+  <section class="section">
+    <details open>
+      <summary>Functional Requirements <span class="summary__meta">6 items</span></summary>
+      <div class="details__body">
+        <ul class="req-list">
+          <li>
+            <span class="req__tag">FR-1</span>
+            <span class="req__body"><strong>Asynchronous request.</strong> A user can request an export and receive an immediate acknowledgement with a tracking ID; the export proceeds in the background.</span>
+          </li>
+          <li>
+            <span class="req__tag">FR-2</span>
+            <span class="req__body"><strong>Progress visibility.</strong> The user can poll or subscribe to export status (<code>queued</code>, <code>running</code>, <code>ready</code>, <code>failed</code>) and see a rough percentage complete.</span>
+          </li>
+          <li>
+            <span class="req__tag">FR-3</span>
+            <span class="req__body"><strong>Resumable delivery.</strong> The finished artifact supports HTTP range requests so an interrupted download resumes rather than restarts.</span>
+          </li>
+          <li>
+            <span class="req__tag">FR-4</span>
+            <span class="req__body"><strong>Notification.</strong> On completion or failure the user is notified via their configured channel (in-app and email).</span>
+          </li>
+          <li>
+            <span class="req__tag">FR-5</span>
+            <span class="req__body"><strong>Expiry.</strong> Ready artifacts remain downloadable for a bounded window, after which they are purged and the link returns a clear expired state.</span>
+          </li>
+          <li>
+            <span class="req__tag">FR-6</span>
+            <span class="req__body"><strong>Idempotency.</strong> Re-requesting an identical export within the active window returns the existing artifact rather than recomputing it.</span>
+          </li>
+        </ul>
+      </div>
+    </details>
+  </section>
+
+  <!-- ============================================================
+       5. Constraints (collapsed)
+       ============================================================ -->
+  <section class="section">
+    <details>
+      <summary>Constraints <span class="summary__meta">4 items</span></summary>
+      <div class="details__body">
+        <ul class="req-list">
+          <li>
+            <span class="req__tag">C-1</span>
+            <span class="req__body"><strong>Technical.</strong> Must run on the existing job queue (<code>redis</code> + worker pool); no new orchestration system this cycle.</span>
+          </li>
+          <li>
+            <span class="req__tag">C-2</span>
+            <span class="req__body"><strong>Storage.</strong> Artifacts land in the existing object store; no schema migrations to the primary database.</span>
+          </li>
+          <li>
+            <span class="req__tag">C-3</span>
+            <span class="req__body"><strong>Time.</strong> Target a single-cycle delivery; defer multi-region replication to a follow-up.</span>
+          </li>
+          <li>
+            <span class="req__tag">C-4</span>
+            <span class="req__body"><strong>Scope.</strong> CSV and JSON formats only; spreadsheet and archive bundles are out of scope.</span>
+          </li>
+        </ul>
+      </div>
+    </details>
+  </section>
+
+  <!-- ============================================================
+       6. Open Questions (collapsed) — populated state
+       ============================================================ -->
+  <section class="section">
+    <details>
+      <summary>Open Questions <span class="summary__meta">3 unresolved</span></summary>
+      <div class="details__body">
+        <ul class="q-list">
+          <li>What is the acceptable upper bound on export latency before we surface a "still working" reassurance state to the user?</li>
+          <li>Should the expiry window be fixed system-wide, or configurable per workspace plan tier?</li>
+          <li>Do we need signed, single-use download URLs, or is an authenticated session sufficient for the first release?</li>
+        </ul>
+      </div>
+    </details>
+  </section>
+
+  <nav class="related"><span class="label">Related:</span> <span>—</span></nav>
+
 </main>
 
 <script>
-/* Editorial Design System v1 — phase
+/* Editorial Design System v1 — orchestrator spec
    Vanilla JS only. No libraries, no inline handlers.
-   Maps the rendered {{rollup_status}} to the correct header pill class. */
+   Maps data-status (READY_FOR_PLANNING | DRAFT) to the header pill class. */
 (function () {
   "use strict";
 
   var STATUS_TO_TOKEN = {
-    todo: "muted",
-    in_progress: "active",
-    done: "success",
-    blocked: "danger",
-    superseded: "muted"
+    READY_FOR_PLANNING: "success",
+    DRAFT: "active"
   };
 
   function syncHeaderPill() {
-    var root = document.querySelector('main[data-kind="phase"]');
+    var root = document.querySelector("main[data-id][data-cycle]");
     if (!root) return;
     var status = root.getAttribute("data-status");
     var token = STATUS_TO_TOKEN[status];
-    if (!token) return; // unresolved {{rollup_status}} token — leave default
+    if (!token) return;
     var pill = document.querySelector(".h1__pill .pill");
     if (pill) {
       pill.className = "pill pill--" + token;

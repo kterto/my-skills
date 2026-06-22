@@ -53,7 +53,7 @@ Kebab-case, lowercase, max 5 words from the title. Example: `user-profile-settin
 
 ## Step 3 — Create the plan file
 
-Emit the artifact per `references/artifact-format.md` using the configured `output_format`; the stdout summary below is identical regardless of format. The `md`-mode definition follows.
+Emit the artifact per `references/artifact-format.md` using the configured `output_format`; the stdout summary below is identical regardless of format. The `md`-mode definition follows. In the rendered plan, fill the Related region with a relative link to the source spec (and source CR/QA for fix/qa plans), per `artifact-format.md` → Related navigation.
 
 Path: `plans/{dir}/{PREFIX}-{NNN}-{slug}.md`
 

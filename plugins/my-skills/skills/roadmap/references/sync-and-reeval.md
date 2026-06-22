@@ -8,7 +8,7 @@ This document is the single source of truth for the three non-trivial algorithms
 
 ## Rollup rules
 
-Rollup derives a phase status from its tasks, and a milestone status from its phases. The function is applied bottom-up after every sync or re-eval run, and audit rows are appended only where the derived status changed.
+Rollup derives a phase status from its user stories, and a milestone status from its phases. The function is applied bottom-up after every sync or re-eval run, and audit rows are appended only where the derived status changed.
 
 | Condition | Derived status |
 |---|---|
@@ -23,34 +23,34 @@ Rollup derives a phase status from its tasks, and a milestone status from its ph
 
 ## Sync procedure
 
-`/roadmap sync` stamps task items `done` by scanning git commit trailers. It is **idempotent and additive** — re-running it never regresses or rewrites prior rows.
+`/roadmap sync` stamps user-story items `done` by scanning git commit trailers. It is **idempotent and additive** — re-running it never regresses or rewrites prior rows.
 
 ### Steps
 
 1. Read `last_synced_sha` from `roadmap.lock.json`.
-2. Run the git trailer scan (see command below). When `last_synced_sha` is `null`, scan full history. Per commit, extract: matched task id(s), author name/email, author date (ISO-8601), sha.
-3. For each matched task not already `done` or `superseded`: set `status: done`, append a full audit row (`when` = commit author date, `status` = `done`, `who` = author name/email, `evidence` = commit sha).
+2. Run the git trailer scan (see command below). When `last_synced_sha` is `null`, scan full history. Per commit, extract: matched user-story id(s), author name/email, author date (ISO-8601), sha.
+3. For each matched user story not already `done` or `superseded`: set `status: done`, append a full audit row (`when` = commit author date, `status` = `done`, `who` = author name/email, `evidence` = commit sha).
 4. Roll up phase and milestone statuses (see Rollup rules above); append rollup audit rows only where the derived status changed.
-5. Update `last_synced_sha` to `HEAD`, refresh README progress %, print a summary of stamped tasks.
+5. Update `last_synced_sha` to `HEAD`, refresh README progress %, print a summary of stamped stories.
 
 ### Git command
 
 ```bash
-git log ${last_synced_sha:+"$last_synced_sha.."}HEAD --grep 'Roadmap-Task:' \
-  --pretty=format:'%H%x09%an <%ae>%x09%aI%x09%(trailers:key=Roadmap-Task,valueonly)'
+git log ${last_synced_sha:+"$last_synced_sha.."}HEAD --grep 'Roadmap-Story:' \
+  --pretty=format:'%H%x09%an <%ae>%x09%aI%x09%(trailers:key=Roadmap-Story,valueonly)'
 ```
 
 When `last_synced_sha` is set, `${last_synced_sha:+"$last_synced_sha.."}` expands to `<sha>..`, giving the range `<sha>..HEAD`. When it is `null` (before first sync) the prefix expands to nothing, leaving just `HEAD` — which scans the full history reachable from `HEAD`. Do **not** write `"${last_synced_sha:-}"..HEAD`: an empty left side makes `..HEAD`, which git reads as `HEAD..HEAD` (empty), so the first sync would scan nothing.
 
 ### Parse example
 
-Given a commit with trailer `Roadmap-Task: 001.1.1`, the output line is:
+Given a commit with trailer `Roadmap-Story: 001.1.1`, the output line is:
 
 ```
 a3f9c2e	Jane Smith <jane@example.com>	2026-06-21T14:30:00+00:00	001.1.1
 ```
 
-Fields (tab-separated): `sha`, `author name <email>`, `author date (ISO-8601)`, `task id(s)`.
+Fields (tab-separated): `sha`, `author name <email>`, `author date (ISO-8601)`, `user-story id(s)`.
 
 ---
 

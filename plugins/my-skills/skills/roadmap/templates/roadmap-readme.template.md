@@ -1,7 +1,7 @@
 <!-- roadmap-index -->
 # Roadmap
 
-**Progress:** {{done_count}}/{{total_count}} tasks done ({{pct}}%)
+**Progress:** {{done_count}}/{{total_count}} stories done ({{pct}}%)
 
 ## Status legend
 

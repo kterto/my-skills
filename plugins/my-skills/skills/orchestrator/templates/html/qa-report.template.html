@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Phase — {{id}}</title>
+<title>QA Report — QA-042</title>
 <style>
 /* ============================================================
    EDITORIAL DESIGN SYSTEM v1 — Color tokens
@@ -111,7 +111,7 @@ body {
 }
 
 main {
-  max-width: 58rem;
+  max-width: 56rem;
   margin: 0 auto;
   padding: var(--sp-16) var(--sp-8);
 }
@@ -131,6 +131,7 @@ a { color: var(--accent); }
 .masthead__kicker {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--sp-3);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
@@ -139,8 +140,6 @@ a { color: var(--accent); }
   color: var(--text-muted);
   margin: 0 0 var(--sp-4);
 }
-
-.masthead__crumb { color: var(--accent); }
 
 h1 {
   font-family: var(--font-serif);
@@ -159,7 +158,7 @@ h1 {
 
 h1 .h1__id {
   font-family: var(--font-mono);
-  font-size: 0.5em;
+  font-size: 0.46em;
   font-weight: 500;
   letter-spacing: 0;
   color: var(--accent);
@@ -191,6 +190,7 @@ h1 .h1__pill { align-self: center; }
 .meta__fields {
   display: flex;
   flex-wrap: wrap;
+  align-items: baseline;
   gap: var(--sp-3);
   margin-left: auto;
 }
@@ -208,32 +208,6 @@ h1 .h1__pill { align-self: center; }
   border-radius: 4px;
   white-space: nowrap;
 }
-
-/* ============================================================
-   Dependency field
-   ============================================================ */
-.depends {
-  display: flex;
-  align-items: baseline;
-  gap: var(--sp-3);
-  margin-top: var(--sp-6);
-  font-size: var(--text-sm);
-}
-
-.depends__label {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--text-muted);
-}
-
-.depends__val { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
-
-/* ============================================================
-   Section scaffolding
-   ============================================================ */
-.section { margin-top: var(--sp-12); }
 
 /* ============================================================
    Status pill
@@ -268,8 +242,126 @@ h1 .h1__pill { align-self: center; }
 .pill--muted   { background: var(--status-muted-bg);   color: var(--status-muted);   }
 
 /* ============================================================
+   Gate-results grid
+   ============================================================ */
+.gates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--sp-4);
+  margin-top: var(--sp-8);
+}
+
+.gate {
+  background: var(--bg-surface);
+  border: 1px solid var(--rule);
+  border-top: 2px solid var(--rule-heavy);
+  border-radius: 6px;
+  padding: var(--sp-4);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "name   icon"
+    "detail label";
+  align-items: start;
+  gap: var(--sp-2) var(--sp-3);
+}
+
+.gate--pass { border-top-color: var(--status-success); }
+.gate--fail { border-top-color: var(--status-danger); }
+
+.gate__name {
+  grid-area: name;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.gate__icon {
+  grid-area: icon;
+  font-family: var(--font-mono);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  line-height: 1;
+  align-self: center;
+}
+
+.gate--pass .gate__icon { color: var(--status-success); }
+.gate--fail .gate__icon { color: var(--status-danger); }
+
+.gate__detail {
+  grid-area: detail;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.gate__label {
+  grid-area: label;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  align-self: center;
+  text-align: right;
+}
+
+.gate--pass .gate__label { color: var(--status-success); }
+.gate--fail .gate__label { color: var(--status-danger); }
+
+/* Stale-gate flag */
+.stale {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--status-warning);
+  background: var(--status-warning-bg);
+  padding: 1px 5px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+/* Gate summary row */
+.gate-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  margin-top: var(--sp-4);
+}
+
+.gate-summary .gs-sep { color: var(--rule-heavy); }
+.gate-summary .gs-stale { color: var(--status-warning); font-size: var(--text-xs); }
+
+/* ============================================================
+   Conditional inset blocks
+   ============================================================ */
+.inset {
+  border-radius: 6px;
+  padding: var(--sp-4) var(--sp-6);
+  font-size: var(--text-lg);
+  max-width: var(--measure);
+}
+
+.inset--warning { background: var(--status-warning-bg); color: var(--status-warning); }
+.inset--danger  { background: var(--status-danger-bg);  color: var(--status-danger); }
+
+.inset strong { font-weight: 700; }
+.inset code { background: rgba(0,0,0,0.06); color: inherit; }
+.inset ul { margin: var(--sp-2) 0 0; padding-left: var(--sp-6); }
+.inset li { margin-bottom: var(--sp-1); }
+
+/* ============================================================
    Collapsible <details>
    ============================================================ */
+.section { margin-top: var(--sp-12); }
+
 details { border-top: 1px solid var(--rule); }
 
 summary {
@@ -304,132 +396,32 @@ summary:focus-visible {
   border-radius: 3px;
 }
 
-summary .summary__meta {
-  margin-left: auto;
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  font-weight: 400;
-  color: var(--text-muted);
-}
-
 .details__body {
   border-left: 3px solid var(--accent);
   padding-left: var(--sp-6);
   margin: 0 0 var(--sp-6) 2px;
 }
 
-details[open] > .details__body { animation: detailsfade 0.22s ease both; }
+details.warning-section > summary { color: var(--status-warning); }
+details.warning-section > summary::before { color: var(--status-warning); }
+details.warning-section > .details__body { border-left-color: var(--status-warning); }
 
-@keyframes detailsfade {
-  from { opacity: 0; transform: translateY(-4px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
+details.blocked-section > summary { color: var(--status-danger); }
+details.blocked-section > summary::before { color: var(--status-danger); }
+details.blocked-section > .details__body { border-left-color: var(--status-danger); }
 
 /* ============================================================
-   Task list — disabled-checkbox rows
+   QA notes prose
    ============================================================ */
-.tasks {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.tasks li {
-  display: grid;
-  grid-template-columns: 1.4rem 1fr auto;
-  align-items: baseline;
-  gap: var(--sp-3) var(--sp-4);
-  padding: var(--sp-3) 0;
-  border-bottom: 1px solid var(--rule);
-  color: var(--text-primary);
+.prose {
+  max-width: var(--measure);
+  color: var(--text-secondary);
   font-size: var(--text-lg);
 }
 
-.tasks li:last-child { border-bottom: none; }
-
-.tasks li input[type="checkbox"] {
-  margin: 0;
-  width: 1rem;
-  height: 1rem;
-  opacity: 0.5;
-  accent-color: var(--accent);
-  position: relative;
-  top: 0.18em;
-}
-
-.tasks .task__title {
-  min-width: 0;
-  text-wrap: pretty;
-}
-
-.tasks .task__status { align-self: center; }
-
-/* completed tasks: checked OR explicit .done class */
-.tasks li:has(input:checked) .task__title,
-.tasks li.done .task__title {
-  text-decoration: line-through;
-  color: var(--text-muted);
-}
-
-/* blocked tasks */
-.tasks li[data-status="blocked"] .task__title {
-  color: var(--status-danger);
-}
-
-/* superseded tasks */
-.tasks li[data-status="superseded"] .task__title {
-  text-decoration: line-through;
-  color: var(--text-muted);
-}
-
-/* Empty state */
-.empty {
-  text-align: center;
-  font-family: var(--font-serif);
-  font-style: italic;
-  font-size: var(--text-lg);
-  color: var(--text-muted);
-  padding: var(--sp-12) var(--sp-4);
-  margin: 0;
-}
-
-/* ============================================================
-   Audit-log table
-   ============================================================ */
-.audit-wrap { overflow-x: auto; }
-
-.audit {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--text-sm);
-}
-
-.audit thead th {
-  text-align: left;
-  background: var(--bg-surface);
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  color: var(--text-secondary);
-  padding: var(--sp-2) var(--sp-4);
-  border-bottom: 1px solid var(--rule-heavy);
-  white-space: nowrap;
-}
-
-.audit tbody td {
-  padding: var(--sp-2) var(--sp-4);
-  border-bottom: 1px solid var(--rule);
-  vertical-align: baseline;
-  color: var(--text-secondary);
-}
-
-.audit tbody tr:nth-child(odd)  td { background: var(--bg-page); }
-.audit tbody tr:nth-child(even) td { background: var(--bg-surface); }
-.audit tbody tr:last-child td { border-bottom: none; }
-
-.audit .col-when { font-family: var(--font-mono); color: var(--text-muted); white-space: nowrap; }
-.audit .col-who  { font-family: var(--font-mono); color: var(--text-secondary); }
-.audit .col-evidence code { font-size: 0.85em; }
+.prose p { margin: 0 0 var(--sp-4); }
+.prose p:last-child { margin-bottom: 0; }
+.prose strong { color: var(--text-primary); }
 
 /* ============================================================
    Inline code / path
@@ -444,127 +436,155 @@ code {
 }
 
 /* ============================================================
-   Breadcrumb nav
+   Related nav region
    ============================================================ */
-.crumbs { font-size: 0.85rem; margin: 0 0 1.25rem; color: var(--text-muted, #6b6b6b); }
-.crumbs a { color: var(--accent); text-decoration: none; }
-.crumbs a:hover { text-decoration: underline; }
-.crumbs .sep { opacity: 0.5; margin: 0 0.4em; }
+.related { font-size: 0.85rem; margin: 1.5rem 0 0; padding-top: 0.75rem; border-top: 1px solid var(--rule, #e3e0d8); }
+.related .label { color: var(--text-muted, #6b6b6b); margin-right: 0.5em; }
+.related a { color: var(--accent); text-decoration: none; }
+.related a:hover { text-decoration: underline; }
+.related .sep { opacity: 0.5; margin: 0 0.4em; }
 </style>
 </head>
 <body>
-<main data-id="{{id}}" data-kind="phase" data-status="{{rollup_status}}"
-      data-created-at="{{created_at}}" data-updated-at="{{updated_at}}">
-
-  <nav class="crumbs"><a href="../../README.html">Roadmap</a><span class="sep">/</span><a href="../README.html">{{milestone}}</a><span class="sep">/</span><span>{{id}}</span></nav>
+<main
+  data-id="QA-042"
+  data-status="READY_WITH_WARNINGS"
+  data-created-at="2026-06-22T07:00:00Z"
+  data-updated-at="2026-06-22T20:15:00Z"
+  data-cycle="2"
+>
 
   <!-- ============================================================
        1. Page header
        ============================================================ -->
   <header class="masthead">
     <p class="masthead__kicker">
-      <span>Phase</span>
+      <span>QA Report</span>
       <span class="meta__sep">·</span>
-      <span class="masthead__crumb">{{milestone}}</span>
-      <span class="meta__sep">·</span>
-      <span class="badge">cycle 3</span>
+      <span>Quality Gate</span>
     </p>
     <h1>
-      <span class="h1__id">{{id}}</span>
-      <span>{{title}}</span>
-      <span class="h1__pill"><span class="pill pill--active">{{rollup_status}}</span></span>
+      <span class="h1__id">QA-042</span>
+      <span>Async export pipeline — quality gates</span>
+      <span class="h1__pill"><span class="pill pill--warning">READY_WITH_WARNINGS</span></span>
     </h1>
 
     <!-- 2. ID / meta header block -->
     <div class="meta">
-      <span class="meta__id">{{id}}</span>
+      <span class="meta__id">QA-042</span>
       <span class="meta__fields">
-        <span><span class="meta__key">milestone:</span> <span class="meta__val">{{milestone}}</span></span>
+        <span><span class="meta__key">created:</span> <span class="meta__val">2026-06-22</span></span>
         <span class="meta__sep">·</span>
-        <span><span class="meta__key">sequence:</span> <span class="meta__val">{{sequence}}</span></span>
+        <span><span class="meta__key">updated:</span> <span class="meta__val">2026-06-22</span></span>
         <span class="meta__sep">·</span>
-        <span><span class="meta__key">created:</span> <span class="meta__val">{{created_at}}</span></span>
-        <span class="meta__sep">·</span>
-        <span><span class="meta__key">updated:</span> <span class="meta__val">{{updated_at}}</span></span>
+        <span class="badge">cycle 2</span>
       </span>
-    </div>
-
-    <!-- 3. Dependencies -->
-    <div class="depends">
-      <span class="depends__label">Depends on</span>
-      <span class="depends__val">{{depends_on}}</span>
     </div>
   </header>
 
   <!-- ============================================================
-       4. User-story list (collapsible, open by default)
+       3. Gate-results grid
        ============================================================ -->
-  <section class="section">
-    <details open>
-      <summary>User stories <span class="summary__meta">by sequence</span></summary>
-      <div class="details__body">
-        <ol class="tasks">
-          <!-- renderer emits one <li> per user story: <li><input type="checkbox" disabled [checked]> <span class="task__title">…</span><span class="task__status">…</span></li> -->
-          {{story_list_ordered_by_sequence}}
-        </ol>
+  <section aria-label="Gate results">
+    <div class="gates">
+      <div class="gate gate--pass">
+        <div class="gate__name">Lint</div>
+        <div class="gate__icon">&#10003;</div>
+        <div class="gate__detail">eslint: 0 errors, 3 warnings</div>
+        <div class="gate__label">PASS</div>
       </div>
-    </details>
+      <div class="gate gate--pass">
+        <div class="gate__name">Type check</div>
+        <div class="gate__icon">&#10003;</div>
+        <div class="gate__detail">tsc: 0 errors</div>
+        <div class="gate__label">PASS</div>
+      </div>
+      <div class="gate gate--pass">
+        <div class="gate__name">Tests <span class="stale">&#9888; stale</span></div>
+        <div class="gate__icon">&#10003;</div>
+        <div class="gate__detail">237 passed · ran on a14f2c0</div>
+        <div class="gate__label">PASS</div>
+      </div>
+      <div class="gate gate--pass">
+        <div class="gate__name">Coverage <span class="stale">&#9888; stale</span></div>
+        <div class="gate__icon">&#10003;</div>
+        <div class="gate__detail">coverage: 87.2% · ran on a14f2c0</div>
+        <div class="gate__label">PASS</div>
+      </div>
+      <div class="gate gate--pass">
+        <div class="gate__name">Build</div>
+        <div class="gate__icon">&#10003;</div>
+        <div class="gate__detail">bundle: 412 KB · ok</div>
+        <div class="gate__label">PASS</div>
+      </div>
+    </div>
+
+    <!-- 4. Gate summary row -->
+    <div class="gate-summary">
+      <span>Passed: 5 / Total: 5</span>
+      <span class="gs-sep">·</span>
+      <span class="gs-stale">Stale: 2</span>
+    </div>
   </section>
 
   <!-- ============================================================
-       5. Audit log (collapsible, open by default)
+       5. Warnings (open — READY_WITH_WARNINGS)
        ============================================================ -->
   <section class="section">
-    <details open>
-      <summary>Audit log</summary>
+    <details class="warning-section" open>
+      <summary>Warnings</summary>
       <div class="details__body">
-        <div class="audit-wrap">
-          <table class="audit">
-            <thead>
-              <tr>
-                <th>when (ISO-8601)</th>
-                <th>status</th>
-                <th>who</th>
-                <th>evidence</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td class="col-when">{{created_at}}</td>
-                <td><span class="pill">{{rollup_status}}</span></td>
-                <td class="col-who">roadmap-skill</td>
-                <td class="col-evidence">/roadmap plan</td>
-              </tr>
-            </tbody>
-          </table>
+        <div class="inset inset--warning">
+          <strong>2 gates are stale.</strong> Tests and Coverage last ran against <code>a14f2c0</code>, while HEAD is now <code>c4f1d9e</code> (2 commits ahead — both docs-only). The results are non-blocking but should be re-run before the next cycle to stay current.
+          <ul>
+            <li><strong>Tests</strong> — 237 passed on <code>a14f2c0</code></li>
+            <li><strong>Coverage</strong> — 87.2% on <code>a14f2c0</code></li>
+          </ul>
         </div>
       </div>
     </details>
   </section>
 
+  <!-- Blocked — Reason section omitted: status is READY_WITH_WARNINGS, not BLOCKED. -->
+
+  <!-- ============================================================
+       7. QA Notes (collapsed)
+       ============================================================ -->
+  <section class="section">
+    <details>
+      <summary>QA Notes</summary>
+      <div class="details__body">
+        <div class="prose">
+          <p>All five gates are green. The only caveat is the two stale results, which lag HEAD by two documentation-only commits — there is no code delta that would change their outcome, so the run is safe to mark <strong>READY_WITH_WARNINGS</strong> rather than re-blocking the pipeline.</p>
+          <p>Recommend a fresh test + coverage run at the top of the next cycle to clear the stale flags.</p>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <nav class="related"><span class="label">Related:</span> <a href="../feat/FEAT-003-stripe-webhooks.html">FEAT-003</a></nav>
+
 </main>
 
 <script>
-/* Editorial Design System v1 — phase
+/* Editorial Design System v1 — QA report
    Vanilla JS only. No libraries, no inline handlers.
-   Maps the rendered {{rollup_status}} to the correct header pill class. */
+   Maps data-status (READY_TO_COMMIT | BLOCKED | READY_WITH_WARNINGS) to the header pill class. */
 (function () {
   "use strict";
 
   var STATUS_TO_TOKEN = {
-    todo: "muted",
-    in_progress: "active",
-    done: "success",
-    blocked: "danger",
-    superseded: "muted"
+    READY_TO_COMMIT: "success",
+    BLOCKED: "danger",
+    READY_WITH_WARNINGS: "warning"
   };
 
   function syncHeaderPill() {
-    var root = document.querySelector('main[data-kind="phase"]');
+    var root = document.querySelector("main[data-id][data-cycle]");
     if (!root) return;
     var status = root.getAttribute("data-status");
     var token = STATUS_TO_TOKEN[status];
-    if (!token) return; // unresolved {{rollup_status}} token — leave default
+    if (!token) return;
     var pill = document.querySelector(".h1__pill .pill");
     if (pill) {
       pill.className = "pill pill--" + token;

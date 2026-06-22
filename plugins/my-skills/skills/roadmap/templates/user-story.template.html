@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Phase — {{id}}</title>
+<title>User Story — {{id}}</title>
 <style>
 /* ============================================================
    EDITORIAL DESIGN SYSTEM v1 — Color tokens
@@ -111,7 +111,7 @@ body {
 }
 
 main {
-  max-width: 58rem;
+  max-width: 52rem;
   margin: 0 auto;
   padding: var(--sp-16) var(--sp-8);
 }
@@ -131,6 +131,7 @@ a { color: var(--accent); }
 .masthead__kicker {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--sp-3);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
@@ -145,8 +146,8 @@ a { color: var(--accent); }
 h1 {
   font-family: var(--font-serif);
   font-weight: 700;
-  font-size: clamp(2rem, 5vw, 3rem);
-  line-height: 1.08;
+  font-size: clamp(1.9rem, 4.5vw, 2.75rem);
+  line-height: 1.1;
   letter-spacing: -0.02em;
   margin: 0;
   color: var(--text-primary);
@@ -210,30 +211,36 @@ h1 .h1__pill { align-self: center; }
 }
 
 /* ============================================================
-   Dependency field
+   Field rows (depends / spec refs)
    ============================================================ */
-.depends {
+.fields {
+  display: grid;
+  gap: var(--sp-3);
+  margin-top: var(--sp-6);
+}
+
+.field {
   display: flex;
   align-items: baseline;
   gap: var(--sp-3);
-  margin-top: var(--sp-6);
   font-size: var(--text-sm);
 }
 
-.depends__label {
+.field__label {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--text-muted);
+  min-width: 6.5rem;
 }
 
-.depends__val { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.field__val { display: flex; flex-wrap: wrap; gap: var(--sp-2); color: var(--text-secondary); }
 
 /* ============================================================
    Section scaffolding
    ============================================================ */
-.section { margin-top: var(--sp-12); }
+.section { margin-top: var(--sp-8); }
 
 /* ============================================================
    Status pill
@@ -326,70 +333,101 @@ details[open] > .details__body { animation: detailsfade 0.22s ease both; }
 }
 
 /* ============================================================
-   Task list — disabled-checkbox rows
+   Prose (brief / acceptance bodies)
    ============================================================ */
-.tasks {
+.prose {
+  max-width: var(--measure);
+  color: var(--text-secondary);
+  font-size: var(--text-lg);
+}
+
+.prose p { margin: 0 0 var(--sp-4); }
+.prose p:last-child { margin-bottom: 0; }
+
+.prose h3 {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: var(--sp-6) 0 var(--sp-2);
+}
+
+.prose ul, .prose ol {
+  margin: 0 0 var(--sp-4);
+  padding-left: var(--sp-6);
+}
+
+.prose li { margin-bottom: var(--sp-2); }
+
+.prose strong { color: var(--text-primary); }
+
+/* ============================================================
+   Commit-trailer callout
+   ============================================================ */
+.trailer-callout {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  background: var(--accent-subtle);
+  color: var(--accent);
+  border-left: 3px solid var(--accent);
+  padding: var(--sp-4);
+  border-radius: 0 6px 6px 0;
+  margin: var(--sp-6) 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  overflow-x: auto;
+}
+
+.trailer-callout__label {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  opacity: 0.75;
+}
+
+.trailer-callout__line {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   Acceptance criteria list
+   ============================================================ */
+.acceptance {
+  max-width: var(--measure);
+  color: var(--text-secondary);
+  font-size: var(--text-lg);
+}
+
+.acceptance ul {
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
-.tasks li {
+.acceptance li {
   display: grid;
-  grid-template-columns: 1.4rem 1fr auto;
+  grid-template-columns: 1.4rem 1fr;
+  gap: var(--sp-3);
+  padding: var(--sp-2) 0;
   align-items: baseline;
-  gap: var(--sp-3) var(--sp-4);
-  padding: var(--sp-3) 0;
-  border-bottom: 1px solid var(--rule);
-  color: var(--text-primary);
-  font-size: var(--text-lg);
 }
 
-.tasks li:last-child { border-bottom: none; }
-
-.tasks li input[type="checkbox"] {
-  margin: 0;
-  width: 1rem;
-  height: 1rem;
-  opacity: 0.5;
-  accent-color: var(--accent);
-  position: relative;
-  top: 0.18em;
+.acceptance li::before {
+  content: "\2713";
+  font-family: var(--font-mono);
+  color: var(--status-success);
+  font-weight: 700;
 }
 
-.tasks .task__title {
-  min-width: 0;
-  text-wrap: pretty;
-}
-
-.tasks .task__status { align-self: center; }
-
-/* completed tasks: checked OR explicit .done class */
-.tasks li:has(input:checked) .task__title,
-.tasks li.done .task__title {
-  text-decoration: line-through;
-  color: var(--text-muted);
-}
-
-/* blocked tasks */
-.tasks li[data-status="blocked"] .task__title {
-  color: var(--status-danger);
-}
-
-/* superseded tasks */
-.tasks li[data-status="superseded"] .task__title {
-  text-decoration: line-through;
-  color: var(--text-muted);
-}
-
-/* Empty state */
 .empty {
   text-align: center;
   font-family: var(--font-serif);
   font-style: italic;
   font-size: var(--text-lg);
   color: var(--text-muted);
-  padding: var(--sp-12) var(--sp-4);
+  padding: var(--sp-8) var(--sp-4);
   margin: 0;
 }
 
@@ -453,26 +491,28 @@ code {
 </style>
 </head>
 <body>
-<main data-id="{{id}}" data-kind="phase" data-status="{{rollup_status}}"
+<main data-id="{{id}}" data-kind="user-story" data-status="{{status}}"
       data-created-at="{{created_at}}" data-updated-at="{{updated_at}}">
 
-  <nav class="crumbs"><a href="../../README.html">Roadmap</a><span class="sep">/</span><a href="../README.html">{{milestone}}</a><span class="sep">/</span><span>{{id}}</span></nav>
+  <nav class="crumbs"><a href="../../README.html">Roadmap</a><span class="sep">/</span><a href="../README.html">{{milestone}}</a><span class="sep">/</span><a href="README.html">{{phase}}</a><span class="sep">/</span><span>{{id}}</span></nav>
 
   <!-- ============================================================
        1. Page header
        ============================================================ -->
   <header class="masthead">
     <p class="masthead__kicker">
-      <span>Phase</span>
+      <span>User Story</span>
       <span class="meta__sep">·</span>
       <span class="masthead__crumb">{{milestone}}</span>
+      <span class="meta__sep">/</span>
+      <span class="masthead__crumb">{{phase}}</span>
       <span class="meta__sep">·</span>
       <span class="badge">cycle 3</span>
     </p>
     <h1>
       <span class="h1__id">{{id}}</span>
       <span>{{title}}</span>
-      <span class="h1__pill"><span class="pill pill--active">{{rollup_status}}</span></span>
+      <span class="h1__pill"><span class="pill pill--active">{{status}}</span></span>
     </h1>
 
     <!-- 2. ID / meta header block -->
@@ -480,6 +520,8 @@ code {
       <span class="meta__id">{{id}}</span>
       <span class="meta__fields">
         <span><span class="meta__key">milestone:</span> <span class="meta__val">{{milestone}}</span></span>
+        <span class="meta__sep">·</span>
+        <span><span class="meta__key">phase:</span> <span class="meta__val">{{phase}}</span></span>
         <span class="meta__sep">·</span>
         <span><span class="meta__key">sequence:</span> <span class="meta__val">{{sequence}}</span></span>
         <span class="meta__sep">·</span>
@@ -489,30 +531,49 @@ code {
       </span>
     </div>
 
-    <!-- 3. Dependencies -->
-    <div class="depends">
-      <span class="depends__label">Depends on</span>
-      <span class="depends__val">{{depends_on}}</span>
+    <!-- 3. Dependencies & spec refs -->
+    <div class="fields">
+      <div class="field">
+        <span class="field__label">Depends on</span>
+        <span class="field__val">{{depends_on}}</span>
+      </div>
+      <div class="field">
+        <span class="field__label">Spec refs</span>
+        <span class="field__val">{{spec_refs}}</span>
+      </div>
     </div>
   </header>
 
   <!-- ============================================================
-       4. User-story list (collapsible, open by default)
+       4. Brief (collapsible, open) + commit-trailer callout
        ============================================================ -->
   <section class="section">
     <details open>
-      <summary>User stories <span class="summary__meta">by sequence</span></summary>
+      <summary>Brief</summary>
       <div class="details__body">
-        <ol class="tasks">
-          <!-- renderer emits one <li> per user story: <li><input type="checkbox" disabled [checked]> <span class="task__title">…</span><span class="task__status">…</span></li> -->
-          {{story_list_ordered_by_sequence}}
-        </ol>
+        <div class="prose">{{brief}}</div>
+        <aside class="trailer-callout" aria-label="Commit trailer">
+          <span class="trailer-callout__label">Include in your commit message</span>
+          <span class="trailer-callout__line">Roadmap-Story: {{id}}</span>
+        </aside>
       </div>
     </details>
   </section>
 
   <!-- ============================================================
-       5. Audit log (collapsible, open by default)
+       5. Acceptance (collapsible, closed by default)
+       ============================================================ -->
+  <section class="section">
+    <details>
+      <summary>Acceptance <span class="summary__meta">criteria</span></summary>
+      <div class="details__body">
+        <div class="acceptance">{{acceptance}}</div>
+      </div>
+    </details>
+  </section>
+
+  <!-- ============================================================
+       6. Audit log (collapsible, open)
        ============================================================ -->
   <section class="section">
     <details open>
@@ -531,7 +592,7 @@ code {
             <tbody>
               <tr>
                 <td class="col-when">{{created_at}}</td>
-                <td><span class="pill">{{rollup_status}}</span></td>
+                <td><span class="pill">{{status}}</span></td>
                 <td class="col-who">roadmap-skill</td>
                 <td class="col-evidence">/roadmap plan</td>
               </tr>
@@ -545,9 +606,9 @@ code {
 </main>
 
 <script>
-/* Editorial Design System v1 — phase
+/* Editorial Design System v1 — user-story
    Vanilla JS only. No libraries, no inline handlers.
-   Maps the rendered {{rollup_status}} to the correct header pill class. */
+   Maps the rendered {{status}} to the correct header pill class. */
 (function () {
   "use strict";
 
@@ -560,15 +621,23 @@ code {
   };
 
   function syncHeaderPill() {
-    var root = document.querySelector('main[data-kind="phase"]');
+    var root = document.querySelector('main[data-kind="user-story"]');
     if (!root) return;
     var status = root.getAttribute("data-status");
     var token = STATUS_TO_TOKEN[status];
-    if (!token) return; // unresolved {{rollup_status}} token — leave default
+    if (!token) return; // unresolved {{status}} token — leave default
     var pill = document.querySelector(".h1__pill .pill");
     if (pill) {
       pill.className = "pill pill--" + token;
       pill.textContent = status;
+    }
+    // de-emphasise title when superseded
+    if (status === "superseded") {
+      var titleSpan = document.querySelector("h1 > span:not([class])");
+      if (titleSpan) {
+        titleSpan.style.textDecoration = "line-through";
+        titleSpan.style.color = "var(--text-muted)";
+      }
     }
   }
 
