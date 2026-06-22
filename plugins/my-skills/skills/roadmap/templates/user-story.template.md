@@ -1,6 +1,6 @@
 ---
 id: {{id}}
-kind: task
+kind: user-story
 title: {{title}}
 status: {{status}}
 milestone: "{{milestone}}"
@@ -8,7 +8,7 @@ phase: "{{phase}}"
 sequence: {{sequence}}
 depends_on: {{depends_on}}
 spec_refs: {{spec_refs}}
-commit_trailer: "Roadmap-Task: {{id}}"
+commit_trailer: "Roadmap-Story: {{id}}"
 created_at: {{created_at}}
 updated_at: {{updated_at}}
 ---
@@ -17,7 +17,7 @@ updated_at: {{updated_at}}
 ## Brief
 {{brief}}
 
-Commit with trailer: Roadmap-Task: {{id}}
+Commit with trailer: Roadmap-Story: {{id}}
 
 ## Acceptance
 {{acceptance}}

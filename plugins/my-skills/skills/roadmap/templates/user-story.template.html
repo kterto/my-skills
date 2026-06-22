@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Task — {{id}}</title>
+<title>User Story — {{id}}</title>
 <style>
 /* ============================================================
    EDITORIAL DESIGN SYSTEM v1 — Color tokens
@@ -491,7 +491,7 @@ code {
 </style>
 </head>
 <body>
-<main data-id="{{id}}" data-kind="task" data-status="{{status}}"
+<main data-id="{{id}}" data-kind="user-story" data-status="{{status}}"
       data-created-at="{{created_at}}" data-updated-at="{{updated_at}}">
 
   <nav class="crumbs"><a href="../../README.html">Roadmap</a><span class="sep">/</span><a href="../README.html">{{milestone}}</a><span class="sep">/</span><a href="README.html">{{phase}}</a><span class="sep">/</span><span>{{id}}</span></nav>
@@ -501,7 +501,7 @@ code {
        ============================================================ -->
   <header class="masthead">
     <p class="masthead__kicker">
-      <span>Task</span>
+      <span>User Story</span>
       <span class="meta__sep">·</span>
       <span class="masthead__crumb">{{milestone}}</span>
       <span class="meta__sep">/</span>
@@ -554,7 +554,7 @@ code {
         <div class="prose">{{brief}}</div>
         <aside class="trailer-callout" aria-label="Commit trailer">
           <span class="trailer-callout__label">Include in your commit message</span>
-          <span class="trailer-callout__line">Roadmap-Task: {{id}}</span>
+          <span class="trailer-callout__line">Roadmap-Story: {{id}}</span>
         </aside>
       </div>
     </details>
@@ -606,7 +606,7 @@ code {
 </main>
 
 <script>
-/* Editorial Design System v1 — task
+/* Editorial Design System v1 — user-story
    Vanilla JS only. No libraries, no inline handlers.
    Maps the rendered {{status}} to the correct header pill class. */
 (function () {
@@ -621,7 +621,7 @@ code {
   };
 
   function syncHeaderPill() {
-    var root = document.querySelector('main[data-kind="task"]');
+    var root = document.querySelector('main[data-kind="user-story"]');
     if (!root) return;
     var status = root.getAttribute("data-status");
     var token = STATUS_TO_TOKEN[status];

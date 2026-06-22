@@ -13,8 +13,8 @@ This document is the single source of truth for the `/roadmap/` directory struct
   001-bootstrap/
     README.md            # milestone overview + rollup status + audit log + ordered phase list
     001.1-scaffold/
-      README.md          # phase overview + rollup status + audit log + task list
-      001.1.1-init-repo.md
+      README.md          # phase overview + rollup status + audit log + user story list
+      001.1.1-init-repo.md   # user story
       001.1.2-....md
   002-auth/
   ...
@@ -26,7 +26,7 @@ This document is the single source of truth for the `/roadmap/` directory struct
 |---|---|---|
 | Milestone | `NNN-kebab` (zero-padded ordinal + kebab name) | `001-bootstrap`, `002-auth` |
 | Phase | `NNN.M` | `001.1`, `001.2` |
-| Task | `NNN.M.T` | `001.1.1`, `001.1.2` |
+| User Story | `NNN.M.T` | `001.1.1`, `001.1.2` |
 
 The directory name uses the full ID pattern as its prefix (e.g. `001-bootstrap/`, `001.1-scaffold/`, `001.1.1-init-repo.md`).
 
@@ -51,7 +51,7 @@ Items link to each other by relative path derived from the ID scheme: a mileston
   "version": 1,
   "last_synced_sha": "<sha or null>",
   "items": [
-    { "id": "001.1.1", "kind": "task", "status": "todo", "content_hash": "<sha256>", "sequence": 1 }
+    { "id": "001.1.1", "kind": "user-story", "status": "todo", "content_hash": "<sha256>", "sequence": 1 }
   ]
 }
 ```
@@ -64,7 +64,7 @@ Keys:
 | `last_synced_sha` | string \| null | The git SHA of the last `/roadmap sync` run. `null` before first sync. |
 | `items` | array | One entry per tracked milestone, phase, and task. |
 | `items[].id` | string | Stable ID (e.g. `001.1.1`). |
-| `items[].kind` | string | `milestone` \| `phase` \| `task`. |
+| `items[].kind` | string | `milestone` \| `phase` \| `user-story`. |
 | `items[].status` | string | Current status (see item-schema.md for the status enum). |
 | `items[].content_hash` | string | SHA-256 of the item file body, used for change detection during re-evaluation. |
 | `items[].sequence` | integer | Logical execution order within the parent scope. |

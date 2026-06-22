@@ -19,7 +19,7 @@ The roadmap skill first checks for a CLI flag; if absent, checks `/roadmap/roadm
 
 ### `output_format`
 
-Controls **all** generated artifact files — every milestone README, phase README, task file, and the top-level `/roadmap/README.md`. Valid values: `md` (default) or `html`.
+Controls **all** generated artifact files — every milestone README, phase README, user-story file, and the top-level `/roadmap/README.md`. Valid values: `md` (default) or `html`.
 
 `roadmap.lock.json` is always JSON regardless of `output_format`; it is machine state, not a deliverable.
 
