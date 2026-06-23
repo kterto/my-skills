@@ -31,6 +31,8 @@ Before cutting a branch, PM determines the correct base commit using the followi
 
 The run base is captured once at PM startup and held constant for the entire run.
 
+> A dependency that is already `done` has its work in the base branch — its `pm/` branch may be gone — so dependents of it stack on the run base, not a stale predecessor branch.
+
 ### Cycle guard
 
 If dependency resolution would produce a cycle, PM stops before cutting any branch and reports the offending ids. See `references/scope-resolution.md` for the cycle-detection algorithm.
@@ -89,15 +91,25 @@ After the orchestrator completes implementation and produces its proposed commit
 
 5. **Open the PR.**
 
+   First, fill all tokens in `templates/pr-body.template.md` and write the result to a temp file:
+
    ```bash
-   gh pr create --base <base> --head pm/<id>-<slug> --body "$(cat pr-body.md)"
+   # PM renders the template (substitutes all {{ }} tokens) and saves the result:
+   # (token substitution is done inline — the output is a plain Markdown file)
+   /tmp/pm-pr-body-<id>.md
+   ```
+
+   Then open the PR using `--body-file`:
+
+   ```bash
+   gh pr create --base <base> --head pm/<id>-<slug> --body-file /tmp/pm-pr-body-<id>.md
    ```
 
    where `<base>` is:
    - The **predecessor branch** (`pm/<dep-id>-<slug>` of the latest-ordered dependency) for stories that have in-scope dependencies — this is a stacked PR that targets another feature branch, not the run base.
    - The **run base** (`--base` value, else the branch PM started on) for independent stories.
 
-   The PR body is rendered from `templates/pr-body.template.md` with all tokens substituted before passing to `gh`.
+   The PR body is rendered from `templates/pr-body.template.md` with all tokens substituted. PM writes the rendered result to `/tmp/pm-pr-body-<id>.md` before invoking `gh pr create`.
 
 ---
 
