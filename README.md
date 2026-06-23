@@ -12,6 +12,7 @@ Authored [Claude Code](https://code.claude.com) skills, packaged as a plugin mar
 | `design-to-code` | Translates Claude design output files (self-contained HTML with tokens, reviewer comments, component states) into pixel-perfect, correctly-behaving code. |
 | `orchestrator` | Project-agnostic 6-agent pipeline (brainstormer → architect → coder → tester → reviewer → qa) with a context-confidence gate, spec-driven-eval integration, and a final Markdown/HTML report. Auto-detects first-run bootstrap vs. straight pipeline execution. |
 | `roadmap` | Decomposes a project spec into an auditable milestone→phase→user-story roadmap under `/roadmap/`, with append-only audit logs, orchestrator-ready user-story briefs, `/roadmap sync` trailer stamping, and diff+preserve re-evaluation. Doc-only. |
+| `product-manager` | Autonomously drives a scoped branch of the roadmap to completion — feeds each user story's brief to the orchestrator, then commits with the `Roadmap-Story:` trailer, syncs the roadmap, pushes, and opens a stacked PR per story. Conservative human-validation default; stops on orchestrator stall. |
 
 ## orchestrator
 
@@ -105,6 +106,43 @@ Stored in `/roadmap/roadmap.config.json`; overridable per-run via CLI flags.
 
 ---
 
+## product-manager
+
+The autonomous loop that glues `roadmap` (plans, never runs code) and `orchestrator` (implements, never commits). It resolves a scope of the roadmap, runs the orchestrator on each user story in dependency order, and performs the git work both other skills leave out: commit with the `Roadmap-Story:` trailer, `/roadmap sync`, push, and open a stacked PR per story.
+
+### Usage
+
+```text
+/product-manager complete <scope> [--conservative=true|false] [--base <branch>] [--dry-run]
+```
+
+| Token | Meaning |
+|---|---|
+| `complete <scope>` | `roadmap` (whole tree), a milestone id (`001` or `001-bootstrap`), or a phase id (`001.2`) |
+| `--conservative` | Autonomy mode. **Default `true`** — stop at detected human-validation spots; `false` documents them and continues |
+| `--base <branch>` | Run base for independent stories. Default: the current branch |
+| `--dry-run` | Resolve the scope, print the ordered queue + git plan, and exit — no execution |
+
+### How it works
+
+1. **Pre-flight** — requires `/roadmap/roadmap.lock.json` and `.orchestrator/config.json`, a clean tree, and `gh`. Resolves the scope, drops `done`/`superseded` stories, topo-sorts by `depends_on` then `sequence`, prints the queue, and asks for a single up-front confirmation (which authorizes per-story push/PR for the whole run).
+2. **Per-story loop** — cuts a `pm/<id>-<slug>` branch (stacked on the predecessor's branch for dependents), feeds the story's `## Brief` to the orchestrator, and on a `pipeline complete` report commits with the trailer, runs `/roadmap sync`, pushes, and opens a stacked PR.
+3. **Human validation** — scans the story's `## Acceptance` and the orchestrator QA report for manual-validation markers. Conservative mode halts the loop after completing the flagged story; autonomous mode logs the spot to `/roadmap/human-validation-queue.md` and continues.
+4. **Stop on stall** — any orchestrator `Status: STALLED` halts the run with the remaining queue preserved. Re-running resumes (it re-reads the lock and skips `done` stories — no extra state file).
+
+Progress is appended to `/roadmap/pm-progress.md` (one row per story attempt). The skill never merges PRs.
+
+### Config
+
+CLI flag > `/roadmap/pm.config.json` > built-in default.
+
+| Key | Default | CLI flag | Description |
+|---|---|---|---|
+| `conservative` | `true` | `--conservative` | Stop at human-validation spots (`true`) vs. document-and-continue (`false`) |
+| `base_branch` | `null` | `--base` | Run base for independent stories; `null` → current branch |
+
+---
+
 ## Layout
 
 ```
@@ -121,7 +159,8 @@ my-skills/
 │           ├── validation-fixer/SKILL.md
 │           ├── design-to-code/SKILL.md
 │           ├── orchestrator/SKILL.md
-│           └── roadmap/SKILL.md
+│           ├── roadmap/SKILL.md
+│           └── product-manager/SKILL.md
 ├── sync.sh                      # author-side: symlink skills into ~/.claude/skills
 └── README.md
 ```
@@ -140,7 +179,7 @@ A local checkout works too:
 /plugin install my-skills@my-skills
 ```
 
-Skills are then invocable as `/my-skills:clean-code-gates`, `/my-skills:commit-pr-dev`, `/my-skills:orchestrator`, `/my-skills:roadmap`, etc.
+Skills are then invocable as `/my-skills:clean-code-gates`, `/my-skills:commit-pr-dev`, `/my-skills:orchestrator`, `/my-skills:roadmap`, `/my-skills:product-manager`, etc.
 
 ## Updating (consumers)
 
