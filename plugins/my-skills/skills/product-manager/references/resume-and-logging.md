@@ -12,7 +12,7 @@ The run log lives at `/roadmap/pm-progress.md` and is **append-only**. PM is the
 
 One entry is written per story attempt (including retries and partial runs). If PM is interrupted mid-story, an entry is still appended when the attempt is abandoned or when PM resumes and re-evaluates the story.
 
-**Commit the log with the sync-docs commit (clean-tree precondition).** `pm-progress.md` (always) and `human-validation-queue.md` (autonomous mode) are PM's own writes. If left uncommitted they dirty the working tree and break the next iteration's clean-tree precondition — the next `git checkout -b` carries them over and/or trips the orchestrator's Step 0 dirty-tree gate. So PM writes the entry first, then stages it alongside `roadmap.lock.json`/READMEs into the single `docs(roadmap): sync <id>` commit (see `references/git-flow.md` → Success-path sequence step 3). Ordering: log entry written → staged with the sync-docs commit → committed → tree clean before the next branch is cut.
+**Commit the log AFTER the PR, in a dedicated commit (clean-tree precondition).** `pm-progress.md` (always) and `human-validation-queue.md` (autonomous mode) are PM's own writes. They cannot be folded into the pre-PR `docs(roadmap): sync <id>` commit, because the `pr` field and the queue row's `(PR <url>)` are only known after `gh pr create` returns. So PM writes both rows after the PR is opened and commits them in a dedicated `chore(pm): log <id>` commit (see `references/git-flow.md` → Success-path sequence step 6). If left uncommitted they dirty the working tree and break the next iteration's clean-tree precondition — the next `git checkout -b` carries them over and/or trips the orchestrator's Step 0 dirty-tree gate. Ordering: PR opened → `pm-progress.md` (and any `human-validation-queue.md`) row written → committed as `chore(pm): log <id>` → pushed → tree clean before the next branch is cut.
 
 ---
 
@@ -51,6 +51,23 @@ On re-run, PM performs the following steps from scratch to reconstruct its execu
    - Only **error** if the predecessor branch is absent **AND** the dependency is **not** `done` (its work exists nowhere reachable). Report the missing predecessor and stop.
 
 4. **Resume the queue.** The re-resolved, filtered, ordered queue (see scope-resolution ordering algorithm) is the queue PM processes, starting from the first non-`done` story. No state file is consulted; no in-memory state from the previous run is required.
+
+### Resume walkthrough — stall then restart
+
+Run: `/product-manager complete 001` over queue `001.1.1 → 001.1.2 → 001.1.3` (each `depends_on` the previous), conservative mode.
+
+**First invocation.**
+- `001.1.1` — orchestrator `READY_TO_COMMIT` → committed (trailer), synced (`done`), sync-docs commit, pushed, PR #1 opened (`--base main`), `chore(pm): log` commit. Branch `pm/001.1.1-…`.
+- `001.1.2` — depends_on `001.1.1` (in scope, just done in this run) → base = `pm/001.1.1-…` (stacked) → `READY_TO_COMMIT` → committed, synced (`done`), PR #2 opened (`--base pm/001.1.1-…`), logged.
+- `001.1.3` — depends_on `001.1.2` → base = `pm/001.1.2-…` → orchestrator hits the qa-cycle limit and prints `Status: STALLED`. PM **halts**: reports the banner, story `001.1.3`, and the remaining queue (`001.1.3`). `pm-progress.md` still gets a row for `001.1.3` with `state=STALLED`, `commit=—`, `pr=—`, and the stall reason in `notes`.
+
+State now: lock has `001.1.1`, `001.1.2` = `done`, `001.1.3` = `todo` (sync never stamped it — no trailer commit). PRs #1, #2 live; branches present.
+
+**Second invocation** (after the operator fixes whatever stalled QA), same command `/product-manager complete 001`:
+1. Re-resolve scope `001` → `001.1.1, 001.1.2, 001.1.3`.
+2. Drop `done` → `001.1.1`, `001.1.2` removed. Queue = `001.1.3`.
+3. Reconstruct stack: `001.1.3` depends_on `001.1.2`; predecessor branch `pm/001.1.2-…` still exists (PR #2 not merged) → base = `pm/001.1.2-…`. (Had PR #2 already been merged and its branch deleted, `001.1.2` is `done` in the lock → base falls back to the **run base** per step 3 above.)
+4. Resume: process `001.1.3` from the top of the queue. No state file consulted — `roadmap.lock.json` is the sole source of "what's left."
 
 ### What the run log is (and is not) used for
 

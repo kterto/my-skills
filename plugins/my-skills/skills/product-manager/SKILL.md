@@ -83,20 +83,19 @@ For each story in the queue, PM executes the following steps in order:
    - **Success** = the orchestrator prints its `ORCHESTRATOR — pipeline complete` final report, which only happens when QA returned `READY_TO_COMMIT` or `READY_WITH_WARNINGS` (the report's QA line shows which). The proposed commit message and PR message PM uses in step 4 are read from this report. → proceed to step 4.
    - **Stop** = the orchestrator prints any stop banner with a `Status: STALLED` line (cycle-limit reached, tester BLOCKED, qa BLOCKED_STALE, or spec still in DRAFT). There is no terminal `BLOCKED` status — `BLOCKED` is only an internal intermediate the orchestrator resolves via its fix/QA loops and never the final printed state. On any `Status: STALLED` banner, halt the entire PM run: report the stop banner, the story id, and the remaining queue. Do not proceed to any further story.
 
-4. **Execute the success-path sequence** (see `references/git-flow.md` → **Success-path sequence**). The ordering below is load-bearing — PM's own log/queue writes must be staged into the sync-docs commit so the working tree is clean before the next story's branch is cut:
+4. **Execute the success-path sequence** (see `references/git-flow.md` → **Success-path sequence**). The ordering is load-bearing because of two constraints: `/roadmap sync` must run after the trailer commit (it reads `git log`), and PM's own logs must be committed *after* the PR (they record the PR URL). The six steps:
    - Commit with the `Roadmap-Story: <id>` trailer using the orchestrator's proposed commit message.
    - Run `/roadmap sync` (after the trailer commit exists in git log).
-   - **Human-validation check** (step 5 below) — runs here so its outcome (autonomous-mode queue row, PR-body note) is known before the sync-docs commit and the PR are created.
-   - **Append the `pm-progress.md` log row** (step 6 below) — written now, before the sync-docs commit.
-   - Commit the roadmap doc changes (`roadmap.lock.json`, READMEs) **together with** the just-written `/roadmap/pm-progress.md` row and any `/roadmap/human-validation-queue.md` change, in one `docs(roadmap): sync <id>` commit. Folding PM's logs into this commit keeps the tree clean for the next iteration (see `references/git-flow.md` → Success-path sequence step 3).
+   - Commit the roadmap sync docs **only** (`roadmap.lock.json`, READMEs) in a `docs(roadmap): sync <id>` commit — no logs here; they need the PR URL.
    - Push `pm/<id>-<slug>` to origin.
-   - Render `templates/pr-body.template.md` with all tokens substituted and open the PR using `gh pr create --body-file`.
+   - Run the **human-validation check** (step 5), render `templates/pr-body.template.md` (its `{{human_validation_note}}` comes from that check), open the PR with `gh pr create --body-file`, and capture the PR URL.
+   - **Write and commit PM's logs** (step 6): with the PR URL known, append the `pm-progress.md` row (and, autonomous-mode-flagged, the `human-validation-queue.md` row), commit them as `chore(pm): log <id>`, and push. This dedicated post-PR commit keeps the working tree clean before the next story's branch is cut.
 
-5. **Human-validation check.** Scan the story's `## Acceptance` section and the orchestrator's QA report for validation markers (see `references/human-validation.md` → **Detection sources**). Then apply mode behavior:
-   - **conservative (default):** if flagged, halt the loop after the PR is open and surface a validation request. The user re-runs PM with the same scope to resume — the Filter step will skip the now-`done` story automatically.
-   - **autonomous (`--conservative=false`):** if flagged, append a row to `/roadmap/human-validation-queue.md` (this change is committed as part of the `docs(roadmap): sync <id>` commit in step 4) and continue to the next story.
+5. **Human-validation check.** Scan the story's `## Acceptance` section and the orchestrator's QA report for validation markers (see `references/human-validation.md` → **Detection sources**). The result sets the PR-body `{{human_validation_note}}` before the PR is opened. Then apply mode behavior:
+   - **conservative (default):** if flagged, halt the loop after the PR is open and its log commit is made, surfacing a validation request (story id, PR URL, matched items). The user re-runs PM with the same scope to resume — the Filter step skips the now-`done` story automatically.
+   - **autonomous (`--conservative=false`):** if flagged, append a row to `/roadmap/human-validation-queue.md` embedding the PR URL (committed in the `chore(pm): log <id>` commit in step 6) and continue to the next story.
 
-6. **Append log entry.** Write one row to `/roadmap/pm-progress.md` using `templates/pm-progress-entry.template.md` (see `references/resume-and-logging.md` → **Log** and **Entry fields**). The log is append-only; existing rows are never modified. This row is staged into the same `docs(roadmap): sync <id>` commit (step 4) so it does not dirty the tree for the next story.
+6. **Append log entry.** After the PR is open, write one row to `/roadmap/pm-progress.md` using `templates/pm-progress-entry.template.md` (see `references/resume-and-logging.md` → **Log** and **Entry fields**), filling `commit`, `pr` (the PR URL), and `state`. The log is append-only; existing rows are never modified. This row plus any `human-validation-queue.md` row are committed together as `chore(pm): log <id>` and pushed, so they do not dirty the tree for the next story.
 
 ---
 

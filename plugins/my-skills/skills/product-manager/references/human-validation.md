@@ -111,6 +111,39 @@ The `/roadmap/human-validation-queue.md` file accumulates all flagged spots acro
 
 ---
 
+## Scenario walkthroughs
+
+### Scenario A — conservative (default), `flagged: acceptance`
+
+Story `002.1.3` (slug `payment-flow`), its `## Acceptance` contains "verify the receipt renders correctly on a **real device**". Pre-run scan matches `real device` → `flagged: acceptance`.
+
+1. PM runs the full success-path sequence anyway (invariant): commit with trailer → `/roadmap sync` (stamps `002.1.3` done) → `docs(roadmap): sync 002.1.3` → push → open PR (`PR_URL`) → `chore(pm): log 002.1.3` (row records `human_validation = flagged: acceptance`, `pr = $PR_URL`).
+2. Because mode is conservative and the story is flagged, PM **halts the loop** and surfaces:
+   - story id `002.1.3`,
+   - `PR_URL`,
+   - the matched item: "real device — verify the receipt renders correctly on a real device".
+3. The operator tests on a device, then re-runs `/product-manager complete <same-scope>`. `002.1.3` is now `done` in the lock, so the Filter step skips it and the loop continues from the next pending story.
+
+The work is never lost — it is committed and PR'd before the halt. The halt only gates *forward* progress.
+
+### Scenario B — autonomous (`--conservative=false`), `flagged: qa-report`
+
+Same story, but `## Acceptance` has no markers (pre-run = `none`); the orchestrator's QA report contains "manual verification needed for screen-reader labels". Post-run scan matches → `flagged: qa-report`.
+
+1. Success-path sequence runs identically. During step 5, PM sets the PR body `{{human_validation_note}}` to "manual verification needed for screen-reader labels" so the reviewer sees it.
+2. After the PR is open (`PR_URL` known), step 6 appends to `/roadmap/human-validation-queue.md`:
+   ```
+   - [ ] 002.1.3 payment-flow — manual verification: screen-reader labels (PR https://github.com/acme/app/pull/57)
+   ```
+   and writes the `pm-progress.md` row with `human_validation = flagged: qa-report`.
+3. PM **continues** to the next story without pausing. The operator works the queue checklist at their own cadence.
+
+### Scenario C — `none`
+
+No marker in `## Acceptance` or the QA report. `{{human_validation_note}}` renders as `none`, no `human-validation-queue.md` row is written, and the loop continues in both modes. (Only `pm-progress.md` gets its normal row, with `human_validation = none`.)
+
+---
+
 Cross-references:
 - Mode is also consulted for out-of-scope dependency behavior: `references/scope-resolution.md`
 - PR body token `{{human_validation_note}}`: `templates/pr-body.template.md`
