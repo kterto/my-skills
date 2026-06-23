@@ -2,7 +2,7 @@
 
 This document is the single source of truth for the append-only run log and the stateless resume algorithm used by PM.
 
-`SKILL.md` references this document by name: **Log**, **Entry fields**, **Resume algorithm**, **Stacked-branch reconstruction**.
+`SKILL.md` references this document by name: **Log**, **Entry fields**, **Resume algorithm** (stacked-branch reconstruction is covered under Resume algorithm, step 3).
 
 ---
 

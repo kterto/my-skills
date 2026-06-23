@@ -56,7 +56,7 @@ PM performs the following checks and preparations before executing any story. Al
 7. **Topo-sort.** Apply the ordering algorithm from `references/scope-resolution.md` → **Ordering algorithm** to produce the story queue. On a dependency cycle, stop and report the offending ids. Check all out-of-scope dependencies per `references/scope-resolution.md` → **Out-of-scope dependencies**; in conservative mode, stop if any unmet out-of-scope dependency is found.
 8. **Print queue + confirmation.** Display the story queue in execution order, the active mode (`conservative` or `autonomous`), and the git plan (base branch, branch names that will be cut, PR targets). Then ask a **single up-front confirmation** — approving this prompt authorizes PM to push branches and open PRs for all stories in the queue. No further confirmation is requested per story.
 
-`--dry-run` exits after step 8 without printing the confirmation prompt.
+`--dry-run` exits after printing the queue, mode, and git plan — without asking for confirmation.
 
 ---
 
@@ -107,9 +107,9 @@ All normative details live in these files (relative to `plugins/my-skills/skills
 | File | Content |
 |---|---|
 | `references/scope-resolution.md` | Scope matching, Filter, Ordering algorithm, Out-of-scope dependencies |
-| `references/git-flow.md` | Base resolution, Branch naming (`pm/<id>-<slug>`), Success-path sequence (commit+trailer → /roadmap sync → commit sync docs → push → stacked PR), Stacked PR creation, Trailer-mismatch guard |
-| `references/human-validation.md` | Detection sources, conservative vs autonomous mode behavior, Marker list, Invariant |
-| `references/resume-and-logging.md` | `/roadmap/pm-progress.md` log, Entry fields, Resume algorithm, Stacked-branch reconstruction |
+| `references/git-flow.md` | Base resolution, Branch naming (`pm/<id>-<slug>`), Success-path sequence (commit+trailer → /roadmap sync → commit sync docs → push → stacked PR), Stacked PR ordering, Trailer-mismatch guard |
+| `references/human-validation.md` | Detection sources, conservative mode, autonomous mode, Marker list, Invariant |
+| `references/resume-and-logging.md` | `/roadmap/pm-progress.md` log, Entry fields, Resume algorithm (including stacked-branch reconstruction) |
 
 Templates:
 

@@ -2,7 +2,7 @@
 
 This document is the single source of truth for the stacked-branch git model used by PM: how branches are named, how the base is resolved, the exact success-path commit-and-sync sequence, and how stacked PRs are created.
 
-`SKILL.md` references this document by name: **Branch naming**, **Base resolution**, **Success-path sequence**, **Stacked PR creation**.
+`SKILL.md` references this document by name: **Branch naming**, **Base resolution**, **Success-path sequence**, **Stacked PR ordering**.
 
 ---
 
