@@ -27,7 +27,7 @@ Before cutting a branch, PM determines the correct base commit using the followi
 | Condition | Base |
 |---|---|
 | Story has one or more `depends_on` ids that are all within the current run's scope | `pm/<dep-id>-<slug>` of the **latest-ordered** dependency (the last dep in topological order). This produces a stacked branch. |
-| Story has no in-scope dependencies (independent story, or all deps are already `done`) | The **run base**: the value of `--base` if provided, otherwise the branch PM started on. |
+| Story has no in-scope dependencies (independent story, or all deps are already `done`) | The **run base**: `--base` flag if provided, else `pm.config.json.base_branch` if set, else the branch PM started on. |
 
 The run base is captured once at PM startup and held constant for the entire run.
 
@@ -45,7 +45,9 @@ If dependency resolution would produce a cycle, PM stops before cutting any bran
 git checkout -b pm/<id>-<slug> <base>
 ```
 
-This yields a clean, non-protected branch. The orchestrator's Step 0 pre-flight detects a clean non-protected branch and selects **"use this branch"** without prompting — the branch PM cuts here is the branch the orchestrator will commit onto.
+This yields a clean, non-protected branch. The branch PM cuts here is the branch the orchestrator must commit onto.
+
+> **Step 0 is always interactive — PM must answer it.** The orchestrator's Step 0 pre-flight (orchestrator `SKILL.md` → Step 0, Case A) **always** asks a workspace question and **never** auto-selects, even on a clean non-protected branch. The four options are: 1. use this branch, 2. new branch from here, 3. new worktree, 4. cancel. Because PM has already cut and checked out `pm/<id>-<slug>` and the single up-front confirmation (Pre-flight step 8) authorizes the whole run, PM answers Step 0 on the user's behalf with **option 1 ("use this branch")**. PM MUST NOT choose new-branch, new-worktree, or cancel: those would move the run off the `pm/<id>-<slug>` branch PM tracks, leaving the implementation commit on a branch PM never pushes — producing an empty PR and a trailer mismatch at `/roadmap sync`.
 
 ---
 
@@ -76,12 +78,19 @@ After the orchestrator completes implementation and produces its proposed commit
 
    Sync stamps the story `done`, rolls up milestone/phase completion, and updates `roadmap.lock.json` + READMEs.
 
-3. **Commit the roadmap doc changes.**
-   The files modified by `/roadmap sync` (`roadmap.lock.json`, READMEs) are committed separately with a conventional message. Do **not** append a story trailer to this commit:
+3. **Commit the roadmap doc changes AND PM's own logs together.**
+   The files modified by `/roadmap sync` (`roadmap.lock.json`, READMEs) are committed with a conventional message. Do **not** append a story trailer to this commit.
+
+   **Critical — fold PM's log writes into this same commit.** PM appends to `/roadmap/pm-progress.md` (always) and, in autonomous mode, to `/roadmap/human-validation-queue.md`. These are write-then-commit, not write-and-leave: write the `pm-progress.md` row (per-story loop step 6) and any `human-validation-queue.md` row **before** this commit, then stage them alongside the sync docs so they land in the `docs(roadmap): sync <id>` commit. If left uncommitted they dirty the working tree, and the next story's `git checkout -b` either carries them over or trips the orchestrator's Step 0 dirty-tree gate (Case C). The working tree MUST be clean before the next story's branch is cut.
 
    ```bash
-   git add -A && git commit -m "docs(roadmap): sync <id>"
+   # Stage: roadmap sync output + PM's own logs, then one commit.
+   git add /roadmap/roadmap.lock.json /roadmap/**/README.* /roadmap/README.* \
+           /roadmap/pm-progress.md /roadmap/human-validation-queue.md
+   git commit -m "docs(roadmap): sync <id>"
    ```
+
+   (Stage `human-validation-queue.md` only when it exists / was touched this story.)
 
 4. **Push the branch.**
 
@@ -91,25 +100,26 @@ After the orchestrator completes implementation and produces its proposed commit
 
 5. **Open the PR.**
 
-   First, fill all tokens in `templates/pr-body.template.md` and write the result to a temp file:
+   First, fill all tokens in `templates/pr-body.template.md` and write the result to a repo-local, git-ignored scratch path (not `/tmp`). Use the orchestrator's already-present `.orchestrator/` dir, which is git-ignored by the orchestrator setup — write under `.orchestrator/tmp/`:
 
    ```bash
    # PM renders the template (substitutes all {{ }} tokens) and saves the result:
    # (token substitution is done inline — the output is a plain Markdown file)
-   /tmp/pm-pr-body-<id>.md
+   mkdir -p .orchestrator/tmp
+   .orchestrator/tmp/pm-pr-body-<id>.md
    ```
 
    Then open the PR using `--body-file`:
 
    ```bash
-   gh pr create --base <base> --head pm/<id>-<slug> --body-file /tmp/pm-pr-body-<id>.md
+   gh pr create --base <base> --head pm/<id>-<slug> --body-file .orchestrator/tmp/pm-pr-body-<id>.md
    ```
 
    where `<base>` is:
    - The **predecessor branch** (`pm/<dep-id>-<slug>` of the latest-ordered dependency) for stories that have in-scope dependencies — this is a stacked PR that targets another feature branch, not the run base.
-   - The **run base** (`--base` value, else the branch PM started on) for independent stories.
+   - The **run base** (`--base` flag, else `pm.config.json.base_branch`, else the branch PM started on) for independent stories.
 
-   The PR body is rendered from `templates/pr-body.template.md` with all tokens substituted. PM writes the rendered result to `/tmp/pm-pr-body-<id>.md` before invoking `gh pr create`.
+   The PR body is rendered from `templates/pr-body.template.md` with all tokens substituted. PM writes the rendered result to `.orchestrator/tmp/pm-pr-body-<id>.md` before invoking `gh pr create`. This scratch file is repo-local and git-ignored; delete it after the PR is opened (e.g. `rm -f .orchestrator/tmp/pm-pr-body-<id>.md`). If `.orchestrator/tmp/` is not already git-ignored in the target repo, the file must be cleaned up so it never lands in a commit.
 
 ---
 

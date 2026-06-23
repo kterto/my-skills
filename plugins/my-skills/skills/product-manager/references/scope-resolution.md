@@ -6,6 +6,21 @@ This document is the single source of truth for turning the `<scope>` CLI argume
 
 ---
 
+## Data sources (read this first)
+
+The information PM needs is split across two sources. Getting the split right matters: the lock does **not** carry the fields PM most often wants.
+
+- **`roadmap.lock.json` items** carry ONLY `{ id, kind, status, content_hash, sequence }`. There is **no** `milestone`, `phase`, `depends_on`, `title`, or `commit_trailer` field in the lock. The lock DOES contain `kind: milestone` and `kind: phase` items (identified by their `id`, e.g. `001`, `001.2`) alongside `kind: user-story` items.
+- **The user-story file frontmatter** (`<NNN.M.T-slug>.md`) carries the per-story fields PM reads at execution time: `depends_on`, `title`, `commit_trailer`, and (when present) `milestone`/`phase`.
+
+Implications used throughout this document:
+
+- **Scope membership** for a milestone/phase scope is determined by the user-story **id-prefix** and/or the story-file frontmatter `milestone`/`phase` — never from lock fields that don't exist. A user-story id like `001.2.3` encodes its milestone (`001`) and phase (`001.2`) by id-prefix.
+- **Valid milestone/phase scope ids** (printed when a scope is unrecognized) come from the lock's `kind: milestone` and `kind: phase` item `id`s (and/or a scan of the `/roadmap/` story files) — not from a non-existent lock field.
+- **Status** for filtering comes from the lock (`status`). **`depends_on`** for ordering, **`title`** for log/PR rendering, and **`commit_trailer`** for the commit trailer come from each user-story file's frontmatter; the lock supplies only `id/kind/status/sequence`.
+
+---
+
 ## Scope matching
 
 The `<scope>` argument controls which user stories enter the queue. The table below shows every accepted form and how it maps to a candidate story set.
@@ -13,13 +28,13 @@ The `<scope>` argument controls which user stories enter the queue. The table be
 | `<scope>` value | Candidate stories |
 |---|---|
 | `roadmap` | Every item in `roadmap.lock.json` with `kind: user-story`. |
-| Milestone id (e.g. `001` or `001-bootstrap`) | User stories whose frontmatter `milestone` field matches. Bare ordinal (`001`) matches if it equals the numeric prefix of the milestone id or the full directory-slug (`001-bootstrap`). |
-| Phase id (e.g. `001.2`) | User stories whose frontmatter `phase` field matches exactly. |
-| Anything else | **Stop.** Print the list of valid scopes — the milestone ids and phase ids found in `roadmap.lock.json` — so the caller can correct the argument. |
+| Milestone id (e.g. `001` or `001-bootstrap`) | User stories belonging to that milestone — i.e. whose id-prefix is the milestone ordinal (`001.*.*`) and/or whose story-file frontmatter `milestone` matches. The bare ordinal (`001`) matches the numeric prefix of the milestone id or the full directory-slug (`001-bootstrap`). |
+| Phase id (e.g. `001.2`) | User stories belonging to that phase — i.e. whose id-prefix is the phase id (`001.2.*`) and/or whose story-file frontmatter `phase` matches exactly. |
+| Anything else | **Stop.** Print the list of valid scopes — the milestone and phase ids from the lock's `kind: milestone` / `kind: phase` item `id`s (and/or a story-file scan) — so the caller can correct the argument. |
 
 ### Milestone id matching rule
 
-Accept both short and long forms: `001` matches a story whose `milestone` is either `001` or `001-bootstrap` (the bare ordinal matches the numeric prefix of the full slug, regardless of the name part). This means a user can type either form interchangeably without editing frontmatter.
+Accept both short and long forms: `001` matches stories under milestone `001` whether identified by id-prefix (`001.*.*`) or by a story-file `milestone` frontmatter value of `001` or `001-bootstrap` (the bare ordinal matches the numeric prefix of the full slug, regardless of the name part). This means a user can type either form interchangeably. Note: `milestone`/`phase` are story-file frontmatter fields — they are **not** present in `roadmap.lock.json`, so membership is resolved from id-prefix and/or the story file, never from a lock field.
 
 ---
 
@@ -37,7 +52,7 @@ The filtered candidate set is ordered by a topological sort that respects declar
 
 ### Steps
 
-1. Build a directed graph: for each story in the candidate set, add an edge `dep → story` for each id listed in the story's `depends_on` frontmatter field. Nodes are user-story ids; edges point from prerequisite to dependent.
+1. Build a directed graph: for each story in the candidate set, add an edge `dep → story` for each id listed in the story's `depends_on` frontmatter field (read from the user-story file — `depends_on` is not in `roadmap.lock.json`). Nodes are user-story ids; edges point from prerequisite to dependent.
 2. Topologically sort the graph (Kahn's algorithm or equivalent). Break ties — nodes with no ordering constraint relative to each other — by `sequence` ascending (lower sequence number executes first).
 3. On a cycle, **stop** and report the offending ids. The roadmap should never emit a cycle; PM verifies this precondition on every run before executing any story.
 
