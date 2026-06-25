@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 #
-# Install this repository's skills for opencode by cloning/updating the repo and
-# adding the local skill directory to ~/.config/opencode/opencode.json.
+# Install this repository's skills for opencode by cloning/updating the repo,
+# linking each skill into ~/.config/opencode/skills, and adding the local skill
+# directory to ~/.config/opencode/opencode.json for newer opencode releases.
 
 set -euo pipefail
 
 REPO_URL="${MY_SKILLS_REPO_URL:-https://github.com/kterto/my-skills.git}"
 INSTALL_DIR="${MY_SKILLS_INSTALL_DIR:-$HOME/.config/opencode/my-skills}"
 CONFIG_FILE="${OPENCODE_CONFIG_FILE:-$HOME/.config/opencode/opencode.json}"
+GLOBAL_SKILLS_DIR="${OPENCODE_SKILLS_DIR:-$HOME/.config/opencode/skills}"
 SKILLS_PATH="$INSTALL_DIR/plugins/my-skills/skills"
 
 require_cmd() {
@@ -20,7 +22,7 @@ require_cmd() {
 require_cmd git
 require_cmd node
 
-mkdir -p "$(dirname "$INSTALL_DIR")" "$(dirname "$CONFIG_FILE")"
+mkdir -p "$(dirname "$INSTALL_DIR")" "$(dirname "$CONFIG_FILE")" "$GLOBAL_SKILLS_DIR"
 
 if [ -d "$INSTALL_DIR/.git" ]; then
   echo "Updating $INSTALL_DIR"
@@ -38,6 +40,22 @@ if [ ! -d "$SKILLS_PATH" ]; then
   echo "error: expected skills directory not found: $SKILLS_PATH" >&2
   exit 1
 fi
+
+ts="$(date +%Y%m%d-%H%M%S)"
+for skill in "$SKILLS_PATH"/*/; do
+  name="$(basename "$skill")"
+  target="$GLOBAL_SKILLS_DIR/$name"
+
+  if [ -L "$target" ]; then
+    rm "$target"
+  elif [ -e "$target" ]; then
+    mv "$target" "$target.bak-$ts"
+    echo "backed up existing opencode skill $name -> $name.bak-$ts"
+  fi
+
+  ln -s "${skill%/}" "$target"
+  echo "linked opencode skill $name -> ${skill%/}"
+done
 
 export CONFIG_FILE SKILLS_PATH
 node <<'NODE'
@@ -82,5 +100,6 @@ NODE
 
 echo
 echo "opencode skills path installed: $SKILLS_PATH"
+echo "opencode global skill links installed in: $GLOBAL_SKILLS_DIR"
 echo "Config updated: $CONFIG_FILE"
 echo "Restart opencode to load the skills."

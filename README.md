@@ -187,7 +187,7 @@ Skills are then invocable as `/my-skills:clean-code-gates`, `/my-skills:commit-p
 
 ## Install (opencode)
 
-Recommended install: clone/update this repo under `~/.config/opencode/` and add its skill directory to `skills.paths`.
+Recommended install: clone/update this repo under `~/.config/opencode/`, symlink each skill into `~/.config/opencode/skills/`, and add its skill directory to `skills.paths` for newer opencode releases.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/kterto/my-skills/main/scripts/install-opencode.sh | bash
@@ -201,7 +201,16 @@ Manual equivalent:
 git clone https://github.com/kterto/my-skills.git ~/.config/opencode/my-skills
 ```
 
-Add this to `~/.config/opencode/opencode.json`:
+Then link each skill into opencode's global skill directory:
+
+```bash
+mkdir -p ~/.config/opencode/skills
+for skill in ~/.config/opencode/my-skills/plugins/my-skills/skills/*; do
+  [ -d "$skill" ] && ln -sfn "$skill" ~/.config/opencode/skills/"$(basename "$skill")"
+done
+```
+
+For newer opencode versions, you can also add this to `~/.config/opencode/opencode.json`:
 
 ```json
 {
