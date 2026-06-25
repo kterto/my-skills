@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Milestone — {{id}}</title>
+<style>
+/* ============================================================
+   EDITORIAL DESIGN SYSTEM v1 — Color tokens
+   ============================================================ */
+:root {
+  --bg-page:        #faf9f7;
+  --bg-surface:     #f3f1ee;
+  --bg-overlay:     #ece9e4;
+
+  --text-primary:   #1a1917;
+  --text-secondary: #4a4844;
+  --text-muted:     #8a8680;
+
+  --accent:         #3730a3;
+  --accent-subtle:  #e0e7ff;
+  --accent-focus:   #4f46e5;
+
+  --rule:           #d6d2cb;
+  --rule-heavy:     #b5b0a8;
+
+  --status-success: #166534;
+  --status-success-bg: #dcfce7;
+  --status-active:  #92400e;
+  --status-active-bg: #fef3c7;
+  --status-warning: #9a3412;
+  --status-warning-bg: #ffedd5;
+  --status-danger:  #991b1b;
+  --status-danger-bg: #fee2e2;
+  --status-muted:   #374151;
+  --status-muted-bg: #f3f4f6;
+
+  --font-serif: Georgia, "Times New Roman", serif;
+  --font-sans:  -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                "Helvetica Neue", Arial, sans-serif;
+  --font-mono:  ui-monospace, "SF Mono", "Cascadia Code", "Fira Mono",
+                Menlo, Consolas, monospace;
+
+  --text-xs:   0.75rem;
+  --text-sm:   0.875rem;
+  --text-base: 1rem;
+  --text-lg:   1.125rem;
+  --text-xl:   1.25rem;
+  --text-2xl:  1.5rem;
+  --text-3xl:  2rem;
+
+  --sp-1:  0.25rem;
+  --sp-2:  0.5rem;
+  --sp-3:  0.75rem;
+  --sp-4:  1rem;
+  --sp-6:  1.5rem;
+  --sp-8:  2rem;
+  --sp-12: 3rem;
+  --sp-16: 4rem;
+
+  --measure: 70ch;
+  --line-height-body: 1.65;
+  --line-height-heading: 1.2;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-page:        #141312;
+    --bg-surface:     #1e1c1a;
+    --bg-overlay:     #272420;
+
+    --text-primary:   #f0ece6;
+    --text-secondary: #b8b3ab;
+    --text-muted:     #7a7570;
+
+    --accent:         #818cf8;
+    --accent-subtle:  #1e1b4b;
+    --accent-focus:   #a5b4fc;
+
+    --rule:           #2e2b28;
+    --rule-heavy:     #3d3a36;
+
+    --status-success: #86efac;
+    --status-success-bg: #14532d;
+    --status-active:  #fcd34d;
+    --status-active-bg: #451a03;
+    --status-warning: #fb923c;
+    --status-warning-bg: #431407;
+    --status-danger:  #fca5a5;
+    --status-danger-bg: #450a0a;
+    --status-muted:   #9ca3af;
+    --status-muted-bg: #1f2937;
+  }
+}
+
+/* ============================================================
+   Base reset
+   ============================================================ */
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--line-height-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main {
+  max-width: 58rem;
+  margin: 0 auto;
+  padding: var(--sp-16) var(--sp-8);
+}
+
+@media (max-width: 640px) {
+  main { padding: var(--sp-12) var(--sp-6); }
+}
+
+::selection { background: var(--accent-subtle); color: var(--accent); }
+a { color: var(--accent); }
+
+/* ============================================================
+   Masthead
+   ============================================================ */
+.masthead { margin-bottom: var(--sp-8); }
+
+.masthead__kicker {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--text-muted);
+  margin: 0 0 var(--sp-4);
+}
+
+h1 {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: clamp(2rem, 5vw, 3rem);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  margin: 0;
+  color: var(--text-primary);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-4);
+  text-wrap: balance;
+}
+
+h1 .h1__id {
+  font-family: var(--font-mono);
+  font-size: 0.5em;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--accent);
+  background: var(--accent-subtle);
+  padding: 0.15em 0.5em;
+  border-radius: 6px;
+  align-self: center;
+}
+
+h1 .h1__pill { align-self: center; }
+
+/* ID / meta header block */
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  padding: var(--sp-4) 0;
+  margin-top: var(--sp-6);
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+
+.meta__id { color: var(--text-secondary); font-weight: 600; }
+
+.meta__fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-left: auto;
+}
+
+.meta__sep { color: var(--rule-heavy); }
+.meta__key { color: var(--text-muted); }
+.meta__val { color: var(--text-secondary); }
+
+.badge {
+  font-family: var(--font-mono);
+  background: var(--accent-subtle);
+  color: var(--accent);
+  font-size: var(--text-xs);
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   Dependency field
+   ============================================================ */
+.depends {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  margin-top: var(--sp-6);
+  font-size: var(--text-sm);
+}
+
+.depends__label {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+}
+
+.depends__val {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+/* ============================================================
+   Section scaffolding
+   ============================================================ */
+.section { margin-top: var(--sp-12); }
+
+/* ============================================================
+   Status pill
+   ============================================================ */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+  line-height: 1.6;
+}
+
+.pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+.pill--success { background: var(--status-success-bg); color: var(--status-success); }
+.pill--active  { background: var(--status-active-bg);  color: var(--status-active);  }
+.pill--warning { background: var(--status-warning-bg); color: var(--status-warning); }
+.pill--danger  { background: var(--status-danger-bg);  color: var(--status-danger);  }
+.pill--muted   { background: var(--status-muted-bg);   color: var(--status-muted);   }
+
+/* ============================================================
+   Collapsible <details>
+   ============================================================ */
+details { border-top: 1px solid var(--rule); }
+
+summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-4) 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: var(--text-primary);
+  user-select: none;
+}
+
+summary::-webkit-details-marker { display: none; }
+
+summary::before {
+  content: "\25B6";
+  font-size: 0.7em;
+  color: var(--accent);
+  transition: transform 0.18s ease;
+  flex: none;
+}
+
+details[open] > summary::before { transform: rotate(90deg); }
+
+summary:focus-visible {
+  outline: 2px solid var(--accent-focus);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+summary .summary__meta {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.details__body {
+  border-left: 3px solid var(--accent);
+  padding-left: var(--sp-6);
+  margin: 0 0 var(--sp-6) 2px;
+}
+
+details[open] > .details__body { animation: detailsfade 0.22s ease both; }
+
+@keyframes detailsfade {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   Phase list
+   ============================================================ */
+.phases { list-style: none; margin: 0; padding: 0; }
+
+.phase {
+  display: grid;
+  grid-template-columns: 2.5rem 1fr auto;
+  align-items: baseline;
+  gap: var(--sp-4);
+  padding: var(--sp-4) 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.phase:last-child { border-bottom: none; }
+
+.phase__seq {
+  font-family: var(--font-serif);
+  font-size: var(--text-2xl);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  line-height: 1;
+}
+
+.phase__body { min-width: 0; }
+
+.phase__id {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+.phase__title {
+  font-family: var(--font-serif);
+  font-size: var(--text-xl);
+  color: var(--text-primary);
+  margin-top: 1px;
+  text-wrap: pretty;
+}
+
+.phase[data-status="superseded"] .phase__title {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+.phase__status { align-self: center; }
+
+/* Empty state */
+.empty {
+  text-align: center;
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: var(--text-lg);
+  color: var(--text-muted);
+  padding: var(--sp-12) var(--sp-4);
+  margin: 0;
+}
+
+/* ============================================================
+   Audit-log table
+   ============================================================ */
+.audit-wrap { overflow-x: auto; }
+
+.audit {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.audit thead th {
+  text-align: left;
+  background: var(--bg-surface);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: var(--sp-2) var(--sp-4);
+  border-bottom: 1px solid var(--rule-heavy);
+  white-space: nowrap;
+}
+
+.audit tbody td {
+  padding: var(--sp-2) var(--sp-4);
+  border-bottom: 1px solid var(--rule);
+  vertical-align: baseline;
+  color: var(--text-secondary);
+}
+
+.audit tbody tr:nth-child(odd)  td { background: var(--bg-page); }
+.audit tbody tr:nth-child(even) td { background: var(--bg-surface); }
+
+.audit tbody tr:last-child td { border-bottom: none; }
+
+.audit .col-when { font-family: var(--font-mono); color: var(--text-muted); white-space: nowrap; }
+.audit .col-who  { font-family: var(--font-mono); color: var(--text-secondary); }
+.audit .col-evidence code { font-size: 0.85em; }
+
+/* ============================================================
+   Inline code / path
+   ============================================================ */
+code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--bg-overlay);
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: var(--text-secondary);
+}
+
+/* ============================================================
+   Gallery (design review only)
+   ============================================================ */
+[data-gallery] {
+  margin-top: var(--sp-16);
+  padding-top: var(--sp-8);
+  border-top: 2px solid var(--rule-heavy);
+}
+
+[data-gallery] > summary {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.gallery__group { margin-bottom: var(--sp-12); }
+
+.gallery__group h3 {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin: 0 0 var(--sp-4);
+  padding-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--rule);
+}
+
+/* Milestone card stubs */
+.cardstub {
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: var(--sp-4);
+  background: var(--bg-page);
+}
+
+.cardstub__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--rule);
+}
+
+.cardstub__title {
+  font-family: var(--font-serif);
+  font-size: var(--text-lg);
+  color: var(--text-primary);
+}
+
+.cardstub__title .cs-id {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-right: var(--sp-2);
+}
+
+.cardstub__body {
+  padding: var(--sp-3) var(--sp-4);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.cardstub[data-status="in_progress"] .cardstub__head { background: var(--status-active-bg); }
+.cardstub[data-status="done"]        .cardstub__head { background: var(--bg-surface); }
+.cardstub[data-status="blocked"]     .cardstub__head { background: var(--status-danger-bg); }
+.cardstub[data-status="superseded"]  .cardstub__title { text-decoration: line-through; color: var(--text-muted); }
+
+.gallery__deps {
+  display: grid;
+  gap: var(--sp-4);
+}
+</style>
+</head>
+<body>
+<main data-id="{{id}}" data-kind="milestone" data-status="{{rollup_status}}"
+      data-created-at="{{created_at}}" data-updated-at="{{updated_at}}">
+
+  <!-- ============================================================
+       1. Page header
+       ============================================================ -->
+  <header class="masthead">
+    <p class="masthead__kicker">
+      <span>Milestone</span>
+      <span class="meta__sep">·</span>
+      <span class="badge">cycle 3</span>
+    </p>
+    <h1>
+      <span class="h1__id">{{id}}</span>
+      <span>{{title}}</span>
+      <span class="h1__pill"><span class="pill pill--active">{{rollup_status}}</span></span>
+    </h1>
+
+    <!-- 2. ID / meta header block -->
+    <div class="meta">
+      <span class="meta__id">{{id}}</span>
+      <span class="meta__fields">
+        <span><span class="meta__key">created:</span> <span class="meta__val">{{created_at}}</span></span>
+        <span class="meta__sep">·</span>
+        <span><span class="meta__key">updated:</span> <span class="meta__val">{{updated_at}}</span></span>
+        <span class="meta__sep">·</span>
+        <span><span class="meta__key">sequence:</span> <span class="meta__val">{{sequence}}</span></span>
+      </span>
+    </div>
+
+    <!-- 3. Dependencies -->
+    <div class="depends">
+      <span class="depends__label">Depends on</span>
+      <span class="depends__val">{{depends_on}}</span>
+    </div>
+  </header>
+
+  <!-- ============================================================
+       4. Phase list (collapsible, open by default)
+       ============================================================ -->
+  <section class="section">
+    <details open>
+      <summary>Phases <span class="summary__meta">by sequence</span></summary>
+      <div class="details__body">
+        <ol class="phases">
+          {{phase_list_ordered_by_sequence}}
+        </ol>
+      </div>
+    </details>
+  </section>
+
+  <!-- ============================================================
+       5. Audit log (collapsible, open by default)
+       ============================================================ -->
+  <section class="section">
+    <details open>
+      <summary>Audit log</summary>
+      <div class="details__body">
+        <div class="audit-wrap">
+          <table class="audit">
+            <thead>
+              <tr>
+                <th>when (ISO-8601)</th>
+                <th>status</th>
+                <th>who</th>
+                <th>evidence</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="col-when">2026-03-04T09:12:00Z</td>
+                <td><span class="pill pill--muted">todo</span></td>
+                <td class="col-who">planner</td>
+                <td class="col-evidence">Milestone created from roadmap intake.</td>
+              </tr>
+              <tr>
+                <td class="col-when">2026-04-18T14:30:00Z</td>
+                <td><span class="pill pill--active">in_progress</span></td>
+                <td class="col-who">orchestrator</td>
+                <td class="col-evidence">Phase <code>P-2</code> started; <code>cycle 2</code> opened.</td>
+              </tr>
+              <tr>
+                <td class="col-when">2026-06-22T11:05:00Z</td>
+                <td><span class="pill pill--active">in_progress</span></td>
+                <td class="col-who">worker</td>
+                <td class="col-evidence">Commit <code>a1b9f3c</code> · 3/5 phases done.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <!-- ============================================================
+       Component gallery — design review only.
+       Production data replaces injected regions; removed at render.
+       ============================================================ -->
+  <details data-gallery>
+    <summary>Component gallery — design review only</summary>
+    <div class="details__body" style="border-left-color: var(--rule-heavy);">
+
+      <!-- Rollup status variants -->
+      <div class="gallery__group">
+        <h3>Rollup status — milestone card stubs</h3>
+        <div class="cardstub" data-status="todo">
+          <div class="cardstub__head">
+            <span class="cardstub__title"><span class="cs-id">M1</span>Discovery &amp; research</span>
+            <span class="pill pill--muted">todo</span>
+          </div>
+          <div class="cardstub__body">0 / 4 phases done · not yet started</div>
+        </div>
+        <div class="cardstub" data-status="in_progress">
+          <div class="cardstub__head">
+            <span class="cardstub__title"><span class="cs-id">M2</span>Core data model</span>
+            <span class="pill pill--active">in_progress</span>
+          </div>
+          <div class="cardstub__body">2 / 5 phases done · cycle 2 active</div>
+        </div>
+        <div class="cardstub" data-status="done">
+          <div class="cardstub__head">
+            <span class="cardstub__title"><span class="cs-id">M3</span>Authentication</span>
+            <span class="pill pill--success">done</span>
+          </div>
+          <div class="cardstub__body">6 / 6 phases done · verified</div>
+        </div>
+        <div class="cardstub" data-status="blocked">
+          <div class="cardstub__head">
+            <span class="cardstub__title"><span class="cs-id">M4</span>Billing integration</span>
+            <span class="pill pill--danger">blocked</span>
+          </div>
+          <div class="cardstub__body">1 / 3 phases done · awaiting vendor key</div>
+        </div>
+        <div class="cardstub" data-status="superseded">
+          <div class="cardstub__head">
+            <span class="cardstub__title"><span class="cs-id">M5</span>Legacy export pipeline</span>
+            <span class="pill pill--muted">superseded</span>
+          </div>
+          <div class="cardstub__body">replaced by M7 · retained for history</div>
+        </div>
+      </div>
+
+      <!-- Phase list rows -->
+      <div class="gallery__group">
+        <h3>Phase rows — one per status</h3>
+        <ol class="phases">
+          <li class="phase" data-status="todo">
+            <span class="phase__seq">01</span>
+            <span class="phase__body"><span class="phase__id">P-1</span><div class="phase__title">Requirements gathering</div></span>
+            <span class="phase__status"><span class="pill pill--muted">todo</span></span>
+          </li>
+          <li class="phase" data-status="in_progress">
+            <span class="phase__seq">02</span>
+            <span class="phase__body"><span class="phase__id">P-2</span><div class="phase__title">Schema design &amp; review</div></span>
+            <span class="phase__status"><span class="pill pill--active">in_progress</span></span>
+          </li>
+          <li class="phase" data-status="done">
+            <span class="phase__seq">03</span>
+            <span class="phase__body"><span class="phase__id">P-3</span><div class="phase__title">Migration scripts</div></span>
+            <span class="phase__status"><span class="pill pill--success">done</span></span>
+          </li>
+          <li class="phase" data-status="blocked">
+            <span class="phase__seq">04</span>
+            <span class="phase__body"><span class="phase__id">P-4</span><div class="phase__title">Production cutover</div></span>
+            <span class="phase__status"><span class="pill pill--danger">blocked</span></span>
+          </li>
+          <li class="phase" data-status="superseded">
+            <span class="phase__seq">05</span>
+            <span class="phase__body"><span class="phase__id">P-5</span><div class="phase__title">Manual backfill task</div></span>
+            <span class="phase__status"><span class="pill pill--muted">superseded</span></span>
+          </li>
+        </ol>
+      </div>
+
+      <!-- Empty state -->
+      <div class="gallery__group">
+        <h3>Empty state — zero phases</h3>
+        <div style="border:1px solid var(--rule); border-radius:8px; background:var(--bg-surface);">
+          <p class="empty">No phases defined</p>
+        </div>
+      </div>
+
+      <!-- Audit-log table -->
+      <div class="gallery__group">
+        <h3>Audit log — sample rows</h3>
+        <div class="audit-wrap">
+          <table class="audit">
+            <thead>
+              <tr>
+                <th>when (ISO-8601)</th>
+                <th>status</th>
+                <th>who</th>
+                <th>evidence</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="col-when">2026-03-04T09:12:00Z</td>
+                <td><span class="pill pill--muted">todo</span></td>
+                <td class="col-who">planner</td>
+                <td class="col-evidence">Created from intake.</td>
+              </tr>
+              <tr>
+                <td class="col-when">2026-04-18T14:30:00Z</td>
+                <td><span class="pill pill--active">in_progress</span></td>
+                <td class="col-who">orchestrator</td>
+                <td class="col-evidence">Phase <code>P-2</code> started.</td>
+              </tr>
+              <tr>
+                <td class="col-when">2026-05-30T16:48:00Z</td>
+                <td><span class="pill pill--danger">blocked</span></td>
+                <td class="col-who">worker</td>
+                <td class="col-evidence">Vendor key missing · see <code>RFC-12</code>.</td>
+              </tr>
+              <tr>
+                <td class="col-when">2026-06-22T11:05:00Z</td>
+                <td><span class="pill pill--success">done</span></td>
+                <td class="col-who">reviewer</td>
+                <td class="col-evidence">Approved · commit <code>a1b9f3c</code>.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Dependency field variants -->
+      <div class="gallery__group">
+        <h3>Dependency field — filled &amp; empty</h3>
+        <div class="gallery__deps">
+          <div class="depends" style="margin-top:0;">
+            <span class="depends__label">Depends on</span>
+            <span class="depends__val"><code>M1</code> <code>M3</code></span>
+          </div>
+          <div class="depends" style="margin-top:0;">
+            <span class="depends__label">Depends on</span>
+            <span class="depends__val">—</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </details>
+
+</main>
+
+<script>
+/* Editorial Design System v1 — milestone
+   Vanilla JS only. No libraries, no inline handlers.
+   Maps the rendered {{rollup_status}} to the correct pill class
+   on the header pill, in case the server injects a literal status. */
+(function () {
+  "use strict";
+
+  var STATUS_TO_TOKEN = {
+    todo: "muted",
+    in_progress: "active",
+    done: "success",
+    blocked: "danger",
+    superseded: "muted"
+  };
+
+  function syncHeaderPill() {
+    var root = document.querySelector('main[data-kind="milestone"]');
+    if (!root) return;
+    var status = root.getAttribute("data-status");
+    var token = STATUS_TO_TOKEN[status];
+    if (!token) return; // unresolved {{rollup_status}} token — leave default
+    var pill = document.querySelector(".h1__pill .pill");
+    if (pill) {
+      pill.className = "pill pill--" + token;
+      pill.textContent = status;
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", syncHeaderPill);
+  } else {
+    syncHeaderPill();
+  }
+})();
+</script>
+</body>
+</html>

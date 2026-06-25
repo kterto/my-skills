@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Task — {{id}}</title>
+<style>
+/* ============================================================
+   EDITORIAL DESIGN SYSTEM v1 — Color tokens
+   ============================================================ */
+:root {
+  --bg-page:        #faf9f7;
+  --bg-surface:     #f3f1ee;
+  --bg-overlay:     #ece9e4;
+
+  --text-primary:   #1a1917;
+  --text-secondary: #4a4844;
+  --text-muted:     #8a8680;
+
+  --accent:         #3730a3;
+  --accent-subtle:  #e0e7ff;
+  --accent-focus:   #4f46e5;
+
+  --rule:           #d6d2cb;
+  --rule-heavy:     #b5b0a8;
+
+  --status-success: #166534;
+  --status-success-bg: #dcfce7;
+  --status-active:  #92400e;
+  --status-active-bg: #fef3c7;
+  --status-warning: #9a3412;
+  --status-warning-bg: #ffedd5;
+  --status-danger:  #991b1b;
+  --status-danger-bg: #fee2e2;
+  --status-muted:   #374151;
+  --status-muted-bg: #f3f4f6;
+
+  --font-serif: Georgia, "Times New Roman", serif;
+  --font-sans:  -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                "Helvetica Neue", Arial, sans-serif;
+  --font-mono:  ui-monospace, "SF Mono", "Cascadia Code", "Fira Mono",
+                Menlo, Consolas, monospace;
+
+  --text-xs:   0.75rem;
+  --text-sm:   0.875rem;
+  --text-base: 1rem;
+  --text-lg:   1.125rem;
+  --text-xl:   1.25rem;
+  --text-2xl:  1.5rem;
+  --text-3xl:  2rem;
+
+  --sp-1:  0.25rem;
+  --sp-2:  0.5rem;
+  --sp-3:  0.75rem;
+  --sp-4:  1rem;
+  --sp-6:  1.5rem;
+  --sp-8:  2rem;
+  --sp-12: 3rem;
+  --sp-16: 4rem;
+
+  --measure: 70ch;
+  --line-height-body: 1.65;
+  --line-height-heading: 1.2;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-page:        #141312;
+    --bg-surface:     #1e1c1a;
+    --bg-overlay:     #272420;
+
+    --text-primary:   #f0ece6;
+    --text-secondary: #b8b3ab;
+    --text-muted:     #7a7570;
+
+    --accent:         #818cf8;
+    --accent-subtle:  #1e1b4b;
+    --accent-focus:   #a5b4fc;
+
+    --rule:           #2e2b28;
+    --rule-heavy:     #3d3a36;
+
+    --status-success: #86efac;
+    --status-success-bg: #14532d;
+    --status-active:  #fcd34d;
+    --status-active-bg: #451a03;
+    --status-warning: #fb923c;
+    --status-warning-bg: #431407;
+    --status-danger:  #fca5a5;
+    --status-danger-bg: #450a0a;
+    --status-muted:   #9ca3af;
+    --status-muted-bg: #1f2937;
+  }
+}
+
+/* ============================================================
+   Base reset
+   ============================================================ */
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--line-height-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main {
+  max-width: 52rem;
+  margin: 0 auto;
+  padding: var(--sp-16) var(--sp-8);
+}
+
+@media (max-width: 640px) {
+  main { padding: var(--sp-12) var(--sp-6); }
+}
+
+::selection { background: var(--accent-subtle); color: var(--accent); }
+a { color: var(--accent); }
+
+/* ============================================================
+   Masthead
+   ============================================================ */
+.masthead { margin-bottom: var(--sp-8); }
+
+.masthead__kicker {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--text-muted);
+  margin: 0 0 var(--sp-4);
+}
+
+.masthead__crumb { color: var(--accent); }
+
+h1 {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: clamp(1.9rem, 4.5vw, 2.75rem);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  margin: 0;
+  color: var(--text-primary);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-4);
+  text-wrap: balance;
+}
+
+h1 .h1__id {
+  font-family: var(--font-mono);
+  font-size: 0.5em;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--accent);
+  background: var(--accent-subtle);
+  padding: 0.15em 0.5em;
+  border-radius: 6px;
+  align-self: center;
+}
+
+h1 .h1__pill { align-self: center; }
+
+/* ID / meta header block */
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  padding: var(--sp-4) 0;
+  margin-top: var(--sp-6);
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+
+.meta__id { color: var(--text-secondary); font-weight: 600; }
+
+.meta__fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-left: auto;
+}
+
+.meta__sep { color: var(--rule-heavy); }
+.meta__key { color: var(--text-muted); }
+.meta__val { color: var(--text-secondary); }
+
+.badge {
+  font-family: var(--font-mono);
+  background: var(--accent-subtle);
+  color: var(--accent);
+  font-size: var(--text-xs);
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   Field rows (depends / spec refs)
+   ============================================================ */
+.fields {
+  display: grid;
+  gap: var(--sp-3);
+  margin-top: var(--sp-6);
+}
+
+.field {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  font-size: var(--text-sm);
+}
+
+.field__label {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  min-width: 6.5rem;
+}
+
+.field__val { display: flex; flex-wrap: wrap; gap: var(--sp-2); color: var(--text-secondary); }
+
+/* ============================================================
+   Section scaffolding
+   ============================================================ */
+.section { margin-top: var(--sp-8); }
+
+/* ============================================================
+   Status pill
+   ============================================================ */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+  line-height: 1.6;
+}
+
+.pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+.pill--success { background: var(--status-success-bg); color: var(--status-success); }
+.pill--active  { background: var(--status-active-bg);  color: var(--status-active);  }
+.pill--warning { background: var(--status-warning-bg); color: var(--status-warning); }
+.pill--danger  { background: var(--status-danger-bg);  color: var(--status-danger);  }
+.pill--muted   { background: var(--status-muted-bg);   color: var(--status-muted);   }
+
+/* ============================================================
+   Collapsible <details>
+   ============================================================ */
+details { border-top: 1px solid var(--rule); }
+
+summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-4) 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: var(--text-primary);
+  user-select: none;
+}
+
+summary::-webkit-details-marker { display: none; }
+
+summary::before {
+  content: "\25B6";
+  font-size: 0.7em;
+  color: var(--accent);
+  transition: transform 0.18s ease;
+  flex: none;
+}
+
+details[open] > summary::before { transform: rotate(90deg); }
+
+summary:focus-visible {
+  outline: 2px solid var(--accent-focus);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+summary .summary__meta {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.details__body {
+  border-left: 3px solid var(--accent);
+  padding-left: var(--sp-6);
+  margin: 0 0 var(--sp-6) 2px;
+}
+
+details[open] > .details__body { animation: detailsfade 0.22s ease both; }
+
+@keyframes detailsfade {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   Prose (brief / acceptance bodies)
+   ============================================================ */
+.prose {
+  max-width: var(--measure);
+  color: var(--text-secondary);
+  font-size: var(--text-lg);
+}
+
+.prose p { margin: 0 0 var(--sp-4); }
+.prose p:last-child { margin-bottom: 0; }
+
+.prose h3 {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: var(--sp-6) 0 var(--sp-2);
+}
+
+.prose ul, .prose ol {
+  margin: 0 0 var(--sp-4);
+  padding-left: var(--sp-6);
+}
+
+.prose li { margin-bottom: var(--sp-2); }
+
+.prose strong { color: var(--text-primary); }
+
+/* ============================================================
+   Commit-trailer callout
+   ============================================================ */
+.trailer-callout {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  background: var(--accent-subtle);
+  color: var(--accent);
+  border-left: 3px solid var(--accent);
+  padding: var(--sp-4);
+  border-radius: 0 6px 6px 0;
+  margin: var(--sp-6) 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  overflow-x: auto;
+}
+
+.trailer-callout__label {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  opacity: 0.75;
+}
+
+.trailer-callout__line {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   Acceptance criteria list
+   ============================================================ */
+.acceptance {
+  max-width: var(--measure);
+  color: var(--text-secondary);
+  font-size: var(--text-lg);
+}
+
+.acceptance ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.acceptance li {
+  display: grid;
+  grid-template-columns: 1.4rem 1fr;
+  gap: var(--sp-3);
+  padding: var(--sp-2) 0;
+  align-items: baseline;
+}
+
+.acceptance li::before {
+  content: "\2713";
+  font-family: var(--font-mono);
+  color: var(--status-success);
+  font-weight: 700;
+}
+
+.empty {
+  text-align: center;
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: var(--text-lg);
+  color: var(--text-muted);
+  padding: var(--sp-8) var(--sp-4);
+  margin: 0;
+}
+
+/* ============================================================
+   Audit-log table
+   ============================================================ */
+.audit-wrap { overflow-x: auto; }
+
+.audit {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.audit thead th {
+  text-align: left;
+  background: var(--bg-surface);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: var(--sp-2) var(--sp-4);
+  border-bottom: 1px solid var(--rule-heavy);
+  white-space: nowrap;
+}
+
+.audit tbody td {
+  padding: var(--sp-2) var(--sp-4);
+  border-bottom: 1px solid var(--rule);
+  vertical-align: baseline;
+  color: var(--text-secondary);
+}
+
+.audit tbody tr:nth-child(odd)  td { background: var(--bg-page); }
+.audit tbody tr:nth-child(even) td { background: var(--bg-surface); }
+.audit tbody tr:last-child td { border-bottom: none; }
+
+.audit .col-when { font-family: var(--font-mono); color: var(--text-muted); white-space: nowrap; }
+.audit .col-who  { font-family: var(--font-mono); color: var(--text-secondary); }
+.audit .col-evidence code { font-size: 0.85em; }
+
+/* ============================================================
+   Inline code / path
+   ============================================================ */
+code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--bg-overlay);
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: var(--text-secondary);
+}
+
+/* ============================================================
+   Gallery (design review only)
+   ============================================================ */
+[data-gallery] {
+  margin-top: var(--sp-16);
+  padding-top: var(--sp-8);
+  border-top: 2px solid var(--rule-heavy);
+}
+
+[data-gallery] > summary {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.gallery__group { margin-bottom: var(--sp-12); }
+
+.gallery__group h3 {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin: 0 0 var(--sp-4);
+  padding-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--rule);
+}
+
+/* Task card stubs */
+.cardstub {
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: var(--sp-4);
+  background: var(--bg-page);
+}
+
+.cardstub__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--rule);
+}
+
+.cardstub__title {
+  font-family: var(--font-serif);
+  font-size: var(--text-lg);
+  color: var(--text-primary);
+}
+
+.cardstub__title .cs-id {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-right: var(--sp-2);
+}
+
+.cardstub__body {
+  padding: var(--sp-3) var(--sp-4);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.cardstub__deps {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-top: var(--sp-2);
+}
+
+.cardstub[data-status="in_progress"] .cardstub__head { background: var(--status-active-bg); }
+.cardstub[data-status="done"]        .cardstub__head { background: var(--bg-surface); }
+.cardstub[data-status="blocked"]     .cardstub__head { background: var(--status-danger-bg); }
+.cardstub[data-status="blocked"]     .cardstub__deps { color: var(--status-danger); font-weight: 600; }
+.cardstub[data-status="superseded"]  .cardstub__title { text-decoration: line-through; color: var(--text-muted); }
+.cardstub[data-status="superseded"]  .cardstub__body  { color: var(--text-muted); }
+
+.gallery__pills { display: flex; flex-wrap: wrap; gap: var(--sp-4); }
+
+.gallery__fields { display: grid; gap: var(--sp-3); }
+</style>
+</head>
+<body>
+<main data-id="{{id}}" data-kind="task" data-status="{{status}}"
+      data-created-at="{{created_at}}" data-updated-at="{{updated_at}}">
+
+  <!-- ============================================================
+       1. Page header
+       ============================================================ -->
+  <header class="masthead">
+    <p class="masthead__kicker">
+      <span>Task</span>
+      <span class="meta__sep">·</span>
+      <span class="masthead__crumb">{{milestone}}</span>
+      <span class="meta__sep">/</span>
+      <span class="masthead__crumb">{{phase}}</span>
+      <span class="meta__sep">·</span>
+      <span class="badge">cycle 3</span>
+    </p>
+    <h1>
+      <span class="h1__id">{{id}}</span>
+      <span>{{title}}</span>
+      <span class="h1__pill"><span class="pill pill--active">{{status}}</span></span>
+    </h1>
+
+    <!-- 2. ID / meta header block -->
+    <div class="meta">
+      <span class="meta__id">{{id}}</span>
+      <span class="meta__fields">
+        <span><span class="meta__key">milestone:</span> <span class="meta__val">{{milestone}}</span></span>
+        <span class="meta__sep">·</span>
+        <span><span class="meta__key">phase:</span> <span class="meta__val">{{phase}}</span></span>
+        <span class="meta__sep">·</span>
+        <span><span class="meta__key">sequence:</span> <span class="meta__val">{{sequence}}</span></span>
+        <span class="meta__sep">·</span>
+        <span><span class="meta__key">created:</span> <span class="meta__val">{{created_at}}</span></span>
+        <span class="meta__sep">·</span>
+        <span><span class="meta__key">updated:</span> <span class="meta__val">{{updated_at}}</span></span>
+      </span>
+    </div>
+
+    <!-- 3. Dependencies & spec refs -->
+    <div class="fields">
+      <div class="field">
+        <span class="field__label">Depends on</span>
+        <span class="field__val">{{depends_on}}</span>
+      </div>
+      <div class="field">
+        <span class="field__label">Spec refs</span>
+        <span class="field__val">{{spec_refs}}</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============================================================
+       4. Brief (collapsible, open) + commit-trailer callout
+       ============================================================ -->
+  <section class="section">
+    <details open>
+      <summary>Brief</summary>
+      <div class="details__body">
+        <div class="prose">{{brief}}</div>
+        <aside class="trailer-callout" aria-label="Commit trailer">
+          <span class="trailer-callout__label">Include in your commit message</span>
+          <span class="trailer-callout__line">Roadmap-Task: {{id}}</span>
+        </aside>
+      </div>
+    </details>
+  </section>
+
+  <!-- ============================================================
+       5. Acceptance (collapsible, closed by default)
+       ============================================================ -->
+  <section class="section">
+    <details>
+      <summary>Acceptance <span class="summary__meta">criteria</span></summary>
+      <div class="details__body">
+        <div class="acceptance">{{acceptance}}</div>
+      </div>
+    </details>
+  </section>
+
+  <!-- ============================================================
+       6. Audit log (collapsible, open)
+       ============================================================ -->
+  <section class="section">
+    <details open>
+      <summary>Audit log</summary>
+      <div class="details__body">
+        <div class="audit-wrap">
+          <table class="audit">
+            <thead>
+              <tr>
+                <th>when (ISO-8601)</th>
+                <th>status</th>
+                <th>who</th>
+                <th>evidence</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="col-when">2026-03-08T08:30:00Z</td>
+                <td><span class="pill pill--muted">todo</span></td>
+                <td class="col-who">planner</td>
+                <td class="col-evidence">Task created under <code>{{phase}}</code>.</td>
+              </tr>
+              <tr>
+                <td class="col-when">2026-05-14T11:09:00Z</td>
+                <td><span class="pill pill--active">in_progress</span></td>
+                <td class="col-who">worker</td>
+                <td class="col-evidence">Branch opened · <code>feat/{{id}}</code>.</td>
+              </tr>
+              <tr>
+                <td class="col-when">2026-06-22T15:52:00Z</td>
+                <td><span class="pill pill--active">in_progress</span></td>
+                <td class="col-who">worker</td>
+                <td class="col-evidence">Pushed <code>c4f1d9e</code> · awaiting review.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <!-- ============================================================
+       Component gallery — design review only.
+       Production data replaces injected regions; removed at render.
+       ============================================================ -->
+  <details data-gallery>
+    <summary>Component gallery — design review only</summary>
+    <div class="details__body" style="border-left-color: var(--rule-heavy);">
+
+      <!-- Five task status variants -->
+      <div class="gallery__group">
+        <h3>Task status — all five variants</h3>
+
+        <div class="cardstub" data-status="todo">
+          <div class="cardstub__head">
+            <span class="cardstub__title"><span class="cs-id">T1.1.1</span>Define API contract</span>
+            <span class="pill pill--muted">todo</span>
+          </div>
+          <div class="cardstub__body">
+            Will specify request/response shapes for the new endpoint.
+            <div class="cardstub__deps">depends on: —</div>
+          </div>
+        </div>
+
+        <div class="cardstub" data-status="in_progress">
+          <div class="cardstub__head">
+            <span class="cardstub__title"><span class="cs-id">T1.1.2</span>Implement handler</span>
+            <span class="pill pill--active">in_progress</span>
+          </div>
+          <div class="cardstub__body">
+            Writing the route handler and validation middleware now.
+            <div class="cardstub__deps">depends on: T1.1.1</div>
+          </div>
+        </div>
+
+        <div class="cardstub" data-status="done">
+          <div class="cardstub__head">
+            <span class="cardstub__title"><span class="cs-id">T1.1.3</span>Unit tests</span>
+            <span class="pill pill--success">done</span>
+          </div>
+          <div class="cardstub__body">
+            <div class="acceptance">
+              <ul>
+                <li>Covers happy path and 4xx cases</li>
+                <li>CI green on commit <code>c4f1d9e</code></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="cardstub" data-status="blocked">
+          <div class="cardstub__head">
+            <span class="cardstub__title"><span class="cs-id">T1.1.4</span>Wire to billing service</span>
+            <span class="pill pill--danger">blocked</span>
+          </div>
+          <div class="cardstub__body">
+            Cannot proceed until the vendor sandbox key is issued.
+            <div class="cardstub__deps">depends on: T2.3.1 (blocked)</div>
+          </div>
+        </div>
+
+        <div class="cardstub" data-status="superseded">
+          <div class="cardstub__head">
+            <span class="cardstub__title"><span class="cs-id">T1.1.5</span>Legacy adapter shim</span>
+            <span class="pill pill--muted">superseded</span>
+          </div>
+          <div class="cardstub__body">
+            Superseded by the direct integration in T1.1.4.
+            <div class="cardstub__deps">retained for history</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Commit-trailer callout -->
+      <div class="gallery__group">
+        <h3>Commit-trailer callout</h3>
+        <aside class="trailer-callout" style="margin-top:0;" aria-label="Commit trailer example">
+          <span class="trailer-callout__label">Include in your commit message</span>
+          <span class="trailer-callout__line">Roadmap-Task: T1.1.2</span>
+        </aside>
+      </div>
+
+      <!-- Spec refs field variants -->
+      <div class="gallery__group">
+        <h3>Spec refs — filled &amp; empty</h3>
+        <div class="gallery__fields">
+          <div class="field">
+            <span class="field__label">Spec refs</span>
+            <span class="field__val"><code>§3.2</code> <code>§4.1</code></span>
+          </div>
+          <div class="field">
+            <span class="field__label">Spec refs</span>
+            <span class="field__val">—</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Empty acceptance state -->
+      <div class="gallery__group">
+        <h3>Empty acceptance state</h3>
+        <div style="border:1px solid var(--rule); border-radius:8px; background:var(--bg-surface);">
+          <p class="empty">No acceptance criteria defined</p>
+        </div>
+      </div>
+
+      <!-- Audit-log table -->
+      <div class="gallery__group">
+        <h3>Audit log — sample rows</h3>
+        <div class="audit-wrap">
+          <table class="audit">
+            <thead>
+              <tr>
+                <th>when (ISO-8601)</th>
+                <th>status</th>
+                <th>who</th>
+                <th>evidence</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="col-when">2026-03-08T08:30:00Z</td>
+                <td><span class="pill pill--muted">todo</span></td>
+                <td class="col-who">planner</td>
+                <td class="col-evidence">Created under phase.</td>
+              </tr>
+              <tr>
+                <td class="col-when">2026-05-14T11:09:00Z</td>
+                <td><span class="pill pill--active">in_progress</span></td>
+                <td class="col-who">worker</td>
+                <td class="col-evidence">Branch opened.</td>
+              </tr>
+              <tr>
+                <td class="col-when">2026-05-30T16:48:00Z</td>
+                <td><span class="pill pill--danger">blocked</span></td>
+                <td class="col-who">worker</td>
+                <td class="col-evidence">Vendor key missing.</td>
+              </tr>
+              <tr>
+                <td class="col-when">2026-06-22T15:52:00Z</td>
+                <td><span class="pill pill--success">done</span></td>
+                <td class="col-who">reviewer</td>
+                <td class="col-evidence">Approved · <code>c4f1d9e</code>.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- All five status pills -->
+      <div class="gallery__group">
+        <h3>Status pills — reference</h3>
+        <div class="gallery__pills">
+          <span class="pill pill--muted">todo</span>
+          <span class="pill pill--active">in_progress</span>
+          <span class="pill pill--success">done</span>
+          <span class="pill pill--danger">blocked</span>
+          <span class="pill pill--muted">superseded</span>
+        </div>
+      </div>
+
+    </div>
+  </details>
+
+</main>
+
+<script>
+/* Editorial Design System v1 — task
+   Vanilla JS only. No libraries, no inline handlers.
+   Maps the rendered {{status}} to the correct header pill class. */
+(function () {
+  "use strict";
+
+  var STATUS_TO_TOKEN = {
+    todo: "muted",
+    in_progress: "active",
+    done: "success",
+    blocked: "danger",
+    superseded: "muted"
+  };
+
+  function syncHeaderPill() {
+    var root = document.querySelector('main[data-kind="task"]');
+    if (!root) return;
+    var status = root.getAttribute("data-status");
+    var token = STATUS_TO_TOKEN[status];
+    if (!token) return; // unresolved {{status}} token — leave default
+    var pill = document.querySelector(".h1__pill .pill");
+    if (pill) {
+      pill.className = "pill pill--" + token;
+      pill.textContent = status;
+    }
+    // de-emphasise title when superseded
+    if (status === "superseded") {
+      var titleSpan = document.querySelector("h1 > span:not([class])");
+      if (titleSpan) {
+        titleSpan.style.textDecoration = "line-through";
+        titleSpan.style.color = "var(--text-muted)";
+      }
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", syncHeaderPill);
+  } else {
+    syncHeaderPill();
+  }
+})();
+</script>
+</body>
+</html>

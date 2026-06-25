@@ -60,10 +60,10 @@ Item text is free-form and may reference design files or code paths
 (e.g. `docs/design_files/Opus Create · Build.html`). Carry it through VERBATIM
 when handing off — do not paraphrase or drop references.
 
-## Step 2 — Choose framework and mode (AskUserQuestion)
+## Step 2 — Choose framework and mode
 
-Ask both up front, once per run, with a single `AskUserQuestion` call (two
-questions):
+Ask both up front, once per run, with one structured question interaction
+(`AskUserQuestion` in Claude Code, `question` in opencode):
 
 **Question 1 — Framework** (header "Framework"):
 - `superpowers` — route each item to a superpowers skill (auto-picked per item:
@@ -108,7 +108,7 @@ For each item in the work list:
    |-----------|---------------|-------|
    | superpowers | `Skill` tool | classify the item: if it reads as a defect/bug (e.g. "bug", "currently …", "duplicate", "mirrors", "doesn't / should not", "creates … that mirrors") → `superpowers:systematic-debugging`; if it reads as a missing feature/behavior (e.g. "should have", "there should be", "add … section", "no way to …", "should be possible") → `superpowers:brainstorming`. Pass the handoff prompt as the request. |
    | gsd | `Skill` tool | `gsd-explore`, handoff prompt as args |
-   | orchestrator | `Agent` tool | `subagent_type: orchestrator`, handoff prompt as the description |
+   | orchestrator | host subagent tool | Claude Code: `Agent` with `subagent_type: orchestrator`; opencode: `task` with `subagent_type: orchestrator`; handoff prompt as the prompt/description |
 
    Let that framework run its full course (each entry chains onward per its own
    rules). When control returns, continue.

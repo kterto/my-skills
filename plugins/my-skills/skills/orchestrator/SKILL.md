@@ -1,11 +1,11 @@
 ---
 name: orchestrator
-description: Multi-role pipeline orchestrator. Use when the user invokes "/orchestrator", says "orchestrate", or asks to "run the full pipeline". Auto-detects whether to run bootstrap (first-time setup) or go straight to the pipeline based on the presence of `.orchestrator/config.json`; pass `--setup` to force bootstrap. Spawns each role (brainstormer → architect → coder → tester → reviewer → qa) as a subagent via `subagent_type`. Never commits or pushes.
+description: Multi-role pipeline orchestrator. Use when the user invokes "/orchestrator", says "orchestrate", or asks to "run the full pipeline". Auto-detects whether to run bootstrap (first-time setup) or go straight to the pipeline based on the presence of `.orchestrator/config.json`; pass `--setup` to force bootstrap. Spawns each role (brainstormer → architect → coder → tester → reviewer → qa) as a subagent. Never commits or pushes.
 ---
 
 # orchestrator
 
-This skill runs in the caller session and has the `Agent` tool. It spawns each pipeline role via `subagent_type`. It is project-agnostic — no project facts are hard-coded.
+This skill runs in the caller session and uses the host's subagent tool (`Agent` in Claude Code, `task` in opencode). It spawns each pipeline role via `subagent_type`. It is project-agnostic — no project facts are hard-coded.
 
 ## Lifecycle — auto-detect
 
@@ -26,7 +26,7 @@ Bootstrap runs when `--setup` is passed or `.orchestrator/config.json` is absent
    > "Scan this repo and return a structured digest of stack, build/test/lint/e2e/coverage commands, directory layout, naming conventions, and any documented domain rules. Read CLAUDE.md, AGENTS.md, README, and config/manifest files."
    Collect the digest.
 
-2. **AskUserQuestion interview**: using the digest, call `AskUserQuestion` to ask the user only about sections of `context-schema.md` that the scan left ambiguous. Do not ask about sections the scan already covered clearly.
+2. **User-question interview**: using the digest, call the host's structured question tool (`AskUserQuestion` in Claude Code, `question` in opencode) to ask the user only about sections of `context-schema.md` that the scan left ambiguous. Do not ask about sections the scan already covered clearly.
 
 3. **Self-rate confidence**: after each interview round, rate holistic confidence (0–1) that the context is clear and complete across all required sections.
 
@@ -45,7 +45,7 @@ Record availability in memory for the current run. Do **not** block bootstrap on
 
 ### B3 — Materialize
 
-1. **Render agent templates**: copy each of the six files `templates/{role}.md` verbatim into `target/.claude/agents/{role}.md` (roles: brainstormer, architect, coder, tester, reviewer, qa). No substitution is needed — templates are project-agnostic and read `.orchestrator/PROJECT-CONTEXT.md` at runtime.
+1. **Render agent templates**: materialize each of the six files `templates/{role}.md` (roles: brainstormer, architect, coder, tester, reviewer, qa) for the current host. In Claude Code, copy each template verbatim into `target/.claude/agents/{role}.md`. In opencode, write each role to `target/.opencode/agent/{role}.md` with opencode-compatible frontmatter (`description` copied from the template, `mode: subagent`, omit Claude-only shorthand model values like `model: opus` unless the user provided a valid `provider/model`), then copy the template body unchanged. The templates are project-agnostic and read `.orchestrator/PROJECT-CONTEXT.md` at runtime.
 
 2. **Materialize artifact rules + html scaffolds (load-bearing).** Subagents cannot read the skill's own `references/` or `templates/html/` directories — those paths do not exist in the target project. Copy them into `.orchestrator/` so every role can read them:
    - `references/artifact-format.md` → `.orchestrator/artifact-format.md`
@@ -59,7 +59,7 @@ Record availability in memory for the current run. Do **not** block bootstrap on
 
 ## Pipeline
 
-> **Important — skill execution context:** this skill runs in the caller's session (typically the main conversation), not as an isolated subagent. You DO have the `Agent` tool here, and you MUST use it to spawn each role as a real subagent via `subagent_type` (`brainstormer`, `architect`, `coder`, `tester`, `reviewer`, `qa`). Do not write specs, plans, code, test reports, CRs, or QA reports yourself — each artifact is produced inside its dedicated subagent context.
+> **Important — skill execution context:** this skill runs in the caller's session (typically the main conversation), not as an isolated subagent. You MUST use the host's subagent tool (`Agent` in Claude Code, `task` in opencode) to spawn each role as a real subagent via `subagent_type` (`brainstormer`, `architect`, `coder`, `tester`, `reviewer`, `qa`). Do not write specs, plans, code, test reports, CRs, or QA reports yourself — each artifact is produced inside its dedicated subagent context.
 
 ### Pipeline overview
 
@@ -74,12 +74,22 @@ Brainstormer runs once at the start of every pipeline. It produces a spec, which
 
 ### How to spawn a subagent
 
-Every subagent invocation uses the `Agent` tool with the appropriate `subagent_type`. Example:
+Every subagent invocation uses the host's subagent tool with the appropriate `subagent_type`. Claude Code example:
 
 ```
 Agent({
   description: "<3-5 word task summary>",
   subagent_type: "brainstormer",  // or architect | coder | tester | reviewer | qa
+  prompt: "<self-contained brief — see step-specific templates below>"
+})
+```
+
+opencode example:
+
+```
+task({
+  description: "<3-5 word task summary>",
+  subagent_type: "brainstormer",
   prompt: "<self-contained brief — see step-specific templates below>"
 })
 ```
@@ -609,7 +619,7 @@ If an agent output is ambiguous or missing the expected pattern, re-read the rel
 
 ### Rules
 
-- Never write code, plans, test reports, or QA reports yourself — always spawn a subagent via the `Agent` tool.
+- Never write code, plans, test reports, or QA reports yourself — always spawn a subagent via the host subagent tool.
 - Never skip a step — each agent must complete before the next is invoked.
 - Always pass the exact plan ID or file path extracted from the previous agent's output.
 - Never commit or push — the orchestrator's job ends at `READY_TO_COMMIT`.

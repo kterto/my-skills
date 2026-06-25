@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spec — SPEC-042</title>
+<style>
+/* ============================================================
+   EDITORIAL DESIGN SYSTEM v1 — Color tokens
+   ============================================================ */
+:root {
+  --bg-page:        #faf9f7;
+  --bg-surface:     #f3f1ee;
+  --bg-overlay:     #ece9e4;
+
+  --text-primary:   #1a1917;
+  --text-secondary: #4a4844;
+  --text-muted:     #8a8680;
+
+  --accent:         #3730a3;
+  --accent-subtle:  #e0e7ff;
+  --accent-focus:   #4f46e5;
+
+  --rule:           #d6d2cb;
+  --rule-heavy:     #b5b0a8;
+
+  --status-success: #166534;
+  --status-success-bg: #dcfce7;
+  --status-active:  #92400e;
+  --status-active-bg: #fef3c7;
+  --status-warning: #9a3412;
+  --status-warning-bg: #ffedd5;
+  --status-danger:  #991b1b;
+  --status-danger-bg: #fee2e2;
+  --status-muted:   #374151;
+  --status-muted-bg: #f3f4f6;
+
+  --font-serif: Georgia, "Times New Roman", serif;
+  --font-sans:  -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                "Helvetica Neue", Arial, sans-serif;
+  --font-mono:  ui-monospace, "SF Mono", "Cascadia Code", "Fira Mono",
+                Menlo, Consolas, monospace;
+
+  --text-xs:   0.75rem;
+  --text-sm:   0.875rem;
+  --text-base: 1rem;
+  --text-lg:   1.125rem;
+  --text-xl:   1.25rem;
+  --text-2xl:  1.5rem;
+  --text-3xl:  2rem;
+
+  --sp-1:  0.25rem;
+  --sp-2:  0.5rem;
+  --sp-3:  0.75rem;
+  --sp-4:  1rem;
+  --sp-6:  1.5rem;
+  --sp-8:  2rem;
+  --sp-12: 3rem;
+  --sp-16: 4rem;
+
+  --measure: 70ch;
+  --line-height-body: 1.65;
+  --line-height-heading: 1.2;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-page:        #141312;
+    --bg-surface:     #1e1c1a;
+    --bg-overlay:     #272420;
+
+    --text-primary:   #f0ece6;
+    --text-secondary: #b8b3ab;
+    --text-muted:     #7a7570;
+
+    --accent:         #818cf8;
+    --accent-subtle:  #1e1b4b;
+    --accent-focus:   #a5b4fc;
+
+    --rule:           #2e2b28;
+    --rule-heavy:     #3d3a36;
+
+    --status-success: #86efac;
+    --status-success-bg: #14532d;
+    --status-active:  #fcd34d;
+    --status-active-bg: #451a03;
+    --status-warning: #fb923c;
+    --status-warning-bg: #431407;
+    --status-danger:  #fca5a5;
+    --status-danger-bg: #450a0a;
+    --status-muted:   #9ca3af;
+    --status-muted-bg: #1f2937;
+  }
+}
+
+/* ============================================================
+   Base reset
+   ============================================================ */
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--line-height-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main {
+  max-width: 52rem;
+  margin: 0 auto;
+  padding: var(--sp-16) var(--sp-8);
+}
+
+@media (max-width: 640px) {
+  main { padding: var(--sp-12) var(--sp-6); }
+}
+
+::selection { background: var(--accent-subtle); color: var(--accent); }
+a { color: var(--accent); }
+
+/* ============================================================
+   Masthead
+   ============================================================ */
+.masthead { margin-bottom: var(--sp-8); }
+
+.masthead__kicker {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--text-muted);
+  margin: 0 0 var(--sp-4);
+}
+
+h1 {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: clamp(2rem, 5vw, 3rem);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  margin: 0;
+  color: var(--text-primary);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-4);
+  text-wrap: balance;
+}
+
+h1 .h1__id {
+  font-family: var(--font-mono);
+  font-size: 0.46em;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--accent);
+  background: var(--accent-subtle);
+  padding: 0.15em 0.5em;
+  border-radius: 6px;
+  align-self: center;
+}
+
+h1 .h1__pill { align-self: center; }
+
+.masthead__lede {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: var(--text-lg);
+  color: var(--text-secondary);
+  max-width: 52ch;
+  margin: var(--sp-4) 0 0;
+}
+
+/* ID / meta header block */
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  padding: var(--sp-4) 0;
+  margin-top: var(--sp-6);
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+
+.meta__id { color: var(--text-secondary); font-weight: 600; }
+
+.meta__fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-3);
+  margin-left: auto;
+}
+
+.meta__sep { color: var(--rule-heavy); }
+.meta__key { color: var(--text-muted); }
+.meta__val { color: var(--text-secondary); }
+
+.badge {
+  font-family: var(--font-mono);
+  background: var(--accent-subtle);
+  color: var(--accent);
+  font-size: var(--text-xs);
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   Status pill
+   ============================================================ */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+  line-height: 1.6;
+}
+
+.pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+.pill--success { background: var(--status-success-bg); color: var(--status-success); }
+.pill--active  { background: var(--status-active-bg);  color: var(--status-active);  }
+.pill--warning { background: var(--status-warning-bg); color: var(--status-warning); }
+.pill--danger  { background: var(--status-danger-bg);  color: var(--status-danger);  }
+.pill--muted   { background: var(--status-muted-bg);   color: var(--status-muted);   }
+
+/* ============================================================
+   Collapsible <details>
+   ============================================================ */
+.section { margin-top: 0; }
+
+details { border-top: 1px solid var(--rule); }
+
+summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-4) 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: var(--text-primary);
+  user-select: none;
+}
+
+summary::-webkit-details-marker { display: none; }
+
+summary::before {
+  content: "\25B6";
+  font-size: 0.7em;
+  color: var(--accent);
+  transition: transform 0.18s ease;
+  flex: none;
+}
+
+details[open] > summary::before { transform: rotate(90deg); }
+
+summary:focus-visible {
+  outline: 2px solid var(--accent-focus);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+summary .summary__meta {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.details__body {
+  border-left: 3px solid var(--accent);
+  padding-left: var(--sp-6);
+  margin: 0 0 var(--sp-6) 2px;
+}
+
+details[open] > .details__body { animation: detailsfade 0.22s ease both; }
+
+@keyframes detailsfade {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   Prose
+   ============================================================ */
+.prose {
+  max-width: var(--measure);
+  color: var(--text-secondary);
+  font-size: var(--text-lg);
+}
+
+.prose p { margin: 0 0 var(--sp-4); }
+.prose p:last-child { margin-bottom: 0; }
+.prose strong { color: var(--text-primary); }
+
+/* Requirements / constraints / questions list */
+.req-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-width: var(--measure);
+}
+
+.req-list li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--sp-3) var(--sp-4);
+  padding: var(--sp-3) 0;
+  border-bottom: 1px solid var(--rule);
+  color: var(--text-secondary);
+  font-size: var(--text-lg);
+}
+
+.req-list li:last-child { border-bottom: none; }
+
+.req-list .req__tag {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--accent);
+  background: var(--accent-subtle);
+  padding: 0.1em 0.5em;
+  border-radius: 4px;
+  align-self: start;
+  margin-top: 0.2em;
+  white-space: nowrap;
+}
+
+.req-list .req__body { min-width: 0; text-wrap: pretty; }
+.req-list .req__body strong { color: var(--text-primary); }
+
+/* Questions get a hanging marker */
+.q-list { list-style: none; margin: 0; padding: 0; max-width: var(--measure); }
+
+.q-list li {
+  display: grid;
+  grid-template-columns: 1.6rem 1fr;
+  gap: var(--sp-3);
+  padding: var(--sp-3) 0;
+  border-bottom: 1px solid var(--rule);
+  color: var(--text-secondary);
+  font-size: var(--text-lg);
+}
+
+.q-list li:last-child { border-bottom: none; }
+
+.q-list li::before {
+  content: "Q";
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.empty {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: var(--text-lg);
+  color: var(--text-muted);
+  padding: var(--sp-4) 0;
+  margin: 0;
+}
+
+/* ============================================================
+   Inline code / path
+   ============================================================ */
+code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--bg-overlay);
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: var(--text-secondary);
+}
+
+/* ============================================================
+   Gallery (design review only)
+   ============================================================ */
+[data-gallery] {
+  margin-top: var(--sp-16);
+  padding-top: var(--sp-8);
+  border-top: 2px solid var(--rule-heavy);
+}
+
+[data-gallery] > summary {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.gallery__group { margin-bottom: var(--sp-12); }
+
+.gallery__group h3 {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin: 0 0 var(--sp-4);
+  padding-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--rule);
+}
+
+.gallery__row { display: flex; flex-wrap: wrap; gap: var(--sp-4); align-items: center; }
+
+.headerstub {
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: var(--sp-4) var(--sp-6);
+  margin-bottom: var(--sp-4);
+  background: var(--bg-page);
+}
+
+.headerstub--draft { background: var(--status-active-bg); }
+.headerstub--ready { background: var(--bg-surface); }
+
+.headerstub__title {
+  font-family: var(--font-serif);
+  font-size: var(--text-2xl);
+  color: var(--text-primary);
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+
+.headerstub__id {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.headerstub__note {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  margin-top: var(--sp-2);
+}
+</style>
+</head>
+<body>
+<main
+  data-id="SPEC-042"
+  data-status="DRAFT"
+  data-created-at="2026-05-30T09:00:00Z"
+  data-updated-at="2026-06-22T16:40:00Z"
+  data-cycle="2"
+>
+
+  <!-- ============================================================
+       1. Page header
+       ============================================================ -->
+  <header class="masthead">
+    <p class="masthead__kicker">
+      <span>Functional Specification</span>
+      <span class="meta__sep">·</span>
+      <span>Brainstormer</span>
+    </p>
+    <h1>
+      <span class="h1__id">SPEC-042</span>
+      <span>Async export pipeline for large datasets</span>
+      <span class="h1__pill"><span class="pill pill--active">DRAFT</span></span>
+    </h1>
+    <p class="masthead__lede">A functional brief defining what an asynchronous, resumable export pipeline must do before the architect commits it to a plan.</p>
+
+    <!-- 2. ID / meta header block -->
+    <div class="meta">
+      <span class="meta__id">SPEC-042</span>
+      <span class="meta__fields">
+        <span><span class="meta__key">created:</span> <span class="meta__val">2026-05-30</span></span>
+        <span class="meta__sep">·</span>
+        <span><span class="meta__key">updated:</span> <span class="meta__val">2026-06-22</span></span>
+        <span class="meta__sep">·</span>
+        <span class="badge">cycle 2</span>
+      </span>
+    </div>
+  </header>
+
+  <!-- ============================================================
+       3. Problem Statement (open)
+       ============================================================ -->
+  <section class="section">
+    <details open>
+      <summary>Problem Statement</summary>
+      <div class="details__body">
+        <div class="prose">
+          <p>Customers with large workspaces routinely request full data exports that exceed what the current synchronous endpoint can serve. Requests over roughly <strong>200&nbsp;MB</strong> time out at the gateway, leaving users with a failed download and no recourse but to retry — which fails the same way.</p>
+          <p>We need an export mechanism that decouples the request from the delivery: the user asks for an export, the system produces it in the background, and the user is notified when a stable, resumable artifact is ready to download. The experience must remain trustworthy even when an export takes minutes and spans transient infrastructure failures.</p>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <!-- ============================================================
+       4. Functional Requirements (open)
+       ============================================================ -->
+  <section class="section">
+    <details open>
+      <summary>Functional Requirements <span class="summary__meta">6 items</span></summary>
+      <div class="details__body">
+        <ul class="req-list">
+          <li>
+            <span class="req__tag">FR-1</span>
+            <span class="req__body"><strong>Asynchronous request.</strong> A user can request an export and receive an immediate acknowledgement with a tracking ID; the export proceeds in the background.</span>
+          </li>
+          <li>
+            <span class="req__tag">FR-2</span>
+            <span class="req__body"><strong>Progress visibility.</strong> The user can poll or subscribe to export status (<code>queued</code>, <code>running</code>, <code>ready</code>, <code>failed</code>) and see a rough percentage complete.</span>
+          </li>
+          <li>
+            <span class="req__tag">FR-3</span>
+            <span class="req__body"><strong>Resumable delivery.</strong> The finished artifact supports HTTP range requests so an interrupted download resumes rather than restarts.</span>
+          </li>
+          <li>
+            <span class="req__tag">FR-4</span>
+            <span class="req__body"><strong>Notification.</strong> On completion or failure the user is notified via their configured channel (in-app and email).</span>
+          </li>
+          <li>
+            <span class="req__tag">FR-5</span>
+            <span class="req__body"><strong>Expiry.</strong> Ready artifacts remain downloadable for a bounded window, after which they are purged and the link returns a clear expired state.</span>
+          </li>
+          <li>
+            <span class="req__tag">FR-6</span>
+            <span class="req__body"><strong>Idempotency.</strong> Re-requesting an identical export within the active window returns the existing artifact rather than recomputing it.</span>
+          </li>
+        </ul>
+      </div>
+    </details>
+  </section>
+
+  <!-- ============================================================
+       5. Constraints (collapsed)
+       ============================================================ -->
+  <section class="section">
+    <details>
+      <summary>Constraints <span class="summary__meta">4 items</span></summary>
+      <div class="details__body">
+        <ul class="req-list">
+          <li>
+            <span class="req__tag">C-1</span>
+            <span class="req__body"><strong>Technical.</strong> Must run on the existing job queue (<code>redis</code> + worker pool); no new orchestration system this cycle.</span>
+          </li>
+          <li>
+            <span class="req__tag">C-2</span>
+            <span class="req__body"><strong>Storage.</strong> Artifacts land in the existing object store; no schema migrations to the primary database.</span>
+          </li>
+          <li>
+            <span class="req__tag">C-3</span>
+            <span class="req__body"><strong>Time.</strong> Target a single-cycle delivery; defer multi-region replication to a follow-up.</span>
+          </li>
+          <li>
+            <span class="req__tag">C-4</span>
+            <span class="req__body"><strong>Scope.</strong> CSV and JSON formats only; spreadsheet and archive bundles are out of scope.</span>
+          </li>
+        </ul>
+      </div>
+    </details>
+  </section>
+
+  <!-- ============================================================
+       6. Open Questions (collapsed) — populated state
+       ============================================================ -->
+  <section class="section">
+    <details>
+      <summary>Open Questions <span class="summary__meta">3 unresolved</span></summary>
+      <div class="details__body">
+        <ul class="q-list">
+          <li>What is the acceptable upper bound on export latency before we surface a "still working" reassurance state to the user?</li>
+          <li>Should the expiry window be fixed system-wide, or configurable per workspace plan tier?</li>
+          <li>Do we need signed, single-use download URLs, or is an authenticated session sufficient for the first release?</li>
+        </ul>
+      </div>
+    </details>
+  </section>
+
+  <!-- ============================================================
+       Component gallery — design review only.
+       ============================================================ -->
+  <details data-gallery>
+    <summary>Component Gallery — design review only</summary>
+    <div class="details__body" style="border-left-color: var(--rule-heavy);">
+
+      <!-- READY_FOR_PLANNING status -->
+      <div class="gallery__group">
+        <h3>Status — READY_FOR_PLANNING (settled)</h3>
+        <div class="headerstub headerstub--ready">
+          <div class="headerstub__title">
+            <span class="headerstub__id">SPEC-039</span>
+            <span>Rate-limit middleware</span>
+            <span class="pill pill--success">READY_FOR_PLANNING</span>
+          </div>
+          <p class="headerstub__note">Requirements are settled — ready to hand to the architect for planning.</p>
+        </div>
+      </div>
+
+      <!-- DRAFT status -->
+      <div class="gallery__group">
+        <h3>Status — DRAFT (work in progress)</h3>
+        <div class="headerstub headerstub--draft">
+          <div class="headerstub__title">
+            <span class="headerstub__id">SPEC-042</span>
+            <span>Async export pipeline</span>
+            <span class="pill pill--active">DRAFT</span>
+          </div>
+          <p class="headerstub__note">Still in revision — requirements may shift before planning.</p>
+        </div>
+      </div>
+
+      <!-- Empty open questions -->
+      <div class="gallery__group">
+        <h3>Open Questions — empty state (collapsed by default)</h3>
+        <details>
+          <summary>Open Questions <span class="summary__meta">none</span></summary>
+          <div class="details__body">
+            <p class="empty">No open questions.</p>
+          </div>
+        </details>
+      </div>
+
+      <!-- Populated open questions -->
+      <div class="gallery__group">
+        <h3>Open Questions — populated (open)</h3>
+        <details open>
+          <summary>Open Questions <span class="summary__meta">3 unresolved</span></summary>
+          <div class="details__body">
+            <ul class="q-list">
+              <li>Where should the latency reassurance threshold sit?</li>
+              <li>Is the expiry window fixed or per-tier?</li>
+              <li>Do we require signed single-use download URLs?</li>
+            </ul>
+          </div>
+        </details>
+      </div>
+
+      <!-- Cycle badge variants -->
+      <div class="gallery__group">
+        <h3>Cycle badge — variants</h3>
+        <div class="gallery__row">
+          <span class="badge">cycle 1</span>
+          <span class="badge">cycle 2</span>
+        </div>
+      </div>
+
+      <!-- Status pills side by side -->
+      <div class="gallery__group">
+        <h3>Status pills — reference</h3>
+        <div class="gallery__row">
+          <span class="pill pill--success">READY_FOR_PLANNING</span>
+          <span class="pill pill--active">DRAFT</span>
+        </div>
+      </div>
+
+    </div>
+  </details>
+
+</main>
+
+<script>
+/* Editorial Design System v1 — orchestrator spec
+   Vanilla JS only. No libraries, no inline handlers.
+   Maps data-status (READY_FOR_PLANNING | DRAFT) to the header pill class. */
+(function () {
+  "use strict";
+
+  var STATUS_TO_TOKEN = {
+    READY_FOR_PLANNING: "success",
+    DRAFT: "active"
+  };
+
+  function syncHeaderPill() {
+    var root = document.querySelector("main[data-id][data-cycle]");
+    if (!root) return;
+    var status = root.getAttribute("data-status");
+    var token = STATUS_TO_TOKEN[status];
+    if (!token) return;
+    var pill = document.querySelector(".h1__pill .pill");
+    if (pill) {
+      pill.className = "pill pill--" + token;
+      pill.textContent = status;
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", syncHeaderPill);
+  } else {
+    syncHeaderPill();
+  }
+})();
+</script>
+</body>
+</html>
