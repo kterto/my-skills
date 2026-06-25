@@ -1,0 +1,111 @@
+{
+  "skills": [
+    {
+      "name": "clean-code-gates",
+      "files": [
+        "__tests__/args.test.cjs",
+        "__tests__/config.test.cjs",
+        "__tests__/dart-flutter.test.cjs",
+        "__tests__/detect.test.cjs",
+        "__tests__/g5.test.cjs",
+        "__tests__/report.test.cjs",
+        "__tests__/run.test.cjs",
+        "__tests__/schema.test.cjs",
+        "__tests__/scope.test.cjs",
+        "__tests__/smoke.test.cjs",
+        ".cleancode-gates.json",
+        "bin/gates.cjs",
+        "defaults.cjs",
+        "package.json",
+        "README.md",
+        "schema/report.schema.json",
+        "SKILL.md",
+        "src/adapters/dart-flutter.cjs",
+        "src/adapters/node-ts.cjs",
+        "src/args.cjs",
+        "src/config.cjs",
+        "src/detect.cjs",
+        "src/gates/g5-no-comments.cjs",
+        "src/gates/registry.cjs",
+        "src/report.cjs",
+        "src/run.cjs",
+        "src/scope.cjs"
+      ]
+    },
+    {
+      "name": "commit-pr-dev",
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "design-to-code",
+      "files": [
+        "references/contract-template.md",
+        "references/coverage-checklist.md",
+        "references/extraction-guide.md",
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "orchestrator",
+      "files": [
+        "references/artifact-format.md",
+        "references/config.md",
+        "references/context-schema.md",
+        "SKILL.md",
+        "templates/architect.md",
+        "templates/brainstormer.md",
+        "templates/coder.md",
+        "templates/config.template.json",
+        "templates/html/code-review.template.html",
+        "templates/html/final-report.template.html",
+        "templates/html/plan.template.html",
+        "templates/html/progress-timeline.template.html",
+        "templates/html/qa-report.template.html",
+        "templates/html/spec.template.html",
+        "templates/html/test-report.template.html",
+        "templates/PROJECT-CONTEXT.template.md",
+        "templates/qa.md",
+        "templates/reviewer.md",
+        "templates/tester.md"
+      ]
+    },
+    {
+      "name": "product-manager",
+      "files": [
+        "references/git-flow.md",
+        "references/human-validation.md",
+        "references/resume-and-logging.md",
+        "references/scope-resolution.md",
+        "SKILL.md",
+        "templates/pm-progress-entry.template.md",
+        "templates/pr-body.template.md"
+      ]
+    },
+    {
+      "name": "roadmap",
+      "files": [
+        "references/config.md",
+        "references/directory-layout.md",
+        "references/item-schema.md",
+        "references/sync-and-reeval.md",
+        "SKILL.md",
+        "templates/milestone-readme.template.html",
+        "templates/milestone-readme.template.md",
+        "templates/phase-readme.template.html",
+        "templates/phase-readme.template.md",
+        "templates/roadmap-readme.template.html",
+        "templates/roadmap-readme.template.md",
+        "templates/user-story.template.html",
+        "templates/user-story.template.md"
+      ]
+    },
+    {
+      "name": "validation-fixer",
+      "files": [
+        "SKILL.md"
+      ]
+    }
+  ]
+}

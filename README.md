@@ -154,6 +154,7 @@ my-skills/
 │       ├── .claude-plugin/
 │       │   └── plugin.json      # plugin manifest
 │       └── skills/
+│           ├── index.json       # opencode remote skill index
 │           ├── clean-code-gates/SKILL.md
 │           ├── commit-pr-dev/SKILL.md
 │           ├── validation-fixer/SKILL.md
@@ -161,11 +162,14 @@ my-skills/
 │           ├── orchestrator/SKILL.md
 │           ├── roadmap/SKILL.md
 │           └── product-manager/SKILL.md
+├── scripts/
+│   ├── generate-opencode-skill-index.mjs
+│   └── install-opencode.sh
 ├── sync.sh                      # author-side: symlink skills into ~/.claude/skills
 └── README.md
 ```
 
-## Install (consumers)
+## Install (Claude Code)
 
 ```text
 /plugin marketplace add kterto/my-skills
@@ -181,7 +185,51 @@ A local checkout works too:
 
 Skills are then invocable as `/my-skills:clean-code-gates`, `/my-skills:commit-pr-dev`, `/my-skills:orchestrator`, `/my-skills:roadmap`, `/my-skills:product-manager`, etc.
 
-## Updating (consumers)
+## Install (opencode)
+
+Recommended install: clone/update this repo under `~/.config/opencode/` and add its skill directory to `skills.paths`.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kterto/my-skills/main/scripts/install-opencode.sh | bash
+```
+
+Then restart opencode. Skills load as normal opencode skills: `clean-code-gates`, `commit-pr-dev`, `orchestrator`, `roadmap`, `product-manager`, etc.
+
+Manual equivalent:
+
+```bash
+git clone https://github.com/kterto/my-skills.git ~/.config/opencode/my-skills
+```
+
+Add this to `~/.config/opencode/opencode.json`:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "skills": {
+    "paths": [
+      "~/.config/opencode/my-skills/plugins/my-skills/skills"
+    ]
+  }
+}
+```
+
+Hosted URL install is also supported by opencode's `skills.urls` loader:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "skills": {
+    "urls": [
+      "https://raw.githubusercontent.com/kterto/my-skills/main/plugins/my-skills/skills/"
+    ]
+  }
+}
+```
+
+Prefer the local installer for regular use: opencode currently caches remote skill files by skill name, so updates from `skills.urls` may require clearing opencode's skill cache before restart.
+
+## Updating (Claude Code)
 
 This plugin **omits `version`** in `plugin.json`, so each pushed commit is treated as a new version (git SHA). To pull the latest:
 
@@ -194,6 +242,22 @@ This plugin **omits `version`** in `plugin.json`, so each pushed commit is treat
 
 To auto-refresh at startup: `/plugin` → Marketplaces tab → enable auto-update (off by default for third-party marketplaces).
 
+## Updating (opencode)
+
+If installed with `install-opencode.sh`, run it again:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kterto/my-skills/main/scripts/install-opencode.sh | bash
+```
+
+Or update the local checkout directly:
+
+```bash
+git -C ~/.config/opencode/my-skills pull --ff-only
+```
+
+Restart opencode after updating. Running sessions keep the previously loaded skill set.
+
 ## Local development (author)
 
 Edit skills here and have changes live in Claude Code immediately, with no reinstall:
@@ -203,6 +267,12 @@ Edit skills here and have changes live in Claude Code immediately, with no reins
 ```
 
 This symlinks each `plugins/my-skills/skills/<name>` into `~/.claude/skills/<name>` (backing up any existing real directory to `<name>.bak-<timestamp>` — never deleting). After running, `/reload-plugins` in Claude Code.
+
+Regenerate the opencode remote index whenever skill files are added, removed, or renamed:
+
+```bash
+node scripts/generate-opencode-skill-index.mjs
+```
 
 While symlinked for development, **do not also `/plugin install` this marketplace on the same machine** — you'd load each skill twice (personal `/name` and namespaced `/my-skills:name`).
 

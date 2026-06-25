@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Code Review — CR-042</title>
+<style>
+/* ============================================================
+   EDITORIAL DESIGN SYSTEM v1 — Color tokens
+   ============================================================ */
+:root {
+  --bg-page:        #faf9f7;
+  --bg-surface:     #f3f1ee;
+  --bg-overlay:     #ece9e4;
+
+  --text-primary:   #1a1917;
+  --text-secondary: #4a4844;
+  --text-muted:     #8a8680;
+
+  --accent:         #3730a3;
+  --accent-subtle:  #e0e7ff;
+  --accent-focus:   #4f46e5;
+
+  --rule:           #d6d2cb;
+  --rule-heavy:     #b5b0a8;
+
+  --status-success: #166534;
+  --status-success-bg: #dcfce7;
+  --status-active:  #92400e;
+  --status-active-bg: #fef3c7;
+  --status-warning: #9a3412;
+  --status-warning-bg: #ffedd5;
+  --status-danger:  #991b1b;
+  --status-danger-bg: #fee2e2;
+  --status-muted:   #374151;
+  --status-muted-bg: #f3f4f6;
+
+  --font-serif: Georgia, "Times New Roman", serif;
+  --font-sans:  -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                "Helvetica Neue", Arial, sans-serif;
+  --font-mono:  ui-monospace, "SF Mono", "Cascadia Code", "Fira Mono",
+                Menlo, Consolas, monospace;
+
+  --text-xs:   0.75rem;
+  --text-sm:   0.875rem;
+  --text-base: 1rem;
+  --text-lg:   1.125rem;
+  --text-xl:   1.25rem;
+  --text-2xl:  1.5rem;
+  --text-3xl:  2rem;
+
+  --sp-1:  0.25rem;
+  --sp-2:  0.5rem;
+  --sp-3:  0.75rem;
+  --sp-4:  1rem;
+  --sp-6:  1.5rem;
+  --sp-8:  2rem;
+  --sp-12: 3rem;
+  --sp-16: 4rem;
+
+  --measure: 70ch;
+  --line-height-body: 1.65;
+  --line-height-heading: 1.2;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-page:        #141312;
+    --bg-surface:     #1e1c1a;
+    --bg-overlay:     #272420;
+
+    --text-primary:   #f0ece6;
+    --text-secondary: #b8b3ab;
+    --text-muted:     #7a7570;
+
+    --accent:         #818cf8;
+    --accent-subtle:  #1e1b4b;
+    --accent-focus:   #a5b4fc;
+
+    --rule:           #2e2b28;
+    --rule-heavy:     #3d3a36;
+
+    --status-success: #86efac;
+    --status-success-bg: #14532d;
+    --status-active:  #fcd34d;
+    --status-active-bg: #451a03;
+    --status-warning: #fb923c;
+    --status-warning-bg: #431407;
+    --status-danger:  #fca5a5;
+    --status-danger-bg: #450a0a;
+    --status-muted:   #9ca3af;
+    --status-muted-bg: #1f2937;
+  }
+}
+
+/* ============================================================
+   Base reset
+   ============================================================ */
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--line-height-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main {
+  max-width: 54rem;
+  margin: 0 auto;
+  padding: var(--sp-16) var(--sp-8);
+}
+
+@media (max-width: 640px) {
+  main { padding: var(--sp-12) var(--sp-6); }
+}
+
+::selection { background: var(--accent-subtle); color: var(--accent); }
+a { color: var(--accent); }
+
+/* ============================================================
+   Masthead
+   ============================================================ */
+.masthead { margin-bottom: var(--sp-6); }
+
+.masthead__kicker {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--text-muted);
+  margin: 0 0 var(--sp-4);
+}
+
+h1 {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: clamp(2rem, 5vw, 3rem);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  margin: 0;
+  color: var(--text-primary);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-4);
+  text-wrap: balance;
+}
+
+h1 .h1__id {
+  font-family: var(--font-mono);
+  font-size: 0.46em;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--accent);
+  background: var(--accent-subtle);
+  padding: 0.15em 0.5em;
+  border-radius: 6px;
+  align-self: center;
+}
+
+h1 .h1__pill { align-self: center; }
+
+/* ID / meta header block */
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  padding: var(--sp-4) 0;
+  margin-top: var(--sp-6);
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+
+.meta__id { color: var(--text-secondary); font-weight: 600; }
+
+.meta__fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-3);
+  margin-left: auto;
+}
+
+.meta__sep { color: var(--rule-heavy); }
+.meta__key { color: var(--text-muted); }
+.meta__val { color: var(--text-secondary); }
+
+.badge {
+  font-family: var(--font-mono);
+  background: var(--accent-subtle);
+  color: var(--accent);
+  font-size: var(--text-xs);
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   Finding count summary
+   ============================================================ */
+.count-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin-top: var(--sp-4);
+}
+
+.count-summary .cs-sep { color: var(--rule-heavy); }
+.count-summary .cs--crit-some { color: var(--status-danger); font-weight: 700; }
+.count-summary .cs--imp-some  { color: var(--status-warning); font-weight: 700; }
+.count-summary .cs--minor     { color: var(--text-secondary); }
+.count-summary .cs--zero      { color: var(--text-muted); }
+
+/* ============================================================
+   Status pill
+   ============================================================ */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+  line-height: 1.6;
+}
+
+.pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+.pill--success { background: var(--status-success-bg); color: var(--status-success); }
+.pill--active  { background: var(--status-active-bg);  color: var(--status-active);  }
+.pill--warning { background: var(--status-warning-bg); color: var(--status-warning); }
+.pill--danger  { background: var(--status-danger-bg);  color: var(--status-danger);  }
+.pill--muted   { background: var(--status-muted-bg);   color: var(--status-muted);   }
+
+/* ============================================================
+   Collapsible <details>
+   ============================================================ */
+.section { margin-top: var(--sp-8); }
+
+details { border-top: 1px solid var(--rule); }
+
+summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-4) 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: var(--text-primary);
+  user-select: none;
+}
+
+summary::-webkit-details-marker { display: none; }
+
+summary::before {
+  content: "\25B6";
+  font-size: 0.7em;
+  color: var(--accent);
+  transition: transform 0.18s ease;
+  flex: none;
+}
+
+details[open] > summary::before { transform: rotate(90deg); }
+
+summary:focus-visible {
+  outline: 2px solid var(--accent-focus);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+/* severity-colored summary dot */
+summary .sev-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.sev-dot--crit  { background: var(--status-danger); }
+.sev-dot--imp   { background: var(--status-warning); }
+.sev-dot--minor { background: var(--rule-heavy); }
+
+summary .summary__count {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.details__body {
+  border-left: 3px solid var(--accent);
+  padding-left: var(--sp-6);
+  margin: 0 0 var(--sp-6) 2px;
+}
+
+details.findings-section > .details__body {
+  border-left: none;
+  padding-left: 0;
+  margin-left: 0;
+}
+
+/* ============================================================
+   Finding cards
+   ============================================================ */
+.finding {
+  border-left: 3px solid var(--rule-heavy);
+  background: var(--bg-surface);
+  border-radius: 0 6px 6px 0;
+  padding: var(--sp-4) var(--sp-6);
+  margin-bottom: var(--sp-4);
+}
+
+.finding:last-child { margin-bottom: 0; }
+
+.finding--crit  { border-left-color: var(--status-danger); }
+.finding--imp   { border-left-color: var(--status-warning); }
+.finding--minor { border-left-color: var(--rule-heavy); }
+
+.finding__id {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+.finding__title {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: var(--sp-1) 0 var(--sp-2);
+}
+
+.finding__loc { margin-bottom: var(--sp-2); }
+
+.finding__desc {
+  color: var(--text-secondary);
+  line-height: var(--line-height-body);
+  max-width: var(--measure);
+}
+
+.finding__suggestion {
+  margin-top: var(--sp-3);
+  padding-left: var(--sp-4);
+  border-left: 2px solid var(--rule);
+  color: var(--text-primary);
+  max-width: var(--measure);
+}
+
+.finding__suggestion .sugg-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  display: block;
+  margin-bottom: var(--sp-1);
+}
+
+.finding__suggestion .sugg-label::before { content: "\25B6 "; color: var(--accent); }
+
+.tier-empty {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: var(--text-lg);
+  color: var(--text-muted);
+  padding: var(--sp-4) 0;
+  margin: 0;
+}
+
+/* ============================================================
+   Clean review callout
+   ============================================================ */
+.clean-callout {
+  background: var(--status-success-bg);
+  color: var(--status-success);
+  border-radius: 8px;
+  padding: var(--sp-8);
+  text-align: center;
+  font-family: var(--font-serif);
+  font-size: var(--text-2xl);
+  margin-top: var(--sp-8);
+}
+
+.clean-callout .cc-sub {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  margin-top: var(--sp-2);
+  opacity: 0.85;
+}
+
+/* ============================================================
+   Reviewer notes prose
+   ============================================================ */
+.prose {
+  max-width: var(--measure);
+  color: var(--text-secondary);
+  font-size: var(--text-lg);
+}
+
+.prose p { margin: 0 0 var(--sp-4); }
+.prose p:last-child { margin-bottom: 0; }
+.prose strong { color: var(--text-primary); }
+
+/* ============================================================
+   Inline code / path
+   ============================================================ */
+code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--bg-overlay);
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: var(--text-secondary);
+}
+
+/* ============================================================
+   Gallery (design review only)
+   ============================================================ */
+[data-gallery] {
+  margin-top: var(--sp-16);
+  padding-top: var(--sp-8);
+  border-top: 2px solid var(--rule-heavy);
+}
+
+[data-gallery] > summary {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.gallery__group { margin-bottom: var(--sp-12); }
+
+.gallery__group h3 {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin: 0 0 var(--sp-4);
+  padding-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--rule);
+}
+
+.gallery__row { display: flex; flex-wrap: wrap; gap: var(--sp-4); align-items: center; }
+
+.gallery__cards { display: grid; gap: var(--sp-4); }
+</style>
+</head>
+<body>
+<main
+  data-id="CR-042"
+  data-status="REQUEST_CHANGES"
+  data-created-at="2026-06-21T09:00:00Z"
+  data-updated-at="2026-06-22T19:20:00Z"
+  data-cycle="2"
+>
+
+  <!-- ============================================================
+       1. Page header
+       ============================================================ -->
+  <header class="masthead">
+    <p class="masthead__kicker">
+      <span>Code Review</span>
+      <span class="meta__sep">·</span>
+      <span>Reviewer</span>
+    </p>
+    <h1>
+      <span class="h1__id">CR-042</span>
+      <span>Async export pipeline — review</span>
+      <span class="h1__pill"><span class="pill pill--danger">REQUEST_CHANGES</span></span>
+    </h1>
+
+    <!-- 2. ID / meta header block -->
+    <div class="meta">
+      <span class="meta__id">CR-042</span>
+      <span class="meta__fields">
+        <span><span class="meta__key">created:</span> <span class="meta__val">2026-06-21</span></span>
+        <span class="meta__sep">·</span>
+        <span><span class="meta__key">updated:</span> <span class="meta__val">2026-06-22</span></span>
+        <span class="meta__sep">·</span>
+        <span class="badge">cycle 2</span>
+      </span>
+    </div>
+
+    <!-- 3. Finding count summary -->
+    <div class="count-summary">
+      <span class="cs--crit-some">Critical: 1</span>
+      <span class="cs-sep">·</span>
+      <span class="cs--imp-some">Important: 2</span>
+      <span class="cs-sep">·</span>
+      <span class="cs--minor">Minor: 3</span>
+    </div>
+  </header>
+
+  <!-- ============================================================
+       4. Findings by severity — Critical / Important / Minor
+       ============================================================ -->
+
+  <!-- Critical (open, has findings) -->
+  <section class="section">
+    <details class="findings-section" open>
+      <summary><span class="sev-dot sev-dot--crit"></span>Critical Findings <span class="summary__count">1</span></summary>
+      <div class="details__body">
+        <div class="finding finding--crit">
+          <span class="finding__id">CR-042-C1</span>
+          <h4 class="finding__title">Export artifact written before the transaction commits</h4>
+          <div class="finding__loc"><code>src/export/worker.ts:212</code></div>
+          <p class="finding__desc">The worker uploads the finished file to the object store and marks the export <code>ready</code> before the surrounding database transaction commits. If the commit fails, the user is notified of a downloadable artifact that points at orphaned state, and a retry produces a duplicate.</p>
+          <div class="finding__suggestion">
+            <span class="sugg-label">Suggestion</span>
+            Move the <code>ready</code> transition and notification into an after-commit hook so the artifact is only advertised once the export row is durably persisted.
+          </div>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <!-- Important (open, has findings) -->
+  <section class="section">
+    <details class="findings-section" open>
+      <summary><span class="sev-dot sev-dot--imp"></span>Important Findings <span class="summary__count">2</span></summary>
+      <div class="details__body">
+        <div class="finding finding--imp">
+          <span class="finding__id">CR-042-I1</span>
+          <h4 class="finding__title">Range requests ignore the <code>If-Range</code> header</h4>
+          <div class="finding__loc"><code>src/export/download.ts:88</code></div>
+          <p class="finding__desc">A resumed download whose artifact was regenerated mid-transfer will silently stitch bytes from two different files. Honoring <code>If-Range</code> against the artifact ETag avoids serving a corrupt blend.</p>
+          <div class="finding__suggestion">
+            <span class="sugg-label">Suggestion</span>
+            Validate <code>If-Range</code> against the stored ETag; fall back to a full <code>200</code> response when it does not match.
+          </div>
+        </div>
+        <div class="finding finding--imp">
+          <span class="finding__id">CR-042-I2</span>
+          <h4 class="finding__title">Idempotency key omits the export format</h4>
+          <div class="finding__loc"><code>src/export/request.ts:54</code></div>
+          <p class="finding__desc">Two requests for the same workspace that differ only in <code>format</code> (CSV vs JSON) collide on the idempotency key and the second returns the first's artifact.</p>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <!-- Minor (collapsed) -->
+  <section class="section">
+    <details class="findings-section">
+      <summary><span class="sev-dot sev-dot--minor"></span>Minor Findings <span class="summary__count">3</span></summary>
+      <div class="details__body">
+        <div class="finding finding--minor">
+          <span class="finding__id">CR-042-M1</span>
+          <h4 class="finding__title">Magic number for expiry window</h4>
+          <div class="finding__loc"><code>src/export/expiry.ts:9</code></div>
+          <p class="finding__desc">The 72-hour expiry is hard-coded; lift it to config alongside the other retention settings.</p>
+        </div>
+        <div class="finding finding--minor">
+          <span class="finding__id">CR-042-M2</span>
+          <h4 class="finding__title">Inconsistent log field casing</h4>
+          <div class="finding__loc"><code>src/export/worker.ts:140</code></div>
+          <p class="finding__desc">Logs mix <code>exportId</code> and <code>export_id</code>; pick one to keep downstream queries simple.</p>
+        </div>
+        <div class="finding finding--minor">
+          <span class="finding__id">CR-042-M3</span>
+          <h4 class="finding__title">Missing JSDoc on the public request helper</h4>
+          <div class="finding__loc"><code>src/export/request.ts:20</code></div>
+          <p class="finding__desc">The exported <code>requestExport</code> helper has no doc comment; add one describing the returned tracking shape.</p>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <!-- ============================================================
+       5. Reviewer Notes (open — REQUEST_CHANGES)
+       ============================================================ -->
+  <section class="section">
+    <details open>
+      <summary>Reviewer Notes</summary>
+      <div class="details__body">
+        <div class="prose">
+          <p>The shape of the pipeline is right and the worker/queue split is clean. The blocking issue is <strong>C1</strong> — advertising an artifact before the transaction commits is a correctness bug that will surface as duplicate exports under load. Please resolve it and the two Important findings; the Minor items are welcome but not required for this cycle.</p>
+          <p>Once C1 and the Important findings are addressed I expect a quick re-review.</p>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <!-- ============================================================
+       Component gallery — design review only.
+       ============================================================ -->
+  <details data-gallery>
+    <summary>Component Gallery — design review only</summary>
+    <div class="details__body" style="border-left-color: var(--rule-heavy);">
+
+      <!-- APPROVED with findings -->
+      <div class="gallery__group">
+        <h3>State — APPROVED (minor findings only)</h3>
+        <div class="gallery__row" style="margin-bottom:var(--sp-4);">
+          <span class="pill pill--success">APPROVED</span>
+          <span style="font-family:var(--font-mono); font-size:var(--text-sm); color:var(--text-secondary);">
+            <span class="cs--zero">Critical: 0</span> · <span class="cs--zero">Important: 0</span> · <span class="cs--minor">Minor: 2</span>
+          </span>
+        </div>
+        <details class="findings-section">
+          <summary><span class="sev-dot sev-dot--minor"></span>Minor Findings <span class="summary__count">2</span></summary>
+          <div class="details__body">
+            <div class="finding finding--minor">
+              <span class="finding__id">CR-040-M1</span>
+              <h4 class="finding__title">Prefer const over let for the cache handle</h4>
+              <div class="finding__loc"><code>src/cache/index.ts:31</code></div>
+              <p class="finding__desc">The handle is never reassigned.</p>
+            </div>
+            <div class="finding finding--minor">
+              <span class="finding__id">CR-040-M2</span>
+              <h4 class="finding__title">Typo in comment</h4>
+              <div class="finding__loc"><code>src/cache/index.ts:48</code></div>
+              <p class="finding__desc">"recieve" → "receive".</p>
+            </div>
+          </div>
+        </details>
+      </div>
+
+      <!-- REQUEST_CHANGES -->
+      <div class="gallery__group">
+        <h3>State — REQUEST_CHANGES</h3>
+        <div class="gallery__row">
+          <span class="pill pill--danger">REQUEST_CHANGES</span>
+          <span style="font-family:var(--font-mono); font-size:var(--text-sm);">
+            <span class="cs--crit-some">Critical: 1</span> · <span class="cs--imp-some">Important: 2</span> · <span class="cs--minor">Minor: 3</span>
+          </span>
+        </div>
+        <p style="color:var(--text-muted); font-size:var(--text-sm); font-family:var(--font-mono); margin-top:var(--sp-2);">Critical &amp; Important open · Minor collapsed · Reviewer Notes open (see top of page)</p>
+      </div>
+
+      <!-- Empty / clean review -->
+      <div class="gallery__group">
+        <h3>State — clean review (zero findings)</h3>
+        <div class="gallery__row" style="margin-bottom:var(--sp-4);">
+          <span class="pill pill--success">APPROVED</span>
+          <span style="font-family:var(--font-mono); font-size:var(--text-sm); color:var(--text-muted);">Critical: 0 · Important: 0 · Minor: 0</span>
+        </div>
+        <details class="findings-section">
+          <summary><span class="sev-dot sev-dot--crit"></span>Critical Findings <span class="summary__count">0</span></summary>
+          <div class="details__body"><p class="tier-empty">No findings in this tier.</p></div>
+        </details>
+        <details class="findings-section">
+          <summary><span class="sev-dot sev-dot--imp"></span>Important Findings <span class="summary__count">0</span></summary>
+          <div class="details__body"><p class="tier-empty">No findings in this tier.</p></div>
+        </details>
+        <details class="findings-section">
+          <summary><span class="sev-dot sev-dot--minor"></span>Minor Findings <span class="summary__count">0</span></summary>
+          <div class="details__body"><p class="tier-empty">No findings in this tier.</p></div>
+        </details>
+        <div class="clean-callout">
+          No findings — clean review.
+          <span class="cc-sub">APPROVED · ready to merge</span>
+        </div>
+      </div>
+
+      <!-- Finding card variants -->
+      <div class="gallery__group">
+        <h3>Finding cards — Critical / Important / Minor</h3>
+        <div class="gallery__cards">
+          <div class="finding finding--crit">
+            <span class="finding__id">CR-XXX-C1</span>
+            <h4 class="finding__title">Critical — data-loss risk</h4>
+            <div class="finding__loc"><code>src/path/file.ts:42</code></div>
+            <p class="finding__desc">Red left-border. A blocking correctness issue that must be fixed before approval.</p>
+            <div class="finding__suggestion"><span class="sugg-label">Suggestion</span>Guard the write path behind a committed transaction.</div>
+          </div>
+          <div class="finding finding--imp">
+            <span class="finding__id">CR-XXX-I1</span>
+            <h4 class="finding__title">Important — correctness under edge cases</h4>
+            <div class="finding__loc"><code>src/path/file.ts:88</code></div>
+            <p class="finding__desc">Orange left-border. Should be addressed this cycle but not strictly blocking.</p>
+          </div>
+          <div class="finding finding--minor">
+            <span class="finding__id">CR-XXX-M1</span>
+            <h4 class="finding__title">Minor — style / readability</h4>
+            <div class="finding__loc"><code>src/path/file.ts:9</code></div>
+            <p class="finding__desc">Gray left-border. Nice-to-have polish.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cycle badge variants -->
+      <div class="gallery__group">
+        <h3>Cycle badge — variants</h3>
+        <div class="gallery__row">
+          <span class="badge">cycle 1</span>
+          <span class="badge">cycle 2</span>
+        </div>
+      </div>
+
+      <!-- Status pills -->
+      <div class="gallery__group">
+        <h3>Status pills — reference</h3>
+        <div class="gallery__row">
+          <span class="pill pill--success">APPROVED</span>
+          <span class="pill pill--danger">REQUEST_CHANGES</span>
+        </div>
+      </div>
+
+      <!-- Severity summaries open & closed -->
+      <div class="gallery__group">
+        <h3>Severity summaries — open &amp; closed</h3>
+        <details class="findings-section" open style="margin-bottom:var(--sp-2);">
+          <summary><span class="sev-dot sev-dot--crit"></span>Critical Findings <span class="summary__count">2</span></summary>
+          <div class="details__body"><p class="tier-empty">(open state — triangle points down)</p></div>
+        </details>
+        <details class="findings-section">
+          <summary><span class="sev-dot sev-dot--imp"></span>Important Findings <span class="summary__count">1</span></summary>
+          <div class="details__body"><p class="tier-empty">(closed state — triangle points right)</p></div>
+        </details>
+      </div>
+
+    </div>
+  </details>
+
+</main>
+
+<script>
+/* Editorial Design System v1 — reviewer code review
+   Vanilla JS only. No libraries, no inline handlers.
+   Maps data-status (APPROVED | REQUEST_CHANGES) to the header pill class. */
+(function () {
+  "use strict";
+
+  var STATUS_TO_TOKEN = {
+    APPROVED: "success",
+    REQUEST_CHANGES: "danger"
+  };
+
+  function syncHeaderPill() {
+    var root = document.querySelector("main[data-id][data-cycle]");
+    if (!root) return;
+    var status = root.getAttribute("data-status");
+    var token = STATUS_TO_TOKEN[status];
+    if (!token) return;
+    var pill = document.querySelector(".h1__pill .pill");
+    if (pill) {
+      pill.className = "pill pill--" + token;
+      pill.textContent = status;
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", syncHeaderPill);
+  } else {
+    syncHeaderPill();
+  }
+})();
+</script>
+</body>
+</html>

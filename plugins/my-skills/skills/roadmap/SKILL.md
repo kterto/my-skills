@@ -45,8 +45,8 @@ Check whether `.orchestrator/PROJECT-CONTEXT.md` exists.
 
 - **If it exists:** read it as the base context. Do not edit it — it is orchestrator-owned. When `/roadmap/CONTEXT.md` is written later, write it as a **roadmap addendum** (milestones, sequencing decisions, release targets, and what "done" means per milestone) — not a full duplicate of the base context.
 - **If it is absent:** run the own gate:
-  1. Spawn an `Explore` subagent: `"Scan this repo and return a structured digest of stack, build/test/lint commands, directory layout, naming conventions, documented domain rules, and any existing specs or PRD files. Read CLAUDE.md, AGENTS.md, README, and config/manifest files."`
-  2. Using the digest, run `AskUserQuestion` rounds to fill gaps the scan left ambiguous. Do not re-ask what the scan already covered.
+  1. Spawn an `Explore`/`explore` subagent: `"Scan this repo and return a structured digest of stack, build/test/lint commands, directory layout, naming conventions, documented domain rules, and any existing specs or PRD files. Read CLAUDE.md, AGENTS.md, README, and config/manifest files."`
+  2. Using the digest, run structured user-question rounds (`AskUserQuestion` in Claude Code, `question` in opencode) to fill gaps the scan left ambiguous. Do not re-ask what the scan already covered.
   3. After each round, self-rate holistic confidence (0–1) that the context is complete across all required sections.
   4. Loop until confidence ≥ `context_threshold`. If the user ends the loop early, record the achieved confidence as-is.
   5. Write `/roadmap/CONTEXT.md` with the full gathered context.
@@ -60,7 +60,7 @@ In both cases (base context present or absent), grill **only roadmap gaps** the 
 - Release targets: are there external dates or contractual milestones?
 - Per-milestone "done" criteria: what does completion look like for each milestone?
 
-Run `AskUserQuestion` on these gaps until roadmap-clarity confidence ≥ `context_threshold`.
+Ask structured user questions on these gaps until roadmap-clarity confidence ≥ `context_threshold`.
 
 ### Step 3 — Seed decomposition
 

@@ -1,0 +1,45 @@
+#!/usr/bin/env node
+
+import { readdirSync, statSync, writeFileSync } from "node:fs"
+import { dirname, join, relative, sep } from "node:path"
+import { fileURLToPath } from "node:url"
+
+const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)))
+const skillsDir = join(repoRoot, "plugins", "my-skills", "skills")
+const indexPath = join(skillsDir, "index.json")
+
+function toPosix(path) {
+  return path.split(sep).join("/")
+}
+
+function walk(dir) {
+  const entries = readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))
+  const files = []
+
+  for (const entry of entries) {
+    if (entry.name === ".DS_Store") continue
+
+    const fullPath = join(dir, entry.name)
+    if (entry.isDirectory()) {
+      files.push(...walk(fullPath))
+      continue
+    }
+
+    if (entry.isFile()) files.push(fullPath)
+  }
+
+  return files
+}
+
+const skills = readdirSync(skillsDir, { withFileTypes: true })
+  .filter((entry) => entry.isDirectory())
+  .map((entry) => entry.name)
+  .filter((name) => statSync(join(skillsDir, name, "SKILL.md"), { throwIfNoEntry: false })?.isFile())
+  .sort((a, b) => a.localeCompare(b))
+  .map((name) => ({
+    name,
+    files: walk(join(skillsDir, name)).map((file) => toPosix(relative(join(skillsDir, name), file))),
+  }))
+
+writeFileSync(indexPath, `${JSON.stringify({ skills }, null, 2)}\n`)
+console.log(`wrote ${toPosix(relative(repoRoot, indexPath))} with ${skills.length} skills`)

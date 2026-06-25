@@ -5,14 +5,14 @@ description: Run Clean Code quality gates (G1-G7 — coverage, complexity, lengt
 
 # clean-code-gates
 
-A portable, dependency-free CLI that runs Clean Code quality gates over a scope and emits a machine-agnostic report. Lives at `~/.claude/skills/clean-code-gates/`. Not coupled to GSD — usable by any project, orchestrator, or directly by the main agent.
+A portable, dependency-free CLI that runs Clean Code quality gates over a scope and emits a machine-agnostic report. It lives inside this skill directory. Not coupled to GSD — usable by any project, orchestrator, or directly by the main agent.
 
 ## How to invoke
 
 Run the CLI from the **target project's root**:
 
 ```bash
-node ~/.claude/skills/clean-code-gates/bin/gates.cjs [flags]
+node <skill-dir>/bin/gates.cjs [flags]
 ```
 
 (If `npm link` / on PATH, `clean-code-gates [flags]` also works — but the absolute `node …/bin/gates.cjs` form always works.)
@@ -51,9 +51,10 @@ On first run it auto-creates `.cleancode-gates.json` in the target project root 
 
 ```bash
 cd /path/to/project
-node ~/.claude/skills/clean-code-gates/bin/gates.cjs --scope diff --gates G5 --out -
+node <skill-dir>/bin/gates.cjs --scope diff --gates G5 --out -
 ```
 
 ## Notes
 - Mirrors the gate semantics in a project's qa agent (`.claude/agents/qa.md` in GSD repos) but decoupled from any plan/CR/QA flow. G8 (rework ratio) is intentionally out of scope — it's a plan-tree metric, not a code property.
-- Tests: `cd ~/.claude/skills/clean-code-gates && node --test`.
+- Tests: `cd <skill-dir> && node --test`.
+- Common skill dirs: Claude Code personal install `~/.claude/skills/clean-code-gates`; opencode local installer `~/.config/opencode/my-skills/plugins/my-skills/skills/clean-code-gates`; opencode remote install cache location is shown in the loaded skill's location.
