@@ -187,13 +187,15 @@ Skills are then invocable as `/my-skills:clean-code-gates`, `/my-skills:commit-p
 
 ## Install (opencode)
 
-Recommended install: clone/update this repo under `~/.config/opencode/`, symlink each skill into `~/.config/opencode/skills/`, and add its skill directory to `skills.paths` for newer opencode releases.
+Recommended install: clone/update this repo under `~/.config/opencode/`, symlink each skill into `~/.config/opencode/skills/`, create matching slash commands under `~/.config/opencode/commands/`, and add its skill directory to `skills.paths` for newer opencode releases.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/kterto/my-skills/main/scripts/install-opencode.sh | bash
 ```
 
 Then restart opencode. Skills load as normal opencode skills: `clean-code-gates`, `commit-pr-dev`, `orchestrator`, `roadmap`, `product-manager`, etc.
+
+Slash commands are installed too: `/clean-code-gates`, `/commit-pr-dev`, `/orchestrator`, `/roadmap`, `/product-manager`, etc. In opencode, slash commands are separate from skills, so these command files explicitly load the matching skill before running it.
 
 Manual equivalent:
 
@@ -209,6 +211,21 @@ for skill in ~/.config/opencode/my-skills/plugins/my-skills/skills/*; do
   [ -d "$skill" ] && ln -sfn "$skill" ~/.config/opencode/skills/"$(basename "$skill")"
 done
 ```
+
+To add slash commands manually, create files like `~/.config/opencode/commands/roadmap.md`:
+
+~~~markdown
+---
+description: Run the roadmap skill
+---
+Use the skill tool to load the `roadmap` skill, then execute it with these arguments exactly as provided:
+
+```text
+$ARGUMENTS
+```
+
+Do not answer from memory before loading the skill. If the arguments are empty, follow the skill's default invocation behavior.
+~~~
 
 For newer opencode versions, you can also add this to `~/.config/opencode/opencode.json`:
 
