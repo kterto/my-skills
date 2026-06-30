@@ -9,10 +9,52 @@ Produce one self-contained interactive HTML code-review report for the current b
 
 ## Procedure
 
-1. Resolve the base branch. _(filled in Task 4)_
-2. Gather the diff. _(filled in Task 4)_
-3. Review across three lenses using `references/review-rubric.md`. _(filled in Task 4)_
-4. Author the HTML per `references/html-template.md`. _(filled in Task 4)_
+### 1. Resolve the base branch
+
+Detect the default branch and the merge-base, then show the user and let them override:
+
+```bash
+# default branch: prefer origin/HEAD, then main, master, dev
+base="$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@')"
+for cand in "$base" main master dev; do
+  [ -n "$cand" ] && git show-ref --verify --quiet "refs/heads/$cand" && base="$cand" && break
+done
+branch="$(git branch --show-current)"
+mb="$(git merge-base "$base" HEAD)"
+git --no-pager log --oneline "$mb"..HEAD | wc -l   # commit count
+git --no-pager diff --stat "$mb"..HEAD             # changed files / lines
+```
+
+Tell the user: base branch, merge-base sha (short), commit count, changed-file count.
+Ask them to confirm or supply a different base before continuing. Re-run with the
+chosen base if overridden.
+
+### 2. Gather the diff
+
+```bash
+git --no-pager diff "$base"...HEAD          # three-dot: branch changes since divergence
+git --no-pager diff --stat "$base"...HEAD
+```
+
+Read the full diff. If it is very large, prioritize files by `--stat` magnitude and
+explicitly list in the report any file you did not fully review — never truncate silently.
+
+### 3. Review across three lenses
+
+Follow `references/review-rubric.md`. Produce findings for Architecture (with ADR
+recommendations where criteria match — recommend only, write no files), Security,
+and Bugs & Improvements. Give each finding the full finding object: id, severity,
+title, file, line, rationale, fix, and (architecture only) optional adr.
+
+### 4. Author the HTML report
+
+Write ONE self-contained HTML file to `docs/reviews/<branch>-<YYYY-MM-DD>.html`
+following `references/html-template.md` exactly — inline CSS+JS, severity color
+tokens, the three sections, finding cards, the rendered per-file diff with inline
+gutter annotations, and the bidirectional `finding-<id>` ⇄ `diffline-<file>-<line>`
+anchors. Create `docs/reviews/` if absent.
+
+Then tell the user the path and a one-line summary (counts per severity).
 
 ## References
 
