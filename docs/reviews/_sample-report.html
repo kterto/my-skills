@@ -477,6 +477,7 @@
     var details = block.querySelector('details');
     if (details) details.open = true;
     block.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    e.target.value = '';   // reset so re-selecting the same file fires change again
   });
 })();
 </script>

@@ -45,7 +45,8 @@ Must open by double-click, offline.
   marker's section via its `data-finding` card's enclosing `<section>` and require
   both the marker's severity AND its section to be active before showing it.
 - **Collapse/expand all:** toggle every `<section>` and diff-file block.
-- **Jump-to-file:** selecting a file scrolls its diff block into view.
+- **Jump-to-file:** selecting a file scrolls its diff block into view, then reset the
+  select to its empty default so re-selecting the same file fires `change` again.
 
 No persisted state — filters reset on reload. Keep total JS small and dependency-free.
 
