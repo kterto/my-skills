@@ -191,6 +191,9 @@ my-skills/
 ├── scripts/
 │   ├── generate-opencode-skill-index.mjs
 │   └── install-opencode.sh
+├── .opencode/
+│   ├── commands/                 # opencode-specific slash command templates
+│   └── skills/                   # opencode-specific skill ports/overrides
 ├── sync.sh                      # author-side: symlink skills into ~/.claude/skills
 └── README.md
 ```
@@ -213,15 +216,15 @@ Skills are then invocable as `/my-skills:clean-code-gates`, `/my-skills:commit-p
 
 ## Install (opencode)
 
-Recommended install: clone/update this repo under `~/.config/opencode/`, symlink each skill into `~/.config/opencode/skills/`, create matching slash commands under `~/.config/opencode/commands/`, and add its skill directory to `skills.paths` for newer opencode releases.
+Recommended install: clone/update this repo under `~/.config/opencode/`, symlink each shared skill and opencode-specific skill into `~/.config/opencode/skills/`, create matching slash commands under `~/.config/opencode/commands/`, and add the skill directories to `skills.paths` for newer opencode releases.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/kterto/my-skills/main/scripts/install-opencode.sh | bash
 ```
 
-Then restart opencode. Skills load as normal opencode skills: `clean-code-gates`, `commit-pr-dev`, `orchestrator`, `roadmap`, `product-manager`, etc.
+Then restart opencode. Skills load as normal opencode skills: `clean-code-gates`, `commit-pr-dev`, `orchestrator`, `roadmap`, `product-manager`, `pr-review-report`, etc.
 
-Slash commands are installed too: `/clean-code-gates`, `/commit-pr-dev`, `/orchestrator`, `/roadmap`, `/product-manager`, etc. In opencode, slash commands are separate from skills, so these command files explicitly load the matching skill before running it.
+Slash commands are installed too: `/clean-code-gates`, `/commit-pr-dev`, `/orchestrator`, `/roadmap`, `/product-manager`, `/pr-review-report`, etc. In opencode, slash commands are separate from skills, so these command files explicitly load the matching skill before running it. Hand-written templates under `.opencode/commands/` override the generated command prompt for the same name.
 
 Manual equivalent:
 
@@ -234,6 +237,9 @@ Then link each skill into opencode's global skill directory:
 ```bash
 mkdir -p ~/.config/opencode/skills
 for skill in ~/.config/opencode/my-skills/plugins/my-skills/skills/*; do
+  [ -d "$skill" ] && ln -sfn "$skill" ~/.config/opencode/skills/"$(basename "$skill")"
+done
+for skill in ~/.config/opencode/my-skills/.opencode/skills/*; do
   [ -d "$skill" ] && ln -sfn "$skill" ~/.config/opencode/skills/"$(basename "$skill")"
 done
 ```
@@ -260,7 +266,8 @@ For newer opencode versions, you can also add this to `~/.config/opencode/openco
   "$schema": "https://opencode.ai/config.json",
   "skills": {
     "paths": [
-      "~/.config/opencode/my-skills/plugins/my-skills/skills"
+      "~/.config/opencode/my-skills/plugins/my-skills/skills",
+      "~/.config/opencode/my-skills/.opencode/skills"
     ]
   }
 }
