@@ -56,7 +56,7 @@ title, file, line, rationale, fix, and (architecture only) optional adr.
 Write ONE self-contained HTML file to `docs/reviews/<branch>-<YYYY-MM-DD>.html`
 following `references/html-template.md` exactly — inline CSS+JS, severity color
 tokens, the three sections, finding cards, the rendered per-file diff with inline
-gutter annotations, and the bidirectional `finding-<id>` ⇄ `diffline-<file>-<line>`
+gutter annotations, and the bidirectional `finding-<id>` ⇄ `diffline-<file-slug>-<line>`
 anchors. Create `docs/reviews/` if absent.
 
 Then tell the user the path and a one-line summary (counts per severity).

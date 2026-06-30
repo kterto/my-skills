@@ -326,10 +326,15 @@ Detect the default branch and the merge-base, then show the user and let them ov
 
 \`\`\`bash
 # default branch: prefer origin/HEAD, then main, master, dev
-base="$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@')"
-for cand in "$base" main master dev; do
-  [ -n "$cand" ] && git show-ref --verify --quiet "refs/heads/$cand" && base="$cand" && break
+guess="$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@')"
+base=""
+for cand in "$guess" main master dev; do
+  [ -n "$cand" ] || continue
+  if git show-ref --verify --quiet "refs/heads/$cand"; then base="$cand"; break
+  elif git show-ref --verify --quiet "refs/remotes/origin/$cand"; then base="origin/$cand"; break
+  fi
 done
+base="${base:-origin/main}"   # last-resort fallback
 branch="$(git branch --show-current)"
 mb="$(git merge-base "$base" HEAD)"
 git --no-pager log --oneline "$mb"..HEAD | wc -l   # commit count

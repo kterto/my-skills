@@ -47,4 +47,9 @@ No persisted state — filters reset on reload. Keep total JS small and dependen
 ## Empty state
 
 If a lens has no findings, still render the section with a "No findings" note so the
-report shape is consistent.
+report shape is consistent. Render this inside the section body when a lens has zero
+findings:
+
+```html
+<p class="no-findings">No findings in this lens.</p>
+```
