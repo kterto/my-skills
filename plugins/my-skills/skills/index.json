@@ -72,6 +72,14 @@
       ]
     },
     {
+      "name": "pr-review-report",
+      "files": [
+        "references/html-template.md",
+        "references/review-rubric.md",
+        "SKILL.md"
+      ]
+    },
+    {
       "name": "product-manager",
       "files": [
         "references/git-flow.md",

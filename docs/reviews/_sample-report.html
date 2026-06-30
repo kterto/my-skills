@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PR Review — feat/example</title>
+<style>
+  :root {
+    --sev-critical:#dc2626;
+    --sev-high:#ea580c;
+    --sev-medium:#ca8a04;
+    --sev-low:#2563eb;
+    --sev-info:#6b7280;
+    --bg:#0f172a;
+    --panel:#ffffff;
+    --ink:#1e293b;
+    --muted:#64748b;
+    --border:#e2e8f0;
+    --add-bg:rgba(22,163,74,.14);
+    --add-border:rgba(22,163,74,.45);
+    --rem-bg:rgba(220,38,38,.12);
+    --rem-border:rgba(220,38,38,.4);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: #f1f5f9;
+    color: var(--ink);
+    line-height: 1.45;
+  }
+  header.topbar {
+    background: var(--bg);
+    color: #f8fafc;
+    padding: 1.25rem 1.5rem;
+  }
+  header.topbar h1 { margin: 0 0 .5rem; font-size: 1.25rem; }
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: .5rem 1.5rem;
+    font-size: .85rem;
+    margin-bottom: .75rem;
+  }
+  .summary-grid dt { color: #94a3b8; text-transform: uppercase; font-size: .7rem; letter-spacing: .04em; }
+  .summary-grid dd { margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .badges { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .5rem; }
+  .badge {
+    display: inline-flex; align-items: center; gap: .35rem;
+    padding: .2rem .6rem; border-radius: 999px; font-size: .75rem; font-weight: 600;
+    background: rgba(255,255,255,.1); color: #f8fafc;
+  }
+  .badge .dot { width: .55rem; height: .55rem; border-radius: 50%; display: inline-block; }
+  .section-counts { display: flex; gap: .75rem; flex-wrap: wrap; font-size: .78rem; color: #cbd5e1; }
+
+  .controls {
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: .85rem 1.5rem;
+    display: flex; flex-wrap: wrap; gap: 1.25rem; align-items: center;
+    position: sticky; top: 0; z-index: 5;
+  }
+  .controls fieldset { border: none; margin: 0; padding: 0; display: flex; gap: .6rem; align-items: center; }
+  .controls legend { font-size: .7rem; text-transform: uppercase; color: var(--muted); margin-bottom: .2rem; }
+  .controls label { font-size: .82rem; display: inline-flex; align-items: center; gap: .3rem; cursor: pointer; }
+  .controls button, .controls select {
+    font-size: .82rem; padding: .35rem .65rem; border-radius: 6px; border: 1px solid var(--border);
+    background: #fff; cursor: pointer;
+  }
+
+  main { max-width: 1100px; margin: 0 auto; padding: 1.25rem 1.5rem 3rem; }
+
+  section.lens { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 1.25rem; overflow: hidden; }
+  section.lens > details > summary {
+    cursor: pointer; padding: .85rem 1.1rem; font-weight: 700; font-size: 1.02rem;
+    display: flex; align-items: center; justify-content: space-between; list-style: none;
+    background: #f8fafc; border-bottom: 1px solid var(--border);
+  }
+  section.lens > details > summary::-webkit-details-marker { display: none; }
+  section.lens > details[open] > summary { border-bottom: 1px solid var(--border); }
+  .lens-count { font-weight: 500; color: var(--muted); font-size: .8rem; }
+  .lens-body { padding: 1rem 1.1rem; display: flex; flex-direction: column; gap: .9rem; }
+
+  .finding-card {
+    border: 1px solid var(--border); border-left-width: 5px; border-radius: 8px;
+    padding: .85rem 1rem; background: #fff;
+  }
+  .finding-card.sev-critical { border-left-color: var(--sev-critical); }
+  .finding-card.sev-high { border-left-color: var(--sev-high); }
+  .finding-card.sev-medium { border-left-color: var(--sev-medium); }
+  .finding-card.sev-low { border-left-color: var(--sev-low); }
+  .finding-card.sev-info { border-left-color: var(--sev-info); }
+  .finding-card.is-hidden { display: none; }
+
+  .finding-head { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-bottom: .4rem; }
+  .chip {
+    color: #fff; font-size: .68rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; padding: .15rem .5rem; border-radius: 999px;
+  }
+  .chip.sev-critical { background: var(--sev-critical); }
+  .chip.sev-high { background: var(--sev-high); }
+  .chip.sev-medium { background: var(--sev-medium); }
+  .chip.sev-low { background: var(--sev-low); }
+  .chip.sev-info { background: var(--sev-info); }
+  .finding-title { font-weight: 700; }
+  .diffline-link {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .8rem;
+    color: #1d4ed8; text-decoration: none; background: #eff6ff; padding: .1rem .4rem; border-radius: 4px;
+  }
+  .diffline-link:hover { text-decoration: underline; }
+  .adr-badge {
+    display: inline-block; font-size: .68rem; font-weight: 700; text-transform: uppercase;
+    color: #4338ca; background: #eef2ff; border: 1px solid #c7d2fe; padding: .15rem .5rem; border-radius: 6px;
+  }
+  .adr-box { margin-top: .5rem; padding: .55rem .7rem; background: #f5f3ff; border: 1px dashed #c4b5fd; border-radius: 6px; font-size: .85rem; }
+  .adr-box .adr-title { font-weight: 700; margin-bottom: .2rem; }
+  .finding-rationale, .finding-fix { font-size: .88rem; margin-top: .4rem; }
+  .finding-fix strong, .finding-rationale strong { color: var(--muted); font-size: .75rem; text-transform: uppercase; letter-spacing: .03em; }
+
+  .diff-file { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 1rem; overflow: hidden; background: #fff; }
+  .diff-file > details > summary {
+    cursor: pointer; padding: .65rem 1rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: .85rem; background: #f8fafc; border-bottom: 1px solid var(--border); list-style: none;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .diff-file > details > summary::-webkit-details-marker { display: none; }
+  .diff-body { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .82rem; }
+  .diff-line { display: grid; grid-template-columns: 3rem 1.5rem 1fr; align-items: start; padding: .08rem 0; }
+  .diff-line .ln { color: #94a3b8; text-align: right; padding-right: .5rem; user-select: none; }
+  .diff-line .gutter { display: flex; align-items: center; justify-content: center; }
+  .diff-line code { white-space: pre-wrap; padding-right: .75rem; }
+  .diff-line.added { background: var(--add-bg); border-left: 3px solid var(--add-border); }
+  .diff-line.removed { background: var(--rem-bg); border-left: 3px solid var(--rem-border); }
+  .diff-line.context { border-left: 3px solid transparent; }
+  .ann {
+    width: 1.1rem; height: 1.1rem; border-radius: 50%; border: none; cursor: pointer;
+    color: #fff; font-size: .65rem; font-weight: 700; line-height: 1.1rem; padding: 0;
+  }
+  .ann.is-hidden { visibility: hidden; }
+  .ann.sev-critical { background: var(--sev-critical); }
+  .ann.sev-high { background: var(--sev-high); }
+  .ann.sev-medium { background: var(--sev-medium); }
+  .ann.sev-low { background: var(--sev-low); }
+  .ann.sev-info { background: var(--sev-info); }
+
+  .flash { animation: flash-anim 1.2s ease-out; }
+  @keyframes flash-anim {
+    0% { box-shadow: 0 0 0 3px #fde047; background-color: #fef9c3; }
+    100% { box-shadow: 0 0 0 0 transparent; }
+  }
+  section.lens.is-hidden { display: none; }
+  .no-findings { color: var(--muted); font-style: italic; font-size: .85rem; }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <h1>PR Review — feat/example</h1>
+  <dl class="summary-grid">
+    <div><dt>Branch</dt><dd>feat/example</dd></div>
+    <div><dt>Base branch</dt><dd>main</dd></div>
+    <div><dt>Merge-base SHA</dt><dd>a1b2c3d</dd></div>
+    <div><dt>Commit range</dt><dd>a1b2c3d..feat/example</dd></div>
+    <div><dt>Generated at</dt><dd>2026-06-30T10:15:00Z</dd></div>
+  </dl>
+  <div class="badges" aria-label="Findings by severity">
+    <span class="badge"><span class="dot" style="background:var(--sev-critical)"></span>Critical: 1</span>
+    <span class="badge"><span class="dot" style="background:var(--sev-high)"></span>High: 1</span>
+    <span class="badge"><span class="dot" style="background:var(--sev-medium)"></span>Medium: 1</span>
+    <span class="badge"><span class="dot" style="background:var(--sev-low)"></span>Low: 1</span>
+    <span class="badge"><span class="dot" style="background:var(--sev-info)"></span>Info: 1</span>
+  </div>
+  <div class="section-counts">
+    <span>Architecture: 1 finding</span>
+    <span>Security: 2 findings</span>
+    <span>Bugs &amp; Improvements: 2 findings</span>
+  </div>
+</header>
+
+<div class="controls">
+  <fieldset>
+    <legend>Severity</legend>
+    <label><input type="checkbox" class="sev-filter" value="critical" checked> Critical</label>
+    <label><input type="checkbox" class="sev-filter" value="high" checked> High</label>
+    <label><input type="checkbox" class="sev-filter" value="medium" checked> Medium</label>
+    <label><input type="checkbox" class="sev-filter" value="low" checked> Low</label>
+    <label><input type="checkbox" class="sev-filter" value="info" checked> Info</label>
+  </fieldset>
+  <fieldset>
+    <legend>Section</legend>
+    <label><input type="checkbox" class="section-filter" value="architecture" checked> Architecture</label>
+    <label><input type="checkbox" class="section-filter" value="security" checked> Security</label>
+    <label><input type="checkbox" class="section-filter" value="bugs" checked> Bugs &amp; Improvements</label>
+  </fieldset>
+  <fieldset>
+    <legend>View</legend>
+    <button type="button" id="collapse-all">Collapse all</button>
+    <button type="button" id="expand-all">Expand all</button>
+  </fieldset>
+  <fieldset>
+    <legend>Jump to file</legend>
+    <select id="jump-to-file">
+      <option value="">Select a file…</option>
+      <option value="diff-file-src-auth-session-js">src/auth/session.js</option>
+      <option value="diff-file-src-api-routes-users-js">src/api/routes/users.js</option>
+    </select>
+  </fieldset>
+</div>
+
+<main>
+
+  <section class="lens" data-section="architecture">
+    <details open>
+      <summary>Architecture <span class="lens-count">1 finding</span></summary>
+      <div class="lens-body">
+
+        <article class="finding-card sev-info" id="finding-arch-1" data-severity="info">
+          <div class="finding-head">
+            <span class="chip sev-info">Info</span>
+            <span class="finding-title">Second session-validation path duplicates auth/session.js logic</span>
+            <span class="adr-badge">ADR recommended</span>
+          </div>
+          <a class="diffline-link" href="#diffline-src-api-routes-users-js-5" data-diffline="diffline-src-api-routes-users-js-5">src/api/routes/users.js:5</a>
+          <p class="finding-rationale"><strong>Why it matters</strong><br>
+            <code>router.use('/users', legacySessionMiddleware)</code> wires a second, divergent
+            admin-token check alongside the new <code>createSession</code> JWT flow. Two independent
+            paths can decide whether a request is authenticated, and a future fix to one path is easy
+            to forget in the other.</p>
+          <p class="finding-fix"><strong>Suggested fix</strong><br>
+            Consolidate to a single exported session-validation middleware in
+            <code>auth/session.js</code> and have every router depend on it.</p>
+          <div class="adr-box">
+            <div class="adr-title">ADR draft: Single source of truth for request session validation</div>
+            <div>Context: the diff introduces two independent ways to authenticate a request
+              (JWT-based <code>createSession</code> vs. a legacy shared-secret header check). This is
+              hard to reverse once routes depend on either path and affects every future route added to
+              this router. Recommend picking one strategy and removing the other before merge.</div>
+          </div>
+        </article>
+
+      </div>
+    </details>
+  </section>
+
+  <section class="lens" data-section="security">
+    <details open>
+      <summary>Security <span class="lens-count">2 findings</span></summary>
+      <div class="lens-body">
+
+        <article class="finding-card sev-critical" id="finding-sec-1" data-severity="critical">
+          <div class="finding-head">
+            <span class="chip sev-critical">Critical</span>
+            <span class="finding-title">Hardcoded admin token committed to source</span>
+          </div>
+          <a class="diffline-link" href="#diffline-src-auth-session-js-3" data-diffline="diffline-src-auth-session-js-3">src/auth/session.js:3</a>
+          <p class="finding-rationale"><strong>Why it matters</strong><br>
+            <code>ADMIN_TOKEN</code> is a literal secret string checked into version control. Anyone
+            with read access to the repository (including this PR's diff) can authenticate as admin
+            against <code>legacySessionMiddleware</code>.</p>
+          <p class="finding-fix"><strong>Suggested fix</strong><br>
+            Load <code>ADMIN_TOKEN</code> from a secret manager or environment variable at startup,
+            rotate the leaked value immediately, and add a pre-commit secret scanner.</p>
+        </article>
+
+        <article class="finding-card sev-medium" id="finding-sec-2" data-severity="medium">
+          <div class="finding-head">
+            <span class="chip sev-medium">Medium</span>
+            <span class="finding-title">Session token logged in plaintext</span>
+          </div>
+          <a class="diffline-link" href="#diffline-src-auth-session-js-7" data-diffline="diffline-src-auth-session-js-7">src/auth/session.js:7</a>
+          <p class="finding-rationale"><strong>Why it matters</strong><br>
+            <code>console.log</code> prints the freshly minted JWT alongside the <code>userId</code>.
+            Anything with access to application logs (log aggregators, stdout capture, crash reports)
+            can hijack the session.</p>
+          <p class="finding-fix"><strong>Suggested fix</strong><br>
+            Remove the token from the log line, or log only a non-reversible identifier such as a hash
+            of the token.</p>
+        </article>
+
+      </div>
+    </details>
+  </section>
+
+  <section class="lens" data-section="bugs">
+    <details open>
+      <summary>Bugs &amp; Improvements <span class="lens-count">2 findings</span></summary>
+      <div class="lens-body">
+
+        <article class="finding-card sev-high" id="finding-bug-1" data-severity="high">
+          <div class="finding-head">
+            <span class="chip sev-high">High</span>
+            <span class="finding-title">Missing await leaves user as a pending Promise</span>
+          </div>
+          <a class="diffline-link" href="#diffline-src-api-routes-users-js-8" data-diffline="diffline-src-api-routes-users-js-8">src/api/routes/users.js:8</a>
+          <p class="finding-rationale"><strong>Why it matters</strong><br>
+            <code>db.users.findById</code> returns a Promise but is not awaited, so <code>user</code>
+            is the Promise object rather than the row. <code>res.json(user)</code> serializes Promise
+            internals instead of the actual user — every request to this route is broken.</p>
+          <p class="finding-fix"><strong>Suggested fix</strong><br>
+            Add <code>await</code>: <code>const user = await db.users.findById(req.params.id);</code></p>
+        </article>
+
+        <article class="finding-card sev-low" id="finding-bug-2" data-severity="low">
+          <div class="finding-head">
+            <span class="chip sev-low">Low</span>
+            <span class="finding-title">Off-by-one in pagination skips the first page's results</span>
+          </div>
+          <a class="diffline-link" href="#diffline-src-api-routes-users-js-16" data-diffline="diffline-src-api-routes-users-js-16">src/api/routes/users.js:16</a>
+          <p class="finding-rationale"><strong>Why it matters</strong><br>
+            <code>page</code> starts at 1 (<code>parseInt(req.query.page) || 1</code>), but
+            <code>slice(page * pageSize, ...)</code> treats page 1 as the second page, so the first
+            <code>pageSize</code> users are silently never returned.</p>
+          <p class="finding-fix"><strong>Suggested fix</strong><br>
+            Use <code>(page - 1) * pageSize</code> as the slice start.</p>
+        </article>
+
+      </div>
+    </details>
+  </section>
+
+  <h2 style="font-size:1rem;color:#475569;margin:1.5rem 0 .75rem;">Diff</h2>
+
+  <div class="diff-file" id="diff-file-src-auth-session-js" data-file="src/auth/session.js">
+    <details open>
+      <summary><span>src/auth/session.js</span><span>2 annotations</span></summary>
+      <div class="diff-body">
+        <div class="diff-line context"><span class="ln">1</span><span class="gutter"></span><code>  const crypto = require('crypto');</code></div>
+        <div class="diff-line added" id="diffline-src-auth-session-js-2"><span class="ln">2</span><span class="gutter"></span><code>+ const jwt = require('jsonwebtoken');</code></div>
+        <div class="diff-line added" id="diffline-src-auth-session-js-3"><span class="ln">3</span><span class="gutter"><button type="button" class="ann sev-critical" data-finding="sec-1" data-severity="critical" title="finding sec-1: Hardcoded admin token committed to source">●</button></span><code>+ const ADMIN_TOKEN = 'sk-live-9f8a7d6c5b4a3f2e1d0c91234567';</code></div>
+        <div class="diff-line context"><span class="ln">4</span><span class="gutter"></span><code></code></div>
+        <div class="diff-line added" id="diffline-src-auth-session-js-5"><span class="ln">5</span><span class="gutter"></span><code>+ function createSession(userId, secret) {</code></div>
+        <div class="diff-line added" id="diffline-src-auth-session-js-6"><span class="ln">6</span><span class="gutter"></span><code>+   const token = jwt.sign({ userId }, secret, { expiresIn: '7d' });</code></div>
+        <div class="diff-line added" id="diffline-src-auth-session-js-7"><span class="ln">7</span><span class="gutter"><button type="button" class="ann sev-medium" data-finding="sec-2" data-severity="medium" title="finding sec-2: Session token logged in plaintext">●</button></span><code>+   console.log('session created for', userId, token);</code></div>
+        <div class="diff-line added" id="diffline-src-auth-session-js-8"><span class="ln">8</span><span class="gutter"></span><code>+   return { token, userId };</code></div>
+        <div class="diff-line added" id="diffline-src-auth-session-js-9"><span class="ln">9</span><span class="gutter"></span><code>+ }</code></div>
+        <div class="diff-line context"><span class="ln">10</span><span class="gutter"></span><code></code></div>
+        <div class="diff-line added" id="diffline-src-auth-session-js-11"><span class="ln">11</span><span class="gutter"></span><code>+ function legacySessionMiddleware(req, res, next) {</code></div>
+        <div class="diff-line added" id="diffline-src-auth-session-js-12"><span class="ln">12</span><span class="gutter"></span><code>+   if (req.headers['x-admin-token'] === ADMIN_TOKEN) return next();</code></div>
+        <div class="diff-line added" id="diffline-src-auth-session-js-13"><span class="ln">13</span><span class="gutter"></span><code>+   return res.sendStatus(403);</code></div>
+        <div class="diff-line added" id="diffline-src-auth-session-js-14"><span class="ln">14</span><span class="gutter"></span><code>+ }</code></div>
+        <div class="diff-line removed"><span class="ln">-</span><span class="gutter"></span><code>- function legacyValidate(token) {</code></div>
+        <div class="diff-line removed"><span class="ln">-</span><span class="gutter"></span><code>-   return token === 'admin';</code></div>
+        <div class="diff-line removed"><span class="ln">-</span><span class="gutter"></span><code>- }</code></div>
+        <div class="diff-line context"><span class="ln">15</span><span class="gutter"></span><code></code></div>
+        <div class="diff-line context"><span class="ln">16</span><span class="gutter"></span><code>  module.exports = { createSession, legacySessionMiddleware };</code></div>
+      </div>
+    </details>
+  </div>
+
+  <div class="diff-file" id="diff-file-src-api-routes-users-js" data-file="src/api/routes/users.js">
+    <details open>
+      <summary><span>src/api/routes/users.js</span><span>3 annotations</span></summary>
+      <div class="diff-body">
+        <div class="diff-line context"><span class="ln">1</span><span class="gutter"></span><code>  const express = require('express');</code></div>
+        <div class="diff-line context"><span class="ln">2</span><span class="gutter"></span><code>  const router = express.Router();</code></div>
+        <div class="diff-line added" id="diffline-src-api-routes-users-js-3"><span class="ln">3</span><span class="gutter"></span><code>+ const { legacySessionMiddleware } = require('../auth/session');</code></div>
+        <div class="diff-line context"><span class="ln">4</span><span class="gutter"></span><code></code></div>
+        <div class="diff-line added" id="diffline-src-api-routes-users-js-5"><span class="ln">5</span><span class="gutter"><button type="button" class="ann sev-info" data-finding="arch-1" data-severity="info" title="finding arch-1: Second session-validation path duplicates auth/session.js logic">●</button></span><code>+ router.use('/users', legacySessionMiddleware); // second, divergent session-validation path</code></div>
+        <div class="diff-line context"><span class="ln">6</span><span class="gutter"></span><code></code></div>
+        <div class="diff-line context"><span class="ln">7</span><span class="gutter"></span><code>  router.get('/users/:id', async (req, res) => {</code></div>
+        <div class="diff-line removed"><span class="ln">-</span><span class="gutter"></span><code>-   if (!legacyValidate(req.headers['x-admin-token'])) return res.sendStatus(403);</code></div>
+        <div class="diff-line added" id="diffline-src-api-routes-users-js-8"><span class="ln">8</span><span class="gutter"><button type="button" class="ann sev-high" data-finding="bug-1" data-severity="high" title="finding bug-1: Missing await leaves user as a pending Promise">●</button></span><code>+   const user = db.users.findById(req.params.id);</code></div>
+        <div class="diff-line context"><span class="ln">9</span><span class="gutter"></span><code>    res.json(user);</code></div>
+        <div class="diff-line context"><span class="ln">10</span><span class="gutter"></span><code>  });</code></div>
+        <div class="diff-line context"><span class="ln">11</span><span class="gutter"></span><code></code></div>
+        <div class="diff-line context"><span class="ln">12</span><span class="gutter"></span><code>  router.get('/users', async (req, res) => {</code></div>
+        <div class="diff-line context"><span class="ln">13</span><span class="gutter"></span><code>    const page = parseInt(req.query.page) || 1;</code></div>
+        <div class="diff-line added" id="diffline-src-api-routes-users-js-14"><span class="ln">14</span><span class="gutter"></span><code>+   const pageSize = 20;</code></div>
+        <div class="diff-line removed"><span class="ln">-</span><span class="gutter"></span><code>-   res.json(await db.users.list());</code></div>
+        <div class="diff-line added" id="diffline-src-api-routes-users-js-15"><span class="ln">15</span><span class="gutter"></span><code>+   const users = await db.users.list();</code></div>
+        <div class="diff-line added" id="diffline-src-api-routes-users-js-16"><span class="ln">16</span><span class="gutter"><button type="button" class="ann sev-low" data-finding="bug-2" data-severity="low" title="finding bug-2: Off-by-one in pagination skips the first page's results">●</button></span><code>+   const sliced = users.slice(page * pageSize, page * pageSize + pageSize);</code></div>
+        <div class="diff-line context"><span class="ln">17</span><span class="gutter"></span><code>    res.json(sliced);</code></div>
+        <div class="diff-line context"><span class="ln">18</span><span class="gutter"></span><code>  });</code></div>
+        <div class="diff-line context"><span class="ln">19</span><span class="gutter"></span><code></code></div>
+        <div class="diff-line context"><span class="ln">20</span><span class="gutter"></span><code>  module.exports = router;</code></div>
+      </div>
+    </details>
+  </div>
+
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  function $(id) { return document.getElementById(id); }
+
+  function openAncestorDetails(el) {
+    var node = el;
+    while (node) {
+      var details = node.closest ? node.closest('details') : null;
+      if (!details) break;
+      details.open = true;
+      node = details.parentElement;
+    }
+  }
+
+  function flashAndScroll(target) {
+    if (!target) return;
+    openAncestorDetails(target);
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    target.classList.add('flash');
+    window.setTimeout(function () {
+      target.classList.remove('flash');
+    }, 1200);
+  }
+
+  // Bidirectional jump: gutter marker -> finding card
+  document.querySelectorAll('.ann').forEach(function (marker) {
+    marker.addEventListener('click', function () {
+      var findingId = marker.getAttribute('data-finding');
+      flashAndScroll($('finding-' + findingId));
+    });
+  });
+
+  // Bidirectional jump: finding card file:line link -> diff line
+  document.querySelectorAll('.diffline-link').forEach(function (link) {
+    link.addEventListener('click', function (e) {
+      e.preventDefault();
+      var targetId = link.getAttribute('data-diffline');
+      flashAndScroll($(targetId));
+    });
+  });
+
+  // Severity multi-toggle filter
+  var sevBoxes = document.querySelectorAll('.sev-filter');
+  function applySeverityFilter() {
+    var active = {};
+    sevBoxes.forEach(function (box) {
+      if (box.checked) active[box.value] = true;
+    });
+    document.querySelectorAll('.finding-card').forEach(function (card) {
+      var sev = card.getAttribute('data-severity');
+      card.classList.toggle('is-hidden', !active[sev]);
+    });
+    document.querySelectorAll('.ann').forEach(function (marker) {
+      var sev = marker.getAttribute('data-severity');
+      marker.classList.toggle('is-hidden', !active[sev]);
+    });
+  }
+  sevBoxes.forEach(function (box) { box.addEventListener('change', applySeverityFilter); });
+
+  // Section filter
+  var sectionBoxes = document.querySelectorAll('.section-filter');
+  function applySectionFilter() {
+    var active = {};
+    sectionBoxes.forEach(function (box) {
+      if (box.checked) active[box.value] = true;
+    });
+    document.querySelectorAll('section.lens').forEach(function (section) {
+      var name = section.getAttribute('data-section');
+      section.classList.toggle('is-hidden', !active[name]);
+    });
+  }
+  sectionBoxes.forEach(function (box) { box.addEventListener('change', applySectionFilter); });
+
+  // Collapse / expand all (sections + diff file blocks)
+  function setAllDetails(open) {
+    document.querySelectorAll('details').forEach(function (d) { d.open = open; });
+  }
+  $('collapse-all').addEventListener('click', function () { setAllDetails(false); });
+  $('expand-all').addEventListener('click', function () { setAllDetails(true); });
+
+  // Jump to file
+  $('jump-to-file').addEventListener('change', function (e) {
+    var id = e.target.value;
+    if (!id) return;
+    var block = $(id);
+    if (!block) return;
+    var details = block.querySelector('details');
+    if (details) details.open = true;
+    block.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+})();
+</script>
+
+</body>
+</html>
