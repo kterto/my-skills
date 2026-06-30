@@ -17,5 +17,16 @@ for ref in review-rubric.md html-template.md; do
   if [ ! -f "$SKILL_DIR/references/$ref" ]; then echo "FAIL: missing references/$ref"; fail=1; fi
 done
 
+# 3. if a sample report exists, it must be self-contained (no external http refs,
+#    no src/href to remote, anchors resolve loosely)
+SAMPLE="$ROOT/docs/reviews/_sample-report.html"
+if [ -f "$SAMPLE" ]; then
+  if grep -Eq 'src="https?://|href="https?://|<link[^>]+https?://' "$SAMPLE"; then
+    echo "FAIL: sample report has external references"; fail=1
+  fi
+  if ! grep -q 'id="finding-' "$SAMPLE"; then echo "FAIL: sample has no finding anchors"; fail=1; fi
+  if ! grep -q 'id="diffline-' "$SAMPLE"; then echo "FAIL: sample has no diffline anchors"; fail=1; fi
+fi
+
 [ "$fail" -eq 0 ] && echo "PASS: frontmatter" || true
 exit "$fail"
