@@ -39,6 +39,11 @@ Must open by double-click, offline.
 - **Severity filter:** toggling a severity hides/shows all finding cards AND their
   gutter markers of that severity.
 - **Section filter:** show/hide whole sections.
+- **Coordinate the two filters:** apply severity and section together so a gutter
+  marker is hidden whenever its finding card is hidden by EITHER filter — otherwise
+  clicking a marker for a filtered-out finding scrolls to a hidden card. Resolve each
+  marker's section via its `data-finding` card's enclosing `<section>` and require
+  both the marker's severity AND its section to be active before showing it.
 - **Collapse/expand all:** toggle every `<section>` and diff-file block.
 - **Jump-to-file:** selecting a file scrolls its diff block into view.
 

@@ -422,37 +422,44 @@
     });
   });
 
-  // Severity multi-toggle filter
+  // Severity + section filters, applied together so a gutter marker is hidden
+  // whenever its finding card is hidden by EITHER filter (otherwise clicking a
+  // marker for a filtered-out finding would scroll to a hidden card).
   var sevBoxes = document.querySelectorAll('.sev-filter');
-  function applySeverityFilter() {
-    var active = {};
-    sevBoxes.forEach(function (box) {
-      if (box.checked) active[box.value] = true;
-    });
-    document.querySelectorAll('.finding-card').forEach(function (card) {
-      var sev = card.getAttribute('data-severity');
-      card.classList.toggle('is-hidden', !active[sev]);
-    });
-    document.querySelectorAll('.ann').forEach(function (marker) {
-      var sev = marker.getAttribute('data-severity');
-      marker.classList.toggle('is-hidden', !active[sev]);
-    });
-  }
-  sevBoxes.forEach(function (box) { box.addEventListener('change', applySeverityFilter); });
-
-  // Section filter
   var sectionBoxes = document.querySelectorAll('.section-filter');
-  function applySectionFilter() {
-    var active = {};
-    sectionBoxes.forEach(function (box) {
-      if (box.checked) active[box.value] = true;
+
+  function updateFilters() {
+    var activeSevs = {};
+    sevBoxes.forEach(function (box) {
+      if (box.checked) activeSevs[box.value] = true;
     });
+    var activeSections = {};
+    sectionBoxes.forEach(function (box) {
+      if (box.checked) activeSections[box.value] = true;
+    });
+
     document.querySelectorAll('section.lens').forEach(function (section) {
       var name = section.getAttribute('data-section');
-      section.classList.toggle('is-hidden', !active[name]);
+      section.classList.toggle('is-hidden', !activeSections[name]);
+    });
+
+    document.querySelectorAll('.finding-card').forEach(function (card) {
+      var sev = card.getAttribute('data-severity');
+      card.classList.toggle('is-hidden', !activeSevs[sev]);
+    });
+
+    document.querySelectorAll('.ann').forEach(function (marker) {
+      var sev = marker.getAttribute('data-severity');
+      var card = document.getElementById('finding-' + marker.getAttribute('data-finding'));
+      var section = card ? card.closest('section.lens') : null;
+      var sectionName = section ? section.getAttribute('data-section') : null;
+      var visible = activeSevs[sev] && (!sectionName || activeSections[sectionName]);
+      marker.classList.toggle('is-hidden', !visible);
     });
   }
-  sectionBoxes.forEach(function (box) { box.addEventListener('change', applySectionFilter); });
+
+  sevBoxes.forEach(function (box) { box.addEventListener('change', updateFilters); });
+  sectionBoxes.forEach(function (box) { box.addEventListener('change', updateFilters); });
 
   // Collapse / expand all (sections + diff file blocks)
   function setAllDetails(open) {
