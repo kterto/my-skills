@@ -13,6 +13,7 @@ Authored [Claude Code](https://code.claude.com) skills, packaged as a plugin mar
 | `orchestrator` | Project-agnostic 6-agent pipeline (brainstormer → architect → coder → tester → reviewer → qa) with a context-confidence gate, spec-driven-eval integration, and a final Markdown/HTML report. Auto-detects first-run bootstrap vs. straight pipeline execution. |
 | `roadmap` | Decomposes a project spec into an auditable milestone→phase→user-story roadmap under `/roadmap/`, with append-only audit logs, orchestrator-ready user-story briefs, `/roadmap sync` trailer stamping, and diff+preserve re-evaluation. Doc-only. |
 | `product-manager` | Autonomously drives a scoped branch of the roadmap to completion — feeds each user story's brief to the orchestrator, then commits with the `Roadmap-Story:` trailer, syncs the roadmap, pushes, and opens a stacked PR per story. Conservative human-validation default; stops on orchestrator stall. |
+| `pr-review-report` | Reviews the current branch against an auto-detected base and authors one self-contained interactive HTML PR-review report — architecture (with recommend-only ADR flags), security, and bugs/improvements lenses, the rendered diff with inline annotations, findings color-coded by severity. |
 
 ## orchestrator
 
@@ -161,7 +162,8 @@ my-skills/
 │           ├── design-to-code/SKILL.md
 │           ├── orchestrator/SKILL.md
 │           ├── roadmap/SKILL.md
-│           └── product-manager/SKILL.md
+│           ├── product-manager/SKILL.md
+│           └── pr-review-report/SKILL.md
 ├── scripts/
 │   ├── generate-opencode-skill-index.mjs
 │   └── install-opencode.sh
