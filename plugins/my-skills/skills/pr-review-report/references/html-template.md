@@ -1,7 +1,9 @@
 # HTML Artifact Contract
 
 Author ONE self-contained `.html` file. All CSS and JS inline in `<style>` /
-`<script>`. **No external references** — no CDN links, fonts, or images by URL.
+`<script>`. **No remotely-loaded resources** — no CDN scripts, stylesheets, fonts,
+or images by URL (`src="http..."`, `<link href="http...">`). Outbound `<a href="https://...">`
+links in finding text (docs, issue trackers) are fine — they navigate, they don't load.
 Must open by double-click, offline.
 
 ## Anchor scheme (powers the bidirectional jump)
