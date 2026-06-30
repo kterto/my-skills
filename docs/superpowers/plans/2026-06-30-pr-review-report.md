@@ -334,11 +334,22 @@ for cand in "$guess" main master dev; do
   elif git show-ref --verify --quiet "refs/remotes/origin/$cand"; then base="origin/$cand"; break
   fi
 done
-base="${base:-origin/main}"   # last-resort fallback
+# last resort: only adopt a ref that actually resolves — never invent origin/main
+# (it would crash merge-base in a local-only clone), and never silently pick a
+# random branch (it would diff against the wrong base).
+if [ -z "$base" ]; then
+  for cand in main master origin/main origin/master; do
+    git rev-parse --verify --quiet "$cand^{commit}" >/dev/null 2>&1 && base="$cand" && break
+  done
+fi
 branch="$(git branch --show-current)"
-mb="$(git merge-base "$base" HEAD)"
-git --no-pager log --oneline "$mb"..HEAD | wc -l   # commit count
-git --no-pager diff --stat "$mb"..HEAD             # changed files / lines
+if [ -z "$base" ]; then
+  echo "Could not auto-detect a base branch — ask the user which branch to diff against, then set base."
+else
+  mb="$(git merge-base "$base" HEAD)"
+  git --no-pager log --oneline "$mb"..HEAD | wc -l   # commit count
+  git --no-pager diff --stat "$mb"..HEAD             # changed files / lines
+fi
 \`\`\`
 
 Tell the user: base branch, merge-base sha (short), commit count, changed-file count.
