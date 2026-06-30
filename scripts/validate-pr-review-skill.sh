@@ -12,5 +12,10 @@ name="$(awk -F': *' '/^name:/{print $2; exit}' "$SKILL_DIR/SKILL.md" 2>/dev/null
 if [ "$name" != "pr-review-report" ]; then echo "FAIL: name '$name' != pr-review-report"; fail=1; fi
 if ! grep -q '^description:' "$SKILL_DIR/SKILL.md"; then echo "FAIL: no description"; fail=1; fi
 
+# 2. references exist
+for ref in review-rubric.md html-template.md; do
+  if [ ! -f "$SKILL_DIR/references/$ref" ]; then echo "FAIL: missing references/$ref"; fail=1; fi
+done
+
 [ "$fail" -eq 0 ] && echo "PASS: frontmatter" || true
 exit "$fail"
