@@ -662,6 +662,15 @@ relative links to the spec, plan, test report, code review, and qa report (per
 `artifact-format.md` → Related navigation). Never create any directory other than `plans/final/`
 for the final report.
 
+**File verification (mandatory before printing the banner):**
+
+Read back `plans/final/FINAL-{NNN}-{slug}.md` (and, when `output_format=html`, the paired
+`.html`). If it does not exist or is empty, re-run this persistence step once. If still missing
+after the retry, stop and report — do **NOT** print the `pipeline complete` banner. The banner is
+the contract downstream consumers rely on (the `product-manager` skill treats it as proof the
+FINAL artifact exists and moves straight to commit/PR); printing it without the persisted file on
+disk is the silent-drop failure mode this step guards against.
+
 In addition, PRINT the report below to stdout (the printed summary is the same regardless of
 mode). If READY_WITH_WARNINGS arrived from QA, carry the G8 warning into the Issues found list.
 
@@ -669,6 +678,7 @@ mode). If READY_WITH_WARNINGS arrived from QA, carry the G8 warning into the Iss
 ORCHESTRATOR — pipeline complete
 Spec: {spec_path}
 Final plan: {plan_id}
+Final report: plans/final/FINAL-{NNN}-{slug}.md
 Tester: {tester_status} (coverage {after}%)
 QA report: {qa_report_path}
 Spec eval: {PASS | ISSUES | SKIPPED}
