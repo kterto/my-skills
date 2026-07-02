@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QA Report — QA-042</title>
+<style>
+/* ============================================================
+   EDITORIAL DESIGN SYSTEM v1 — Color tokens
+   ============================================================ */
+:root {
+  --bg-page:        #faf9f7;
+  --bg-surface:     #f3f1ee;
+  --bg-overlay:     #ece9e4;
+
+  --text-primary:   #1a1917;
+  --text-secondary: #4a4844;
+  --text-muted:     #8a8680;
+
+  --accent:         #3730a3;
+  --accent-subtle:  #e0e7ff;
+  --accent-focus:   #4f46e5;
+
+  --rule:           #d6d2cb;
+  --rule-heavy:     #b5b0a8;
+
+  --status-success: #166534;
+  --status-success-bg: #dcfce7;
+  --status-active:  #92400e;
+  --status-active-bg: #fef3c7;
+  --status-warning: #9a3412;
+  --status-warning-bg: #ffedd5;
+  --status-danger:  #991b1b;
+  --status-danger-bg: #fee2e2;
+  --status-muted:   #374151;
+  --status-muted-bg: #f3f4f6;
+
+  --font-serif: Georgia, "Times New Roman", serif;
+  --font-sans:  -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                "Helvetica Neue", Arial, sans-serif;
+  --font-mono:  ui-monospace, "SF Mono", "Cascadia Code", "Fira Mono",
+                Menlo, Consolas, monospace;
+
+  --text-xs:   0.75rem;
+  --text-sm:   0.875rem;
+  --text-base: 1rem;
+  --text-lg:   1.125rem;
+  --text-xl:   1.25rem;
+  --text-2xl:  1.5rem;
+  --text-3xl:  2rem;
+
+  --sp-1:  0.25rem;
+  --sp-2:  0.5rem;
+  --sp-3:  0.75rem;
+  --sp-4:  1rem;
+  --sp-6:  1.5rem;
+  --sp-8:  2rem;
+  --sp-12: 3rem;
+  --sp-16: 4rem;
+
+  --measure: 70ch;
+  --line-height-body: 1.65;
+  --line-height-heading: 1.2;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-page:        #141312;
+    --bg-surface:     #1e1c1a;
+    --bg-overlay:     #272420;
+
+    --text-primary:   #f0ece6;
+    --text-secondary: #b8b3ab;
+    --text-muted:     #7a7570;
+
+    --accent:         #818cf8;
+    --accent-subtle:  #1e1b4b;
+    --accent-focus:   #a5b4fc;
+
+    --rule:           #2e2b28;
+    --rule-heavy:     #3d3a36;
+
+    --status-success: #86efac;
+    --status-success-bg: #14532d;
+    --status-active:  #fcd34d;
+    --status-active-bg: #451a03;
+    --status-warning: #fb923c;
+    --status-warning-bg: #431407;
+    --status-danger:  #fca5a5;
+    --status-danger-bg: #450a0a;
+    --status-muted:   #9ca3af;
+    --status-muted-bg: #1f2937;
+  }
+}
+
+/* ============================================================
+   Base reset
+   ============================================================ */
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--line-height-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main {
+  max-width: 56rem;
+  margin: 0 auto;
+  padding: var(--sp-16) var(--sp-8);
+}
+
+@media (max-width: 640px) {
+  main { padding: var(--sp-12) var(--sp-6); }
+}
+
+::selection { background: var(--accent-subtle); color: var(--accent); }
+a { color: var(--accent); }
+
+/* ============================================================
+   Masthead
+   ============================================================ */
+.masthead { margin-bottom: var(--sp-8); }
+
+.masthead__kicker {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--text-muted);
+  margin: 0 0 var(--sp-4);
+}
+
+h1 {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: clamp(2rem, 5vw, 3rem);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  margin: 0;
+  color: var(--text-primary);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-4);
+  text-wrap: balance;
+}
+
+h1 .h1__id {
+  font-family: var(--font-mono);
+  font-size: 0.46em;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--accent);
+  background: var(--accent-subtle);
+  padding: 0.15em 0.5em;
+  border-radius: 6px;
+  align-self: center;
+}
+
+h1 .h1__pill { align-self: center; }
+
+/* ID / meta header block */
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  padding: var(--sp-4) 0;
+  margin-top: var(--sp-6);
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+
+.meta__id { color: var(--text-secondary); font-weight: 600; }
+
+.meta__fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-3);
+  margin-left: auto;
+}
+
+.meta__sep { color: var(--rule-heavy); }
+.meta__key { color: var(--text-muted); }
+.meta__val { color: var(--text-secondary); }
+
+.badge {
+  font-family: var(--font-mono);
+  background: var(--accent-subtle);
+  color: var(--accent);
+  font-size: var(--text-xs);
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   Status pill
+   ============================================================ */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+  line-height: 1.6;
+}
+
+.pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+.pill--success { background: var(--status-success-bg); color: var(--status-success); }
+.pill--active  { background: var(--status-active-bg);  color: var(--status-active);  }
+.pill--warning { background: var(--status-warning-bg); color: var(--status-warning); }
+.pill--danger  { background: var(--status-danger-bg);  color: var(--status-danger);  }
+.pill--muted   { background: var(--status-muted-bg);   color: var(--status-muted);   }
+
+/* ============================================================
+   Gate-results grid
+   ============================================================ */
+.gates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--sp-4);
+  margin-top: var(--sp-8);
+}
+
+.gate {
+  background: var(--bg-surface);
+  border: 1px solid var(--rule);
+  border-top: 2px solid var(--rule-heavy);
+  border-radius: 6px;
+  padding: var(--sp-4);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "name   icon"
+    "detail label";
+  align-items: start;
+  gap: var(--sp-2) var(--sp-3);
+}
+
+.gate--pass { border-top-color: var(--status-success); }
+.gate--fail { border-top-color: var(--status-danger); }
+
+.gate__name {
+  grid-area: name;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.gate__icon {
+  grid-area: icon;
+  font-family: var(--font-mono);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  line-height: 1;
+  align-self: center;
+}
+
+.gate--pass .gate__icon { color: var(--status-success); }
+.gate--fail .gate__icon { color: var(--status-danger); }
+
+.gate__detail {
+  grid-area: detail;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.gate__label {
+  grid-area: label;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  align-self: center;
+  text-align: right;
+}
+
+.gate--pass .gate__label { color: var(--status-success); }
+.gate--fail .gate__label { color: var(--status-danger); }
+
+/* Stale-gate flag */
+.stale {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--status-warning);
+  background: var(--status-warning-bg);
+  padding: 1px 5px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+/* Gate summary row */
+.gate-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  margin-top: var(--sp-4);
+}
+
+.gate-summary .gs-sep { color: var(--rule-heavy); }
+.gate-summary .gs-stale { color: var(--status-warning); font-size: var(--text-xs); }
+
+/* ============================================================
+   Conditional inset blocks
+   ============================================================ */
+.inset {
+  border-radius: 6px;
+  padding: var(--sp-4) var(--sp-6);
+  font-size: var(--text-lg);
+  max-width: var(--measure);
+}
+
+.inset--warning { background: var(--status-warning-bg); color: var(--status-warning); }
+.inset--danger  { background: var(--status-danger-bg);  color: var(--status-danger); }
+
+.inset strong { font-weight: 700; }
+.inset code { background: rgba(0,0,0,0.06); color: inherit; }
+.inset ul { margin: var(--sp-2) 0 0; padding-left: var(--sp-6); }
+.inset li { margin-bottom: var(--sp-1); }
+
+/* ============================================================
+   Collapsible <details>
+   ============================================================ */
+.section { margin-top: var(--sp-12); }
+
+details { border-top: 1px solid var(--rule); }
+
+summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-4) 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: var(--text-primary);
+  user-select: none;
+}
+
+summary::-webkit-details-marker { display: none; }
+
+summary::before {
+  content: "\25B6";
+  font-size: 0.7em;
+  color: var(--accent);
+  transition: transform 0.18s ease;
+  flex: none;
+}
+
+details[open] > summary::before { transform: rotate(90deg); }
+
+summary:focus-visible {
+  outline: 2px solid var(--accent-focus);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+.details__body {
+  border-left: 3px solid var(--accent);
+  padding-left: var(--sp-6);
+  margin: 0 0 var(--sp-6) 2px;
+}
+
+details.warning-section > summary { color: var(--status-warning); }
+details.warning-section > summary::before { color: var(--status-warning); }
+details.warning-section > .details__body { border-left-color: var(--status-warning); }
+
+details.blocked-section > summary { color: var(--status-danger); }
+details.blocked-section > summary::before { color: var(--status-danger); }
+details.blocked-section > .details__body { border-left-color: var(--status-danger); }
+
+/* ============================================================
+   QA notes prose
+   ============================================================ */
+.prose {
+  max-width: var(--measure);
+  color: var(--text-secondary);
+  font-size: var(--text-lg);
+}
+
+.prose p { margin: 0 0 var(--sp-4); }
+.prose p:last-child { margin-bottom: 0; }
+.prose strong { color: var(--text-primary); }
+
+/* ============================================================
+   Inline code / path
+   ============================================================ */
+code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--bg-overlay);
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: var(--text-secondary);
+}
+
+/* ============================================================
+   Related nav region
+   ============================================================ */
+.related { font-size: 0.85rem; margin: 1.5rem 0 0; padding-top: 0.75rem; border-top: 1px solid var(--rule, #e3e0d8); }
+.related .label { color: var(--text-muted, #6b6b6b); margin-right: 0.5em; }
+.related a { color: var(--accent); text-decoration: none; }
+.related a:hover { text-decoration: underline; }
+.related .sep { opacity: 0.5; margin: 0 0.4em; }
+</style>
+</head>
+<body>
+<main
+  data-id="QA-042"
+  data-status="READY_WITH_WARNINGS"
+  data-created-at="2026-06-22T07:00:00Z"
+  data-updated-at="2026-06-22T20:15:00Z"
+  data-cycle="2"
+>
+
+  <!-- ============================================================
+       1. Page header
+       ============================================================ -->
+  <header class="masthead">
+    <p class="masthead__kicker">
+      <span>QA Report</span>
+      <span class="meta__sep">·</span>
+      <span>Quality Gate</span>
+    </p>
+    <h1>
+      <span class="h1__id">QA-042</span>
+      <span>Async export pipeline — quality gates</span>
+      <span class="h1__pill"><span class="pill pill--warning">READY_WITH_WARNINGS</span></span>
+    </h1>
+
+    <!-- 2. ID / meta header block -->
+    <div class="meta">
+      <span class="meta__id">QA-042</span>
+      <span class="meta__fields">
+        <span><span class="meta__key">created:</span> <span class="meta__val">2026-06-22</span></span>
+        <span class="meta__sep">·</span>
+        <span><span class="meta__key">updated:</span> <span class="meta__val">2026-06-22</span></span>
+        <span class="meta__sep">·</span>
+        <span class="badge">cycle 2</span>
+      </span>
+    </div>
+  </header>
+
+  <!-- ============================================================
+       3. Gate-results grid
+       ============================================================ -->
+  <section aria-label="Gate results">
+    <div class="gates">
+      <div class="gate gate--pass">
+        <div class="gate__name">Lint</div>
+        <div class="gate__icon">&#10003;</div>
+        <div class="gate__detail">eslint: 0 errors, 3 warnings</div>
+        <div class="gate__label">PASS</div>
+      </div>
+      <div class="gate gate--pass">
+        <div class="gate__name">Type check</div>
+        <div class="gate__icon">&#10003;</div>
+        <div class="gate__detail">tsc: 0 errors</div>
+        <div class="gate__label">PASS</div>
+      </div>
+      <div class="gate gate--pass">
+        <div class="gate__name">Tests <span class="stale">&#9888; stale</span></div>
+        <div class="gate__icon">&#10003;</div>
+        <div class="gate__detail">237 passed · ran on a14f2c0</div>
+        <div class="gate__label">PASS</div>
+      </div>
+      <div class="gate gate--pass">
+        <div class="gate__name">Coverage <span class="stale">&#9888; stale</span></div>
+        <div class="gate__icon">&#10003;</div>
+        <div class="gate__detail">coverage: 87.2% · ran on a14f2c0</div>
+        <div class="gate__label">PASS</div>
+      </div>
+      <div class="gate gate--pass">
+        <div class="gate__name">Build</div>
+        <div class="gate__icon">&#10003;</div>
+        <div class="gate__detail">bundle: 412 KB · ok</div>
+        <div class="gate__label">PASS</div>
+      </div>
+    </div>
+
+    <!-- 4. Gate summary row -->
+    <div class="gate-summary">
+      <span>Passed: 5 / Total: 5</span>
+      <span class="gs-sep">·</span>
+      <span class="gs-stale">Stale: 2</span>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       5. Warnings (open — READY_WITH_WARNINGS)
+       ============================================================ -->
+  <section class="section">
+    <details class="warning-section" open>
+      <summary>Warnings</summary>
+      <div class="details__body">
+        <div class="inset inset--warning">
+          <strong>2 gates are stale.</strong> Tests and Coverage last ran against <code>a14f2c0</code>, while HEAD is now <code>c4f1d9e</code> (2 commits ahead — both docs-only). The results are non-blocking but should be re-run before the next cycle to stay current.
+          <ul>
+            <li><strong>Tests</strong> — 237 passed on <code>a14f2c0</code></li>
+            <li><strong>Coverage</strong> — 87.2% on <code>a14f2c0</code></li>
+          </ul>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <!-- Blocked — Reason section omitted: status is READY_WITH_WARNINGS, not BLOCKED. -->
+
+  <!-- ============================================================
+       7. QA Notes (collapsed)
+       ============================================================ -->
+  <section class="section">
+    <details>
+      <summary>QA Notes</summary>
+      <div class="details__body">
+        <div class="prose">
+          <p>All five gates are green. The only caveat is the two stale results, which lag HEAD by two documentation-only commits — there is no code delta that would change their outcome, so the run is safe to mark <strong>READY_WITH_WARNINGS</strong> rather than re-blocking the pipeline.</p>
+          <p>Recommend a fresh test + coverage run at the top of the next cycle to clear the stale flags.</p>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <nav class="related"><span class="label">Related:</span> <a href="../feat/FEAT-003-stripe-webhooks.html">FEAT-003</a></nav>
+
+</main>
+
+<script>
+/* Editorial Design System v1 — QA report
+   Vanilla JS only. No libraries, no inline handlers.
+   Maps data-status (READY_TO_COMMIT | BLOCKED | READY_WITH_WARNINGS) to the header pill class. */
+(function () {
+  "use strict";
+
+  var STATUS_TO_TOKEN = {
+    READY_TO_COMMIT: "success",
+    BLOCKED: "danger",
+    READY_WITH_WARNINGS: "warning"
+  };
+
+  function syncHeaderPill() {
+    var root = document.querySelector("main[data-id][data-cycle]");
+    if (!root) return;
+    var status = root.getAttribute("data-status");
+    var token = STATUS_TO_TOKEN[status];
+    if (!token) return;
+    var pill = document.querySelector(".h1__pill .pill");
+    if (pill) {
+      pill.className = "pill pill--" + token;
+      pill.textContent = status;
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", syncHeaderPill);
+  } else {
+    syncHeaderPill();
+  }
+})();
+</script>
+</body>
+</html>
