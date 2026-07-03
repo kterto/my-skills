@@ -21,12 +21,14 @@ const { G1_EXEMPTIONS } = require('../../defaults.cjs');
  *    Dart naming lints. Uses the SDK analyzer (via FVM) — no extra install —
  *    so enablement follows the project's lint set (flutter_lints provides the
  *    naming lints by default).
- *  - G6 (mutation): runs `mutation_test` over the scoped source files with the
- *    project's `flutter test` as the kill command and the gate's mutationScore
- *    as the failure threshold. Parses the XML report's `<result success>` for
- *    the verdict and lists surviving (undetected) mutations as findings. SLOW
- *    — runs the full test suite once per mutant; skip with `--skip G6`. Needs
- *    mutation_test as a project dev_dependency.
+ *  - G6 (mutation): runs the external `dart_mutant` binary over the stack root
+ *    glob with the project's `flutter test` as the kill command and the gate's
+ *    mutationScore as the `--threshold`. Reads the pass/fail verdict from the
+ *    Stryker JSON report's top-level `mutationScore` and lists surviving mutants
+ *    (`status` ∈ {Survived, NoCoverage}) as findings. dart_mutant sandboxes its
+ *    own mutations (no in-place edits, no worktree, no `pub get`); the report is
+ *    written to a temp dir and removed after parsing. Needs `dart_mutant` on
+ *    PATH — it is an external CLI, not a pub dependency.
  *  - G7 (dependency-structure): built-in, zero-tool circular-import detector.
  *    Parses Dart imports across the source roots (resolving `package:<self>/`
  *    and relative imports to files) and reports any import cycle — the Dart
@@ -38,7 +40,7 @@ const GATE_META = {
   G1: { name: 'coverage', tool: 'flutter' },
   G2: { name: 'cyclomatic-complexity', tool: 'dart_code_linter' },
   G4: { name: 'naming', tool: 'dart analyze' },
-  G6: { name: 'mutation', tool: 'mutation_test' },
+  G6: { name: 'mutation', tool: 'dart_mutant' },
   G7: { name: 'dependency-structure', tool: 'builtin' },
 };
 
@@ -422,200 +424,92 @@ function runG4(files, stackCfg, io) {
   return gateResult('G4', findings.length ? 'fail' : 'pass', { command, findings });
 }
 
-// ---- G6: mutation (mutation_test) --------------------------------------
+// ---- G6: mutation (dart_mutant) ----------------------------------------
 
-function escapeXml(s) {
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-function writeMutationConfig(targets, testCommand, threshold) {
-  const fileEls = targets.map((rel) => `  <file>${escapeXml(rel)}</file>`).join('\n');
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<mutations version="1.2">
- <files>
-${fileEls}
- </files>
- <commands>
-  <command group="test" expected-return="0" working-directory=".">${escapeXml(testCommand)}</command>
- </commands>
- <threshold failure="${threshold}"/>
-</mutations>
-`;
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccg-mut-cfg-'));
-  const cfgPath = path.join(dir, 'mutation.xml');
-  fs.writeFileSync(cfgPath, xml);
-  return cfgPath;
-}
-
-/** Parse mutation_test's XML report into { success, byFile: { rel: [lines] } }. */
-function parseMutationReport(xml) {
-  const result = /<result[^>]*\bsuccess="([^"]*)"/.exec(xml);
-  const success = result ? result[1] === 'true' : null;
-  const byFile = {};
-  const fileRe = /<file name="([^"]*)">([\s\S]*?)<\/file>/g;
-  let fm;
-  while ((fm = fileRe.exec(xml))) {
-    const name = fm[1];
-    const lines = [];
-    const lineRe = /<mutation line="(\d+)"/g;
-    let lm;
-    while ((lm = lineRe.exec(fm[2]))) lines.push(Number(lm[1]));
-    byFile[name] = lines;
-  }
-  return { success, byFile };
-}
-
-function git(repo, args, opts = {}) {
-  return execFileSync('git', ['-C', repo, ...args], {
-    encoding: 'utf8',
-    maxBuffer: 256 * 1024 * 1024,
-    stdio: ['ignore', 'pipe', 'pipe'],
-    ...opts,
-  });
-}
-
-function gitRoot(root) {
+/** Parse dart_mutant's Stryker JSON into { score, total, byFile: { name: [lines] } }. */
+function parseDartMutantReport(json) {
+  let report;
   try {
-    return git(root, ['rev-parse', '--show-toplevel']).trim();
+    report = JSON.parse(json);
   } catch {
     return null;
   }
+  const score = typeof report.mutationScore === 'number' ? report.mutationScore : null;
+  const SURVIVED = new Set(['survived', 'nocoverage']);
+  const byFile = {};
+  let total = 0;
+  for (const [name, fobj] of Object.entries(report.files || {})) {
+    const lines = [];
+    for (const m of fobj.mutants || []) {
+      total += 1;
+      // Normalize away casing and the underscore variant (No_Coverage / NoCoverage).
+      const status = String(m.status || '').toLowerCase().replace(/_/g, '');
+      if (!SURVIVED.has(status)) continue;
+      const line = m.location && m.location.start && m.location.start.line;
+      if (line) lines.push(line);
+    }
+    if (lines.length) byFile[name] = lines;
+  }
+  return { score, total, byFile };
 }
 
 /**
- * mutation_test rewrites source files in place (mutate → test → restore), so it
- * must never run against the live tree. This checks HEAD out into a throwaway
- * git worktree, replays the current uncommitted + untracked changes into it, and
- * returns the isolated copy. Returns null when the project is not a git checkout.
+ * Map the stack roots (default ['lib']) to the single `--glob` wildcard
+ * dart_mutant mutates. dart_mutant takes one wildcard glob (an exact file path
+ * matches nothing), so multiple roots collapse into a brace group. This glob is
+ * a superset of the scope; survivor findings are still post-filtered to the
+ * in-scope targets, and the score-vs-scope caveat below applies for narrow scopes.
  */
-function setupWorktree(io) {
-  const repo = gitRoot(io.root);
-  if (!repo) return null;
-  const rel = path.relative(repo, io.root);
-  const wt = fs.mkdtempSync(path.join(os.tmpdir(), 'ccg-g6-wt-'));
-  try {
-    git(repo, ['worktree', 'add', '--detach', wt, 'HEAD']);
-  } catch {
-    try {
-      fs.rmSync(wt, { recursive: true, force: true });
-    } catch {
-      /* ignore */
-    }
-    return null;
-  }
-  const cleanup = () => {
-    try {
-      git(repo, ['worktree', 'remove', '--force', wt]);
-    } catch {
-      /* ignore */
-    }
-    try {
-      fs.rmSync(wt, { recursive: true, force: true });
-    } catch {
-      /* ignore */
-    }
-  };
-  try {
-    const patch = git(repo, ['diff', 'HEAD', '--binary'], { encoding: 'buffer' });
-    if (patch.length) {
-      const pf = path.join(wt, '.ccg-uncommitted.patch');
-      fs.writeFileSync(pf, patch);
-      git(wt, ['apply', '--whitespace=nowarn', '.ccg-uncommitted.patch']);
-      fs.unlinkSync(pf);
-    }
-    const others = git(repo, ['ls-files', '--others', '--exclude-standard'])
-      .split('\n')
-      .filter(Boolean);
-    for (const f of others) {
-      const dst = path.join(wt, f);
-      fs.mkdirSync(path.dirname(dst), { recursive: true });
-      fs.copyFileSync(path.join(repo, f), dst);
-    }
-  } catch {
-    cleanup();
-    return null;
-  }
-  return { appDir: path.join(wt, rel), cleanup };
+function g6Glob(stackCfg) {
+  const roots = stackCfg.roots && stackCfg.roots.length ? stackCfg.roots : ['lib'];
+  const rootGlob = roots.length === 1 ? roots[0] : `{${roots.join(',')}}`;
+  return `${rootGlob}/**/*.dart`;
 }
 
-function runG6(files, stackCfg, io) {
-  const dart = resolveDart(io.root);
-  const flutter = resolveFlutter(io.root);
-  if (!dart || !flutter || !hasPkg(io.root, 'mutation_test')) {
-    return missingTool('G6', stackCfg);
-  }
-
-  const threshold = ((stackCfg.gates.G6 || {}).thresholds || {}).mutationScore ?? 70;
+/**
+ * Turn a parsed dart_mutant report + the in-scope targets into a gate result.
+ *
+ * Verdict matrix:
+ *  - no in-scope targets            → pass (caller skips invoking dart_mutant)
+ *  - report absent / no score       → error
+ *  - files present but 0 mutants     → pass (nothing to verify, not a failure;
+ *                                       dart_mutant reports score 0.0 here, so we
+ *                                       guard on the mutant count, not the score)
+ *  - score >= threshold             → pass, no findings
+ *  - score <  threshold             → fail: one mutation/score blocker plus one
+ *                                       mutation/survived warning per surviving
+ *                                       mutant (relativized + exempt-filtered)
+ *
+ * Score-vs-scope caveat: dart_mutant computes mutationScore over everything its
+ * --glob mutated (the whole root). For --scope project (G6's real use) that is
+ * exactly right; for narrow scopes the survivor findings are still correctly
+ * scoped, but the pass/fail score is root-wide — it is never presented as a
+ * per-file score.
+ */
+function g6Verdict(parsed, { targets, threshold, command, stackCfg, io }) {
   const thresholds = { mutationScore: threshold };
-  const command = 'mutation_test -f xml (isolated git worktree)';
-  const targets = files.filter(
-    (rel) => DART_FILE_RE.test(rel) && !isExempt(rel, stackCfg, 'G6'),
-  );
   if (!targets.length) return gateResult('G6', 'pass', { command, thresholds });
-
-  const wt = setupWorktree(io);
-  if (!wt) {
-    return gateResult('G6', 'error', {
-      command,
-      thresholds,
-      error:
-        'G6 needs an isolated git worktree (mutation_test edits files in place) — ' +
-        'run inside a git checkout',
-    });
-  }
-
-  const reportPath = path.join(wt.appDir, '.ccg-mutation', 'mutation-test-report.xml');
-  let report = null;
-  try {
-    const testCommand = [flutter.cmd, ...flutter.pre, 'test'].join(' ');
-    const cfgPath = path.join(wt.appDir, '.ccg-mutation.xml');
-    fs.writeFileSync(cfgPath, fs.readFileSync(writeMutationConfig(targets, testCommand, threshold)));
-    // Resolve deps in the isolated copy (.dart_tool is gitignored, not replayed).
-    execFileSync(flutter.cmd, [...flutter.pre, 'pub', 'get'], {
-      cwd: wt.appDir,
-      stdio: ['ignore', 'ignore', 'ignore'],
-      maxBuffer: 64 * 1024 * 1024,
-    });
-    try {
-      execFileSync(
-        dart.cmd,
-        [...dart.pre, 'run', 'mutation_test', '-f', 'xml', '-o', path.join(wt.appDir, '.ccg-mutation'), cfgPath],
-        { cwd: wt.appDir, stdio: ['ignore', 'ignore', 'ignore'], maxBuffer: 64 * 1024 * 1024 },
-      );
-    } catch {
-      // mutation_test exits non-zero when the quality gate fails; the report is
-      // still written. A missing report (below) is the real failure signal.
-    }
-    if (fs.existsSync(reportPath)) report = fs.readFileSync(reportPath, 'utf8');
-  } catch {
-    report = null;
-  } finally {
-    wt.cleanup();
-  }
-
-  if (report == null) return gateResult('G6', 'error', { command, thresholds });
-  const { success, byFile } = parseMutationReport(report);
+  if (!parsed || parsed.score == null) return gateResult('G6', 'error', { command, thresholds });
+  if (parsed.total === 0) return gateResult('G6', 'pass', { command, thresholds });
 
   const findings = [];
-  if (success === false) {
+  const failed = parsed.score < threshold;
+  if (failed) {
     findings.push({
       id: 'G6:score',
       severity: 'blocker',
       file: targets[0],
       line: 1,
       rule: 'mutation/score',
-      message: `mutation score below the ${threshold}% quality gate`,
-      metric: { limit: threshold, unit: 'percent' },
+      message: `mutation score ${parsed.score.toFixed(1)}% below the ${threshold}% quality gate`,
+      metric: { value: parsed.score, limit: threshold, unit: 'percent' },
       fixHint: 'Strengthen tests to kill the surviving mutants listed below',
     });
   }
-  for (const name of Object.keys(byFile)) {
+  for (const name of Object.keys(parsed.byFile)) {
     const rel = path.isAbsolute(name) ? path.relative(io.root, name) : name;
-    for (const line of byFile[name]) {
+    if (isExempt(rel, stackCfg, 'G6')) continue;
+    for (const line of parsed.byFile[name]) {
       findings.push({
         id: `G6-${rel}:${line}`,
         severity: 'warning',
@@ -628,8 +522,72 @@ function runG6(files, stackCfg, io) {
     }
   }
 
-  const status = success === false ? 'fail' : success === null ? 'error' : 'pass';
-  return gateResult('G6', status, { command, thresholds, findings });
+  return gateResult('G6', failed ? 'fail' : 'pass', { command, thresholds, findings });
+}
+
+/**
+ * Invoke dart_mutant against the live tree and return its Stryker JSON report as
+ * a string, or null when no report was written. dart_mutant sandboxes its own
+ * mutations (no in-place edits) and writes to a temp --output dir that is removed
+ * afterwards, so a run leaves no mutation-reports/, worktree, or pub-get litter
+ * on the target tree. A non-zero exit (dart_mutant exits non-zero when the score
+ * is below --threshold) is tolerated; the verdict keys off the report file.
+ */
+function runMutant(flutter, stackCfg, io, threshold) {
+  const testCommand = [flutter.cmd, ...flutter.pre, 'test'].join(' ');
+  const excludeGlobs = stackCfg.exclude || [];
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccg-g6-'));
+  const args = [
+    '--path', io.root,
+    '--glob', g6Glob(stackCfg),
+    '--test-command', testCommand,
+    '--threshold', String(threshold),
+    '--json', '--quiet',
+    '--ai', 'none',
+    '--output', outDir,
+  ];
+  for (const ex of excludeGlobs) args.push('--exclude', ex);
+
+  try {
+    execFileSync('dart_mutant', args, {
+      cwd: io.root,
+      stdio: ['ignore', 'ignore', 'ignore'],
+      maxBuffer: 64 * 1024 * 1024,
+    });
+  } catch {
+    // Non-zero exit means the quality gate failed; the report is still written.
+  }
+
+  const reportPath = path.join(outDir, 'mutation-report.json');
+  let json = null;
+  if (fs.existsSync(reportPath)) json = fs.readFileSync(reportPath, 'utf8');
+  try {
+    fs.rmSync(outDir, { recursive: true, force: true });
+  } catch {
+    /* ignore */
+  }
+  return json;
+}
+
+function runG6(files, stackCfg, io, deps = {}) {
+  const resolveF = deps.resolveFlutter || resolveFlutter;
+  const hasCmd = deps.commandExists || commandExists;
+  const runner = deps.runMutant || runMutant;
+
+  const flutter = resolveF(io.root);
+  if (!flutter || !hasCmd('dart_mutant')) return missingTool('G6', stackCfg);
+
+  const threshold = ((stackCfg.gates.G6 || {}).thresholds || {}).mutationScore ?? 70;
+  const command = 'dart_mutant --json --quiet --ai none';
+  const targets = files.filter(
+    (rel) => DART_FILE_RE.test(rel) && !isExempt(rel, stackCfg, 'G6'),
+  );
+  const opts = { targets, threshold, command, stackCfg, io };
+  if (!targets.length) return g6Verdict(null, opts);
+
+  const json = runner(flutter, stackCfg, io, threshold);
+  const parsed = json == null ? null : parseDartMutantReport(json);
+  return g6Verdict(parsed, opts);
 }
 
 // ---- G7: dependency-structure (built-in circular-import detector) -------
@@ -775,7 +733,10 @@ module.exports = {
     parseDclJson,
     g2Findings,
     parseAnalyzeLine,
-    parseMutationReport,
+    parseDartMutantReport,
+    g6Glob,
+    g6Verdict,
+    runG6,
     resolveImport,
     buildImportGraph,
     findCycles,

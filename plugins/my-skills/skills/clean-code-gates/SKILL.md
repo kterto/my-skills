@@ -55,6 +55,7 @@ node <skill-dir>/bin/gates.cjs --scope diff --gates G5 --out -
 ```
 
 ## Notes
+- **G6 (mutation, dart-flutter)** shells out to the external `dart_mutant` binary and reads its Stryker-compatible JSON report (`--json`): the verdict is the report's top-level `mutationScore` vs the gate threshold (default 70), and surviving mutants (`status` ∈ {Survived, NoCoverage}) become warnings. `dart_mutant` must be on PATH (e.g. `brew install dart_mutant`) — it is an external CLI, not a pub dev-dependency. The gate sandboxes to a temp report dir, so a run leaves no `mutation-reports/`, git worktree, or `pub get` artifacts on the project.
 - Mirrors the gate semantics in a project's qa agent (`.claude/agents/qa.md` in GSD repos) but decoupled from any plan/CR/QA flow. G8 (rework ratio) is intentionally out of scope — it's a plan-tree metric, not a code property.
 - Tests: `cd <skill-dir> && node --test`.
 - Common skill dirs: Claude Code personal install `~/.claude/skills/clean-code-gates`; opencode local installer `~/.config/opencode/my-skills/plugins/my-skills/skills/clean-code-gates`; opencode remote install cache location is shown in the loaded skill's location.
