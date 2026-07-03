@@ -434,6 +434,9 @@ function parseDartMutantReport(json) {
   } catch {
     return null;
   }
+  // JSON.parse('null'/'42'/'"x"'/'[]') succeeds without throwing; guard so a
+  // non-object report becomes error (null), never a property-access crash.
+  if (!report || typeof report !== 'object' || Array.isArray(report)) return null;
   const score = typeof report.mutationScore === 'number' ? report.mutationScore : null;
   const SURVIVED = new Set(['survived', 'nocoverage']);
   const byFile = {};

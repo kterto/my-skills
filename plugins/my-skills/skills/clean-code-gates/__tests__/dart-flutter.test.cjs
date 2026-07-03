@@ -117,6 +117,14 @@ test('parseDartMutantReport (c) returns null for malformed/empty JSON', () => {
   assert.strictEqual(parseDartMutantReport(''), null);
 });
 
+test('parseDartMutantReport (c2) returns null for valid-JSON non-objects without crashing', () => {
+  // JSON.parse succeeds for these; the guard must return null, not throw on
+  // property access (report.mutationScore on null/primitive/array).
+  for (const j of ['null', '42', '"nope"', 'true', '[]']) {
+    assert.strictEqual(parseDartMutantReport(j), null, `input ${j}`);
+  }
+});
+
 test('parseDartMutantReport (d) yields null score when mutationScore is absent', () => {
   const r = parseDartMutantReport(fixture('g6-dart-mutant-no-score.json'));
   assert.strictEqual(r.score, null);
