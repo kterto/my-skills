@@ -1,7 +1,11 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
+const fs = require('node:fs');
+const path = require('node:path');
 const adapter = require('../src/adapters/dart-flutter.cjs');
-const { parseLcov, fileMetrics, coverageFindings, parseDclJson, g2Findings, parseAnalyzeLine, parseMutationReport, resolveImport, buildImportGraph, findCycles } = adapter._internals;
+const { parseLcov, fileMetrics, coverageFindings, parseDclJson, g2Findings, parseAnalyzeLine, parseDartMutantReport, g6Glob, g6Verdict, runG6, resolveImport, buildImportGraph, findCycles } = adapter._internals;
+
+const fixture = (name) => fs.readFileSync(path.join(__dirname, 'fixtures', name), 'utf8');
 
 const LCOV = [
   'SF:lib/src/a.dart',
@@ -91,25 +95,173 @@ test('parseAnalyzeLine splits machine format and preserves messages with pipes',
   assert.strictEqual(parseAnalyzeLine('too|few'), null);
 });
 
-test('parseMutationReport extracts success verdict + undetected mutation lines', () => {
-  const xml = `<?xml version="1.0"?>
-<undetected-mutations>
-<result rating="C" success="false"/>
-<file name="lib/a.dart">
-<mutation line="12"><original>&&</original><modified>||</modified></mutation>
-<mutation line="20"><original>+</original><modified>-</modified></mutation>
-</file>
-<file name="lib/b.dart">
-</file>
-</undetected-mutations>`;
-  const r = parseMutationReport(xml);
-  assert.strictEqual(r.success, false);
-  assert.deepStrictEqual(r.byFile['lib/a.dart'], [12, 20]);
-  assert.deepStrictEqual(r.byFile['lib/b.dart'], []);
+test('parseDartMutantReport (a) reads top-level score and total, no survivors when all killed', () => {
+  const r = parseDartMutantReport(fixture('g6-dart-mutant-pass.json'));
+  assert.strictEqual(r.score, 85);
+  assert.strictEqual(r.total, 2);
+  assert.deepStrictEqual(r.byFile, {});
 });
 
-test('parseMutationReport reads success=true', () => {
-  assert.strictEqual(parseMutationReport('<result rating="A" success="true"/>').success, true);
+test('parseDartMutantReport (b) collects survivor lines case-insensitively across statuses', () => {
+  const r = parseDartMutantReport(fixture('g6-dart-mutant-fail.json'));
+  assert.strictEqual(r.score, 42.5);
+  assert.strictEqual(r.total, 5);
+  // Survived, survived (lowercase), NoCoverage → lines 5, 8, 12; Killed (line 3) excluded.
+  assert.deepStrictEqual(r.byFile['lib/calc.dart'], [5, 8, 12]);
+  // no_coverage → line 7.
+  assert.deepStrictEqual(r.byFile['lib/util.dart'], [7]);
+});
+
+test('parseDartMutantReport (c) returns null for malformed/empty JSON', () => {
+  assert.strictEqual(parseDartMutantReport(fixture('g6-dart-mutant-malformed.json')), null);
+  assert.strictEqual(parseDartMutantReport(''), null);
+});
+
+test('parseDartMutantReport (c2) returns null for valid-JSON non-objects without crashing', () => {
+  // JSON.parse succeeds for these; the guard must return null, not throw on
+  // property access (report.mutationScore on null/primitive/array).
+  for (const j of ['null', '42', '"nope"', 'true', '[]']) {
+    assert.strictEqual(parseDartMutantReport(j), null, `input ${j}`);
+  }
+});
+
+test('parseDartMutantReport (d) yields null score when mutationScore is absent', () => {
+  const r = parseDartMutantReport(fixture('g6-dart-mutant-no-score.json'));
+  assert.strictEqual(r.score, null);
+  assert.strictEqual(r.total, 1);
+  assert.deepStrictEqual(r.byFile, {});
+});
+
+test('parseDartMutantReport (e) reports zero total when files carry no mutants', () => {
+  const r = parseDartMutantReport(fixture('g6-dart-mutant-zero-mutants.json'));
+  assert.strictEqual(r.score, 0);
+  assert.strictEqual(r.total, 0);
+  assert.deepStrictEqual(r.byFile, {});
+});
+
+test('g6Glob maps the stack roots (default lib) to a single wildcard dart glob', () => {
+  assert.strictEqual(g6Glob({}), 'lib/**/*.dart');
+  assert.strictEqual(g6Glob({ roots: [] }), 'lib/**/*.dart');
+  assert.strictEqual(g6Glob({ roots: ['lib'] }), 'lib/**/*.dart');
+  assert.strictEqual(g6Glob({ roots: ['packages'] }), 'packages/**/*.dart');
+  assert.strictEqual(g6Glob({ roots: ['lib', 'src'] }), '{lib,src}/**/*.dart');
+});
+
+const dartCfg = require('../defaults.cjs').defaultStackConfig('dart-flutter');
+const g6Io = { root: '/abs/root' };
+const g6Command = 'dart_mutant --json --quiet --ai none';
+const g6Opts = (targets) => ({ targets, threshold: 70, command: g6Command, stackCfg: dartCfg, io: g6Io });
+
+test('g6Verdict (a) passes with no findings when score ≥ threshold', () => {
+  const parsed = parseDartMutantReport(fixture('g6-dart-mutant-pass.json'));
+  const r = g6Verdict(parsed, g6Opts(['lib/calc.dart']));
+  assert.strictEqual(r.status, 'pass');
+  assert.strictEqual(r.findings.length, 0);
+});
+
+test('g6Verdict (e) passes when files carry zero mutants (nothing to verify)', () => {
+  const parsed = parseDartMutantReport(fixture('g6-dart-mutant-zero-mutants.json'));
+  const r = g6Verdict(parsed, g6Opts(['lib/simple.dart']));
+  assert.strictEqual(r.status, 'pass');
+  assert.strictEqual(r.findings.length, 0);
+});
+
+test('g6Verdict (b) fails with one score blocker plus per-line survivor warnings', () => {
+  const parsed = parseDartMutantReport(fixture('g6-dart-mutant-fail.json'));
+  const r = g6Verdict(parsed, g6Opts(['lib/calc.dart', 'lib/util.dart']));
+  assert.strictEqual(r.status, 'fail');
+  const blockers = r.findings.filter((f) => f.severity === 'blocker');
+  const warnings = r.findings.filter((f) => f.severity === 'warning');
+  assert.strictEqual(blockers.length, 1);
+  assert.strictEqual(blockers[0].id, 'G6:score');
+  assert.strictEqual(blockers[0].rule, 'mutation/score');
+  assert.strictEqual(blockers[0].file, 'lib/calc.dart');
+  assert.strictEqual(blockers[0].line, 1);
+  assert.deepStrictEqual(blockers[0].metric, { value: 42.5, limit: 70, unit: 'percent' });
+  // survivors: calc lines 5,8,12 + util line 7
+  assert.strictEqual(warnings.length, 4);
+  assert.deepStrictEqual(
+    warnings.map((f) => `${f.file}:${f.line}`).sort(),
+    ['lib/calc.dart:12', 'lib/calc.dart:5', 'lib/calc.dart:8', 'lib/util.dart:7'],
+  );
+  assert.strictEqual(warnings[0].rule, 'mutation/survived');
+  assert.strictEqual(warnings[0].id, `G6-${warnings[0].file}:${warnings[0].line}`);
+});
+
+test('g6Verdict relativizes absolute survivor paths and skips exempt files', () => {
+  const parsed = {
+    score: 40,
+    total: 3,
+    byFile: {
+      '/abs/root/lib/a.dart': [3],   // absolute → relativized
+      'lib/a_test.dart': [9],        // test file → exempt
+      'lib/b.g.dart': [4],           // generated glob → exempt
+    },
+  };
+  const r = g6Verdict(parsed, g6Opts(['lib/a.dart']));
+  assert.strictEqual(r.status, 'fail');
+  const warnings = r.findings.filter((f) => f.severity === 'warning');
+  assert.strictEqual(warnings.length, 1);
+  assert.strictEqual(warnings[0].file, 'lib/a.dart');
+  assert.strictEqual(warnings[0].line, 3);
+});
+
+test('g6Verdict (c/d) errors when the report is unparseable or missing a score', () => {
+  assert.strictEqual(g6Verdict(null, g6Opts(['lib/a.dart'])).status, 'error');
+  const noScore = parseDartMutantReport(fixture('g6-dart-mutant-no-score.json'));
+  assert.strictEqual(g6Verdict(noScore, g6Opts(['lib/a.dart'])).status, 'error');
+});
+
+test('g6Verdict passes without error when there are no in-scope targets', () => {
+  const r = g6Verdict(null, g6Opts([]));
+  assert.strictEqual(r.status, 'pass');
+  assert.strictEqual(r.findings.length, 0);
+});
+
+test('runG6 returns missing_tool when Flutter or dart_mutant is absent', () => {
+  const noFlutter = runG6(['lib/a.dart'], dartCfg, g6Io, {
+    resolveFlutter: () => null,
+    commandExists: () => true,
+    runMutant: () => { throw new Error('must not run'); },
+  });
+  assert.strictEqual(noFlutter.status, 'missing_tool');
+  const noBinary = runG6(['lib/a.dart'], dartCfg, g6Io, {
+    resolveFlutter: () => ({ cmd: 'flutter', pre: [] }),
+    commandExists: () => false,
+    runMutant: () => { throw new Error('must not run'); },
+  });
+  assert.strictEqual(noBinary.status, 'missing_tool');
+});
+
+test('runG6 passes without invoking dart_mutant when no targets are in scope', () => {
+  let invoked = false;
+  const r = runG6(['lib/a_test.dart', 'README.md'], dartCfg, g6Io, {
+    resolveFlutter: () => ({ cmd: 'flutter', pre: [] }),
+    commandExists: () => true,
+    runMutant: () => { invoked = true; return null; },
+  });
+  assert.strictEqual(r.status, 'pass');
+  assert.strictEqual(invoked, false);
+});
+
+test('runG6 wires the parsed report through the verdict matrix (fail case)', () => {
+  const r = runG6(['lib/calc.dart', 'lib/util.dart'], dartCfg, g6Io, {
+    resolveFlutter: () => ({ cmd: 'flutter', pre: [] }),
+    commandExists: () => true,
+    runMutant: () => fixture('g6-dart-mutant-fail.json'),
+  });
+  assert.strictEqual(r.status, 'fail');
+  assert.strictEqual(r.tool, 'dart_mutant');
+  assert.ok(r.findings.some((f) => f.id === 'G6:score'));
+});
+
+test('runG6 errors when the report is missing (null from the runner)', () => {
+  const r = runG6(['lib/calc.dart'], dartCfg, g6Io, {
+    resolveFlutter: () => ({ cmd: 'flutter', pre: [] }),
+    commandExists: () => true,
+    runMutant: () => null,
+  });
+  assert.strictEqual(r.status, 'error');
 });
 
 test('resolveImport maps package-self and relative imports, skips externals', () => {

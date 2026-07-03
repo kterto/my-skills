@@ -36,7 +36,7 @@ function defaultStackConfig(stack) {
       G2: { tool: 'dart_code_linter', thresholds: { 'cyclomatic-complexity': 8, 'maximum-nesting-level': 2, 'number-of-parameters': 4, 'source-lines-of-code': 30 } },
       G4: { tool: 'dart_code_linter' },
       G5: { tool: 'builtin' },
-      G6: { tool: 'mutation_test', thresholds: THRESHOLDS.G6 },
+      G6: { tool: 'dart_mutant', thresholds: THRESHOLDS.G6 },
       G7: { tool: 'builtin' },
     },
     baseline: '.dart_code_linter_baseline.yaml',

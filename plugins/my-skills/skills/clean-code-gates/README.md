@@ -43,6 +43,8 @@ All flags consume the next positional argument as their value unless noted.
 
 G1/G2/G3/G4/G6/G7 produce a `missing_tool` result and do not crash. `--scaffold` (Plan 4) is not yet implemented; the flag is accepted but does nothing.
 
+**G6 tooling (dart-flutter):** the mutation gate invokes the external `dart_mutant` binary and parses its Stryker-compatible JSON (`--json`). The pass/fail verdict is the report's top-level `mutationScore` vs the gate threshold (default 70); surviving mutants (`status` ∈ {Survived, NoCoverage}) are reported as warnings. `dart_mutant` must be installed on PATH (e.g. `brew install dart_mutant`) — it is a standalone CLI, not a pub dev-dependency. Runs against the live tree with no `mutation-reports/`, worktree, or `pub get` side effects (the report is written to a temp dir and removed after parsing).
+
 ---
 
 ## Stack detection and config
