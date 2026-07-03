@@ -75,7 +75,7 @@ The ONLY directories permitted under `plans/`. No role or step may invent any ot
 | spec eval     | `plans/eval/`        | `EVAL`  | orchestrator (Step 7a)         |
 | final report  | `plans/final/`       | `FINAL` | orchestrator (Step 7b)         |
 
-`QNA-<ID>` files (brainstormer, non-interactive mode) share the paired SPEC's **full ID token** and live in `plans/specs/`.
+`QNA-{NNN}` files (brainstormer, non-interactive mode) share the paired SPEC's **ID token** (the `{NNN}` part only, without the `SPEC-` prefix) and live in `plans/specs/`.
 
 ## ID allocation — timestamp-based, collision-free
 
