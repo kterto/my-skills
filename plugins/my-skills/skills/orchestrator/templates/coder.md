@@ -13,7 +13,7 @@ A plan ID (e.g. `FEAT-001`, `FIX-003`) or a direct path to a plan `.md` file.
 
 Search `plans/feat/`, `plans/code-review/`, and `plans/qa/` for the plan's **`.md`** file matching the ID (e.g. `FEAT-003-*.md`). The `.md` is always the canonical source of truth — read it fully, even if an `.html` view sits beside it. Also read the paired `.progress.md`.
 
-> **html note:** if `output_format=html`, a `<ID>-<slug>.html` rendered view may exist alongside the `.md`. It is a read-only snapshot from creation time. You mutate ONLY the `.md` (status, `updated_at`, task checkboxes) and append ONLY to `.progress.md`. Do not hand-edit the `.html` — it is regenerated downstream.
+> **html note:** if `output_format=html`, a `<ID>-<slug>.html` rendered view exists alongside the `.md`. The `.md` is always the source of truth — mutate it first. When (and only when) `output_format=html` AND the `<ID>-<slug>.html` file exists beside the `.md`, you ALSO keep its task state in sync as you go: mirror each `[ ] → [x]` into the matching plan-html checkbox, refresh the progress overview, and stamp `data-updated-at`. See Step 4b-html. All other artifacts' `.html` views remain read-only (regenerated downstream); this sync applies to the plan (`FEAT`/`FIX`/`QAF`) html view you are executing, nothing else. `.progress.md` stays markdown-only.
 
 **If status is not `PLANNED`**: check current status. If `IN_PROGRESS`, continue from the first unchecked `[ ]` task. If `DONE`, inform the user — nothing to implement.
 
@@ -57,6 +57,8 @@ Session started. Plan status → IN_PROGRESS.
 
 Update the `**Status**` field in `.progress.md` to `IN_PROGRESS`.
 
+**html sync (html mode + plan `.html` exists only):** set the plan html's `<main data-status="in_progress">` and `data-updated-at` to match. See Step 4b-html for the sync rules.
+
 ## Step 4 — Implement tasks in strict TDD order
 
 Work through unchecked `[ ]` tasks **sequentially**. Tasks are already ordered: tests before implementation. Never skip tasks.
@@ -86,6 +88,18 @@ Parse the task description. Identify:
 2. Run the test command to **confirm it passes**.
 3. If other previously-passing tests break, fix the implementation (not the tests).
 4. Mark the task `[x]` in the plan file.
+
+### 4b-html — Mirror completion into the plan html view (html mode only)
+
+Run this immediately after marking a task `[x]` in the `.md`, and ONLY when both are true: `output_format=html` AND the `<ID>-<slug>.html` file exists beside the plan `.md`. Otherwise skip this sub-step entirely.
+
+For the task you just checked off:
+
+1. Find its `<li>` in the plan html — match by the task's `task__id` (e.g. `T-03`) or, failing that, by the task description text — and change its `<input type="checkbox" disabled>` to `<input type="checkbox" disabled checked>`.
+2. Refresh the progress overview to the new counts: update the `.progress__label` text (`{done} / {total} ({pct}%)`), the `.progress__fill` `data-pct` and inline `style="width: {pct}%;"`, and the `role="progressbar"` `aria-valuenow`. `{pct}` = round(done / total × 100).
+3. Set the root `<main>` `data-updated-at` to the same ISO 8601 datetime you wrote to the `.md`.
+
+Edit only these attributes/nodes — do not restyle or restructure the file. If the `.md` and `.html` ever disagree, the `.md` wins; correct the `.html` to match it.
 
 ### 4c — Log each completed task
 
@@ -158,6 +172,7 @@ Total tasks completed this session: {N}
 ```
 
 4. Update `**Status**` in `.progress.md` to `DONE`.
+5. **html sync (html mode + plan `.html` exists only):** set the plan html's `<main data-status="done">` and `data-updated-at`. All task checkboxes should already read `checked` and the progress overview should show `{N} / {N} (100%)` from Step 4b-html; verify and correct if any lag.
 
 ## Code style
 

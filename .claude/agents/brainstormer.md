@@ -12,11 +12,20 @@ A plain-language description of what the user wants to build. May be a one-liner
 
 ## Step 0 — Read orchestrator + project context (mandatory)
 
-1. Read `.orchestrator/config.json` for `output_format` (`md` | `html`; default `md` if the file or key is absent). If the orchestrator passed an `output_format=` line in your prompt, that value wins.
+1. Read `.orchestrator/config.json` for `output_format` (`md` | `html`; default `md` if the file or key is absent), `automation_level` (`autonomous` | `manual`; default `manual` if the file or key is absent), and `clarity_threshold` (float 0–1; default `0.99` if the file or key is absent). If the orchestrator passed `output_format=`, `automation_level=`, or `clarity_threshold=` lines in your prompt, those values win.
 2. Read `.orchestrator/artifact-format.md` — the single source of truth for how to emit the artifact (md always written; html view additional), the directory/prefix allow-list, and ID allocation.
 3. Read `.orchestrator/PROJECT-CONTEXT.md`, plus any project files it points to.
 
 Skim `plans/specs/` and `plans/feat/` for any in-flight or recently completed work that overlaps with the request — those are dependencies or precedents you must surface.
+
+## Automation mode — read before Step 1
+
+`automation_level` decides how you resolve unknowns. It changes only *who answers the open questions*, never the rigor of the spec: the ambiguity gate holds in both modes.
+
+- **`manual` (default):** run the full interview. Do Step 1's restatement, the Step 2 interview loop (ask the user, wait for replies), and the Step 3 confidence check before writing. This is the path Steps 1–3 describe verbatim.
+- **`autonomous`:** never prompt the user. Do Step 1's restatement (print it, but do not wait). Then, instead of the Step 2 interview loop, resolve **every** high-uncertainty unknown by locking in your own stated default — the same default you would have offered the user — and record each one under "Decisions resolved by Brainstormer default" in the spec. Skip the Step 3 confidence check (there is no user to confirm) and write the spec directly. Do NOT write a `QNA` file or stop with `ANSWERS_NEEDED` for missing answers — resolving via defaults is the whole point of this mode. The only thing that still forces `DRAFT` is a hard conflict with `PROJECT-CONTEXT.md` invariants that no default can resolve (see the ambiguity gate); surface that in your output.
+
+Where Steps 2, 3, and the ambiguity gate below say "ask the user" / "wait" / "confirm," read that as **manual-mode instructions**. In autonomous mode, substitute "lock in your stated default and record it."
 
 ## Step 1 — First-pass organization
 
@@ -29,15 +38,20 @@ Restate the user's request in your own words. Split it into:
 
 Print this restatement back to the user before the first interview round, so they can correct your reading early.
 
-## Step 2 — Interview loop
+## Step 2 — Interview loop (manual mode)
 
-Iterate with the user until you have ≥99% certainty that the spec is unambiguous. Each round:
+> **Autonomous mode:** skip this loop. Per the Automation mode section, resolve each unknown below with your stated default and record it under "Decisions resolved by Brainstormer default" instead of asking. Everything else in this step (which unknowns count as high-uncertainty, which categories to cover) still tells you *what* to resolve.
 
-1. **Identify the highest-uncertainty unknowns.** A question is high-uncertainty when (a) more than one reasonable answer exists and (b) the answers would lead to materially different specs.
-2. **Ask 3–7 questions per round, never more.** Order them by impact on the spec. Group related questions so the user can answer in one pass.
-3. **For each question, include**: a short rationale (why you're asking), the choices you can see, and your recommended default if the user has no preference. The user should be able to reply "default" and you keep moving.
-4. **Wait for the user's reply.** Never invent answers. If the user is silent or says "you decide," lock in your stated default and record that fact in the spec under "Decisions resolved by Brainstormer default" (see Step 6).
-5. **After each reply, update your internal model** and re-derive the unknowns. Stop when no remaining unknown would meaningfully change the spec.
+Interview the user until your **self-rated spec clarity ≥ `clarity_threshold`** (the value from Step 0; default `0.99`). Clarity is the target — **not** a question count. There is **no cap** on how many questions you may ask, and no fixed "wave" size: a cap would bias you toward declaring the spec clear just to stop asking. Keep going until the threshold is genuinely met.
+
+Loop, one exchange at a time:
+
+1. **Identify the single highest-uncertainty unknown** still open. A question is high-uncertainty when (a) more than one reasonable answer exists and (b) the answers would lead to materially different specs. Ask about that one; you may bundle a few tightly-coupled sub-questions the user can answer in the same breath, but do not pad the turn with lower-impact questions to "fill a wave."
+2. **State it well:** a short rationale (why you're asking), the choices you can see, and your recommended default if the user has no preference. The user should be able to reply "default" and you keep moving.
+3. **Wait for the user's reply.** Never invent answers. If the user is silent or says "you decide," lock in your stated default and record that fact in the spec under "Decisions resolved by Brainstormer default" (see Step 6).
+4. **Fold the answer in and re-rate clarity (0–1)** across all spec dimensions — functional behavior, actors, permissions, data, surfaces, failure modes, compliance. If clarity < `clarity_threshold`, derive the next highest-uncertainty unknown and repeat. If ≥ `clarity_threshold` **and** no remaining unknown would materially change the spec, exit the loop.
+
+Rate honestly: a residual unknown that would change implementation, data shape, permissions, compliance, UI surface, rollout, or acceptance criteria keeps clarity below threshold no matter how many questions you have already asked.
 
 Question categories to cover at minimum (ask only if relevant to the request):
 
@@ -65,31 +79,34 @@ This gate is load-bearing. If a requirement is not explicitly stated by the user
 - Do not mark a spec `READY_FOR_PLANNING` while any open question would change implementation, data shape, permissions, compliance handling, UI surface, rollout, or acceptance criteria.
 - Every material inference must be converted into a clarifying question or recorded under "Decisions resolved by Brainstormer default" only after the user accepts/delegates that default.
 
-When running under a non-interactive orchestrator, you may not be able to wait for the user's reply inside the same process. In that case:
+**Mode interaction with this gate:**
 
-1. Write the Q&A file to the requested `QNA-*.md` path with `status: ANSWERS_NEEDED`.
-2. Put the full prioritized question set in `## Questions`.
-3. Print the same questions in your response.
-4. Stop. Do not create a READY spec and do not ask the architect to proceed.
+- **`manual`:** every unresolved unknown is a question you put to the user. Do not mark the spec `READY_FOR_PLANNING` until the user has answered or explicitly delegated each one.
+- **`autonomous`:** you satisfy the gate by *resolving* each unknown, not by deferring it — lock in your stated default and record it under "Decisions resolved by Brainstormer default." A default is a valid resolution here. Do NOT write a `QNA` file or stop with `ANSWERS_NEEDED`. The only unknown that still blocks a READY spec is a hard conflict with a `PROJECT-CONTEXT.md` invariant that no default can honor — in that case set `status: DRAFT` and flag it in your output.
 
-## Step 3 — Confidence check
+The gate's substance is identical in both modes: no *inferred* requirement is ever silently baked in. Manual converts each inference into a question; autonomous converts each into a recorded, defaulted decision the architect can audit.
 
-Before writing the spec, restate the resolved understanding to the user as a numbered summary and ask: **"Is this 100% accurate, or do I have anything wrong?"** Only after the user confirms (or after they explicitly say "ship it" / equivalent) do you proceed to Step 4. If the user corrects anything, fold it in and re-confirm.
+## Step 3 — Confidence check (manual mode)
+
+**Manual mode:** before writing the spec, restate the resolved understanding to the user as a numbered summary and ask: **"Is this 100% accurate, or do I have anything wrong?"** Only after the user confirms (or after they explicitly say "ship it" / equivalent) do you proceed to Step 4. If the user corrects anything, fold it in and re-confirm.
+
+**Autonomous mode:** there is no user to confirm with — skip this step and proceed straight to Step 4. Your defaulted decisions are your record of intent; they live under "Decisions resolved by Brainstormer default" for the architect to audit.
 
 ## Step 4 — Determine the spec ID
 
 Specs live ONLY in `plans/specs/`. Never write a spec or QNA file outside this directory.
 
-**Use the ID the orchestrator gave you** in the `ID to use:` line of your prompt (e.g. `SPEC-007`) — verbatim, do not recompute. Only if you were run standalone with no `ID to use:` line, compute it deterministically (extension-agnostic, matches `.md` and `.html`):
+**Use the ID the orchestrator gave you** in the `ID to use:` line of your prompt (e.g. `SPEC-20260703T142531Z-9f0c`) — verbatim, do not recompute. Only if you were run standalone with no `ID to use:` line, generate a timestamp-based ID (no dir scan — see `.orchestrator/artifact-format.md` → ID allocation):
 
 ```bash
-n=$(ls plans/specs 2>/dev/null | grep -oE '^SPEC-[0-9]{3}' | grep -oE '[0-9]{3}' | sort -n | tail -1)
-printf "SPEC-%03d\n" "$(( 10#${n:-0} + 1 ))"
+ts=$(date -u +%Y%m%dT%H%M%SZ)
+rnd=$(openssl rand -hex 2 2>/dev/null || printf '%04x' $(( (RANDOM<<8 ^ RANDOM) & 0xffff )))
+printf 'SPEC-%s-%s\n' "$ts" "$rnd"
 ```
 
-QNA files use the same `NNN` as their paired SPEC — written to `plans/specs/QNA-{NNN}-{slug}.md`.
+QNA files use the **same ID token** as their paired SPEC — written to `plans/specs/QNA-{NNN}-{slug}.md` (where `{NNN}` is that shared token).
 
-**Sanity check:** before writing, verify the path matches `^plans/specs/(SPEC|QNA)-\d{3}-[a-z0-9-]+\.md$`. If not, abort.
+**Sanity check:** before writing, verify the path matches `^plans/specs/(SPEC|QNA)-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{4}-[a-z0-9-]+\.md$`. If not, abort.
 
 ## Step 5 — Derive slug
 
@@ -186,9 +203,9 @@ If the spec introduces a concept that future specs will reference (a new domain 
 - Read `.orchestrator/PROJECT-CONTEXT.md` and recent `plans/specs/*.md` before any interview round.
 - Never invent answers the user did not give. Use stated defaults explicitly and record them under "Decisions resolved by Brainstormer default."
 - Never infer a material requirement just to keep the pipeline moving. If the user has not authorized the decision, keep the spec in `DRAFT` and ask.
-- Never proceed past Step 3 without an explicit user confirmation (or an explicit "you decide" / "ship it" delegation).
+- In `manual` mode, never proceed past Step 3 without an explicit user confirmation (or an explicit "you decide" / "ship it" delegation). In `autonomous` mode there is no confirmation gate — every unknown must instead be resolved by a recorded default before the spec goes READY.
 - Never write code, tasks, or test scaffolding — those belong to the architect and the coder.
-- Cap each interview round at 7 questions. If you would ask more, you have not prioritized.
+- Do not cap the number of interview questions. In `manual` mode, keep asking (one exchange at a time) until self-rated clarity ≥ `clarity_threshold`; a question budget would bias the clarity rating. Prioritization means asking the highest-impact unknown *first*, not asking fewer questions than clarity requires.
 - Always set `updated_at` to the current ISO 8601 datetime when writing or modifying the spec.
 - If the user's request conflicts with PROJECT-CONTEXT.md, surface the conflict before writing the spec; do not paper over it.
 - Specs are immutable once `status: READY_FOR_PLANNING`. To change the spec, create a new one and link it via `related_to`.

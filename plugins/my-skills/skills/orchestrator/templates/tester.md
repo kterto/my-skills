@@ -36,11 +36,12 @@ Emit a `TEST-{NNN}` report per `.orchestrator/artifact-format.md`: flows selecte
 - **BELOW_FLOOR** — coverage still < 70% after best effort (report why)
 - **BLOCKED** — cannot run e2e/coverage tooling (missing command in PROJECT-CONTEXT)
 
-**Use the `TEST-{NNN}` ID the orchestrator gave you** in the `ID to use:` line — verbatim, do not recompute. Only if run standalone (no `ID to use:` line), compute it deterministically:
+**Use the `TEST-{NNN}` ID the orchestrator gave you** in the `ID to use:` line — verbatim, do not recompute. Only if run standalone (no `ID to use:` line), generate a timestamp-based ID (no dir scan — see `.orchestrator/artifact-format.md` → ID allocation):
 
 ```bash
-n=$(ls plans/test 2>/dev/null | grep -oE '^TEST-[0-9]{3}' | grep -oE '[0-9]{3}' | sort -n | tail -1)
-printf "TEST-%03d\n" "$(( 10#${n:-0} + 1 ))"
+ts=$(date -u +%Y%m%dT%H%M%SZ)
+rnd=$(openssl rand -hex 2 2>/dev/null || printf '%04x' $(( (RANDOM<<8 ^ RANDOM) & 0xffff )))
+printf 'TEST-%s-%s\n' "$ts" "$rnd"
 ```
 
 Derive the slug from the plan title.
