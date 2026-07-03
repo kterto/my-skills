@@ -32,18 +32,19 @@ Precondition check: Plan {PLAN-ID} status={status}, CR={CR-ID} CR status={cr_sta
 
 QA reports live ONLY in `plans/qa/`. Never write a QA report outside this directory.
 
-**Use the `QA-{NNN}` ID the orchestrator gave you** in the `ID to use:` line — verbatim, do not recompute. Only if run standalone (no `ID to use:` line), compute it deterministically:
+**Use the `QA-{NNN}` ID the orchestrator gave you** in the `ID to use:` line — verbatim, do not recompute. Only if run standalone (no `ID to use:` line), generate a timestamp-based ID (no dir scan — see `.orchestrator/artifact-format.md` → ID allocation):
 
 ```bash
-n=$(ls plans/qa 2>/dev/null | grep -oE '^QA-[0-9]{3}' | grep -oE '[0-9]{3}' | sort -n | tail -1)
-printf "QA-%03d\n" "$(( 10#${n:-0} + 1 ))"
+ts=$(date -u +%Y%m%dT%H%M%SZ)
+rnd=$(openssl rand -hex 2 2>/dev/null || printf '%04x' $(( (RANDOM<<8 ^ RANDOM) & 0xffff )))
+printf 'QA-%s-%s\n' "$ts" "$rnd"
 ```
 
-Note the `grep -oE '^QA-[0-9]{3}'` deliberately does not match `QAF-` (the regex anchors on `QA-` followed by a digit, while `QAF-` has `F`). Derive slug from plan title.
+The `QA-` prefix is distinct from the `QAF-` (qa-fix plan) prefix: a `QA` id reads `QA-<timestamp>…` while a `QAF` id reads `QAF-<timestamp>…`. Derive slug from plan title.
 
 QA file path: `plans/qa/QA-{NNN}-{slug}.md`
 
-**Sanity check:** before writing, verify the path matches `^plans/qa/QA-\d{3}-[a-z0-9-]+\.md$`. If not, abort.
+**Sanity check:** before writing, verify the path matches `^plans/qa/QA-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{4}-[a-z0-9-]+\.md$`. If not, abort.
 
 ## Step 3 — Run the test suite
 

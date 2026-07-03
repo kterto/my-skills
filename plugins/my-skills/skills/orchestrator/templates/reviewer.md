@@ -23,18 +23,19 @@ A plan ID (e.g. `FEAT-001`) or path to a plan file. The plan must have `status: 
 
 CR files live ONLY in `plans/code-review/`. Never write a CR outside this directory.
 
-If the environment variable `MAESTRO_CR_TARGET_PATH` is set, the CR file path is **already chosen** — write the CR file to that exact absolute path. Do not re-compute the sequence number. Otherwise, **use the `CR-{NNN}` ID the orchestrator gave you** in the `ID to use:` line — verbatim, do not recompute. Only if run standalone (no `ID to use:` line and no env var), compute it deterministically:
+If the environment variable `MAESTRO_CR_TARGET_PATH` is set, the CR file path is **already chosen** — write the CR file to that exact absolute path. Do not re-generate the ID. Otherwise, **use the `CR-{NNN}` ID the orchestrator gave you** in the `ID to use:` line — verbatim, do not recompute. Only if run standalone (no `ID to use:` line and no env var), generate a timestamp-based ID (no dir scan — see `.orchestrator/artifact-format.md` → ID allocation):
 
 ```bash
-n=$(ls plans/code-review 2>/dev/null | grep -oE '^CR-[0-9]{3}' | grep -oE '[0-9]{3}' | sort -n | tail -1)
-printf "CR-%03d\n" "$(( 10#${n:-0} + 1 ))"
+ts=$(date -u +%Y%m%dT%H%M%SZ)
+rnd=$(openssl rand -hex 2 2>/dev/null || printf '%04x' $(( (RANDOM<<8 ^ RANDOM) & 0xffff )))
+printf 'CR-%s-%s\n' "$ts" "$rnd"
 ```
 
 Derive slug from plan title.
 
 CR file path: `plans/code-review/CR-{NNN}-{slug}.md`
 
-**Sanity check:** before writing, verify the path matches `^plans/code-review/CR-\d{3}-[a-z0-9-]+\.md$`. If not, abort.
+**Sanity check:** before writing, verify the path matches `^plans/code-review/CR-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{4}-[a-z0-9-]+\.md$`. If not, abort.
 
 ## Step 3 — Review against criteria
 

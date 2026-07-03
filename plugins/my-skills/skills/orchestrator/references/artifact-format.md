@@ -11,8 +11,10 @@ All six role templates (brainstormer, architect, coder, tester, reviewer, qa) wr
 This means:
 
 - Numbering scans never break, because `<ID>-<slug>.md` always exists.
-- State mutation (status flips, `[ ] → [x]`) always targets the `.md`.
+- State mutation (status flips, `[ ] → [x]`) always targets the `.md` first — it is authoritative.
 - The `.html` view is a snapshot rendered from the `.md` at write time.
+
+**One exception — the coder keeps the plan html task state live.** While executing a plan in `html` mode (and only when the plan `<ID>-<slug>.html` exists beside the `.md`), the coder mirrors each `[ ] → [x]`, the progress overview, and `data-status`/`data-updated-at` into that one plan html view as it goes, so the rendered plan tracks reality instead of freezing at creation time. The `.md` still wins on any disagreement, and every other artifact's `.html` remains a read-only render regenerated downstream. See the coder role template, Step 4b-html.
 
 ## md artifact (always written)
 
@@ -73,21 +75,37 @@ The ONLY directories permitted under `plans/`. No role or step may invent any ot
 | spec eval     | `plans/eval/`        | `EVAL`  | orchestrator (Step 7a)         |
 | final report  | `plans/final/`       | `FINAL` | orchestrator (Step 7b)         |
 
-`QNA-{NNN}` files (brainstormer, non-interactive mode) share the paired SPEC's number and live in `plans/specs/`.
+`QNA-<ID>` files (brainstormer, non-interactive mode) share the paired SPEC's **full ID token** and live in `plans/specs/`.
 
-## ID allocation — orchestrator-owned, deterministic
+## ID allocation — timestamp-based, collision-free
 
-IDs are **assigned by the orchestrator and passed into each role's prompt** (`ID to use: <PREFIX>-<NNN>`). A role MUST use the provided ID verbatim and MUST NOT compute its own when one is supplied.
+An artifact ID is `<PREFIX>-<ID-TOKEN>` where the ID token is a UTC creation timestamp plus a short random suffix:
 
-The orchestrator computes the next ID with a fixed, extension-agnostic command (matches `.md`, `.html`, and `.progress.*` alike, so it is correct across the md→html transition):
-
-```bash
-# args: $1 = dir (e.g. plans/feat), $2 = prefix (e.g. FEAT)
-n=$(ls "$1" 2>/dev/null | grep -oE "^$2-[0-9]{3}" | grep -oE '[0-9]{3}' | sort -n | tail -1)
-printf "%s-%03d\n" "$2" "$(( 10#${n:-0} + 1 ))"
+```
+<PREFIX>-<YYYYMMDD>T<HHMMSS>Z-<4 hex>
+e.g.  FEAT-20260703T142530Z-a1b2   SPEC-20260703T142531Z-9f0c   TEST-20260703T142600Z-7d3e
 ```
 
-Fallback: if a role is run standalone (no `ID to use:` in its prompt), it runs the same command itself for its (dir, prefix) before writing.
+**Why not an incrementing counter.** The old `<PREFIX>-001` scheme scanned the target directory for the highest existing number and added one. Two coworkers working in separate branches/worktrees each see only their own tree, both allocate the same next number, and the IDs collide on merge. Timestamp IDs are allocated **without listing the directory at all**, so parallel actors never race: the second-resolution UTC timestamp orders artifacts by creation time, and the random suffix guarantees uniqueness even if two artifacts of the same prefix are created in the same second.
+
+IDs are **assigned by the orchestrator and passed into each role's prompt** (`ID to use: <PREFIX>-<ID-TOKEN>`). A role MUST use the provided ID verbatim and MUST NOT compute its own when one is supplied.
+
+The orchestrator generates an ID with a fixed command — no scan, no dir argument:
+
+```bash
+# arg: $1 = prefix (e.g. FEAT). Emits e.g. FEAT-20260703T142530Z-a1b2
+newid() {
+  ts=$(date -u +%Y%m%dT%H%M%SZ)
+  rnd=$(openssl rand -hex 2 2>/dev/null || printf '%04x' $(( (RANDOM<<8 ^ RANDOM) & 0xffff )))
+  printf '%s-%s-%s\n' "$1" "$ts" "$rnd"
+}
+```
+
+Fallback: if a role is run standalone (no `ID to use:` in its prompt), it runs the same generator itself before writing.
+
+**Validation & ordering.** An ID token matches `[0-9]{8}T[0-9]{6}Z-[0-9a-f]{4}`; a full artifact filename matches `^<PREFIX>-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{4}-<slug>\.(md|html)$`. Because the timestamp is fixed-width and leads the token, `ls <dir> | sort` lists artifacts in chronological order.
+
+> **Placeholder note.** Throughout these templates and the role prompts, `{NNN}` (and any `-NNN` shown in an example path) is shorthand for this per-artifact **ID token** — no longer a zero-padded number. Read `SPEC-{NNN}` as `SPEC-<YYYYMMDD>T<HHMMSS>Z-<hex>`.
 
 ## Related navigation (md + html)
 

@@ -39,15 +39,16 @@ Apply the Invariants and Commands sections of `PROJECT-CONTEXT.md`.
 
 ## Step 1 — Determine the ID
 
-**Use the ID the orchestrator gave you** in the `ID to use:` line of your prompt (e.g. `FEAT-003`) — verbatim, do not recompute. Only if you were run standalone with no `ID to use:` line, compute it deterministically for your type's (dir, prefix) from the canonical table (extension-agnostic, matches `.md` and `.html`):
+**Use the ID the orchestrator gave you** in the `ID to use:` line of your prompt (e.g. `FEAT-20260703T142530Z-a1b2`) — verbatim, do not recompute. Only if you were run standalone with no `ID to use:` line, generate a timestamp-based ID for your type's prefix (no dir scan — see `.orchestrator/artifact-format.md` → ID allocation):
 
 ```bash
-# feat → plans/feat FEAT ; fix → plans/code-review FIX ; qa → plans/qa QAF
-n=$(ls {dir} 2>/dev/null | grep -oE '^{PREFIX}-[0-9]{3}' | grep -oE '[0-9]{3}' | sort -n | tail -1)
-printf "{PREFIX}-%03d\n" "$(( 10#${n:-0} + 1 ))"
+# feat → FEAT ; fix → FIX ; qa → QAF
+ts=$(date -u +%Y%m%dT%H%M%SZ)
+rnd=$(openssl rand -hex 2 2>/dev/null || printf '%04x' $(( (RANDOM<<8 ^ RANDOM) & 0xffff )))
+printf '%s-%s-%s\n' "{PREFIX}" "$ts" "$rnd"
 ```
 
-**Sanity check:** before writing, verify `{full path}` matches `^plans/(feat|code-review|qa)/(FEAT|FIX|QAF)-\d{3}-[a-z0-9-]+\.md$`. If not, recheck the canonical table.
+**Sanity check:** before writing, verify `{full path}` matches `^plans/(feat|code-review|qa)/(FEAT|FIX|QAF)-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{4}-[a-z0-9-]+\.md$`. If not, recheck the canonical table.
 
 ## Step 2 — Derive slug
 
