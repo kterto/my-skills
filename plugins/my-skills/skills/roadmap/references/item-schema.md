@@ -10,6 +10,7 @@ id: 001.1.1
 kind: user-story
 title: Initialize repo
 status: todo            # todo | in_progress | done | superseded | blocked
+release: null           # null/absent = active untiered | "backlog" = parked | any other = named release train
 milestone: "001"
 phase: "001.1"
 sequence: 1
@@ -40,6 +41,7 @@ updated_at: <ISO-8601>
 | `kind` | string | Always `user-story` for user-story files. |
 | `title` | string | Short human-readable title. |
 | `status` | string | One of: `todo | in_progress | done | superseded | blocked`. |
+| `release` | string \| null | **Release band** — classification metadata orthogonal to `status`. Absent or `null` = active but untiered; the reserved value `backlog` = parked / out of the active plan; any other value = a named release train (e.g. `mvp`, `v1.1`). Editable on an item of **any** status (including `done`/`superseded`) — a band change never alters `status`. Named bands are registered, in order, in `roadmap.lock.json` → `releases[]` (see `directory-layout.md`); `backlog` is reserved and never listed there. Optional and nullable for backward compatibility: legacy items with no `release` key render and execute unchanged (untiered, badge omitted). |
 | `milestone` | string | Parent milestone ID (e.g. `"001"`). |
 | `phase` | string | Parent phase ID (e.g. `"001.1"`). |
 | `sequence` | integer | Logical execution order within the phase. Carries order after re-eval inserts. |
@@ -64,6 +66,7 @@ Same frontmatter shape as a user-story file, with the following differences:
 - `kind: milestone` or `kind: phase` (never `user-story`).
 - No `commit_trailer` key (milestones and phases are not directly implemented by a single commit).
 - `status` is **derived** (rolled up from children) rather than set directly — see the rollup function below.
+- `release` is likewise **derived** for display: a phase/milestone shows the shared band of its **not-done** descendant stories, or the derived badge `mixed` when those children differ (see `mutation-ops.md` → cascade + derived `[mixed]` badge). A phase/milestone frontmatter `release` may still be stored when `set-release` cascades a band, but rendering always reflects the derived value.
 - No `orchestrator_brief` field.
 - Body includes an ordered list of children rendered by `sequence`, plus the audit log.
 
@@ -112,6 +115,25 @@ Columns are written in this order: `when (ISO-8601) | status | who | evidence`.
 
 - For sync-detected `done`: `evidence` = the commit sha.
 - Otherwise: `evidence` = the originating action string — one of `/roadmap plan`, `/roadmap sync`, or `/roadmap` (re-evaluation, triggered by running `/roadmap` when `/roadmap/` already exists).
+
+### Release-change audit row (release-band convention)
+
+A `release`-band change appends exactly **one** row to the item's existing 4-column `## Audit log` table — the same table, **no new column**. Because a band change is orthogonal to `status`, the row records the item's **unchanged current status**:
+
+| Column | Value on a release change |
+|---|---|
+| `when (ISO-8601)` | The change timestamp. |
+| `status` | The item's **current, unchanged** status (the band change does not transition status). |
+| `who` | The actor tag (e.g. `roadmap-skill`, or a user handle). |
+| `evidence` | `release: <old>→<new> (set-release)` — where `<old>`/`<new>` are the prior and new band values (`null` rendered as `null`, the parked band as `backlog`), and `set-release` is the roadmap op that made the change. If a front-door caller drove the op it may append its own attribution as a source suffix (e.g. `… (set-release via /product-manager park)`); the roadmap schema itself references only the op, so a direct `set-release` call has a fully-defined evidence string with no caller. |
+
+Example — a `todo` story parked (`set-release backlog`), driven by the PM `park` verb:
+
+```
+| 2026-07-04T18:40Z | todo | roadmap-skill | release: null→backlog (set-release via /product-manager park) |
+```
+
+Status-transition rows continue to append exactly as before; the release row is additive and never replaces a status row.
 
 ## html mode
 

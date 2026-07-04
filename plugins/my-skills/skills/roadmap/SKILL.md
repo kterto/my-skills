@@ -64,7 +64,7 @@ Ask structured user questions on these gaps until roadmap-clarity confidence ≥
 
 ### Step 3 — Seed decomposition
 
-Pull spec and PRD content from `docs/superpowers/specs/*`, any PRD files found in the repo, and README to seed the decomposition step. These are read-only inputs.
+Pull spec and PRD content from `docs/superpowers/specs/*`, `plans/specs/*`, any PRD files found in the repo, and README to seed the decomposition step. These are read-only inputs. (`plans/specs/*` is where the orchestrator brainstormer writes specs; the `ingest-spec` op remains location-agnostic via its explicit path argument — see `references/mutation-ops.md`.)
 
 ---
 
@@ -134,6 +134,26 @@ The full algorithms — rollup rules, the Sync procedure, and the Re-eval proced
 
 ---
 
+## Mutation operations
+
+Beyond building, syncing, and re-evaluating, the roadmap skill exposes five doc-only **mutation operations** on an existing `/roadmap/`. They are the engine behind the `product-manager` skill's management verbs; the full normative spec is in `references/mutation-ops.md`.
+
+**Release band.** Every item carries an optional `release` band (`string | null`) — classification metadata **orthogonal to `status`**, editable on items of any status. `null`/absent = active untiered; the reserved value `backlog` = parked; any other value = a named release train (`mvp`, `v1.1`, …) registered in the ordered `releases[]` array in `roadmap.lock.json`. The band is nullable and the registry is lazily created, so legacy roadmaps are untouched (no migration). See `references/item-schema.md` and `references/directory-layout.md`.
+
+**The five ops at a glance** (each: **stage a diff → gate on approval → write files → propose a commit → never commit**):
+
+| Op | Purpose |
+|---|---|
+| `set-release <release> <ids…>` | Assign a band; cascades to not-done descendant stories for a phase/milestone id, derived `[mixed]` badge when children differ. |
+| `ingest-spec <path>` | Targeted re-eval scoped to one spec file; appends new work (default `release: null`), immutable to done work, preserves existing bands. |
+| `reorder <ids-in-order>` | Change `sequence`/`depends_on` of **not-done** items only. |
+| `revise <id>` | Retitle / re-scope, or split/merge via new stable IDs + supersede — **not-done** items only. |
+| `release <list\|reorder\|rename>` | Manage the `releases[]` registry order and names. |
+
+The staged-diff marker set extends the re-eval markers with a band marker: `+ new`, `~ changed`, `! superseded`, `± release`. Structural edits (`reorder`, `revise`, split/merge) apply to not-done items only; a frozen `done`/`superseded` item may only have its `release` band changed.
+
+---
+
 ## References
 
 All normative details live in these files (relative to `plugins/my-skills/skills/roadmap/`):
@@ -141,9 +161,10 @@ All normative details live in these files (relative to `plugins/my-skills/skills
 | File | Content |
 |---|---|
 | `references/directory-layout.md` | Directory tree, ID scheme, stable-identity rule, `roadmap.lock.json` schema |
-| `references/item-schema.md` | Frontmatter keys, body sections, audit log format, rollup function, html rendering rules |
+| `references/item-schema.md` | Frontmatter keys (incl. `release` band), body sections, audit log format (incl. release-change row), rollup function, html rendering rules |
 | `references/config.md` | Config keys, precedence chain, `roadmap.config.json` schema |
-| `references/sync-and-reeval.md` | Rollup rules, Sync procedure (git command + steps), Re-eval procedure |
+| `references/sync-and-reeval.md` | Rollup rules, Sync procedure (git command + steps), Re-eval procedure (incl. band preservation + `ingest-spec`) |
+| `references/mutation-ops.md` | Mutation ops (`set-release`, `ingest-spec`, `reorder`, `revise`, `release`), staged-diff markers, cascade + `[mixed]` badge, structural immutability |
 
 Templates (rendered per `output_format`):
 

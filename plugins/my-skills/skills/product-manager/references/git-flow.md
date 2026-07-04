@@ -2,7 +2,7 @@
 
 This document is the single source of truth for the stacked-branch git model used by PM: how branches are named, how the base is resolved, the exact success-path commit-and-sync sequence, and how stacked PRs are created.
 
-`SKILL.md` references this document by name: **Branch naming**, **Base resolution**, **Success-path sequence**, **Stacked PR ordering**.
+`SKILL.md` references this document by name: **Branch naming**, **Base resolution**, **Success-path sequence**, **Stacked PR ordering**, **Planning-PR flow**.
 
 ---
 
@@ -209,8 +209,66 @@ When a run produces multiple stories, each story's PR is opened immediately afte
 
 ---
 
+## Planning-PR flow
+
+The management verbs (`assign`/`park`/`unpark`/`add-spec`/`reorder`/`revise`/`release`; see `references/roadmap-management.md`) **mutate the roadmap** rather than execute stories. They do **not** run the orchestrator, carry no `Roadmap-Story:` trailer, and produce a single documentation PR — the **planning PR**. The git model reuses base resolution but is simpler than the per-story success path.
+
+### Branch naming
+
+```
+pm/roadmap-<verb>-<slug>
+```
+
+where `<verb>` is the management verb (`assign`, `park`, `unpark`, `add-spec`, `reorder`, `revise`, `release`) and `<slug>` is a short kebab-case slug of the change (e.g. the target band, or the primary resolved id). Example: `pm/roadmap-assign-mvp`, `pm/roadmap-park-002-1`.
+
+The base is the **PM starting branch** (existing **Base resolution**: `--base` flag > `pm.config.json.base_branch` > the branch PM was invoked on). A planning branch never stacks — it always cuts off the starting branch:
+
+```bash
+git checkout -b pm/roadmap-<verb>-<slug> <starting-branch>
+```
+
+### Sequence
+
+1. **Cut** `pm/roadmap-<verb>-<slug>` off the starting branch.
+2. **Invoke the roadmap op** (`set-release` / `ingest-spec` / `reorder` / `revise` / `release`). The op stages a diff, gates on approval (`--yes` skips the gate), writes the `/roadmap/` files, and prints a proposed commit message. PM writes nothing itself.
+3. **Commit** the roadmap files the op wrote with a `docs(roadmap):` message using the op's proposed text:
+
+   ```bash
+   git add /roadmap
+   git commit -m "docs(roadmap): <verb> …"
+   ```
+
+   No `Roadmap-Story:` trailer (this is a plan change, not a story implementation), and no `/roadmap sync` (nothing was implemented).
+4. **Push** the branch:
+
+   ```bash
+   git push -u origin pm/roadmap-<verb>-<slug>
+   ```
+5. **Open the planning PR** targeting the starting branch, using the planning-PR variant of `templates/pr-body.template.md` (staged-diff summary / resolved id set / verb):
+
+   ```bash
+   PR_URL=$(gh pr create --base <starting-branch> --head pm/roadmap-<verb>-<slug> \
+              --body-file .orchestrator/tmp/pm-roadmap-pr-body-<verb>.md)
+   ```
+
+As with story PRs, PM opens the planning PR and stops — it never merges.
+
+### Reject-and-discard
+
+If the user **rejects at the staged-diff gate** (or the op produces an empty diff), the roadmap op writes nothing, so the planning branch has **no commits**. PM discards it and returns to the starting branch, leaving the working tree untouched:
+
+```bash
+git checkout <starting-branch>
+git branch -D pm/roadmap-<verb>-<slug>   # unpushed, no commits — safe to delete
+```
+
+PM then reports the discard (verb, resolved id set, reason). No push, no PR. See `references/roadmap-management.md` → **Reject-and-discard**.
+
+---
+
 Cross-references:
 - Scope and story queue ordering: `references/scope-resolution.md`
+- Management verbs + planning PR front-door: `references/roadmap-management.md`
 - Human-validation spots (affects PR body `{{human_validation_note}}`): `references/human-validation.md`
 - Run log and resume behavior: `references/resume-and-logging.md`
-- PR body token definitions: `templates/pr-body.template.md`
+- PR body token definitions (story + planning variants): `templates/pr-body.template.md`

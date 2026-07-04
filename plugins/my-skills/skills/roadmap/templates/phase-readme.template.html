@@ -209,6 +209,29 @@ h1 .h1__pill { align-self: center; }
   white-space: nowrap;
 }
 
+/* Release band badge — derived on a phase: shared band, or [mixed] when children
+   differ, hidden when untiered/legacy. Uses shared tokens → readable light + dark. */
+.release-badge {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+  background: var(--bg-overlay);
+  color: var(--text-secondary);
+  border: 1px solid var(--rule-heavy);
+  padding: 1px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.release-badge--backlog { color: var(--status-muted); background: var(--status-muted-bg); border-color: transparent; }
+.release-badge--mixed   { color: var(--status-warning); background: var(--status-warning-bg); border-color: transparent; }
+
+/* Per-release progress + grouping view */
+.release-progress { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-top: var(--sp-4); font-family: var(--font-mono); font-size: var(--text-sm); color: var(--text-secondary); }
+.release-progress__item { display: inline-flex; gap: var(--sp-2); align-items: baseline; }
+.release-progress__band { color: var(--text-muted); }
+.release-group { margin-top: var(--sp-6); }
+.release-group__head { font-family: var(--font-mono); font-size: var(--text-sm); text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin: 0 0 var(--sp-2); }
+
 /* ============================================================
    Dependency field
    ============================================================ */
@@ -453,7 +476,7 @@ code {
 </style>
 </head>
 <body>
-<main data-id="{{id}}" data-kind="phase" data-status="{{rollup_status}}"
+<main data-id="{{id}}" data-kind="phase" data-status="{{rollup_status}}" data-release="{{release_derived}}"
       data-created-at="{{created_at}}" data-updated-at="{{updated_at}}">
 
   <nav class="crumbs"><a href="../../README.html">Roadmap</a><span class="sep">/</span><a href="../README.html">{{milestone}}</a><span class="sep">/</span><span>{{id}}</span></nav>
@@ -473,6 +496,7 @@ code {
       <span class="h1__id">{{id}}</span>
       <span>{{title}}</span>
       <span class="h1__pill"><span class="pill pill--active">{{rollup_status}}</span></span>
+      <span class="h1__pill"><span class="release-badge" data-release="{{release_derived}}" hidden>[{{release_derived}}]</span></span>
     </h1>
 
     <!-- 2. ID / meta header block -->
@@ -494,6 +518,19 @@ code {
       <span class="depends__label">Depends on</span>
       <span class="depends__val">{{depends_on}}</span>
     </div>
+
+    <!-- 3b. Progress: rollup + per-release. The renderer emits one
+         .release-progress__item per band (named bands in releases[] order,
+         then backlog, then untiered), each `band done/total`. The whole
+         block is omitted for legacy/untiered phases. -->
+    <div class="depends">
+      <span class="depends__label">Progress</span>
+      <span class="depends__val">{{done_count}}/{{total_count}} done ({{pct}}%)</span>
+    </div>
+    <div class="release-progress" data-role="per-release-progress">
+      <!-- e.g. <span class="release-progress__item"><span class="release-progress__band">mvp</span> 2/3</span> -->
+      {{per_release_progress}}
+    </div>
   </header>
 
   <!-- ============================================================
@@ -504,9 +541,32 @@ code {
       <summary>User stories <span class="summary__meta">by sequence</span></summary>
       <div class="details__body">
         <ol class="tasks">
-          <!-- renderer emits one <li> per user story: <li><input type="checkbox" disabled [checked]> <span class="task__title">…</span><span class="task__status">…</span></li> -->
+          <!-- renderer emits one <li> per user story, each carrying the story's
+               release badge alongside its status pill:
+               <li data-status="…" data-release="mvp"><input type="checkbox" disabled [checked]>
+                 <span class="task__title">…</span>
+                 <span class="task__status"><span class="pill">…</span> <span class="release-badge">[mvp]</span></span></li>
+               The badge is omitted for untiered stories. -->
           {{story_list_ordered_by_sequence}}
         </ol>
+      </div>
+    </details>
+  </section>
+
+  <!-- ============================================================
+       4b. User stories by release (grouping / filter view)
+       Rendered only when the phase has ≥1 tiered story; the whole section is
+       omitted for legacy/untiered phases. Groups are emitted in releases[]
+       order, then backlog, then an "(untiered)" group.
+       ============================================================ -->
+  <section class="section" data-role="release-grouping">
+    <details>
+      <summary>User stories <span class="summary__meta">by release</span></summary>
+      <div class="details__body">
+        <!-- renderer emits one .release-group per band:
+             <div class="release-group"><p class="release-group__head">mvp — 2/3</p>
+               <ol class="tasks">…story rows…</ol></div> -->
+        {{story_groups_by_release}}
       </div>
     </details>
   </section>
@@ -572,10 +632,29 @@ code {
     }
   }
 
+  function syncReleaseBadge() {
+    var root = document.querySelector('main[data-kind="phase"]');
+    if (!root) return;
+    var release = root.getAttribute("data-release"); // derived band or "mixed"
+    var badge = document.querySelector(".release-badge");
+    if (!badge) return;
+    // null / absent / unresolved token → untiered phase, show no badge (legacy-safe)
+    if (!release || release === "null" || release === "untiered" || release === "{{" + "release_derived}}") {
+      badge.hidden = true;
+      return;
+    }
+    badge.hidden = false;
+    badge.textContent = "[" + release + "]";
+    if (release === "backlog") badge.classList.add("release-badge--backlog");
+    else if (release === "mixed") badge.classList.add("release-badge--mixed");
+  }
+
+  function init() { syncHeaderPill(); syncReleaseBadge(); }
+
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", syncHeaderPill);
+    document.addEventListener("DOMContentLoaded", init);
   } else {
-    syncHeaderPill();
+    init();
   }
 })();
 </script>
