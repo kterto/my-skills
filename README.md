@@ -1,6 +1,6 @@
 # my-skills
 
-Authored [Claude Code](https://code.claude.com) skills, packaged as a plugin marketplace so they can be shared across projects, with colleagues, and the community.
+Authored agent skills for [Claude Code](https://code.claude.com) and [opencode](https://opencode.ai), packaged so the same skill bodies can be shared across projects, with colleagues, and the community.
 
 ## Skills
 
@@ -11,8 +11,8 @@ Authored [Claude Code](https://code.claude.com) skills, packaged as a plugin mar
 | `validation-fixer` | Routes recorded user-validation bugs through a chosen framework (superpowers / gsd / orchestrator) and tracks each fix in-file. |
 | `design-to-code` | Translates Claude design output files (self-contained HTML with tokens, reviewer comments, component states) into pixel-perfect, correctly-behaving code. |
 | `orchestrator` | Project-agnostic 6-agent pipeline (brainstormer → architect → coder → tester → reviewer → qa) with a context-confidence gate, spec-driven-eval integration, and a final Markdown/HTML report. Auto-detects first-run bootstrap vs. straight pipeline execution. |
-| `roadmap` | Decomposes a project spec into an auditable milestone→phase→user-story roadmap under `/roadmap/`, with append-only audit logs, orchestrator-ready user-story briefs, `/roadmap sync` trailer stamping, and diff+preserve re-evaluation. Doc-only. |
-| `product-manager` | Autonomously drives a scoped branch of the roadmap to completion — feeds each user story's brief to the orchestrator, then commits with the `Roadmap-Story:` trailer, syncs the roadmap, pushes, and opens a stacked PR per story. Conservative human-validation default; stops on orchestrator stall. |
+| `roadmap` | Decomposes a project spec into an auditable milestone→phase→user-story roadmap under `/roadmap/`, with append-only audit logs, orchestrator-ready user-story briefs, `/roadmap sync` trailer stamping, diff+preserve re-evaluation, release bands, and doc-only mutation ops. |
+| `product-manager` | Autonomously drives roadmap stories to completion and manages roadmap planning PRs — runs story briefs through the orchestrator, commits with `Roadmap-Story:`, syncs the roadmap, pushes/opens PRs, and exposes `assign`/`park`/`add-spec`/`revise`/release-management verbs. |
 | `pr-review-report` | Reviews the current branch against an auto-detected base and authors one self-contained interactive HTML PR-review report — architecture (with recommend-only ADR flags), security, and bugs/improvements lenses, the rendered diff with inline annotations, findings color-coded by severity. |
 
 ## orchestrator
@@ -26,7 +26,7 @@ A project-agnostic 6-agent pipeline that takes a plain-language task description
 /orchestrator "<task description>" --setup  # force re-bootstrap (re-interview + regenerate context)
 ```
 
-On the first run (or when `.orchestrator/config.json` is absent) the skill runs **bootstrap** automatically: it scans the repo, interviews you about missing context until confidence ≥ `context_threshold`, writes `.orchestrator/PROJECT-CONTEXT.md`, renders the six role templates into `.claude/agents/`, and writes `.orchestrator/config.json`. Subsequent invocations skip straight to the pipeline.
+On the first run (or when `.orchestrator/config.json` is absent) the skill runs **bootstrap** automatically: it scans the repo, interviews you about missing context until confidence ≥ `context_threshold`, writes `.orchestrator/PROJECT-CONTEXT.md`, renders the six role templates into the host agent directory (`.claude/agents/` in Claude Code, `.opencode/agent/` in opencode), and writes `.orchestrator/config.json`. Subsequent invocations skip straight to the pipeline.
 
 ### Pipeline
 
@@ -63,11 +63,23 @@ A doc-only skill that turns a project spec or PRD into an auditable, traceable i
 ### Usage
 
 ```text
-/roadmap                # auto-detect: no /roadmap dir → build; dir exists → re-evaluate (diff + preserve)
-/roadmap sync           # scan git commit trailers, stamp matched stories done, roll up, refresh progress
+/roadmap                                # auto-detect: no /roadmap dir → build; dir exists → re-evaluate
+/roadmap sync                           # scan git commit trailers, stamp matched stories done, roll up
+/roadmap set-release mvp 001.1.*        # doc-only mutation op used by PM assign/park/unpark
+/roadmap ingest-spec plans/specs/SPEC.md # targeted append from a reviewed spec
 ```
 
-On the first run the skill runs a **context gate**: if `.orchestrator/PROJECT-CONTEXT.md` exists it reads it as the base context; otherwise it spawns an `Explore` subagent, then loops `AskUserQuestion` until holistic confidence ≥ `context_threshold` (default 0.95). It then grills only roadmap-specific gaps (milestone boundaries, sequencing, release targets, definition of done) before proposing a decomposition for user confirmation.
+On the first run the skill runs a **context gate**: if `.orchestrator/PROJECT-CONTEXT.md` exists it reads it as the base context; otherwise it spawns an `Explore`/`explore` subagent, then loops `AskUserQuestion` in Claude Code or `question` in opencode until holistic confidence ≥ `context_threshold` (default 0.95). It then grills only roadmap-specific gaps (milestone boundaries, sequencing, release targets, definition of done) before proposing a decomposition for user confirmation.
+
+Existing roadmaps can also be changed through doc-only mutation operations. They all stage a diff, require approval unless explicitly bypassed by the caller, write `/roadmap/`, and stop without committing:
+
+| Operation | Purpose |
+|---|---|
+| `set-release <release> <ids…>` | Assign a release band such as `mvp`, `v1.1`, or `backlog`; phase/milestone ids cascade to not-done descendant stories. |
+| `ingest-spec <path>` | Append work from a reviewed spec through a targeted re-eval. |
+| `reorder <ids-in-order>` | Change sequence/dependencies for not-done items. |
+| `revise <id>` | Retitle, re-scope, split, or merge not-done items without renumbering done work. |
+| `release <list\|reorder\|rename>` | Inspect or manage the ordered release registry. |
 
 ### Output layout
 
@@ -115,21 +127,33 @@ The autonomous loop that glues `roadmap` (plans, never runs code) and `orchestra
 
 ```text
 /product-manager complete <scope> [--conservative=true|false] [--base <branch>] [--dry-run]
+/product-manager assign mvp 001.1.* [--yes]
+/product-manager park "not needed for MVP" [--yes]
+/product-manager add-spec plans/specs/SPEC-123.md
+/product-manager new-spec "raw idea to explore"
+/product-manager release list
 ```
 
 | Token | Meaning |
 |---|---|
-| `complete <scope>` | `roadmap` (whole tree), a milestone id (`001` or `001-bootstrap`), or a phase id (`001.2`) |
+| `complete <scope>` | `roadmap` (whole active tree), a milestone id (`001` or `001-bootstrap`), a phase id (`001.2`), or a release band (`mvp`, `v1.1`, `backlog`) |
 | `--conservative` | Autonomy mode. **Default `true`** — stop at detected human-validation spots; `false` documents them and continues |
 | `--base <branch>` | Run base for independent stories. Default: the current branch |
 | `--dry-run` | Resolve the scope, print the ordered queue + git plan, and exit — no execution |
+| `assign <release> <selection>` | Open a planning PR that assigns selected roadmap items to a release band |
+| `park <selection>` / `unpark <selection> [release]` | Move selected work into or out of `backlog` |
+| `add-spec <path>` | Open a planning PR that ingests a reviewed spec into the roadmap |
+| `new-spec [raw idea]` | Run the orchestrator brainstormer to create a spec, then stop for review |
+| `reorder` / `revise` / `release` | Open planning PRs for roadmap order, scope, and release-registry changes |
 
 ### How it works
 
-1. **Pre-flight** — requires `/roadmap/roadmap.lock.json` and `.orchestrator/config.json`, a clean tree, and `gh`. Resolves the scope, drops `done`/`superseded` stories, topo-sorts by `depends_on` then `sequence`, prints the queue, and asks for a single up-front confirmation (which authorizes per-story push/PR for the whole run).
+1. **Pre-flight** — requires `/roadmap/roadmap.lock.json` and `.orchestrator/config.json`, a clean tree, and `gh`. Resolves the scope, drops `done`/`superseded` stories, excludes `backlog` from active scopes, topo-sorts by `depends_on` then `sequence`, prints the queue, and asks for a single up-front confirmation (which authorizes per-story push/PR for the whole run).
 2. **Per-story loop** — cuts a `pm/<id>-<slug>` branch (stacked on the predecessor's branch for dependents), feeds the story's `## Brief` to the orchestrator, and on a `pipeline complete` report commits with the trailer, runs `/roadmap sync`, pushes, and opens a stacked PR.
 3. **Human validation** — scans the story's `## Acceptance` and the orchestrator QA report for manual-validation markers. Conservative mode halts the loop after completing the flagged story; autonomous mode logs the spot to `/roadmap/human-validation-queue.md` and continues.
 4. **Stop on stall** — any orchestrator `Status: STALLED` halts the run with the remaining queue preserved. Re-running resumes (it re-reads the lock and skips `done` stories — no extra state file).
+
+Management verbs follow the same clean-tree and branch safety model, but they do not run implementation work. PM cuts `pm/roadmap-<verb>-<slug>`, invokes the matching roadmap mutation op, commits the roadmap files as `docs(roadmap): <verb> …`, pushes, and opens a planning PR. `release list` is read-only.
 
 Progress is appended to `/roadmap/pm-progress.md` (one row per story attempt). The skill never merges PRs.
 
@@ -216,7 +240,7 @@ Skills are then invocable as `/my-skills:clean-code-gates`, `/my-skills:commit-p
 
 ## Install (opencode)
 
-Recommended install: clone/update this repo under `~/.config/opencode/`, symlink each shared skill and opencode-specific skill into `~/.config/opencode/skills/`, create matching slash commands under `~/.config/opencode/commands/`, and add the skill directories to `skills.paths` for newer opencode releases.
+Recommended install: clone/update this repo under `~/.config/opencode/`, symlink each shared skill and opencode-specific skill into `~/.config/opencode/skills/`, create or refresh matching slash commands under `~/.config/opencode/commands/`, and add the skill directories to `skills.paths` for newer opencode releases.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/kterto/my-skills/main/scripts/install-opencode.sh | bash
@@ -224,7 +248,7 @@ curl -fsSL https://raw.githubusercontent.com/kterto/my-skills/main/scripts/insta
 
 Then restart opencode. Skills load as normal opencode skills: `clean-code-gates`, `commit-pr-dev`, `orchestrator`, `roadmap`, `product-manager`, `pr-review-report`, etc.
 
-Slash commands are installed too: `/clean-code-gates`, `/commit-pr-dev`, `/orchestrator`, `/roadmap`, `/product-manager`, `/pr-review-report`, etc. In opencode, slash commands are separate from skills, so these command files explicitly load the matching skill before running it. Hand-written templates under `.opencode/commands/` override the generated command prompt for the same name.
+Slash commands are installed too: `/clean-code-gates`, `/commit-pr-dev`, `/orchestrator`, `/roadmap`, `/product-manager`, `/pr-review-report`, etc. In opencode, slash commands are separate from skills, so these command files explicitly load the matching skill before running it. Hand-written templates under `.opencode/commands/` override the generated command prompt for the same name; `roadmap` and `product-manager` have explicit templates so their expanded command surfaces match Claude Code usage.
 
 Manual equivalent:
 
@@ -316,6 +340,8 @@ git -C ~/.config/opencode/my-skills pull --ff-only
 ```
 
 Restart opencode after updating. Running sessions keep the previously loaded skill set.
+
+The installer is intentionally idempotent: it pulls the checkout, refreshes symlinks, regenerates slash command files, and preserves any pre-existing unmanaged command/skill directory by moving it to a timestamped `.bak-*` path.
 
 ## Local development (author)
 

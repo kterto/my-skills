@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 #
-# Install this repository's skills for opencode by cloning/updating the repo,
-# linking each skill into ~/.config/opencode/skills, and adding the local skill
-# directories to ~/.config/opencode/opencode.json for newer opencode releases.
-# Also creates matching slash commands in ~/.config/opencode/commands, overlaying
-# any hand-written opencode command templates from this repo.
+# Install or update this repository's skills for opencode by cloning/updating
+# the repo, linking each skill into ~/.config/opencode/skills, and adding the
+# local skill directories to ~/.config/opencode/opencode.json for newer opencode
+# releases. Also creates or refreshes matching slash commands in
+# ~/.config/opencode/commands, overlaying any hand-written opencode command
+# templates from this repo.
 
 set -euo pipefail
 
@@ -193,4 +194,5 @@ done
 echo "opencode global skill links installed in: $GLOBAL_SKILLS_DIR"
 echo "opencode slash commands installed in: $GLOBAL_COMMANDS_DIR"
 echo "Config updated: $CONFIG_FILE"
+echo "Run this installer again to update skills and command templates."
 echo "Restart opencode to load the skills."
