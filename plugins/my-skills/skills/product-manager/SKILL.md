@@ -101,6 +101,54 @@ For each story in the queue, PM executes the following steps in order:
 
 ---
 
+## Roadmap-management verbs
+
+Beyond `complete <scope>` (which *executes* stories), PM exposes a set of **management verbs** that *reshape the roadmap*. Each verb resolves a selection, cuts a planning branch, invokes a `roadmap` mutation op (which stages a diff, gates on approval, and writes `/roadmap/`), then commits / pushes / opens a **planning PR**. PM never edits roadmap files itself — the `roadmap` skill is the sole writer of `/roadmap/`. Full normative detail is in `references/roadmap-management.md`.
+
+```
+/product-manager <verb> <args> [--yes]
+```
+
+### Verb → roadmap op mapping
+
+| PM verb | Roadmap op (`roadmap/references/mutation-ops.md`) | Notes |
+|---|---|---|
+| `assign <release> <selection>` | `set-release <release> <ids…>` | Assign a named band or `backlog`; implicitly registers a new band in `releases[]`. |
+| `park <selection>` | `set-release backlog <ids…>` | Sugar for `assign backlog <selection>`. |
+| `unpark <selection> [<release>]` | `set-release <release-or-null> <ids…>` | Sugar; with a release re-tiers to it, omitting the release un-tiers to `null`. |
+| `add-spec <path>` | `ingest-spec <path>` | Targeted re-eval appending a spec's new work (new items default `release: null`). |
+| `new-spec [raw idea]` | *(two-step; see below)* | Spawns the orchestrator brainstormer, writes `plans/specs/SPEC-{id}.md`, then STOPS. Does not touch the roadmap. |
+| `reorder <ids-in-order>` | `reorder <ids-in-order>` | `sequence`/`depends_on` of **not-done** items only (`--after <id>` accepted). |
+| `revise <id>` | `revise <id>` | Retitle / re-scope, or split/merge via new stable IDs + supersede — **not-done** only. |
+| `release <list\|reorder\|rename …>` | `release <list\|reorder\|rename …>` | Manage the ordered `releases[]` registry. `list` is read-only. |
+
+### Front-door flow (per mutating verb)
+
+1. **Resolve selection** → an exact id set. Selection accepts **ids/globs** (`001.1.*`, `002.1.1`) **and natural language** ("make auth and onboarding the MVP"); either way the resolved id set is shown in the staged diff before applying (`references/roadmap-management.md` → Selection resolution).
+2. **Cut** `pm/roadmap-<verb>-<slug>` off the PM starting branch (existing base resolution; `references/git-flow.md` → Planning-PR flow).
+3. **Invoke the roadmap op** → it stages a diff (markers `+ new`, `~ changed`, `! superseded`, `± release`), **gates on approval**, then writes files and prints a proposed commit message.
+4. **On approval** → commit `docs(roadmap): <verb> …`, push, open the planning PR (`templates/pr-body.template.md` planning variant).
+5. **On reject / empty diff** → discard the empty branch and return to the starting branch (`references/git-flow.md` → Reject-and-discard). No PR.
+
+### Confirmation gate and `--yes`
+
+Every mutating verb shows the staged diff and requires approval. **`--yes`** skips the gate for trusted quick edits (unambiguous explicit ids) — PM passes it through to the roadmap op. `--yes` never skips the planning PR; the change stays reviewable.
+
+### `new-spec` two-step
+
+Raw-idea → roadmap is deliberately two-gated:
+
+1. `new-spec "raw idea"` spawns the **orchestrator brainstormer subagent** (reused unchanged), which writes `plans/specs/SPEC-{id}.md`. PM then **STOPS** — it does not append to the roadmap.
+2. After the user reviews/edits the spec, `add-spec plans/specs/SPEC-{id}.md` runs roadmap `ingest-spec`, which stages the append diff, gates, writes, and opens the planning PR.
+
+See `references/roadmap-management.md` → Spec-creation two-step.
+
+### Release name as a `complete` scope
+
+`complete <scope>` additionally accepts a **release name**: `complete mvp` / `complete v1.1` / `complete backlog` runs every not-done story in that band across all milestones, topo-ordered. Active-scope runs (`complete roadmap`/`<milestone>`/`<phase>`) **exclude `backlog`**. See `references/scope-resolution.md` → Release scope + Backlog exclusion.
+
+---
+
 ## Error handling
 
 - **Missing `/roadmap/roadmap.lock.json`** → stop: `run /roadmap first`.
@@ -121,8 +169,9 @@ All normative details live in these files (relative to `plugins/my-skills/skills
 
 | File | Content |
 |---|---|
-| `references/scope-resolution.md` | Scope matching, Filter, Ordering algorithm, Out-of-scope dependencies |
-| `references/git-flow.md` | Base resolution, Branch naming (`pm/<id>-<slug>`), Success-path sequence (commit+trailer → /roadmap sync → commit sync docs → push → stacked PR), Stacked PR ordering, Trailer-mismatch guard |
+| `references/roadmap-management.md` | Management verb catalog + op mapping, selection resolution (ids/globs + natural language), confirmation gate + `--yes`, reject-and-discard, `new-spec → add-spec` two-step |
+| `references/scope-resolution.md` | Scope matching (incl. release-as-scope + backlog exclusion), Filter, Ordering algorithm, Out-of-scope dependencies |
+| `references/git-flow.md` | Base resolution, Branch naming (`pm/<id>-<slug>`), Success-path sequence (commit+trailer → /roadmap sync → commit sync docs → push → stacked PR), Stacked PR ordering, Planning-PR flow (`pm/roadmap-<verb>-<slug>`, `docs(roadmap):`, reject-and-discard), Trailer-mismatch guard |
 | `references/human-validation.md` | Detection sources, conservative mode, autonomous mode, Marker list, Invariant |
 | `references/resume-and-logging.md` | `/roadmap/pm-progress.md` log, Entry fields, Resume algorithm (including stacked-branch reconstruction) |
 

@@ -50,8 +50,9 @@ Items link to each other by relative path derived from the ID scheme: a mileston
 {
   "version": 1,
   "last_synced_sha": "<sha or null>",
+  "releases": ["mvp", "v1.1"],
   "items": [
-    { "id": "001.1.1", "kind": "user-story", "status": "todo", "content_hash": "<sha256>", "sequence": 1 }
+    { "id": "001.1.1", "kind": "user-story", "status": "todo", "release": "mvp", "content_hash": "<sha256>", "sequence": 1 }
   ]
 }
 ```
@@ -62,9 +63,17 @@ Keys:
 |---|---|---|
 | `version` | integer | Schema version (currently `1`). |
 | `last_synced_sha` | string \| null | The git SHA of the last `/roadmap sync` run. `null` before first sync. |
+| `releases` | array of strings | **Ordered** registry of named release trains. Array order defines both the render order and the "runs before" semantics across bands (`releases[0]` renders and runs before `releases[1]`, …). The reserved band `backlog` is **never** listed here. |
 | `items` | array | One entry per tracked milestone, phase, and user story. |
 | `items[].id` | string | Stable ID (e.g. `001.1.1`). |
 | `items[].kind` | string | `milestone` \| `phase` \| `user-story`. |
 | `items[].status` | string | Current status (see item-schema.md for the status enum). |
+| `items[].release` | string \| null | Release band for this item (see item-schema.md → `release`). `null`/absent = active untiered; `backlog` = parked; any other value must appear in the top-level `releases[]` registry. For `kind: milestone`/`kind: phase` entries this stored value is **non-authoritative for rendering** — the badge is derived from not-done descendants (see item-schema.md → derived display, mutation-ops.md → Cascade); release-scope matching (`scope-resolution.md`) reads this field only for `kind: user-story` items. |
 | `items[].content_hash` | string | SHA-256 of the item file body, used for change detection during re-evaluation. |
 | `items[].sequence` | integer | Logical execution order within the parent scope. |
+
+### `releases[]` registry rules
+
+- **Ordered, not a set.** Position is meaningful: it is the render order and the cross-band "runs before" order. `backlog` is reserved, is never a registry entry, and always sorts after every named band.
+- **Implicit create on first use.** The first time the `set-release` op assigns a release name that is not already present, that name is appended to `releases[]` in order. Re-ordering and renaming are done explicitly via the `release` op (see `mutation-ops.md`).
+- **Backward compatibility (legacy roadmaps).** An absent or empty `releases[]` is treated as an empty registry; items with no `release` field are untiered (`null`). **No migration is performed** — a legacy `roadmap.lock.json` without `releases` and items without `release` is valid and renders/executes unchanged. The keys are added lazily only when the first band is assigned.

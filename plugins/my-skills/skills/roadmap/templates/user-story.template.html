@@ -210,6 +210,24 @@ h1 .h1__pill { align-self: center; }
   white-space: nowrap;
 }
 
+/* Release band badge — [mvp] / [v1.1] / [backlog] / (derived) [mixed].
+   Rendered only when the item is tiered; JS hides it when release is null/absent
+   or the {{release}} token is unresolved, so legacy untiered items show no badge.
+   Uses existing tokens so it reads in both light and dark themes (no regression). */
+.release-badge {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+  background: var(--bg-overlay);
+  color: var(--text-secondary);
+  border: 1px solid var(--rule-heavy);
+  padding: 1px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.release-badge--backlog { color: var(--status-muted); background: var(--status-muted-bg); border-color: transparent; }
+.release-badge--mixed   { color: var(--status-warning); background: var(--status-warning-bg); border-color: transparent; }
+
 /* ============================================================
    Field rows (depends / spec refs)
    ============================================================ */
@@ -491,7 +509,7 @@ code {
 </style>
 </head>
 <body>
-<main data-id="{{id}}" data-kind="user-story" data-status="{{status}}"
+<main data-id="{{id}}" data-kind="user-story" data-status="{{status}}" data-release="{{release}}"
       data-created-at="{{created_at}}" data-updated-at="{{updated_at}}">
 
   <nav class="crumbs"><a href="../../README.html">Roadmap</a><span class="sep">/</span><a href="../README.html">{{milestone}}</a><span class="sep">/</span><a href="README.html">{{phase}}</a><span class="sep">/</span><span>{{id}}</span></nav>
@@ -513,6 +531,7 @@ code {
       <span class="h1__id">{{id}}</span>
       <span>{{title}}</span>
       <span class="h1__pill"><span class="pill pill--active">{{status}}</span></span>
+      <span class="h1__pill"><span class="release-badge" data-release="{{release}}" hidden>[{{release}}]</span></span>
     </h1>
 
     <!-- 2. ID / meta header block -->
@@ -641,10 +660,29 @@ code {
     }
   }
 
+  function syncReleaseBadge() {
+    var root = document.querySelector('main[data-kind="user-story"]');
+    if (!root) return;
+    var release = root.getAttribute("data-release");
+    var badge = document.querySelector(".release-badge");
+    if (!badge) return;
+    // null / absent / unresolved token → untiered, show no badge (legacy-safe)
+    if (!release || release === "null" || release === "{{" + "release}}") {
+      badge.hidden = true;
+      return;
+    }
+    badge.hidden = false;
+    badge.textContent = "[" + release + "]";
+    // a story's raw release is never "mixed" (mixed is derived only on phase/milestone)
+    if (release === "backlog") badge.classList.add("release-badge--backlog");
+  }
+
+  function init() { syncHeaderPill(); syncReleaseBadge(); }
+
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", syncHeaderPill);
+    document.addEventListener("DOMContentLoaded", init);
   } else {
-    syncHeaderPill();
+    init();
   }
 })();
 </script>

@@ -10,7 +10,7 @@ This document is the single source of truth for turning the `<scope>` CLI argume
 
 The information PM needs is split across two sources. Getting the split right matters: the lock does **not** carry the fields PM most often wants.
 
-- **`roadmap.lock.json` items** carry ONLY `{ id, kind, status, content_hash, sequence }`. There is **no** `milestone`, `phase`, `depends_on`, `title`, or `commit_trailer` field in the lock. The lock DOES contain `kind: milestone` and `kind: phase` items (identified by their `id`, e.g. `001`, `001.2`) alongside `kind: user-story` items.
+- **`roadmap.lock.json` items** carry ONLY `{ id, kind, status, release, content_hash, sequence }` (the top-level lock also carries the ordered `releases[]` registry). There is **no** `milestone`, `phase`, `depends_on`, `title`, or `commit_trailer` field in the lock. `release` (`string | null`) IS in the lock — it is the field release-scope matching and backlog exclusion read (absent/`null` on legacy roadmaps). The lock DOES contain `kind: milestone` and `kind: phase` items (identified by their `id`, e.g. `001`, `001.2`) alongside `kind: user-story` items.
 - **The user-story file frontmatter** (`<NNN.M.T-slug>.md`) carries the per-story fields PM reads at execution time: `depends_on`, `title`, `commit_trailer`, and (when present) `milestone`/`phase`.
 
 Implications used throughout this document:
@@ -27,10 +27,19 @@ The `<scope>` argument controls which user stories enter the queue. The table be
 
 | `<scope>` value | Candidate stories |
 |---|---|
-| `roadmap` | Every item in `roadmap.lock.json` with `kind: user-story`. |
-| Milestone id (e.g. `001` or `001-bootstrap`) | User stories belonging to that milestone — i.e. whose id-prefix is the milestone ordinal (`001.*.*`) and/or whose story-file frontmatter `milestone` matches. The bare ordinal (`001`) matches the numeric prefix of the milestone id or the full directory-slug (`001-bootstrap`). |
-| Phase id (e.g. `001.2`) | User stories belonging to that phase — i.e. whose id-prefix is the phase id (`001.2.*`) and/or whose story-file frontmatter `phase` matches exactly. |
-| Anything else | **Stop.** Print the list of valid scopes — the milestone and phase ids from the lock's `kind: milestone` / `kind: phase` item `id`s (and/or a story-file scan) — so the caller can correct the argument. |
+| `roadmap` | Every item in `roadmap.lock.json` with `kind: user-story`, **excluding `backlog`-band items** (see **Backlog exclusion**). |
+| Milestone id (e.g. `001` or `001-bootstrap`) | User stories belonging to that milestone — i.e. whose id-prefix is the milestone ordinal (`001.*.*`) and/or whose story-file frontmatter `milestone` matches — **excluding `backlog`-band items**. The bare ordinal (`001`) matches the numeric prefix of the milestone id or the full directory-slug (`001-bootstrap`). |
+| Phase id (e.g. `001.2`) | User stories belonging to that phase — i.e. whose id-prefix is the phase id (`001.2.*`) and/or whose story-file frontmatter `phase` matches exactly — **excluding `backlog`-band items**. |
+| **Release name** (e.g. `mvp`, `v1.1`, `backlog`) | Every `kind: user-story` item whose `release` band equals the name, **across all milestones** (see **Release scope**). A named band (`mvp`) selects that train's not-done stories; `backlog` selects parked stories — this is the **only** scope that runs parked work. |
+| Anything else | **Stop.** Print the list of valid scopes — the milestone and phase ids from the lock's `kind: milestone` / `kind: phase` item `id`s (and/or a story-file scan), plus the release names from `roadmap.lock.json` → `releases[]` (and `backlog`) — so the caller can correct the argument. |
+
+### Release scope (`complete mvp` / `complete v1.1` / `complete backlog`)
+
+A `<scope>` that matches a registered release name in `roadmap.lock.json` → `releases[]`, or the reserved `backlog`, resolves to **every not-done `kind: user-story` item carrying that `release` band, across all milestones**. The candidate set spans the whole roadmap (not one milestone/phase) and is then ordered by the existing **Ordering algorithm** (topo-sort by `depends_on`, ties broken by `sequence`) exactly as any other scope. One band runs at a time — there is no multi-band ordering. Legacy/untiered roadmaps have no release names, so this form simply doesn't match (falls through to the unrecognized-scope stop).
+
+### Backlog exclusion (active-scope runs)
+
+The active-scope forms — `complete roadmap`, `complete <milestone>`, `complete <phase>` — **exclude every item whose `release` band is `backlog`**. Parked work never runs as a side effect of an active-scope run; it runs only via the explicit `complete backlog` release scope, or after un-parking it (PM `unpark`, which re-tiers the item to a named band or `null`). Untiered (`null`) and named-band items are **not** excluded from active-scope runs — only `backlog` is.
 
 ### Milestone id matching rule
 

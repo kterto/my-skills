@@ -214,6 +214,29 @@ h1 {
   white-space: nowrap;
 }
 
+/* Release band badge — per milestone at index level: named band, [backlog],
+   or derived [mixed]; hidden when untiered/legacy. Shared tokens → light + dark. */
+.release-badge {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+  background: var(--bg-overlay);
+  color: var(--text-secondary);
+  border: 1px solid var(--rule-heavy);
+  padding: 1px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.release-badge--backlog { color: var(--status-muted); background: var(--status-muted-bg); border-color: transparent; }
+.release-badge--mixed   { color: var(--status-warning); background: var(--status-warning-bg); border-color: transparent; }
+
+/* Per-release progress + grouping view */
+.release-progress { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-top: var(--sp-4); font-family: var(--font-mono); font-size: var(--text-sm); color: var(--text-secondary); }
+.release-progress__item { display: inline-flex; gap: var(--sp-2); align-items: baseline; }
+.release-progress__band { color: var(--text-muted); }
+.release-group { margin-top: var(--sp-6); }
+.release-group__head { font-family: var(--font-mono); font-size: var(--text-sm); text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin: 0 0 var(--sp-2); }
+
 /* ============================================================
    Section scaffolding
    ============================================================ */
@@ -514,6 +537,13 @@ code {
       <div class="progress__track" role="progressbar" aria-valuenow="{{pct}}" aria-valuemin="0" aria-valuemax="100">
         <div class="progress__fill" data-pct="{{pct}}" style="width: {{pct}}%;"></div>
       </div>
+      <!-- Per-release progress across the whole roadmap; one item per band
+           (named bands in releases[] order, then backlog). Omitted for
+           legacy/untiered roadmaps. -->
+      <div class="release-progress" data-role="per-release-progress">
+        <!-- e.g. <span class="release-progress__item"><span class="release-progress__band">mvp</span> 6/12</span> -->
+        {{per_release_progress}}
+      </div>
     </div>
   </section>
 
@@ -525,8 +555,27 @@ code {
       <summary>Milestones <span class="summary__meta">by sequence</span></summary>
       <div class="details__body">
         <ol class="milestones">
+          <!-- each milestone row carries its derived release badge alongside its status pill;
+               omitted for untiered milestones -->
           {{milestone_list_ordered_by_sequence}}
         </ol>
+      </div>
+    </details>
+  </section>
+
+  <!-- ============================================================
+       3b. Milestones by release (grouping / filter view)
+       Rendered only when the roadmap has ≥1 tiered item; omitted for
+       legacy/untiered roadmaps. Groups emitted in releases[] order, then
+       backlog, then an "(untiered)" group, each with per-release progress.
+       ============================================================ -->
+  <section class="section" data-role="release-grouping">
+    <details>
+      <summary>Milestones <span class="summary__meta">by release</span></summary>
+      <div class="details__body">
+        <!-- one .release-group per band: <div class="release-group">
+             <p class="release-group__head">mvp — 6/12</p><ol class="milestones">…</ol></div> -->
+        {{milestone_groups_by_release}}
       </div>
     </details>
   </section>
@@ -558,6 +607,36 @@ code {
           <div class="legend__row">
             <span class="pill pill--danger">blocked</span>
             <span class="legend__desc">Halted by an unresolved dependency or decision.</span>
+          </div>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <!-- ============================================================
+       5. Release legend (collapsible, collapsed by default)
+       Omitted for legacy/untiered roadmaps (no releases[] and no tiered items).
+       ============================================================ -->
+  <section class="section" data-role="release-legend">
+    <details>
+      <summary>Release legend <span class="summary__meta">bands</span></summary>
+      <div class="details__body">
+        <div class="legend">
+          <div class="legend__row">
+            <span class="release-badge">[mvp]</span>
+            <span class="legend__desc">Named release train — registered, in order, in <code>roadmap.lock.json</code> &rarr; <code>releases[]</code>.</span>
+          </div>
+          <div class="legend__row">
+            <span class="release-badge release-badge--backlog">[backlog]</span>
+            <span class="legend__desc">Parked — excluded from active-scope runs; runs only via <code>complete backlog</code>.</span>
+          </div>
+          <div class="legend__row">
+            <span class="release-badge release-badge--mixed">[mixed]</span>
+            <span class="legend__desc">Derived badge on a milestone/phase whose not-done children span different bands.</span>
+          </div>
+          <div class="legend__row">
+            <span class="release-badge" style="opacity:0.6">(none)</span>
+            <span class="legend__desc">Untiered — active but not assigned to a release train.</span>
           </div>
         </div>
       </div>
