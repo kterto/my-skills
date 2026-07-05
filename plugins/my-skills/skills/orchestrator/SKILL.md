@@ -140,7 +140,7 @@ This step runs before anything else. Its goal: **always start the pipeline in a 
 Inspect the workspace. Run in parallel:
 
 - `git rev-parse --abbrev-ref HEAD` — current branch.
-- `git status --porcelain=v1` — clean vs dirty.
+- `git status --porcelain=v1 -- . ':(exclude).opencode' ':(exclude).claude'` — clean vs dirty. The excludes drop host-runtime scaffolding the harness writes into the project (opencode's `.opencode/`, Claude Code's `.claude/`); without them the tree is permanently dirty under those hosts and the orchestrator can never see a clean workspace. `.orchestrator/` project state is **not** excluded — decide "clean vs dirty" from this command's literal output, not from an assumption.
 - `git rev-parse --show-toplevel` — repo root.
 
 Define `protected_branches = {main, master, dev, develop, trunk}`.
@@ -170,7 +170,7 @@ The pipeline must not run on a protected branch. Ask:
 
 ##### Case C — Tree dirty
 
-Print the changed file list (`git status --short`), then ask:
+Print the changed file list (`git status --short -- . ':(exclude).opencode' ':(exclude).claude'` — same host-runtime excludes as the detection command above), then ask:
 
 > Working tree has uncommitted changes ({N} files). The orchestrator needs a clean starting point. Choose:
 >
@@ -197,7 +197,7 @@ If the current branch is also protected (dirty + protected), drop option 1 from 
 
 After applying the choice, re-verify:
 
-- `git status --porcelain=v1` is empty.
+- `git status --porcelain=v1 -- . ':(exclude).opencode' ':(exclude).claude'` is empty.
 - Current branch is NOT in `protected_branches`.
 
 If either check still fails, loop back into the appropriate Case prompt — never advance to Step 0b on a dirty or protected workspace.

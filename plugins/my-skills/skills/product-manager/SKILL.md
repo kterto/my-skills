@@ -54,10 +54,28 @@ Default: `conservative=true`.
 
 PM performs the following checks and preparations before executing any story. All checks run up-front; the first failure stops the run with a specific remedy.
 
-1. **Require `/roadmap/roadmap.lock.json`.** If the file is absent, stop: `run /roadmap first`.
-2. **Require `.orchestrator/config.json`.** If the file is absent, stop: `run /orchestrator --setup first`.
-3. **Require a clean working tree.** Run `git status --porcelain`. If any modified, staged, or untracked files exist, stop and ask the user to commit or stash before continuing.
-4. **Require `gh` available.** Run `gh --version`. If the command is not found, stop and tell the user to install the GitHub CLI.
+**Run the environment checks (1–4) as the literal shell block below and decide each result ONLY from its printed output.** Do NOT infer a file's presence or absence from context — not from a dirty working tree, not from a prose expectation, not from a file-listing tool that may hide dotfile directories (`.orchestrator/`, `.opencode/`). If `test -f` prints `OK`, the file exists; report it present. Never emit "`.orchestrator/config.json` is missing" unless the block below actually printed `config: MISSING`. Paths are anchored to the git root (`git rev-parse --show-toplevel`) so the checks do not depend on the session's working directory — under opencode the session cwd may differ from the repo root even though `git` still resolves the repo.
+
+Run this first, then read the four result lines:
+
+```bash
+root="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "preflight: not-a-git-repo"; exit 0; }
+test -f "$root/roadmap/roadmap.lock.json" && echo "lock: OK"   || echo "lock: MISSING"
+test -f "$root/.orchestrator/config.json" && echo "config: OK" || echo "config: MISSING"
+command -v gh >/dev/null 2>&1              && echo "gh: OK"     || echo "gh: MISSING"
+# Clean-tree check EXCLUDES host-runtime scaffolding the harness writes into the
+# project (opencode's .opencode/, Claude Code's .claude/) — otherwise the tree is
+# permanently dirty and PM can never start. All other paths still count.
+if [ -n "$(git -C "$root" status --porcelain -- . ':(exclude).opencode' ':(exclude).claude')" ]; then
+  echo "tree: DIRTY"; else echo "tree: CLEAN"; fi
+```
+
+Apply the printed results in this fixed order; the first failure stops the run with the matching remedy:
+
+1. **`lock: MISSING`** → stop: `run /roadmap first`.
+2. **`config: MISSING`** → stop: `run /orchestrator --setup first`. If the line reads `config: OK`, the config exists — proceed; do not override a printed `OK` with an inferred "missing".
+3. **`tree: DIRTY`** → stop; list the offending files with `git -C "$root" status --short -- . ':(exclude).opencode' ':(exclude).claude'` and ask the user to commit, stash, or `.gitignore` them before continuing. Host-runtime `.opencode/`/`.claude/` are already excluded here; also recommend the user add `.opencode/` to their project `.gitignore` so it never resurfaces. `.orchestrator/` project state (`PROJECT-CONTEXT.md`, `config.json`, materialized scaffolding) is **not** excluded — it is real project state; the user commits or gitignores it deliberately.
+4. **`gh: MISSING`** → stop and tell the user to install the GitHub CLI.
 5. **Resolve scope.** Apply the full scope matching algorithm from `references/scope-resolution.md` → **Scope matching** to convert `<scope>` into a candidate story set. On an unrecognized scope value, stop and print valid scope ids.
 6. **Filter.** Drop every candidate story whose `status` is `done` or `superseded` (see `references/scope-resolution.md` → **Filter**).
 7. **Topo-sort.** Apply the ordering algorithm from `references/scope-resolution.md` → **Ordering algorithm** to produce the story queue. On a dependency cycle, stop and report the offending ids. Check all out-of-scope dependencies per `references/scope-resolution.md` → **Out-of-scope dependencies**; in conservative mode, stop if any unmet out-of-scope dependency is found.
@@ -151,10 +169,11 @@ See `references/roadmap-management.md` → Spec-creation two-step.
 
 ## Error handling
 
-- **Missing `/roadmap/roadmap.lock.json`** → stop: `run /roadmap first`.
-- **Missing `.orchestrator/config.json`** → stop: `run /orchestrator --setup first`.
-- **Dirty working tree** → stop: commit or stash changes before running PM.
-- **`gh` not found** → stop: install the GitHub CLI and ensure it is authenticated.
+- **`lock: MISSING`** (Pre-flight block) → stop: `run /roadmap first`. Only when the block printed `lock: MISSING` — never inferred.
+- **`config: MISSING`** (Pre-flight block) → stop: `run /orchestrator --setup first`. Only when the block printed `config: MISSING`. A `config: OK` line means the file exists and is readable from the git root; do not report it missing on the basis of a dirty tree, an untracked `PROJECT-CONTEXT.md`, or a listing tool that hides dotfile dirs — re-run the Pre-flight block and trust its output.
+- **`tree: DIRTY`** → stop: commit, stash, or `.gitignore` the listed files before running PM. Host-runtime `.opencode/`/`.claude/` are excluded from this check and never block; `.orchestrator/` project state is not excluded.
+- **`gh: MISSING`** → stop: install the GitHub CLI and ensure it is authenticated.
+- **Unrecognized flag** (e.g. a mistyped `--conservative`) → stop and echo the **exact unrecognized token in backticks** (e.g. ``unknown flag `--corservative`; did you mean `--conservative`?``) so a one-letter typo is visible against the intended flag. Do not silently ignore or silently accept an unknown flag.
 - **Orchestrator prints a `Status: STALLED` stop banner** (cycle-limit, tester BLOCKED, qa BLOCKED_STALE, or spec DRAFT) → stop the entire run. Report the stop banner, the story id, and the unprocessed queue. Stories completed before the stall are preserved (their branches, commits, and PRs remain). Note: there is no terminal `BLOCKED` status — `BLOCKED` is an internal intermediate only; PM keys off the orchestrator's printed STALLED banner.
 - **`pipeline complete` banner but no FINAL artifact on disk** → the orchestrator's Step 7 write was dropped while the banner still printed. Re-invoke the orchestrator once to re-persist (per-story loop step 3, **Artifact verification**); if `plans/final/FINAL-{NNN}-{slug}.md` is still missing after the retry, halt the run like a STALLED stop. Never commit the story — the pipeline did not finish.
 - **Dependency cycle detected** → stop before executing any story and report the offending story ids.
