@@ -25,7 +25,7 @@ Controls **all** generated artifact files — every milestone README, phase READ
 
 ### `context_threshold`
 
-Minimum holistic confidence score (0–1) the roadmap skill must reach before proceeding from the context gate to decomposition. Default `0.95`. The skill loops `AskUserQuestion` rounds, self-rating confidence after each, until the threshold is met.
+Minimum holistic confidence score (0–1) the roadmap skill must reach before proceeding from the context gate to decomposition. Default `0.95`. The skill loops structured question rounds (`AskUserQuestion` in Claude Code, `question` in opencode), self-rating confidence after each, until the threshold is met.
 
 ## `roadmap.config.json`
 

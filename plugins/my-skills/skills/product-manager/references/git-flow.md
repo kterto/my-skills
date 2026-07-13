@@ -104,16 +104,19 @@ After the orchestrator completes implementation and produces its proposed commit
    ```bash
    # PM renders the template (substitutes all {{ }} tokens) and saves the result:
    # (token substitution is done inline — the output is a plain Markdown file)
-   mkdir -p .orchestrator/tmp
-   # -> .orchestrator/tmp/pm-pr-body-<id>.md
+   # Anchor to the git root — under opencode the session cwd may be a repo subdir.
+   root="$(git rev-parse --show-toplevel)"
+   mkdir -p "$root/.orchestrator/tmp"
+   # -> $root/.orchestrator/tmp/pm-pr-body-<id>.md
    ```
 
    Then open the PR using `--body-file`, capturing the URL it prints:
 
    ```bash
+   root="$(git rev-parse --show-toplevel)"
    PR_URL=$(gh pr create --base <base> --head pm/<id>-<slug> \
-              --body-file .orchestrator/tmp/pm-pr-body-<id>.md)
-   rm -f .orchestrator/tmp/pm-pr-body-<id>.md
+              --body-file "$root/.orchestrator/tmp/pm-pr-body-<id>.md")
+   rm -f "$root/.orchestrator/tmp/pm-pr-body-<id>.md"
    ```
 
    where `<base>` is:
@@ -170,11 +173,12 @@ git commit -m "docs(roadmap): sync 001.2.1"
 git push -u origin pm/001.2.1-setup-ci
 
 # 5. Render PR body + open PR, capture URL
-mkdir -p .orchestrator/tmp
-# (render templates/pr-body.template.md -> .orchestrator/tmp/pm-pr-body-001.2.1.md)
+root="$(git rev-parse --show-toplevel)"   # opencode cwd may be a repo subdir
+mkdir -p "$root/.orchestrator/tmp"
+# (render templates/pr-body.template.md -> $root/.orchestrator/tmp/pm-pr-body-001.2.1.md)
 PR_URL=$(gh pr create --base main --head pm/001.2.1-setup-ci \
-           --body-file .orchestrator/tmp/pm-pr-body-001.2.1.md)
-rm -f .orchestrator/tmp/pm-pr-body-001.2.1.md
+           --body-file "$root/.orchestrator/tmp/pm-pr-body-001.2.1.md")
+rm -f "$root/.orchestrator/tmp/pm-pr-body-001.2.1.md"
 # -> PR_URL=https://github.com/acme/app/pull/42
 
 # 6. Now that PR_URL exists, write + commit logs
@@ -247,8 +251,15 @@ git checkout -b pm/roadmap-<verb>-<slug> <starting-branch>
 5. **Open the planning PR** targeting the starting branch, using the planning-PR variant of `templates/pr-body.template.md` (staged-diff summary / resolved id set / verb):
 
    ```bash
+   # render the planning-PR body to the git-root scratch dir first
+   # (opencode cwd may be a repo subdir):
+   root="$(git rev-parse --show-toplevel)"
+   mkdir -p "$root/.orchestrator/tmp"
+   # -> render templates/pr-body.template.md into
+   #    "$root/.orchestrator/tmp/pm-roadmap-pr-body-<verb>.md"
    PR_URL=$(gh pr create --base <starting-branch> --head pm/roadmap-<verb>-<slug> \
-              --body-file .orchestrator/tmp/pm-roadmap-pr-body-<verb>.md)
+              --body-file "$root/.orchestrator/tmp/pm-roadmap-pr-body-<verb>.md")
+   rm -f "$root/.orchestrator/tmp/pm-roadmap-pr-body-<verb>.md"
    ```
 
 As with story PRs, PM opens the planning PR and stops — it never merges.
