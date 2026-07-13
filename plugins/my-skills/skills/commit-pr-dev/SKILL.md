@@ -23,7 +23,7 @@ Take the work in the current worktree from "diff in my editor" → "PR open agai
 Run in parallel:
 - `git rev-parse --show-toplevel` — confirm inside a git repo. Stop if not.
 - `git rev-parse --abbrev-ref HEAD` — current branch.
-- `git status --porcelain=v1` — staged/unstaged state.
+- `git status --porcelain=v1 -- ':(exclude).opencode' ':(exclude).claude'` — staged/unstaged state. The excludes drop host-runtime scaffolding (opencode's `.opencode/`, Claude Code's `.claude/`); without them the tree reads permanently dirty under those hosts and the PR-only fast-path never triggers.
 - `git log -3 --oneline` — recent commit style for matching tone.
 - `git remote -v` — confirm a remote exists. Stop if not.
 - `git fetch --quiet origin` — refresh remote refs (tolerate failure on offline).
@@ -35,11 +35,11 @@ Hard stops (report and exit, do not mutate):
 
 ### Step 1 — Inspect changes
 
-Read the diff:
-- `git diff --stat HEAD` — overview of changed files
-- `git diff --cached` and `git diff` — actual content
+Read the diff (host-runtime dirs excluded so `.opencode/`/`.claude/` churn never pollutes the overview or the auto-drafted commit/PR summary):
+- `git diff --stat HEAD -- ':(exclude).opencode' ':(exclude).claude'` — overview of changed files
+- `git diff --cached -- ':(exclude).opencode' ':(exclude).claude'` and `git diff -- ':(exclude).opencode' ':(exclude).claude'` — actual content
 
-If the working tree is clean AND HEAD is already pushed to origin: skip Step 2 and Step 3, jump to Step 4 (PR-only path).
+If the working tree is clean (after those excludes) AND HEAD is already pushed to origin: skip Step 2 and Step 3, jump to Step 4 (PR-only path).
 
 ### Step 2 — Stage + commit (unless "no commit")
 

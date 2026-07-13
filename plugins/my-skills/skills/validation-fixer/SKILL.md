@@ -9,8 +9,10 @@ allowed-tools:
   - Grep
   - Glob
   - Agent
+  - task
   - Skill
   - AskUserQuestion
+  - question
 ---
 
 # validation-fixer
@@ -104,10 +106,13 @@ For each item in the work list:
    > <verbatim item text, including any referenced files/paths>
 3. Invoke the chosen framework's entry point with that prompt:
 
+   Invoke a skill via the host's skill-invocation tool (`Skill` in Claude Code;
+   in opencode invoke the skill through its equivalent skill mechanism).
+
    | Framework | How to invoke | Entry |
    |-----------|---------------|-------|
-   | superpowers | `Skill` tool | classify the item: if it reads as a defect/bug (e.g. "bug", "currently …", "duplicate", "mirrors", "doesn't / should not", "creates … that mirrors") → `superpowers:systematic-debugging`; if it reads as a missing feature/behavior (e.g. "should have", "there should be", "add … section", "no way to …", "should be possible") → `superpowers:brainstorming`. Pass the handoff prompt as the request. |
-   | gsd | `Skill` tool | `gsd-explore`, handoff prompt as args |
+   | superpowers | host skill tool | classify the item: if it reads as a defect/bug (e.g. "bug", "currently …", "duplicate", "mirrors", "doesn't / should not", "creates … that mirrors") → `superpowers:systematic-debugging`; if it reads as a missing feature/behavior (e.g. "should have", "there should be", "add … section", "no way to …", "should be possible") → `superpowers:brainstorming`. Pass the handoff prompt as the request. |
+   | gsd | host skill tool | `gsd-explore`, handoff prompt as args |
    | orchestrator | host subagent tool | Claude Code: `Agent` with `subagent_type: orchestrator`; opencode: `task` with `subagent_type: orchestrator`; handoff prompt as the prompt/description |
 
    Let that framework run its full course (each entry chains onward per its own
