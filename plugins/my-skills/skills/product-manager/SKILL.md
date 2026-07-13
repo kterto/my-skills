@@ -139,6 +139,10 @@ Beyond `complete <scope>` (which *executes* stories), PM exposes a set of **mana
 | `reorder <ids-in-order>` | `reorder <ids-in-order>` | `sequence`/`depends_on` of **not-done** items only (`--after <id>` accepted). |
 | `revise <id>` | `revise <id>` | Retitle / re-scope, or split/merge via new stable IDs + supersede — **not-done** only. |
 | `release <list\|reorder\|rename …>` | `release <list\|reorder\|rename …>` | Manage the ordered `releases[]` registry. `list` is read-only. |
+| `add-milestone <title>` | `add-item milestone` | Create a milestone; seeds a default phase `NNN.1-general` so tickets can drop straight in. |
+| `add-phase <title> --to <milestone>` | `add-item phase` | Create a phase under a milestone. |
+| `add-ticket <raw> [--to <phase\|milestone>]` | `add-item user-story` | Inline interview composes a story from raw text (bug or feat). `--to` a milestone auto-creates/uses a default phase. |
+| `add-userstory …` | `add-item user-story` | Alias of `add-ticket`. |
 
 ### Front-door flow (per mutating verb)
 
@@ -179,6 +183,10 @@ See `references/roadmap-management.md` → Spec-creation two-step.
 - **Dependency cycle detected** → stop before executing any story and report the offending story ids.
 - **Unrecognized `<scope>` argument** → stop and print the list of valid milestone ids and phase ids from `roadmap.lock.json`.
 - **Trailer mismatch after `/roadmap sync`** → warn and stop. If the story's `roadmap.lock.json` status is not `done` after sync, the trailer may contain a typo. See `references/git-flow.md` → **Trailer-mismatch guard**.
+- **`add-*` with an unresolvable `--to <parent>`** → stop and print the valid milestone/phase ids from `roadmap.lock.json` (same list as an unrecognized `complete` scope).
+- **`add-phase` / `add-ticket --to` naming a `done`/`superseded` parent** → allowed (append under an existing scope is not a structural edit of the frozen item); the new child is `todo`. Only refuse if the parent id does not exist.
+- **`add-ticket` with no `--to`** → PM asks for a target (an existing phase/milestone, or offers to `add-milestone` first) before cutting a branch.
+- **`config: MISSING` does not block `add-*` verbs** → they never invoke the orchestrator (only `complete` and `new-spec` do). The pre-flight `config` check is advisory for add verbs.
 
 ---
 

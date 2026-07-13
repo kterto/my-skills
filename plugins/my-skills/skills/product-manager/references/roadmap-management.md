@@ -22,6 +22,10 @@ Each management verb maps to exactly one roadmap mutation op. Sugar verbs are th
 | `reorder <ids-in-order>` | `reorder <ids-in-order>` | Change `sequence`/`depends_on` of **not-done** items only. Accepts `--after <id>`. |
 | `revise <id>` | `revise <id>` | Retitle / re-scope, or split/merge via new stable IDs + supersede — **not-done** items only. |
 | `release <list\|reorder\|rename …>` | `release <list\|reorder\|rename …>` | Manage the ordered `releases[]` registry. `list` is read-only (no branch/PR). |
+| `add-milestone <title>` | `add-item milestone` | Create a milestone; seeds a default phase `NNN.1-general` so tickets can drop straight in. |
+| `add-phase <title> --to <milestone>` | `add-item phase` | Create a phase under a milestone. |
+| `add-ticket <raw> [--to <phase\|milestone>]` | `add-item user-story` | Inline interview composes a story from raw text (bug or feat). `--to` a milestone auto-creates/uses a default phase. |
+| `add-userstory …` | `add-item user-story` | Alias of `add-ticket`. |
 
 The staged-diff marker set (shared with re-eval + the roadmap ops) is `+ new`, `~ changed`, `! superseded`, `± release`. A band change (`assign`/`park`/`unpark`) shows as `± release`.
 
@@ -38,6 +42,8 @@ Every mutating verb runs this sequence (mirrors the `complete` machinery's base-
 5. **On reject** → PM discards the empty branch and returns to the starting branch (see **Reject-and-discard**).
 
 `release list` is read-only: it prints the registry and exits with no branch, gate, or PR.
+
+The `add-*` verbs follow this same flow; `add-ticket` first runs the inline interview (below) to compose the story body before invoking `add-item`.
 
 ---
 
@@ -85,6 +91,25 @@ Turning a raw idea into roadmap work is deliberately **two-gated** so the spec i
 3. **`add-spec plans/specs/SPEC-{id}.md`** — after the user approves the spec, they (or PM on request) run `add-spec` with the spec path. This maps to roadmap `ingest-spec`, which stages an append diff (`+ new`, new items default `release: null`), gates, and — on approval — writes; PM then commits / pushes / opens the planning PR.
 
 `new-spec` itself never mutates the roadmap and opens no PR — it only produces a spec for review. The roadmap seed list recognizes `plans/specs/*` (roadmap `SKILL.md` → Context gate Step 3), and `ingest-spec` stays location-agnostic via its explicit path argument.
+
+---
+
+## Ticket-creation inline interview (`add-ticket` / `add-userstory`)
+
+`add-ticket "<raw>"` composes a single **user-story** from raw text — no spec file, one planning PR. It reuses the management-verb front-door; the only addition is composing the story body before invoking `add-item`.
+
+1. **Clarity threshold.** PM tests the raw input: can it write a self-contained `## Brief` plus at least one testable `## Acceptance` criterion from the text as given? If yes → compose the story and ask nothing. If gaps remain → grill **one question at a time** (`AskUserQuestion` in Claude Code, the `question` tool in opencode) until the threshold is met.
+2. **Compose.** PM produces `title` (short), the `## Brief` body (plain-language, self-contained — the orchestrator never sees this conversation), and `## Acceptance` (testable criteria). PM does **not** write the trailer line; `add-item` appends `Commit with trailer: Roadmap-Story: <id>` and sets `commit_trailer` once it assigns the id.
+3. **Placement (`--to`).**
+   - a **phase** id → append the story to that phase.
+   - a **milestone** id with **no** phase → `add-item` auto-creates the default phase, then appends (both shown as `+ new`).
+   - a **milestone** id **with** phases → append to its `-general`/default phase (create one if absent).
+   - omitted → PM asks for a target before cutting a branch.
+4. **Invoke `add-item user-story`** with the composed body → it stages the `+ new` diff (showing resolved parent, Brief, Acceptance), gates, writes, and proposes the commit. PM then commits `docs(roadmap): add-ticket …`, pushes, opens the planning PR.
+
+**Bugs.** A bug ticket is composed as: Brief = reproduction steps + expected-vs-actual + fix intent; Acceptance = "the bug no longer reproduces" + "a regression test covers it". No schema affordance — the bug framing lives entirely in the prose.
+
+**Confirmation gate.** The composed story is **always** shown in the staged diff before write — it is the thing worth reviewing. Therefore `--yes` on `add-ticket` still shows the diff (unlike `add-milestone`/`add-phase`, where `--yes` skips the gate for unambiguous structural adds). The planning PR is always opened.
 
 ---
 
