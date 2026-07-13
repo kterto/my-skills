@@ -139,6 +139,10 @@ Beyond `complete <scope>` (which *executes* stories), PM exposes a set of **mana
 | `reorder <ids-in-order>` | `reorder <ids-in-order>` | `sequence`/`depends_on` of **not-done** items only (`--after <id>` accepted). |
 | `revise <id>` | `revise <id>` | Retitle / re-scope, or split/merge via new stable IDs + supersede — **not-done** only. |
 | `release <list\|reorder\|rename …>` | `release <list\|reorder\|rename …>` | Manage the ordered `releases[]` registry. `list` is read-only. |
+| `add-milestone <title>` | `add-item milestone` | Create a milestone; seeds a default phase `NNN.1-general` so tickets can drop straight in. |
+| `add-phase <title> --to <milestone>` | `add-item phase` | Create a phase under a milestone. |
+| `add-ticket <raw> [--to <phase\|milestone>]` | `add-item user-story` | Inline interview composes a story from raw text (bug or feat). `--to` a milestone auto-creates/uses a default phase. |
+| `add-userstory …` | `add-item user-story` | Alias of `add-ticket`. |
 
 ### Front-door flow (per mutating verb)
 
@@ -150,7 +154,7 @@ Beyond `complete <scope>` (which *executes* stories), PM exposes a set of **mana
 
 ### Confirmation gate and `--yes`
 
-Every mutating verb shows the staged diff and requires approval. **`--yes`** skips the gate for trusted quick edits (unambiguous explicit ids) — PM passes it through to the roadmap op. `--yes` never skips the planning PR; the change stays reviewable.
+Every mutating verb shows the staged diff and requires approval. **`--yes`** skips the gate for trusted quick edits (unambiguous explicit ids) — PM passes it through to the roadmap op (exception: `add-ticket`/`add-userstory` always show the composed story in the staged diff even with `--yes` — see `references/roadmap-management.md` → Ticket-creation inline interview). `--yes` never skips the planning PR; the change stays reviewable.
 
 ### `new-spec` two-step
 
@@ -170,7 +174,7 @@ See `references/roadmap-management.md` → Spec-creation two-step.
 ## Error handling
 
 - **`lock: MISSING`** (Pre-flight block) → stop: `run /roadmap first`. Only when the block printed `lock: MISSING` — never inferred.
-- **`config: MISSING`** (Pre-flight block) → stop: `run /orchestrator --setup first`. Only when the block printed `config: MISSING`. A `config: OK` line means the file exists and is readable from the git root; do not report it missing on the basis of a dirty tree, an untracked `PROJECT-CONTEXT.md`, or a listing tool that hides dotfile dirs — re-run the Pre-flight block and trust its output.
+- **`config: MISSING`** (Pre-flight block) → stop: `run /orchestrator --setup first` — except `add-*` verbs, which never invoke the orchestrator (see the `add-*` bullet below). Only when the block printed `config: MISSING`. A `config: OK` line means the file exists and is readable from the git root; do not report it missing on the basis of a dirty tree, an untracked `PROJECT-CONTEXT.md`, or a listing tool that hides dotfile dirs — re-run the Pre-flight block and trust its output.
 - **`tree: DIRTY`** → stop: commit, stash, or `.gitignore` the listed files before running PM. Host-runtime `.opencode/`/`.claude/` are excluded from this check and never block; `.orchestrator/` project state is not excluded.
 - **`gh: MISSING`** → stop: install the GitHub CLI and ensure it is authenticated.
 - **Unrecognized flag** (e.g. a mistyped `--conservative`) → stop and echo the **exact unrecognized token in backticks** (e.g. ``unknown flag `--corservative`; did you mean `--conservative`?``) so a one-letter typo is visible against the intended flag. Do not silently ignore or silently accept an unknown flag.
@@ -179,6 +183,10 @@ See `references/roadmap-management.md` → Spec-creation two-step.
 - **Dependency cycle detected** → stop before executing any story and report the offending story ids.
 - **Unrecognized `<scope>` argument** → stop and print the list of valid milestone ids and phase ids from `roadmap.lock.json`.
 - **Trailer mismatch after `/roadmap sync`** → warn and stop. If the story's `roadmap.lock.json` status is not `done` after sync, the trailer may contain a typo. See `references/git-flow.md` → **Trailer-mismatch guard**.
+- **`add-*` with an unresolvable `--to <parent>`** → stop and print the valid milestone/phase ids from `roadmap.lock.json` (same list as an unrecognized `complete` scope).
+- **`add-phase` / `add-ticket --to` naming a `done`/`superseded` parent** → allowed (append under an existing scope is not a structural edit of the frozen item); the new child is `todo`. Only refuse if the parent id does not exist.
+- **`add-ticket` with no `--to`** → PM asks for a target (an existing phase/milestone, or offers to `add-milestone` first) before cutting a branch.
+- **`config: MISSING` does not block `add-*` verbs** → they never invoke the orchestrator (only `complete` and `new-spec` do). The pre-flight `config` check is advisory for add verbs.
 
 ---
 

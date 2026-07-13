@@ -76,12 +76,15 @@ Same frontmatter shape as a user-story file, with the following differences:
 
 | Condition | Derived status |
 |---|---|
+| No children (freshly created empty scope) | `todo` |
 | All children `done` or `superseded` | `done` |
 | Any child `blocked` | `blocked` |
 | Any child `in_progress` or mixed `done`+`todo` | `in_progress` |
 | All children `todo` | `todo` |
 
 `superseded` children are excluded from "is there remaining work" but kept in the count.
+
+An empty phase or milestone (no descendant stories yet — e.g. a default phase seeded by `add-item`, or a new empty milestone) derives `status: todo` and renders **no release badge**.
 
 ## Status enum
 
@@ -134,6 +137,23 @@ Example — a `todo` story parked (`set-release backlog`), driven by the PM `par
 ```
 
 Status-transition rows continue to append exactly as before; the release row is additive and never replaces a status row.
+
+### Creation audit row (`add-item`)
+
+When `add-item` materializes a new item, it seeds the item's `## Audit log` with exactly one row:
+
+| Column | Value |
+|---|---|
+| `when (ISO-8601)` | The write timestamp. |
+| `status` | `todo` (the new item's initial status). |
+| `who` | The actor tag (`roadmap-skill`, or a user handle). |
+| `evidence` | `/roadmap add-item`. A front-door caller may append its attribution as a source suffix, e.g. `/roadmap add-item (via /product-manager add-ticket)` — mirroring the `set-release` evidence-suffix convention. |
+
+Example — a story created by the PM `add-ticket` verb:
+
+```
+| 2026-07-13T18:40Z | todo | roadmap-skill | /roadmap add-item (via /product-manager add-ticket) |
+```
 
 ## html mode
 
