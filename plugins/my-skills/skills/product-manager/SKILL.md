@@ -154,7 +154,7 @@ Beyond `complete <scope>` (which *executes* stories), PM exposes a set of **mana
 
 ### Confirmation gate and `--yes`
 
-Every mutating verb shows the staged diff and requires approval. **`--yes`** skips the gate for trusted quick edits (unambiguous explicit ids) — PM passes it through to the roadmap op. `--yes` never skips the planning PR; the change stays reviewable.
+Every mutating verb shows the staged diff and requires approval. **`--yes`** skips the gate for trusted quick edits (unambiguous explicit ids) — PM passes it through to the roadmap op (exception: `add-ticket`/`add-userstory` always show the composed story in the staged diff even with `--yes` — see `references/roadmap-management.md` → Ticket-creation inline interview). `--yes` never skips the planning PR; the change stays reviewable.
 
 ### `new-spec` two-step
 
@@ -174,7 +174,7 @@ See `references/roadmap-management.md` → Spec-creation two-step.
 ## Error handling
 
 - **`lock: MISSING`** (Pre-flight block) → stop: `run /roadmap first`. Only when the block printed `lock: MISSING` — never inferred.
-- **`config: MISSING`** (Pre-flight block) → stop: `run /orchestrator --setup first`. Only when the block printed `config: MISSING`. A `config: OK` line means the file exists and is readable from the git root; do not report it missing on the basis of a dirty tree, an untracked `PROJECT-CONTEXT.md`, or a listing tool that hides dotfile dirs — re-run the Pre-flight block and trust its output.
+- **`config: MISSING`** (Pre-flight block) → stop: `run /orchestrator --setup first` — except `add-*` verbs, which never invoke the orchestrator (see the `add-*` bullet below). Only when the block printed `config: MISSING`. A `config: OK` line means the file exists and is readable from the git root; do not report it missing on the basis of a dirty tree, an untracked `PROJECT-CONTEXT.md`, or a listing tool that hides dotfile dirs — re-run the Pre-flight block and trust its output.
 - **`tree: DIRTY`** → stop: commit, stash, or `.gitignore` the listed files before running PM. Host-runtime `.opencode/`/`.claude/` are excluded from this check and never block; `.orchestrator/` project state is not excluded.
 - **`gh: MISSING`** → stop: install the GitHub CLI and ensure it is authenticated.
 - **Unrecognized flag** (e.g. a mistyped `--conservative`) → stop and echo the **exact unrecognized token in backticks** (e.g. ``unknown flag `--corservative`; did you mean `--conservative`?``) so a one-letter typo is visible against the intended flag. Do not silently ignore or silently accept an unknown flag.
