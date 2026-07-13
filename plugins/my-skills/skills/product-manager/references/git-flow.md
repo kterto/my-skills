@@ -85,7 +85,7 @@ After the orchestrator completes implementation and produces its proposed commit
    The files modified by `/roadmap sync` (`roadmap.lock.json`, READMEs) are committed with a conventional message. Do **not** append a story trailer to this commit, and do **not** stage PM's own logs here — they need the PR URL, which does not exist yet (see step 6). Staging only the roadmap docs here keeps this commit part of the PR diff that reviewers see.
 
    ```bash
-   git add /roadmap/roadmap.lock.json /roadmap/**/README.* /roadmap/README.*
+   git -C "$(git rev-parse --show-toplevel)" add roadmap/roadmap.lock.json roadmap/**/README.* roadmap/README.*
    git commit -m "docs(roadmap): sync <id>"
    ```
 
@@ -132,7 +132,7 @@ After the orchestrator completes implementation and produces its proposed commit
    - In autonomous mode, if the story was flagged, append the `human-validation-queue.md` row embedding `(PR ${PR_URL})` (see `references/human-validation.md` → autonomous mode).
 
    ```bash
-   git add /roadmap/pm-progress.md /roadmap/human-validation-queue.md
+   git -C "$(git rev-parse --show-toplevel)" add roadmap/pm-progress.md roadmap/human-validation-queue.md
    git commit -m "chore(pm): log <id>"
    git push          # updates the PR with the log commit; keeps remote == local
    ```
@@ -166,7 +166,7 @@ EOF
 # -> stamps 001.2.1 done, rolls up 001.2 / 001, updates lock + READMEs
 
 # 3. Commit the sync docs only (in the PR diff; no logs, no trailer)
-git add /roadmap/roadmap.lock.json /roadmap/**/README.* /roadmap/README.*
+git -C "$(git rev-parse --show-toplevel)" add roadmap/roadmap.lock.json roadmap/**/README.* roadmap/README.*
 git commit -m "docs(roadmap): sync 001.2.1"
 
 # 4. Push
@@ -185,7 +185,7 @@ rm -f "$root/.orchestrator/tmp/pm-pr-body-001.2.1.md"
 #    pm-progress.md row: when | 001.2.1 Set up CI | main | pm/001.2.1-setup-ci |
 #                        READY_TO_COMMIT | 3a1b2c3 | $PR_URL | none | (empty)
 #    (flagged: none -> no human-validation-queue row this story)
-git add /roadmap/pm-progress.md
+git -C "$(git rev-parse --show-toplevel)" add roadmap/pm-progress.md
 git commit -m "chore(pm): log 001.2.1"
 git push
 # tree clean -> proceed to next story in the queue
@@ -238,7 +238,7 @@ git checkout -b pm/roadmap-<verb>-<slug> <starting-branch>
 3. **Commit** the roadmap files the op wrote with a `docs(roadmap):` message using the op's proposed text:
 
    ```bash
-   git add /roadmap
+   git -C "$(git rev-parse --show-toplevel)" add roadmap
    git commit -m "docs(roadmap): <verb> …"
    ```
 
