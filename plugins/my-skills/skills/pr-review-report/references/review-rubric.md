@@ -47,13 +47,30 @@ to reverse, **(b)** affects multiple modules or future work, or **(c)** selects
 among viable alternatives with real trade-offs. Output only a draft ADR title +
 context; the human decides whether to persist it.
 
+## Applying memory
+
+Before finalizing a finding, check it against the review memory (see
+`memory-schema.md`): `PROJECT-CONTEXT.md` §Out-of-scope and `.pr-review/memory.md`
+entries. When a finding merely **restates a known-deferred decision** (e.g.
+"auth is missing" in an MVP that deferred auth on purpose), apply the matching
+entry's `effect` — default `acknowledge`: set `acknowledged: true` + `memoryRef`
+so the report routes it to the collapsed acknowledged group and excludes it from
+severity counts. A genuine new defect that happens to touch a deferred area is
+not the deferred fact — keep it a normal, counted finding.
+
 ## Finding Object (the shape every finding must carry)
 
 - `id` — stable slug, e.g. `sec-1`, `arch-2`, `bug-3`.
-- `severity` — one of Critical/High/Medium/Low/Info.
+- `severity` — one of Critical/High/Medium/Low/Info (lowercase in the JSON).
+- `section` — `architecture` | `security` | `bugs`.
 - `title` — one line.
 - `file` — repo-relative path.
 - `line` — integer line on the new side (or old side, flagged).
 - `rationale` — why it matters.
 - `fix` — concrete suggested change.
 - `adr` — (architecture only, optional) `{ title, context }` when ADR-worthy.
+- `acknowledged` — (optional) `true` when a memory entry marks it intentional;
+  such findings are excluded from the severity counts.
+- `memoryRef` — (with `acknowledged`) the `.pr-review/memory.md` entry id, e.g. `MEM-1`.
+
+See `review-data-schema.md` for the exact JSON the skill emits.
