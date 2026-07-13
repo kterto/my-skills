@@ -7,8 +7,8 @@ self-contained `.html` file — save it to
 
 The one thing that MUST survive verbatim: the seam
 `<script id="review-data" type="application/json">/*__REVIEW_DATA__*/</script>`.
-The skill string-replaces `/*__REVIEW_DATA__*/` with a JSON blob at generation
-time; every other part of the page renders from that blob.
+The skill replaces that full seam element with the same element wrapping a JSON
+blob at generation time; every other part of the page renders from that blob.
 
 ---
 

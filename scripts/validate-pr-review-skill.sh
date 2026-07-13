@@ -1,23 +1,54 @@
 #!/usr/bin/env bash
-# Validates the pr-review-report skill: frontmatter name matches dir,
-# references exist, and any sample report is self-contained.
+# Validates the pr-review-report skill in BOTH its homes: the marketplace copy
+# and the opencode port. Checks frontmatter name matches dir, references exist,
+# the report template exposes the injection seam, the opencode port stays in
+# parity with the marketplace template, and any sample report is self-contained.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SKILL_DIR="$ROOT/plugins/my-skills/skills/pr-review-report"
+MARKET_DIR="$ROOT/plugins/my-skills/skills/pr-review-report"
+OPENCODE_DIR="$ROOT/.opencode/skills/pr-review-report"
+seam='<script id="review-data" type="application/json">/*__REVIEW_DATA__*/</script>'
 fail=0
 
-# 1. SKILL.md exists with name matching directory
-if [ ! -f "$SKILL_DIR/SKILL.md" ]; then echo "FAIL: no SKILL.md"; fail=1; fi
-name="$(awk -F': *' '/^name:/{print $2; exit}' "$SKILL_DIR/SKILL.md" 2>/dev/null || true)"
-if [ "$name" != "pr-review-report" ]; then echo "FAIL: name '$name' != pr-review-report"; fail=1; fi
-if ! grep -q '^description:' "$SKILL_DIR/SKILL.md"; then echo "FAIL: no description"; fail=1; fi
+# Per-skill-dir checks: name, description, references, injection seam.
+check_skill_dir() {
+  local dir="$1" label="$2"
+  [ -d "$dir" ] || return 0   # opencode port is optional; skip if absent
 
-# 2. references exist
-for ref in review-rubric.md html-template.md; do
-  if [ ! -f "$SKILL_DIR/references/$ref" ]; then echo "FAIL: missing references/$ref"; fail=1; fi
-done
+  # 1. SKILL.md exists with name matching directory
+  if [ ! -f "$dir/SKILL.md" ]; then echo "FAIL[$label]: no SKILL.md"; fail=1; return; fi
+  local name
+  name="$(awk -F': *' '/^name:/{print $2; exit}' "$dir/SKILL.md" 2>/dev/null || true)"
+  if [ "$name" != "pr-review-report" ]; then echo "FAIL[$label]: name '$name' != pr-review-report"; fail=1; fi
+  if ! grep -q '^description:' "$dir/SKILL.md"; then echo "FAIL[$label]: no description"; fail=1; fi
 
-# 3. if a sample report exists, it must be self-contained (no remotely-loaded
+  # 2. references exist
+  local ref
+  for ref in review-rubric.md review-data-schema.md memory-schema.md report-template.html report-template.demo.html; do
+    if [ ! -f "$dir/references/$ref" ]; then echo "FAIL[$label]: missing references/$ref"; fail=1; fi
+  done
+  # retired reference must be gone
+  if [ -f "$dir/references/html-template.md" ]; then echo "FAIL[$label]: retired references/html-template.md still present"; fail=1; fi
+
+  # 3. report template exposes the exact JSON injection seam consumed by SKILL.md
+  if [ -f "$dir/references/report-template.html" ] && ! grep -Fq "$seam" "$dir/references/report-template.html"; then
+    echo "FAIL[$label]: report-template.html missing REVIEW_DATA seam"; fail=1
+  fi
+}
+
+check_skill_dir "$MARKET_DIR" "marketplace"
+check_skill_dir "$OPENCODE_DIR" "opencode"
+
+# 4. opencode port template must stay byte-identical to the marketplace one
+#    (the seam and render JS are load-bearing; drift here silently breaks opencode).
+if [ -d "$OPENCODE_DIR" ] \
+   && [ -f "$MARKET_DIR/references/report-template.html" ] \
+   && [ -f "$OPENCODE_DIR/references/report-template.html" ] \
+   && ! cmp -s "$MARKET_DIR/references/report-template.html" "$OPENCODE_DIR/references/report-template.html"; then
+  echo "FAIL: opencode report-template.html out of parity with marketplace"; fail=1
+fi
+
+# 5. if a sample report exists, it must be self-contained (no remotely-loaded
 #    resources, anchors resolve loosely). Outbound <a href="https://..."> links are
 #    fine — they don't load anything; only src= and <link href> break offline use.
 SAMPLE="$ROOT/docs/reviews/_sample-report.html"
@@ -29,5 +60,5 @@ if [ -f "$SAMPLE" ]; then
   if ! grep -q 'id="diffline-' "$SAMPLE"; then echo "FAIL: sample has no diffline anchors"; fail=1; fi
 fi
 
-[ "$fail" -eq 0 ] && echo "PASS: frontmatter" || true
+[ "$fail" -eq 0 ] && echo "PASS: pr-review-report skill (marketplace + opencode)" || true
 exit "$fail"

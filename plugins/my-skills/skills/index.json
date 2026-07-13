@@ -79,7 +79,10 @@
     {
       "name": "pr-review-report",
       "files": [
-        "references/html-template.md",
+        "references/memory-schema.md",
+        "references/report-template.demo.html",
+        "references/report-template.html",
+        "references/review-data-schema.md",
         "references/review-rubric.md",
         "SKILL.md"
       ]

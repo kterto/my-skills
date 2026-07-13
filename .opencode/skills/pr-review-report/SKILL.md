@@ -1,11 +1,13 @@
 ---
 name: pr-review-report
-description: Review the current branch against an auto-detected base branch and author one self-contained interactive HTML PR-review report: architecture with ADR recommendations, security, and bugs/improvements lenses, rendered diff with inline margin annotations, findings color-coded by severity. Use when the user invokes /pr-review-report, says "review this PR", "generate a code review report", "html review of my branch", or asks for a shareable review artifact of the current branch.
+description: Review the current branch against an auto-detected base branch and author one self-contained interactive HTML PR-review report: architecture with ADR recommendations, security, and bugs/improvements lenses, rendered diff with inline margin annotations, findings color-coded by severity. Reads project context and an evolving review memory so intentional decisions (e.g. deferred auth) stop being re-flagged. Use when the user invokes /pr-review-report, says "review this PR", "generate a code review report", "html review of my branch", or asks for a shareable review artifact of the current branch.
 ---
 
 # PR Review Report
 
-Opencode port of the Claude `pr-review-report` skill. Produce one self-contained interactive HTML code-review report for the current branch.
+Opencode port of the Claude `pr-review-report` skill. Produce one self-contained interactive HTML code-review report for the current branch. The HTML chrome and behavior are fixed in a template; the skill only gathers findings, emits a `REVIEW_DATA` JSON blob, and injects it.
+
+Resolve all `references/...` paths relative to this skill directory, not the repository being reviewed. The reviewed repository only receives generated outputs such as `docs/reviews/...` and approved `.pr-review/memory.md` updates.
 
 ## Procedure
 
@@ -16,15 +18,26 @@ Detect the default branch and merge-base, then show the user and let them overri
 Use git to determine:
 
 - Current branch.
-- Candidate base branch, preferring `origin/HEAD`, then `main`, `master`, `dev`.
+- Candidate base branch, preferring `origin/HEAD`, then `main`, `master`, `dev`. Only adopt a ref that actually resolves; never invent `origin/main` and never silently pick a random branch.
 - Merge-base SHA between the base and `HEAD`.
 - Commit count and changed-file count for the branch diff.
 
 Tell the user the base branch, merge-base SHA, commit count, and changed-file count. Use the `question` tool to ask whether to continue with that base or supply a different base. If overridden, recompute the merge-base and summary with the chosen base.
 
-### 2. Gather The Diff
+### 2. Load Project Context And Review Memory
 
-Gather:
+Read the two context sources so the review respects intentional decisions. Follow `references/memory-schema.md`.
+
+```bash
+# static context (read-only): deferred/forbidden items + domain invariants
+[ -f PROJECT-CONTEXT.md ] && sed -n '/^##* *Out of scope/,/^##* /p;/^##* *Invariants/,/^##* /p' PROJECT-CONTEXT.md
+# evolving review memory (read every run)
+[ -f .pr-review/memory.md ] && cat .pr-review/memory.md
+```
+
+Absent files: skip silently, never block. Hold every `.pr-review/memory.md` entry (id, scope, directive, effect) in mind for step 4.
+
+### 3. Gather The Diff
 
 ```bash
 git --no-pager diff <base>...HEAD
@@ -33,7 +46,7 @@ git --no-pager diff --stat <base>...HEAD
 
 Read the full diff. If it is very large, prioritize files by `--stat` magnitude and explicitly list in the report any file you did not fully review. Never truncate silently.
 
-### 3. Review Across Three Lenses
+### 4. Review Across Three Lenses (Applying Memory)
 
 Follow `references/review-rubric.md`. Produce findings for:
 
@@ -41,24 +54,33 @@ Follow `references/review-rubric.md`. Produce findings for:
 - Security.
 - Bugs & Improvements.
 
-Give each finding the full finding object: `id`, `severity`, `title`, `file`, `line`, `rationale`, `fix`, and architecture-only optional `adr`.
+For each candidate finding, apply the memory rules from `references/memory-schema.md`: match semantically against `.pr-review/memory.md` entries and `PROJECT-CONTEXT.md` Out-of-scope. When a finding merely restates a known-deferred decision, apply the entry's `effect` (default `acknowledge`: mark `acknowledged: true` + `memoryRef`, drop from severity counts). A genuine new defect that happens to touch a deferred area is not the deferred fact; keep it a normal, counted finding.
 
-### 4. Author The HTML Report
+### 5. Build The REVIEW_DATA JSON
 
-Write one self-contained HTML file to `docs/reviews/<branch>-<YYYY-MM-DD>.html` following `references/html-template.md` exactly.
+Assemble one `REVIEW_DATA` object per `references/review-data-schema.md`: `meta`, `counts` (severity totals excluding acknowledged, plus `acknowledged`), `findings` (each with `id`, `severity`, `section`, `title`, `file`, `line`, `rationale`, `fix`, optional `adr`, and the acknowledged flag + `memoryRef` where applicable), and `files` (per-file diff lines with `kind`, `n`, `text`, and `findingId` on annotated lines). Ensure each annotated diff line's `diffline-<slug>-<line>` matches its finding's file+line so the bidirectional jump aligns. Validate the JSON parses.
 
-Requirements:
+### 6. Render The Report
 
-- Inline CSS and JS only.
-- Use the required severity color tokens.
-- Include the three review sections, finding cards, and rendered per-file diff.
-- Include inline gutter annotations.
-- Include bidirectional `finding-<id>` to `diffline-<file-slug>-<line>` anchors.
-- Create `docs/reviews/` if absent.
+Inject the JSON into the template; do not author HTML.
 
-Then tell the user the output path and a one-line summary with counts per severity.
+1. Read `references/report-template.html`.
+2. Replace the full, unique seam element `<script id="review-data" type="application/json">/*__REVIEW_DATA__*/</script>` with the same element wrapping the JSON text. Replace the whole element, not the bare `/*__REVIEW_DATA__*/` substring; that placeholder also appears in the template's JS guard. See `references/review-data-schema.md`.
+3. Write to `docs/reviews/<branch>-<YYYY-MM-DD>.html`. Create `docs/reviews/` if absent.
+
+Fallback: if `references/report-template.html` is missing, author the HTML directly against `references/review-data-schema.md`'s structure so the skill stays functional.
+
+### 7. Propose Memory Updates (Propose-And-Confirm)
+
+If the review surfaced recurring or whole-scope observations that look like intentional decisions (per `references/memory-schema.md`), propose each as a draft `.pr-review/memory.md` entry with its rationale. Use the `question` tool to get explicit approval per entry. On approval only, append the entry (create `.pr-review/` + the file and allocate the next `MEM-<n>` if absent). Never write memory without approval.
+
+### 8. Report
+
+Tell the user the output path and a one-line summary: counts per severity plus the acknowledged count, and any memory entries added.
 
 ## References
 
-- `references/review-rubric.md` - what each lens looks for, severity definitions, ADR-worthy criteria.
-- `references/html-template.md` - required structure, CSS tokens, and JS behaviors for the HTML artifact.
+- `references/review-rubric.md` - what each lens looks for, severity definitions, ADR-worthy criteria, applying memory.
+- `references/review-data-schema.md` - the `REVIEW_DATA` JSON shape and the injection seam.
+- `references/memory-schema.md` - project-context sources, `.pr-review/memory.md` format, matching + propose-and-confirm.
+- `references/report-template.html` - the self-contained HTML template (fixed chrome + inline JS). `report-template.demo.html` is a filled reference.

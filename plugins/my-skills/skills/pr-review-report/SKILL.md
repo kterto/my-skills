@@ -9,6 +9,10 @@ Produce one self-contained interactive HTML code-review report for the current
 branch. The HTML chrome and behavior are fixed in a template — the skill only
 gathers findings, emits a `REVIEW_DATA` JSON blob, and injects it.
 
+Resolve all `references/...` paths relative to this skill directory, not the
+repository being reviewed. The reviewed repository only receives generated
+outputs such as `docs/reviews/...` and approved `.pr-review/memory.md` updates.
+
 ## Procedure
 
 ### 1. Resolve the base branch
