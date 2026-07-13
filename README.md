@@ -13,7 +13,7 @@ Authored agent skills for [Claude Code](https://code.claude.com) and [opencode](
 | `orchestrator` | Project-agnostic 6-agent pipeline (brainstormer → architect → coder → tester → reviewer → qa) with a context-confidence gate, spec-driven-eval integration, and a final Markdown/HTML report. Auto-detects first-run bootstrap vs. straight pipeline execution. |
 | `roadmap` | Decomposes a project spec into an auditable milestone→phase→user-story roadmap under `/roadmap/`, with append-only audit logs, orchestrator-ready user-story briefs, `/roadmap sync` trailer stamping, diff+preserve re-evaluation, release bands, and doc-only mutation ops. |
 | `product-manager` | Autonomously drives roadmap stories to completion and manages roadmap planning PRs — runs story briefs through the orchestrator, commits with `Roadmap-Story:`, syncs the roadmap, pushes/opens PRs, and exposes `assign`/`park`/`add-spec`/`revise`/release-management verbs. |
-| `pr-review-report` | Reviews the current branch against an auto-detected base and authors one self-contained interactive HTML PR-review report — architecture (with recommend-only ADR flags), security, and bugs/improvements lenses, the rendered diff with inline annotations, findings color-coded by severity. |
+| `pr-review-report` | Reviews the current branch against an auto-detected base and authors one self-contained interactive HTML PR-review report — architecture (with recommend-only ADR flags), security, and bugs/improvements lenses, the rendered diff with inline annotations, findings color-coded by severity, plus optional project review memory. |
 
 ## orchestrator
 
@@ -170,7 +170,7 @@ CLI flag > `/roadmap/pm.config.json` > built-in default.
 
 ## pr-review-report
 
-Reviews the current branch as a pull request and authors one **self-contained interactive HTML report**. Pure-LLM review across three lenses — Architecture (with recommend-only ADR flags), Security, and Bugs & Improvements — over the real diff, rendered inline with gutter annotations and findings color-coded by severity (Critical / High / Medium / Low / Info). The report opens offline by double-click; no external dependencies, no files written beyond the report.
+Reviews the current branch as a pull request and authors one **self-contained interactive HTML report**. Pure-LLM review across three lenses — Architecture (with recommend-only ADR flags), Security, and Bugs & Improvements — over the real diff, rendered inline with gutter annotations and findings color-coded by severity (Critical / High / Medium / Low / Info). The report opens offline by double-click; no external dependencies. The only reviewed-repo writes are the report and optional user-approved `.pr-review/memory.md` updates.
 
 ### Usage
 
@@ -182,13 +182,15 @@ Reviews the current branch as a pull request and authors one **self-contained in
 ### How it works
 
 1. **Resolve base** — auto-detects the default branch (`origin/HEAD` → `main` → `master` → `dev`, with a remote-tracking fallback), computes the merge-base, and shows the base + commit range for confirmation or override.
-2. **Gather diff** — three-dot diff (`git diff <base>...HEAD`); large diffs are prioritized by stat with any skipped file listed (no silent truncation).
-3. **Review** — three lenses produce findings, each carrying severity, `file:line`, rationale, and a suggested fix; architectural decisions meeting the ADR criteria get a draft ADR title + context (recommend only — no ADR files written).
-4. **Emit HTML** — writes `docs/reviews/<branch>-<YYYY-MM-DD>.html`: summary bar with per-severity counts, three collapsible sections, finding cards, and the rendered per-file diff with **bidirectional jump** between a finding card and its annotated diff line. Client-side controls (severity filter, section filter, collapse/expand all, jump-to-file) run with inline JS and no persisted state.
+2. **Load context + memory** — reads `PROJECT-CONTEXT.md` sections and `.pr-review/memory.md` when present so intentionally deferred decisions can be acknowledged instead of re-flagged.
+3. **Gather diff** — three-dot diff (`git diff <base>...HEAD`); large diffs are prioritized by stat with any skipped file listed (no silent truncation).
+4. **Review** — three lenses produce findings, each carrying severity, `file:line`, rationale, and a suggested fix; architectural decisions meeting the ADR criteria get a draft ADR title + context (recommend only — no ADR files written).
+5. **Emit HTML** — writes `docs/reviews/<branch>-<YYYY-MM-DD>.html`: summary bar with per-severity counts, acknowledged findings, three collapsible sections, finding cards, and the rendered per-file diff with **bidirectional jump** between a finding card and its annotated diff line. Client-side controls (severity filter, section filter, collapse/expand all, jump-to-file) run with inline JS and no persisted state.
+6. **Propose memory** — suggests `.pr-review/memory.md` entries for recurring intentional decisions and appends them only with explicit user approval.
 
 ### Output
 
-A single shareable `.html` file under `docs/reviews/`. See `docs/reviews/_sample-report.html` for a worked example.
+A single shareable `.html` file under `docs/reviews/`, with optional `.pr-review/memory.md` updates when approved. See `plugins/my-skills/skills/pr-review-report/references/report-template.demo.html` for a worked example.
 
 ---
 
