@@ -1,6 +1,6 @@
 # Roadmap — Mutation Operations Reference
 
-This document is the single source of truth for the five doc-only **mutation operations** the `roadmap` skill exposes on an existing `/roadmap/`: `set-release`, `ingest-spec`, `reorder`, `revise`, and `release`. It also defines the staged-diff marker set, the phase/milestone cascade + derived `[mixed]` badge, and the structural-immutability rule that all ops obey.
+This document is the single source of truth for the six doc-only **mutation operations** the `roadmap` skill exposes on an existing `/roadmap/`: `set-release`, `ingest-spec`, `reorder`, `revise`, `release`, and `add-item`. It also defines the staged-diff marker set, the phase/milestone cascade + derived `[mixed]` badge, and the structural-immutability rule that all ops obey.
 
 These ops are the mutation engine invoked by the `product-manager` skill's management verbs (see `product-manager/references/roadmap-management.md`). The roadmap skill applies the mutation; the PM skill resolves the selection, cuts a branch, and commits/pushes/PRs. **Exactly one skill (`roadmap`) writes `/roadmap/`.**
 
@@ -101,6 +101,22 @@ Manage the `releases[]` registry (order + names) explicitly.
 - `release list` — print the current ordered registry (read-only; no diff, no gate).
 - `release reorder <names…>` — set a new registry order; the given names must be exactly the current registry set. Re-renders all per-release views in the new order. Diff marker: `~ changed` (on `roadmap.lock.json` / index views).
 - `release rename <old> <new>` — rename a band across the registry and every item carrying it; `backlog` cannot be renamed and no name may collide with `backlog`. Diff markers: `± release` (on each re-banded item) + `~ changed` (registry).
+
+### `add-item <kind> [--to <parent-id>]`
+
+Append **one new item** — a `milestone`, `phase`, or `user-story` — directly to an existing `/roadmap/`, without a spec file. The caller (PM front-door) supplies the item body; this op owns id assignment and all id-dependent fields.
+
+- `<kind>` ∈ `milestone | phase | user-story`.
+- `--to <parent-id>` names the parent scope: a `user-story` targets a **phase** (or a **milestone** — auto-phase, below); a `phase` targets a **milestone**; a `milestone` takes no parent.
+- **ID assignment (stable-identity rule):** the new item takes the **next available number** in its parent scope — `NNN` (milestone), `NNN.M` (phase), `NNN.M.T` (story). Never renumbers existing items.
+- New-item frontmatter: `status: todo`, `release: null`, `sequence` = (max `sequence` in the parent scope) + 1, `created_at`/`updated_at` = write timestamp.
+- **`user-story`:** the op owns the id-dependent fields — it assigns the id, sets `commit_trailer: Roadmap-Story: <id>`, and appends `Commit with trailer: Roadmap-Story: <id>` as the final line of `## Brief`. The caller passes only `title`, the Brief body, and `## Acceptance`. Body sections are written in schema order (`## Brief`, `## Acceptance`, `## Audit log`).
+- **`milestone`:** creates `NNN-<slug>/README.md` and **seeds one default phase** `NNN.1-general/README.md` (empty) so a later `add-item user-story --to <milestone>` has a landing phase. Both appear as `+ new` rows.
+- **`phase`:** creates `NNN.M-<slug>/README.md` under the target milestone.
+- **Auto-phase:** a `user-story` whose `--to` is a **milestone** with no phase creates the default phase first (as above), then appends the story to it; a milestone that already has phases receives the story in its `-general`/default phase (creating one if absent).
+- Appends the creation audit row (see `item-schema.md` → Creation audit row) and one `roadmap.lock.json` `items[]` entry per new file (`content_hash` computed fresh).
+- **Immutable to existing work:** only appends new stable ids; never rewrites, renumbers, or supersedes existing items, and never touches `done`/`superseded` work.
+- Diff marker: `+ new` (one row per new file; a milestone add shows two — the milestone and its default phase).
 
 ---
 

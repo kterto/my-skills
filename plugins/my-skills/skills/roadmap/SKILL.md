@@ -136,11 +136,11 @@ The full algorithms — rollup rules, the Sync procedure, and the Re-eval proced
 
 ## Mutation operations
 
-Beyond building, syncing, and re-evaluating, the roadmap skill exposes five doc-only **mutation operations** on an existing `/roadmap/`. They are the engine behind the `product-manager` skill's management verbs; the full normative spec is in `references/mutation-ops.md`.
+Beyond building, syncing, and re-evaluating, the roadmap skill exposes six doc-only **mutation operations** on an existing `/roadmap/`. They are the engine behind the `product-manager` skill's management verbs; the full normative spec is in `references/mutation-ops.md`.
 
 **Release band.** Every item carries an optional `release` band (`string | null`) — classification metadata **orthogonal to `status`**, editable on items of any status. `null`/absent = active untiered; the reserved value `backlog` = parked; any other value = a named release train (`mvp`, `v1.1`, …) registered in the ordered `releases[]` array in `roadmap.lock.json`. The band is nullable and the registry is lazily created, so legacy roadmaps are untouched (no migration). See `references/item-schema.md` and `references/directory-layout.md`.
 
-**The five ops at a glance** (each: **stage a diff → gate on approval → write files → propose a commit → never commit**):
+**The six ops at a glance** (each: **stage a diff → gate on approval → write files → propose a commit → never commit**):
 
 | Op | Purpose |
 |---|---|
@@ -149,6 +149,7 @@ Beyond building, syncing, and re-evaluating, the roadmap skill exposes five doc-
 | `reorder <ids-in-order>` | Change `sequence`/`depends_on` of **not-done** items only. |
 | `revise <id>` | Retitle / re-scope, or split/merge via new stable IDs + supersede — **not-done** items only. |
 | `release <list\|reorder\|rename>` | Manage the `releases[]` registry order and names. |
+| `add-item <kind> [--to <parent-id>]` | Append one new milestone/phase/user-story directly, without a spec file; owns id assignment and id-dependent fields. |
 
 The staged-diff marker set extends the re-eval markers with a band marker: `+ new`, `~ changed`, `! superseded`, `± release`. Structural edits (`reorder`, `revise`, split/merge) apply to not-done items only; a frozen `done`/`superseded` item may only have its `release` band changed.
 
@@ -164,7 +165,7 @@ All normative details live in these files (relative to `plugins/my-skills/skills
 | `references/item-schema.md` | Frontmatter keys (incl. `release` band), body sections, audit log format (incl. release-change row), rollup function, html rendering rules |
 | `references/config.md` | Config keys, precedence chain, `roadmap.config.json` schema |
 | `references/sync-and-reeval.md` | Rollup rules, Sync procedure (git command + steps), Re-eval procedure (incl. band preservation + `ingest-spec`) |
-| `references/mutation-ops.md` | Mutation ops (`set-release`, `ingest-spec`, `reorder`, `revise`, `release`), staged-diff markers, cascade + `[mixed]` badge, structural immutability |
+| `references/mutation-ops.md` | Mutation ops (`set-release`, `ingest-spec`, `reorder`, `revise`, `release`, `add-item`), staged-diff markers, cascade + `[mixed]` badge, structural immutability |
 
 Templates (rendered per `output_format`):
 
