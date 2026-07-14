@@ -24,7 +24,7 @@ All flags consume the next positional argument as their value unless noted.
 | `--gates G1,G5` | all applicable | Allow-list of gates to run (comma-separated). Gates not supported by the detected stack are silently dropped. |
 | `--skip G6` | none | Comma-separated gates to exclude, applied after `--gates`. |
 | `--out <dir\|->` | `./.cleancode` | Output directory for `report.json` and `report.md`. Pass `-` to write JSON to stdout instead. |
-| `--scaffold` | false | Plan 4 — not yet implemented. Flag is parsed and recorded but has no effect. |
+| `--scaffold` | false | Advice mode — detect the stacks and print the exact install commands for any missing gate tooling, then exit 0. Read-only: it inspects the project and makes no changes. |
 | `--require-tools` | false | Exit 2 (instead of 0) when any gate reports `missing_tool`. Useful for CI hard-gates. |
 
 ---
@@ -33,15 +33,17 @@ All flags consume the next positional argument as their value unless noted.
 
 | ID | Name | What it checks | Status |
 |----|------|----------------|--------|
-| G1 | coverage | Statement ≥ 85 % · Branch ≥ 80 % | `missing_tool` — requires node-ts (Plan 2) or dart-flutter (Plan 3) adapter |
-| G2 | cyclomatic-complexity | Cyclomatic complexity ≤ 8, max depth ≤ 2, max lines/fn ≤ 30, max params ≤ 4, max statements ≤ 15 | `missing_tool` — same adapters |
-| G3 | length-nesting | File/function length and nesting limits (same thresholds as G2) | `missing_tool` — same adapters |
-| G4 | naming | Naming-convention lint rules | `missing_tool` — same adapters |
-| **G5** | **no-comments** | **Disallows what-comments inside code bodies. Allows: `///` Dart doc, `/** */` TS doc blocks, plan-ID citations (`SPEC-N`, `FEAT-N`, etc.), `TODO(REF)`, and unindented licence banners in the first 5 lines.** | **Implemented — runs with zero external tooling (builtin)** |
-| G6 | mutation | Mutation score ≥ 70 % | `missing_tool` — same adapters |
-| G7 | dependency-structure | Enforces import / dependency layer rules | `missing_tool` — same adapters |
+| G1 | coverage | Statement ≥ 85 % · Branch ≥ 80 % | Implemented — node-ts (jest/vitest), dart-flutter (flutter) |
+| G2 | cyclomatic-complexity | Cyclomatic complexity ≤ 8, max depth ≤ 2, max lines/fn ≤ 30, max params ≤ 4, max statements ≤ 15 | Implemented — node-ts (eslint), dart-flutter (dart_code_linter) |
+| G3 | length-nesting | File/function length and nesting limits | Folded into G2 (same thresholds, same tools) — not a separate runtime gate |
+| G4 | naming | Naming-convention lint rules | Implemented — node-ts (eslint), dart-flutter (dart_code_linter) |
+| **G5** | **no-comments** | **Disallows what-comments inside code bodies. Allows: `///` Dart doc, `/** */` TS doc blocks, plan-ID citations (`SPEC-N`, `FEAT-N`, etc.), `TODO(REF)`, and unindented licence banners in the first 5 lines.** | **Implemented — builtin, zero external tooling** |
+| G6 | mutation | Mutation score ≥ 70 % | Implemented — node-ts (stryker), dart-flutter (dart_mutant) |
+| G7 | dependency-structure | Enforces import / dependency layer rules | Implemented — node-ts (dependency-cruiser), dart-flutter (builtin) |
 
-G1/G2/G3/G4/G6/G7 produce a `missing_tool` result and do not crash. `--scaffold` (Plan 4) is not yet implemented; the flag is accepted but does nothing.
+Every gate is implemented for both stacks. A gate reports `missing_tool` (never crashes) when its per-stack tooling isn't installed in the target project — run `--scaffold` to print exactly what to install. G5 needs no tooling. Add `--require-tools` to make `missing_tool` fail (exit 2) for CI hard-gates.
+
+**G1 / G6 test runner (node-ts):** coverage (G1) and mutation (G6) run with **Jest or Vitest**, auto-detected from `node_modules/.bin` (both present → jest, back-compat). Vitest emits the same Istanbul `coverage-summary.json`, so only the command differs. Override with `gates.G1.tool: "jest" | "vitest"` and `gates.G6.runner: "jest" | "vitest"`. Vitest coverage needs a provider (`@vitest/coverage-v8` or `-istanbul`); Vitest mutation needs `@stryker-mutator/vitest-runner`. A missing runner or plugin yields `missing_tool` with an install hint.
 
 **G6 tooling (dart-flutter):** the mutation gate invokes the external `dart_mutant` binary and parses its Stryker-compatible JSON (`--json`). The pass/fail verdict is the report's top-level `mutationScore` vs the gate threshold (default 70); surviving mutants (`status` ∈ {Survived, NoCoverage}) are reported as warnings. `dart_mutant` must be installed on PATH (e.g. `brew install dart_mutant`) — it is a standalone CLI, not a pub dev-dependency. Runs against the live tree with no `mutation-reports/`, worktree, or `pub get` side effects (the report is written to a temp dir and removed after parsing).
 
@@ -173,9 +175,14 @@ Gates with `status: "missing_tool"` have an `installHint` string on the gate obj
 
 ---
 
-## Implementation status (Plan 1 / engine state)
+## Implementation status
 
-- **Done**: CLI (`bin/gates.cjs`), arg parsing, stack detection, config load/merge, scope resolution (project / diff / module / files), G5 no-comments gate (builtin, no external tools), report builder (JSON + Markdown), exit codes, JSON schema.
-- **Pending Plan 2**: node-ts adapters (jest/eslint/stryker/dependency-cruiser) enabling G1/G2/G3/G4/G6/G7.
-- **Pending Plan 3**: dart-flutter adapters (flutter/dart_code_linter/dart_mutant/import_lint).
-- **Pending Plan 4**: `--scaffold` auto-generates boilerplate gate configs for a project.
+Feature-complete for both supported stacks:
+
+- **Engine**: CLI (`bin/gates.cjs`), arg parsing, stack detection, config load/merge, scope resolution (project / diff / module / files), report builder (JSON + Markdown), exit codes, JSON schema.
+- **G5 no-comments**: builtin, no external tools.
+- **node-ts adapter**: G1 coverage (jest **or** vitest, auto-detected), G2 complexity + G4 naming (ESLint + typescript-eslint), G6 mutation (Stryker, jest/vitest runner), G7 dependency-structure (dependency-cruiser).
+- **dart-flutter adapter**: G1 coverage (flutter), G2 complexity + G4 naming (dart_code_linter), G6 mutation (external `dart_mutant`), G7 dependency-structure (builtin).
+- **`--scaffold`**: advice mode — prints the exact install commands for any missing gate tooling (read-only).
+
+Gates whose per-stack tooling isn't installed report `missing_tool` (never crash); `--require-tools` promotes that to a hard failure for CI.
