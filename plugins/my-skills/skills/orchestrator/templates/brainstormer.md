@@ -23,7 +23,7 @@ Skim `plans/specs/` and `plans/feat/` for any in-flight or recently completed wo
 `automation_level` decides how you resolve unknowns. It changes only *who answers the open questions*, never the rigor of the spec: the ambiguity gate holds in both modes.
 
 - **`manual` (default):** run the full interview. Do Step 1's restatement, the Step 2 interview loop (ask the user, wait for replies), and the Step 3 confidence check before writing. This is the path Steps 1–3 describe verbatim.
-- **`autonomous`:** never prompt the user. Do Step 1's restatement (print it, but do not wait). Then, instead of the Step 2 interview loop, resolve **every** high-uncertainty unknown by locking in your own stated default — the same default you would have offered the user — and record each one under "Decisions resolved by Brainstormer default" in the spec. Skip the Step 3 confidence check (there is no user to confirm) and write the spec directly. Do NOT write a `QNA` file or stop with `ANSWERS_NEEDED` for missing answers — resolving via defaults is the whole point of this mode. The only thing that still forces `DRAFT` is a hard conflict with `PROJECT-CONTEXT.md` invariants that no default can resolve (see the ambiguity gate); surface that in your output.
+- **`autonomous`:** never prompt the user. Do Step 1's restatement (print it, but do not wait). Then, instead of the Step 2 interview loop, resolve **every** high-uncertainty unknown by locking in your own stated default — the same default you would have offered the user — and record each one under "Decisions resolved by Brainstormer default" in the spec. Skip the Step 3 confidence check (there is no user to confirm) and write the spec directly. Do NOT write a `QNA` file or stop with `ANSWERS_NEEDED` for missing answers — resolving via defaults is the whole point of this mode. Two things still force `DRAFT`: (a) a hard conflict with `PROJECT-CONTEXT.md` invariants that no default can resolve, and (b) any **reserved decision** — an out-of-scope item, open product decision, compliance/privacy choice, or irreversible one-way-door choice — that the prompt has not explicitly authorized you to resolve. Reserved decisions are never silently defaulted: record them under **Open questions** (which keeps the spec `DRAFT`) and surface them in your output. See the ambiguity gate for both the invariant rule and the full reserved-decisions definition.
 
 Where Steps 2, 3, and the ambiguity gate below say "ask the user" / "wait" / "confirm," read that as **manual-mode instructions**. In autonomous mode, substitute "lock in your stated default and record it."
 
@@ -82,9 +82,22 @@ This gate is load-bearing. If a requirement is not explicitly stated by the user
 **Mode interaction with this gate:**
 
 - **`manual`:** every unresolved unknown is a question you put to the user. Do not mark the spec `READY_FOR_PLANNING` until the user has answered or explicitly delegated each one.
-- **`autonomous`:** you satisfy the gate by *resolving* each unknown, not by deferring it — lock in your stated default and record it under "Decisions resolved by Brainstormer default." A default is a valid resolution here. Do NOT write a `QNA` file or stop with `ANSWERS_NEEDED`. The only unknown that still blocks a READY spec is a hard conflict with a `PROJECT-CONTEXT.md` invariant that no default can honor — in that case set `status: DRAFT` and flag it in your output.
+- **`autonomous`:** you satisfy the gate by *resolving* each unknown, not by deferring it — lock in your stated default and record it under "Decisions resolved by Brainstormer default." A default is a valid resolution here. Do NOT write a `QNA` file or stop with `ANSWERS_NEEDED`. Two kinds of unknown still block a READY spec: (a) a hard conflict with a `PROJECT-CONTEXT.md` invariant that no default can honor, and (b) an unauthorized **reserved decision** (defined below) — in either case set `status: DRAFT`, record it under **Open questions**, and flag it in your output.
 
-The gate's substance is identical in both modes: no *inferred* requirement is ever silently baked in. Manual converts each inference into a question; autonomous converts each into a recorded, defaulted decision the architect can audit.
+The gate's substance is identical in both modes: no *inferred* requirement is ever silently baked in. Manual converts each inference into a question; autonomous converts each into a recorded, defaulted decision the architect can audit — except reserved decisions, which autonomous mode surfaces rather than defaults.
+
+### Reserved decisions — autonomous mode may not silently default these
+
+Autonomous mode resolves ordinary unknowns by default. It may **not** do so for a **reserved decision** — a choice that is the user's to make, not a scoping detail the architect can audit after the fact. A reserved decision is any unknown that:
+
+- matches an **out-of-scope** item in `PROJECT-CONTEXT.md`, or would pull one back into scope;
+- is an **open product decision** — which actor/surface a feature targets (e.g. admin vs. customer app), product framing, or a behavior bet that changes *what* is built for *whom*;
+- is a **compliance / privacy / legal** choice — new data collection, retention windows, deletion/anonymization paths, or consent;
+- is **irreversible / one-way-door** — external provider selection, monetization-tier gating, a public API/contract shape, or a data-migration shape that is costly to undo.
+
+For each reserved decision, do **not** lock in a default. Record it under **Open questions** (which forces `status: DRAFT`) and surface it in your output; the user must resolve it before planning.
+
+**Exception — explicit authorization.** If the prompt explicitly authorizes autonomous resolution of a *specific* reserved decision — either by stating the choice outright (e.g. "target the customer app") or by delegating it in words (e.g. "you pick the provider") — then that decision is no longer reserved: resolve it by default and record it under "Decisions resolved by Brainstormer default" like any other. Authorization is per-decision and must be explicit; a general "run autonomously" does **not** authorize reserved decisions.
 
 ## Step 3 — Confidence check (manual mode)
 
@@ -179,7 +192,7 @@ related_to: { comma-separated IDs of related specs/plans/CRs, or "—" }
 
 ## Open questions
 
-- {Anything still uncertain at writing time. Should be empty before handoff. If non-empty, status stays `DRAFT` instead of `READY_FOR_PLANNING`.}
+- {Anything still uncertain at writing time. Should be empty before handoff. If non-empty, status stays `DRAFT` instead of `READY_FOR_PLANNING`. In autonomous mode, unauthorized reserved decisions (out-of-scope / product / compliance / irreversible — see the ambiguity gate) are recorded here, which keeps the spec `DRAFT`.}
 
 ## Decisions resolved by Brainstormer default
 
@@ -204,6 +217,7 @@ If the spec introduces a concept that future specs will reference (a new domain 
 - Never invent answers the user did not give. Use stated defaults explicitly and record them under "Decisions resolved by Brainstormer default."
 - Never infer a material requirement just to keep the pipeline moving. If the user has not authorized the decision, keep the spec in `DRAFT` and ask.
 - In `manual` mode, never proceed past Step 3 without an explicit user confirmation (or an explicit "you decide" / "ship it" delegation). In `autonomous` mode there is no confirmation gate — every unknown must instead be resolved by a recorded default before the spec goes READY.
+- In `autonomous` mode, never silently default a **reserved decision** (out-of-scope item, open product decision, compliance/privacy choice, or irreversible one-way-door choice — see the ambiguity gate). Unless the prompt explicitly authorizes that specific decision, record it under Open questions and keep the spec `DRAFT`.
 - Never write code, tasks, or test scaffolding — those belong to the architect and the coder.
 - Do not cap the number of interview questions. In `manual` mode, keep asking (one exchange at a time) until self-rated clarity ≥ `clarity_threshold`; a question budget would bias the clarity rating. Prioritization means asking the highest-impact unknown *first*, not asking fewer questions than clarity requires.
 - Always set `updated_at` to the current ISO 8601 datetime when writing or modifying the spec.
