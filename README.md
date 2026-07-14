@@ -12,7 +12,7 @@ Authored agent skills for [Claude Code](https://code.claude.com) and [opencode](
 | `design-to-code` | Translates Claude design output files (self-contained HTML with tokens, reviewer comments, component states) into pixel-perfect, correctly-behaving code. |
 | `orchestrator` | Project-agnostic 6-agent pipeline (brainstormer → architect → coder → tester → reviewer → qa) with a context-confidence gate, spec-driven-eval integration, and a final Markdown/HTML report. Auto-detects first-run bootstrap vs. straight pipeline execution. |
 | `roadmap` | Decomposes a project spec into an auditable milestone→phase→user-story roadmap under `/roadmap/`, with append-only audit logs, orchestrator-ready user-story briefs, `/roadmap sync` trailer stamping, diff+preserve re-evaluation, release bands, and doc-only mutation ops. |
-| `product-manager` | Autonomously drives roadmap stories to completion and manages roadmap planning PRs — runs story briefs through the orchestrator, commits with `Roadmap-Story:`, syncs the roadmap, pushes/opens PRs, and exposes `assign`/`park`/`add-spec`/`revise`/release-management verbs. |
+| `product-manager` | Autonomously drives roadmap stories to completion and manages roadmap planning PRs — runs story briefs through the orchestrator, commits with `Roadmap-Story:`, syncs the roadmap, pushes/opens PRs, and exposes `assign`/`park`/`add-spec`/`add-milestone`/`add-phase`/`add-ticket`/`revise`/release-management verbs. |
 | `pr-review-report` | Reviews the current branch against an auto-detected base and authors one self-contained interactive HTML PR-review report — architecture (with recommend-only ADR flags), security, and bugs/improvements lenses, the rendered diff with inline annotations, findings color-coded by severity, plus optional project review memory. |
 
 ## orchestrator
@@ -22,8 +22,10 @@ A project-agnostic 6-agent pipeline that takes a plain-language task description
 ### Usage
 
 ```text
-/orchestrator "<task description>"          # auto-detects bootstrap vs. pipeline
-/orchestrator "<task description>" --setup  # force re-bootstrap (re-interview + regenerate context)
+/orchestrator "<task description>"                  # auto-detects bootstrap vs. pipeline
+/orchestrator "<task description>" --setup          # force re-bootstrap (re-interview + regenerate context)
+/orchestrator "<task description>" --mode autonomous # no prompts: resolve open questions with recorded defaults
+/orchestrator "<task description>" --clarity 0.95    # lower the brainstormer's manual-mode interview target
 ```
 
 On the first run (or when `.orchestrator/config.json` is absent) the skill runs **bootstrap** automatically: it scans the repo, interviews you about missing context until confidence ≥ `context_threshold`, writes `.orchestrator/PROJECT-CONTEXT.md`, renders the six role templates into the host agent directory (`.claude/agents/` in Claude Code, `.opencode/agent/` in opencode), and writes `.orchestrator/config.json`. Subsequent invocations skip straight to the pipeline.
@@ -46,9 +48,14 @@ Stored in `.orchestrator/config.json`; overridable per-run via CLI args.
 | Key | Default | CLI arg | Description |
 |---|---|---|---|
 | `context_threshold` | `0.95` | `--threshold` | Minimum holistic-confidence score (0–1) before bootstrap writes PROJECT-CONTEXT.md |
+| `clarity_threshold` | `0.99` | `--clarity` | Brainstormer's per-spec interview target (0–1) in `manual` mode — it keeps asking, one answer at a time, until self-rated spec clarity reaches this. No question cap. Ignored in `autonomous` mode. |
 | `output_format` | `"md"` | `--format` | Final report format: `md` or `html` |
+| `automation_level` | `"manual"` | `--mode` | `manual` runs the brainstormer interview + confirmation gates; `autonomous` resolves open questions with recorded defaults and runs without prompting. Only the brainstormer changes behavior on it. |
 | `max_review_cycles` | `10` | `--max-review` | Max architect→coder→reviewer cycles before the pipeline hard-stops |
 | `max_qa_cycles` | `5` | `--max-qa` | Max qa-remediation cycles before the pipeline hard-stops |
+| `agent_sync_targets` | `[]` | — | Tooling-only (the pipeline ignores it): dir list used by [`scripts/sync-agents.sh`](#updating-agent-copies-in-consumer-projects) to refresh a project's agent copies. Empty → auto-detect existing agent dirs. |
+
+**Automation modes.** `manual` (default) interviews you at the brainstormer and asks for confirmation before writing the spec. `autonomous` never prompts: it resolves each open question with the brainstormer's own stated default (recorded in the spec under "Decisions resolved by Brainstormer default") and produces a `READY_FOR_PLANNING` spec — except **reserved decisions** (out-of-scope, open product, compliance, or irreversible one-way-door choices), which are surfaced and keep the spec `DRAFT` unless the prompt explicitly authorized that decision.
 
 ### Dependencies
 
@@ -131,6 +138,7 @@ The autonomous loop that glues `roadmap` (plans, never runs code) and `orchestra
 /product-manager park "not needed for MVP" [--yes]
 /product-manager add-spec plans/specs/SPEC-123.md
 /product-manager new-spec "raw idea to explore"
+/product-manager add-ticket "login button misaligned on mobile" --to 001.2
 /product-manager release list
 ```
 
@@ -144,6 +152,8 @@ The autonomous loop that glues `roadmap` (plans, never runs code) and `orchestra
 | `park <selection>` / `unpark <selection> [release]` | Move selected work into or out of `backlog` |
 | `add-spec <path>` | Open a planning PR that ingests a reviewed spec into the roadmap |
 | `new-spec [raw idea]` | Run the orchestrator brainstormer to create a spec, then stop for review |
+| `add-milestone <title>` / `add-phase <title> --to <milestone>` | Directly add a milestone (seeds a default phase) or a phase under a milestone |
+| `add-ticket <raw> [--to <phase\|milestone>]` (alias `add-userstory`) | Compose a user story from raw text via inline interview and add it to the roadmap |
 | `reorder` / `revise` / `release` | Open planning PRs for roadmap order, scope, and release-registry changes |
 
 ### How it works
