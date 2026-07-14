@@ -314,6 +314,23 @@ Hosted URL install is also supported by opencode's `skills.urls` loader:
 
 Prefer the local installer for regular use: opencode currently caches remote skill files by skill name, so updates from `skills.urls` may require clearing opencode's skill cache before restart.
 
+### Updating (opencode)
+
+The installer is a **global, machine-wide** wire-up (`~/.config/opencode/`), not per-project — run it once and every opencode project on the machine sees the skills. It installs from the **remote**, not your local working copy, so a skill change reaches opencode only after it lands on the remote default branch. To ship an edit:
+
+1. **Push the skill change to remote `main`.** Edit under `plugins/my-skills/skills/<name>/` (and, for `pr-review-report` / `spec-driven-eval`, keep their `.opencode/skills/<name>/` override port in parity — those two ports *replace* the marketplace copy in opencode). Commit and push/merge to `main`.
+2. **Re-run the installer.** It is safe to re-run — it `git pull --ff-only`s the checkout, re-links skills, and re-applies the hand-written `.opencode/commands/*.md` wrappers (e.g. the `roadmap` / `product-manager` verb surfaces) over the generated ones:
+
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/kterto/my-skills/main/scripts/install-opencode.sh | bash
+   ```
+
+3. **Restart opencode** to load the updated skills and commands.
+
+After this, Claude Code (via the plugin or `sync.sh`) and opencode run the **same** skill bodies — the SKILL.md prose already dual-maps harness specifics (`AskUserQuestion` in Claude Code ↔ the `question` tool in opencode; all paths anchored to the git root), so behavior matches across both.
+
+> `--ff-only` means the pull refuses to run if `~/.config/opencode/my-skills` has diverged (e.g. local commits there). If it fails, reset or re-clone that checkout: `rm -rf ~/.config/opencode/my-skills` then re-run the installer.
+
 ## Updating (Claude Code)
 
 This plugin **omits `version`** in `plugin.json`, so each pushed commit is treated as a new version (git SHA). To pull the latest:
