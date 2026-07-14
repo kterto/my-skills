@@ -19,11 +19,11 @@ function defaultStackConfig(stack) {
     roots: ['src'],
     exclude: GENERATED_EXCLUDES['node-ts'],
     gates: {
-      G1: { tool: 'jest', thresholds: THRESHOLDS.G1 },
+      G1: { tool: 'auto', thresholds: THRESHOLDS.G1 },
       G2: { tool: 'eslint', thresholds: THRESHOLDS.G2 },
       G4: { tool: 'eslint' },
       G5: { tool: 'builtin' },
-      G6: { tool: 'stryker', thresholds: THRESHOLDS.G6 },
+      G6: { tool: 'stryker', runner: 'auto', thresholds: THRESHOLDS.G6 },
       G7: { tool: 'dependency-cruiser' },
     },
     baseline: '.eslint-baseline.json',

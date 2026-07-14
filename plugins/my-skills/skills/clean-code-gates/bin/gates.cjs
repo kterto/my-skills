@@ -10,6 +10,15 @@ function main() {
   try { options = parseArgs(process.argv.slice(2)); }
   catch (e) { process.stderr.write(`usage error: ${e.message}\n`); process.exit(3); }
   const root = process.cwd();
+
+  if (options.scaffold) {
+    const { detectStacks } = require('../src/detect.cjs');
+    const { scaffoldAdvice, formatAdvice } = require('../src/scaffold.cjs');
+    const stacks = detectStacks(root);
+    process.stdout.write(formatAdvice(scaffoldAdvice(root, stacks), stacks) + '\n');
+    process.exit(0);
+  }
+
   let result;
   try { result = run({ root, options, io: { version: require('../package.json').version } }); }
   catch (e) { process.stderr.write(`error: ${e.message}\n`); process.exit(3); }

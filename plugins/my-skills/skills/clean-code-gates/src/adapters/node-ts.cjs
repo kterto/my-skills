@@ -96,6 +96,59 @@ function binPath(root, name) {
   return fs.existsSync(bin) ? bin : null;
 }
 
+/**
+ * Which JS test runner backs G1 (coverage) and G6 (mutation). Both present with
+ * no explicit override resolves to jest for back-compat (noted in the command).
+ */
+function detectRunner(root) {
+  const hasJest = !!binPath(root, 'jest');
+  const hasVitest = !!binPath(root, 'vitest');
+  if (hasJest && hasVitest) return 'jest';
+  if (hasVitest) return 'vitest';
+  if (hasJest) return 'jest';
+  return null;
+}
+
+/** Explicit `jest`/`vitest` override wins; `auto`/undefined falls back to detection. */
+function resolveRunner(root, override) {
+  if (override === 'jest' || override === 'vitest') return override;
+  return detectRunner(root);
+}
+
+function resolvableFrom(root, pkg) {
+  try {
+    require.resolve(pkg, { paths: [root] });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function hasVitestCoverageProvider(root) {
+  return (
+    resolvableFrom(root, '@vitest/coverage-v8') ||
+    resolvableFrom(root, '@vitest/coverage-istanbul')
+  );
+}
+
+function hasStrykerVitestRunner(root) {
+  return resolvableFrom(root, '@stryker-mutator/vitest-runner');
+}
+
+/** missing_tool result with an explicit tool label + install hint. */
+function missingToolMsg(gate, tool, installHint) {
+  const meta = GATE_META[gate] || { name: gate };
+  return {
+    gate,
+    name: meta.name,
+    stack: 'node-ts',
+    status: 'missing_tool',
+    tool,
+    findings: [],
+    installHint,
+  };
+}
+
 function gateResult(gate, status, extra = {}) {
   const meta = GATE_META[gate];
   return {
@@ -133,18 +186,16 @@ function isExempt(rel, stackCfg, gate) {
 
 // ---- G1: coverage -------------------------------------------------------
 
-function runCoverage(root) {
-  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccg-cov-'));
-  const args = [
-    '--coverage',
-    '--coverageReporters=json-summary',
-    `--coverageDirectory=${outDir}`,
-    '--silent',
-    '--ci',
-  ];
+function readSummary(outDir, failed) {
+  const summaryPath = path.join(outDir, 'coverage-summary.json');
+  if (!fs.existsSync(summaryPath)) return { summary: null, failed };
+  return { summary: JSON.parse(fs.readFileSync(summaryPath, 'utf8')), failed };
+}
+
+function execCoverage(bin, args, root) {
   let failed = false;
   try {
-    execFileSync(binPath(root, 'jest'), args, {
+    execFileSync(bin, args, {
       cwd: root,
       stdio: ['ignore', 'ignore', 'ignore'],
       maxBuffer: 64 * 1024 * 1024,
@@ -152,9 +203,30 @@ function runCoverage(root) {
   } catch {
     failed = true;
   }
-  const summaryPath = path.join(outDir, 'coverage-summary.json');
-  if (!fs.existsSync(summaryPath)) return { summary: null, failed };
-  return { summary: JSON.parse(fs.readFileSync(summaryPath, 'utf8')), failed };
+  return failed;
+}
+
+/** Jest and Vitest both emit the identical Istanbul `coverage-summary.json`. */
+function runCoverage(root, runner) {
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccg-cov-'));
+  const args =
+    runner === 'vitest'
+      ? [
+          'run',
+          '--coverage',
+          '--coverage.enabled',
+          '--coverage.reporter=json-summary',
+          `--coverage.reportsDirectory=${outDir}`,
+        ]
+      : [
+          '--coverage',
+          '--coverageReporters=json-summary',
+          `--coverageDirectory=${outDir}`,
+          '--silent',
+          '--ci',
+        ];
+  const failed = execCoverage(binPath(root, runner), args, root);
+  return readSummary(outDir, failed);
 }
 
 function coverageFindings(rel, entry, thresholds) {
@@ -179,15 +251,32 @@ function coverageFindings(rel, entry, thresholds) {
 }
 
 function runG1(files, stackCfg, io) {
-  if (!binPath(io.root, 'jest')) return missingTool('G1', stackCfg);
+  const runner = resolveRunner(io.root, (stackCfg.gates.G1 || {}).tool);
+  if (!runner) {
+    return missingToolMsg(
+      'G1',
+      'jest|vitest',
+      'node-ts G1 needs a test runner — install jest or vitest (none at node_modules/.bin/)',
+    );
+  }
+  if (runner === 'vitest' && !hasVitestCoverageProvider(io.root)) {
+    return missingToolMsg(
+      'G1',
+      'vitest',
+      'node-ts G1 (vitest) needs a coverage provider — install @vitest/coverage-v8 (or @vitest/coverage-istanbul)',
+    );
+  }
 
   const thresholds = (stackCfg.gates.G1 || {}).thresholds || {
     statements: 85,
     branches: 80,
   };
-  const command = 'jest --coverage --coverageReporters=json-summary';
-  const { summary, failed } = runCoverage(io.root);
-  if (!summary) return gateResult('G1', 'error', { command, thresholds });
+  const command =
+    runner === 'vitest'
+      ? 'vitest run --coverage --coverage.reporter=json-summary'
+      : 'jest --coverage --coverageReporters=json-summary';
+  const { summary, failed } = runCoverage(io.root, runner);
+  if (!summary) return gateResult('G1', 'error', { command, thresholds, tool: runner });
 
   const byRel = new Map();
   for (const key of Object.keys(summary)) {
@@ -207,6 +296,7 @@ function runG1(files, stackCfg, io) {
     command,
     thresholds,
     findings,
+    tool: runner,
   });
 }
 
@@ -405,15 +495,17 @@ function runG4(files, stackCfg, io) {
 
 // ---- G6: mutation (stryker) --------------------------------------------
 
-function writeStrykerConfig(targets, reportPath, excludedMutations) {
+function writeStrykerConfig(targets, reportPath, excludedMutations, runner) {
   const cfg = {
-    testRunner: 'jest',
-    jest: { configFile: 'package.json', enableFindRelatedTests: true },
+    testRunner: runner,
     coverageAnalysis: 'perTest',
     mutate: targets,
     reporters: ['json'],
     jsonReporter: { fileName: reportPath },
   };
+  if (runner === 'jest') {
+    cfg.jest = { configFile: 'package.json', enableFindRelatedTests: true };
+  }
   if (excludedMutations && excludedMutations.length) {
     cfg.mutator = { excludedMutations };
   }
@@ -473,6 +565,22 @@ function runG6(files, stackCfg, io) {
   const strykerBin = binPath(io.root, 'stryker');
   if (!strykerBin) return missingTool('G6', stackCfg);
 
+  const runner = resolveRunner(io.root, (stackCfg.gates.G6 || {}).runner);
+  if (!runner) {
+    return missingToolMsg(
+      'G6',
+      'stryker',
+      'node-ts G6 needs a test runner — install jest or vitest (none at node_modules/.bin/)',
+    );
+  }
+  if (runner === 'vitest' && !hasStrykerVitestRunner(io.root)) {
+    return missingToolMsg(
+      'G6',
+      'stryker',
+      'node-ts G6 (vitest) needs @stryker-mutator/vitest-runner — install it in the project',
+    );
+  }
+
   const g6Cfg = stackCfg.gates.G6 || {};
   const threshold = (g6Cfg.thresholds || {}).mutationScore ?? 70;
   const thresholds = { mutationScore: threshold };
@@ -483,7 +591,7 @@ function runG6(files, stackCfg, io) {
 
   const reportDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccg-mutation-'));
   const reportPath = path.join(reportDir, 'mutation.json');
-  const cfgPath = writeStrykerConfig(targets, reportPath, excludedMutations);
+  const cfgPath = writeStrykerConfig(targets, reportPath, excludedMutations, runner);
 
   try {
     execFileSync(strykerBin, ['run', cfgPath], {
@@ -596,6 +704,8 @@ function runG7(files, stackCfg, io) {
 }
 
 module.exports = {
+  detectRunner,
+  resolveRunner,
   supports(gate) {
     return ['G1', 'G2', 'G4', 'G6', 'G7'].includes(gate);
   },

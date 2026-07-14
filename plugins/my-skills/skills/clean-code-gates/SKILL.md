@@ -1,6 +1,6 @@
 ---
 name: clean-code-gates
-description: Run Clean Code quality gates (G1-G7 — coverage, complexity, length/nesting, naming, no-comments, mutation, dependency-structure) over a configurable scope and produce an agnostic JSON + Markdown report for fixer agents/orchestrators. Use when the user asks to run code-quality gates, check Clean Code metrics, audit complexity/coverage/comments, run the qa gates programmatically, or invokes /clean-code-gates. Portable across projects (node-ts, dart-flutter). G5 (no-comments) runs with zero setup; other gates need their per-stack tooling (adapters/scaffold pending).
+description: Run Clean Code quality gates (G1-G7 — coverage, complexity, length/nesting, naming, no-comments, mutation, dependency-structure) over a configurable scope and produce an agnostic JSON + Markdown report for fixer agents/orchestrators. Use when the user asks to run code-quality gates, check Clean Code metrics, audit complexity/coverage/comments, run the qa gates programmatically, or invokes /clean-code-gates. Portable across projects (node-ts, dart-flutter). All gates G1–G7 are implemented for both stacks; G5 (no-comments) runs with zero setup, the rest use per-stack tooling installed in the target project (run `--scaffold` to print what to install).
 ---
 
 # clean-code-gates
@@ -27,17 +27,21 @@ node <skill-dir>/bin/gates.cjs [flags]
 - `--skip G6` — exclude gates (G6 mutation is slow)
 - `--out <dir|->` — report dir (default `./.cleancode`); `-` prints JSON to stdout
 - `--require-tools` — exit 2 if any gate is `missing_tool`
-- `--scaffold` — (PENDING, Plan 4 — not implemented yet) auto-wire missing gate tooling
+- `--scaffold` — advice mode: detect stacks and print the exact install commands for any missing gate tooling, then exit 0 (read-only, changes nothing)
 
 ### Exit codes
 `0` pass · `1` blockers found · `2` missing tools (with `--require-tools`) · `3` usage/config error
 
-## Current capability (honest status)
+## Capability
 
-- **G5 (no-comments)** — fully implemented, built-in, runs with **zero external tooling** on node-ts and dart-flutter source.
-- **G1/G2/G3/G4/G6/G7** — currently report `status: "missing_tool"` with an install hint, until the per-stack adapters land (node-ts adapter = Plan 2, dart-flutter adapter = Plan 3) and `--scaffold` (Plan 4) wires the tooling (jest coverage, ESLint complexity/naming, Stryker / dart_mutant mutation, dependency-cruiser / import_lint).
+All gates G1–G7 are implemented for both stacks:
 
-So today this reliably enforces the no-comments gate and produces a complete report skeleton; the rest are stubs reporting `missing_tool`.
+- **G5 (no-comments)** — built-in, **zero external tooling**.
+- **node-ts** — G1 coverage (jest **or** vitest), G2 complexity + G4 naming (ESLint + typescript-eslint), G6 mutation (Stryker, jest/vitest runner), G7 dependency-structure (dependency-cruiser).
+- **dart-flutter** — G1 coverage (flutter), G2 complexity + G4 naming (dart_code_linter), G6 mutation (external `dart_mutant`), G7 dependency-structure (built-in).
+- **G3 (length/nesting)** is folded into G2 (same thresholds and tools) — it is not a separate runtime gate.
+
+A gate reports `status: "missing_tool"` with an install hint (never crashes) when its per-stack tooling isn't present in the target project. Run `--scaffold` to print the exact install commands for whatever is missing, or `--require-tools` to make `missing_tool` a hard failure (exit 2) in CI.
 
 ## Config
 
@@ -55,6 +59,7 @@ node <skill-dir>/bin/gates.cjs --scope diff --gates G5 --out -
 ```
 
 ## Notes
+- **G1 / G6 test runner (node-ts)** — the coverage (G1) and mutation (G6) gates work with **Jest or Vitest**, auto-detected from `node_modules/.bin` (both present → jest, for back-compat). Vitest emits the same Istanbul `coverage-summary.json`, so only the invocation differs. Override auto-detection with `gates.G1.tool: "jest" | "vitest"` (coverage) and `gates.G6.runner: "jest" | "vitest"` (mutation) in `.cleancode-gates.json`. Vitest coverage needs a provider (`@vitest/coverage-v8` or `-istanbul`); Vitest mutation needs `@stryker-mutator/vitest-runner`. When the chosen runner or its plugin is absent, the gate reports `missing_tool` with an install hint.
 - **G6 (mutation, dart-flutter)** shells out to the external `dart_mutant` binary and reads its Stryker-compatible JSON report (`--json`): the verdict is the report's top-level `mutationScore` vs the gate threshold (default 70), and surviving mutants (`status` ∈ {Survived, NoCoverage}) become warnings. `dart_mutant` must be on PATH (e.g. `brew install dart_mutant`) — it is an external CLI, not a pub dev-dependency. The gate sandboxes to a temp report dir, so a run leaves no `mutation-reports/`, git worktree, or `pub get` artifacts on the project.
 - Mirrors the gate semantics in a project's qa agent (`.claude/agents/qa.md` in GSD repos) but decoupled from any plan/CR/QA flow. G8 (rework ratio) is intentionally out of scope — it's a plan-tree metric, not a code property.
 - Tests: `cd <skill-dir> && node --test`.
