@@ -216,7 +216,8 @@ my-skills/
 │           └── pr-review-report/SKILL.md
 ├── scripts/
 │   ├── generate-opencode-skill-index.mjs
-│   └── install-opencode.sh
+│   ├── install-opencode.sh
+│   └── sync-agents.sh            # refresh a project's orchestrator agent copies
 ├── .opencode/
 │   ├── commands/                 # opencode-specific slash command templates
 │   └── skills/                   # opencode-specific skill ports/overrides
@@ -314,23 +315,6 @@ Hosted URL install is also supported by opencode's `skills.urls` loader:
 
 Prefer the local installer for regular use: opencode currently caches remote skill files by skill name, so updates from `skills.urls` may require clearing opencode's skill cache before restart.
 
-### Updating (opencode)
-
-The installer is a **global, machine-wide** wire-up (`~/.config/opencode/`), not per-project — run it once and every opencode project on the machine sees the skills. It installs from the **remote**, not your local working copy, so a skill change reaches opencode only after it lands on the remote default branch. To ship an edit:
-
-1. **Push the skill change to remote `main`.** Edit under `plugins/my-skills/skills/<name>/` (and, for `pr-review-report` / `spec-driven-eval`, keep their `.opencode/skills/<name>/` override port in parity — those two ports *replace* the marketplace copy in opencode). Commit and push/merge to `main`.
-2. **Re-run the installer.** It is safe to re-run — it `git pull --ff-only`s the checkout, re-links skills, and re-applies the hand-written `.opencode/commands/*.md` wrappers (e.g. the `roadmap` / `product-manager` verb surfaces) over the generated ones:
-
-   ```bash
-   curl -fsSL https://raw.githubusercontent.com/kterto/my-skills/main/scripts/install-opencode.sh | bash
-   ```
-
-3. **Restart opencode** to load the updated skills and commands.
-
-After this, Claude Code (via the plugin or `sync.sh`) and opencode run the **same** skill bodies — the SKILL.md prose already dual-maps harness specifics (`AskUserQuestion` in Claude Code ↔ the `question` tool in opencode; all paths anchored to the git root), so behavior matches across both.
-
-> `--ff-only` means the pull refuses to run if `~/.config/opencode/my-skills` has diverged (e.g. local commits there). If it fails, reset or re-clone that checkout: `rm -rf ~/.config/opencode/my-skills` then re-run the installer.
-
 ## Updating (Claude Code)
 
 This plugin **omits `version`** in `plugin.json`, so each pushed commit is treated as a new version (git SHA). To pull the latest:
@@ -346,21 +330,36 @@ To auto-refresh at startup: `/plugin` → Marketplaces tab → enable auto-updat
 
 ## Updating (opencode)
 
-If installed with `install-opencode.sh`, run it again:
+The installer is a **global, machine-wide** wire-up (`~/.config/opencode/`), not per-project — run it once and every opencode project on the machine sees the skills. It installs from the **remote**, not your local working copy, so a skill change reaches opencode only after it lands on the remote default branch. To ship an edit:
+
+1. **Push the skill change to remote `main`.** Edit under `plugins/my-skills/skills/<name>/` (and, for `pr-review-report` / `spec-driven-eval`, keep their `.opencode/skills/<name>/` override port in parity — those two ports *replace* the marketplace copy in opencode). Commit and push/merge to `main`.
+2. **Re-run the installer.** It is intentionally idempotent — it `git pull --ff-only`s the checkout, refreshes skill symlinks, regenerates slash-command files, re-applies the hand-written `.opencode/commands/*.md` wrappers (e.g. the `roadmap` / `product-manager` verb surfaces) over the generated ones, and preserves any pre-existing unmanaged command/skill directory by moving it to a timestamped `.bak-*` path:
+
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/kterto/my-skills/main/scripts/install-opencode.sh | bash
+   ```
+
+   Or update the local checkout directly: `git -C ~/.config/opencode/my-skills pull --ff-only`.
+3. **Restart opencode** to load the updated skills and commands. Running sessions keep the previously loaded skill set.
+
+After this, Claude Code (via the plugin or `sync.sh`) and opencode run the **same** skill bodies — the SKILL.md prose already dual-maps harness specifics (`AskUserQuestion` in Claude Code ↔ the `question` tool in opencode; all paths anchored to the git root), so behavior matches across both.
+
+> `--ff-only` means the pull refuses to run if `~/.config/opencode/my-skills` has diverged (e.g. local commits there). If it fails, reset or re-clone that checkout: `rm -rf ~/.config/opencode/my-skills` then re-run the installer.
+
+## Updating agent copies in consumer projects
+
+The orchestrator's agent role files (`architect`, `brainstormer`, `coder`, `qa`, `reviewer`, `tester`) are copied into a project during bootstrap. After you update my-skills, refresh a project's copies with:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/kterto/my-skills/main/scripts/install-opencode.sh | bash
+/path/to/my-skills/scripts/sync-agents.sh [project-dir]   # defaults to the current dir
 ```
 
-Or update the local checkout directly:
+The script copies the six managed agent files from this checkout's templates into the project — never touching `PROJECT-CONTEXT.md` or `config.json`. It picks targets two ways:
 
-```bash
-git -C ~/.config/opencode/my-skills pull --ff-only
-```
+- **Config override** — if `.orchestrator/config.json` has a non-empty `agent_sync_targets` array (relative dir paths), those are synced (created if missing).
+- **Auto-detect** (default) — every known agent dir that already exists (`.claude/agents`, `.agents/agents`) is refreshed; it never creates new dirs.
 
-Restart opencode after updating. Running sessions keep the previously loaded skill set.
-
-The installer is intentionally idempotent: it pulls the checkout, refreshes symlinks, regenerates slash command files, and preserves any pre-existing unmanaged command/skill directory by moving it to a timestamped `.bak-*` path.
+Files in a target dir that aren't part of the managed set are listed as `extra`; pass `--prune` to remove them (git-recoverable).
 
 ## Local development (author)
 

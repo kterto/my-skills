@@ -128,14 +128,14 @@ Allow only:
 - License/header banners (file top, ≤ 5 lines)
 - Public API doc comments on exported types & functions
 - `// TODO(REF):` referencing a tracked plan ID
-- Inline plan-ID citations: `// SPEC-NNN`, `// FEAT-NNN`, `// FIX-NNN`, `// CR-NNN`, `// QA-NNN`, `// QAF-NNN` (with optional trailing prose)
+- Inline plan-ID citations: `// SPEC-<id>`, `// FEAT-<id>`, `// FIX-<id>`, `// CR-<id>`, `// QA-<id>`, `// QAF-<id>` — where `<id>` is the timestamp token (`YYYYMMDDTHHMMSSZ-<hex4>`, matching the sanity-check regex above) or a legacy numeric ID (with optional trailing prose)
 
 Reject inline comments inside function bodies, region markers, and "what" comments that do not match the allow-list. Run a grep audit on changed files (adjust extensions to match the project's languages):
 
 ```
 git diff --name-only $(git merge-base HEAD origin/main)..HEAD \
   | xargs -I{} sh -c 'awk "
-      /^[[:space:]]+\/\/[[:space:]]*(TODO\\(REF\\)|SPEC-[0-9]+|FEAT-[0-9]+|FIX-[0-9]+|CR-[0-9]+|QA-[0-9]+|QAF-[0-9]+)/ { next }
+      /^[[:space:]]+\/\/[[:space:]]*(TODO\\(REF\\)|(SPEC|FEAT|FIX|CR|QA|QAF)-([0-9]{8}T[0-9]{6}Z-[0-9a-f]{4}|[0-9]+))/ { next }
       /^[[:space:]]+\/\/[^\/]/ || /^[[:space:]]+\/\*[^*]/ { print FILENAME\":\"NR\": \"\$0 }
     " "{}"'
 ```
