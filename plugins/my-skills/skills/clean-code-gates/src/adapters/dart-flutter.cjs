@@ -127,6 +127,29 @@ function commandExists(cmd) {
 }
 
 /**
+ * Locate the Flutter package (the directory holding `pubspec.yaml`).
+ *
+ * In a monorepo the package is not the repo root — `flutter test` must run from
+ * e.g. `apps/mobile`, and its lcov paths are relative to that directory, not to
+ * the root. Derived by walking up from the configured roots; falls back to the
+ * root for a single-package repo. Returns a path relative to `root` ('' = root).
+ */
+function resolvePackageDir(root, stackCfg) {
+  const explicit = (stackCfg || {}).packageDir;
+  if (explicit) return explicit;
+  for (const r of (stackCfg || {}).roots || []) {
+    let dir = r;
+    while (dir && dir !== '.' && dir !== path.sep) {
+      if (fs.existsSync(path.join(root, dir, 'pubspec.yaml'))) return dir;
+      const parent = path.dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+  }
+  return fs.existsSync(path.join(root, 'pubspec.yaml')) ? '' : '';
+}
+
+/**
  * Resolve how to invoke Flutter. Prefer FVM when the project pins a version
  * (`.fvmrc`) and `fvm` is available, so the gate runs the same SDK as the app.
  * Returns `{ cmd, pre }` where the full argv is `[...pre, ...flutterArgs]`.
@@ -195,6 +218,20 @@ function coverageFindings(rel, entry, thresholds) {
   return findings;
 }
 
+/**
+ * Map an lcov `SF:` key to a repo-relative path.
+ *
+ * `flutter test --coverage` emits paths relative to the package it ran in
+ * (`lib/src/x.dart`), while scoped files are repo-relative
+ * (`apps/mobile/lib/src/x.dart`). Without re-rooting, no key ever matches a
+ * scoped file, every lookup misses, and the gate reports pass having measured
+ * nothing.
+ */
+function lcovKeyToRepoRel(key, root, pkgDir) {
+  if (path.isAbsolute(key)) return path.relative(root, key);
+  return pkgDir ? path.join(pkgDir, key) : key;
+}
+
 function runCoverage(flutter, root) {
   const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccg-dart-cov-'));
   const lcovPath = path.join(outDir, 'lcov.info');
@@ -217,7 +254,9 @@ function runCoverage(flutter, root) {
 }
 
 function runG1(files, stackCfg, io) {
-  const flutter = resolveFlutter(io.root);
+  const pkgDir = resolvePackageDir(io.root, stackCfg);
+  const pkgRoot = path.join(io.root, pkgDir);
+  const flutter = resolveFlutter(pkgRoot);
   if (!flutter) return missingTool('G1', stackCfg);
 
   const thresholds = (stackCfg.gates.G1 || {}).thresholds || {
@@ -225,13 +264,12 @@ function runG1(files, stackCfg, io) {
     branches: 80,
   };
   const command = 'flutter test --coverage';
-  const { coverage, failed } = runCoverage(flutter, io.root);
+  const { coverage, failed } = runCoverage(flutter, pkgRoot);
   if (!coverage) return gateResult('G1', 'error', { command, thresholds });
 
   const byRel = new Map();
   for (const key of Object.keys(coverage)) {
-    const rel = path.isAbsolute(key) ? path.relative(io.root, key) : key;
-    byRel.set(rel, coverage[key]);
+    byRel.set(lcovKeyToRepoRel(key, io.root, pkgDir), coverage[key]);
   }
 
   const findings = [];
@@ -717,6 +755,8 @@ function runG7(_files, stackCfg, io) {
 }
 
 module.exports = {
+  resolvePackageDir,
+  lcovKeyToRepoRel,
   supports(gate) {
     return ['G1', 'G2', 'G4', 'G6', 'G7'].includes(gate);
   },
