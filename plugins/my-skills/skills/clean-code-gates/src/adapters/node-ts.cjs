@@ -64,7 +64,10 @@ const G4_NAMING_RULE = [
 ];
 
 const COVERAGE_METRICS = ['statements', 'branches', 'functions', 'lines'];
-const TEST_FILE_RE = /\.(spec|test)\.[cm]?[jt]sx?$/;
+// Accepts both separators: `auth.service.spec.ts` and NestJS's scaffolded
+// `app.e2e-spec.ts`. Requiring a dot silently reclassified every e2e file as
+// production code once `test/` entered roots.
+const TEST_FILE_RE = /[.-](spec|test)\.[cm]?[jt]sx?$/;
 const TS_FILE_RE = /\.tsx?$/;
 
 const G2_LIMIT_KEY = {
@@ -706,6 +709,8 @@ function runG7(files, stackCfg, io) {
 module.exports = {
   detectRunner,
   resolveRunner,
+  isExempt,
+  TEST_FILE_RE,
   supports(gate) {
     return ['G1', 'G2', 'G4', 'G6', 'G7'].includes(gate);
   },
