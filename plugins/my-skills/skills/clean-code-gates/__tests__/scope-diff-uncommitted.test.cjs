@@ -43,6 +43,17 @@ test('diff scope is not empty when HEAD equals the base', () => {
   assert.notStrictEqual(realGitDiff(d)(base).length, 0);
 });
 
+// A null baseRef resolves the base in Node via `git merge-base`, not shell
+// `$(...)` substitution (which cmd.exe cannot run). With no origin/main the
+// merge-base fails and the base must fall back to HEAD, still scoping the
+// uncommitted work rather than throwing or returning nothing.
+test('diff scope with no base falls back to HEAD and sees uncommitted work', () => {
+  const { d } = repoWithUncommittedWork();
+  const files = realGitDiff(d)(null);
+  assert.ok(files.includes('base.ts'));
+  assert.ok(files.includes('brand-new.ts'));
+});
+
 test('diff scope reports nothing on a genuinely clean tree', () => {
   const d = fs.mkdtempSync(path.join(os.tmpdir(), 'ccg-scope-clean-'));
   const git = (args) => cp.execSync(`git -C "${d}" ${args}`, { stdio: 'ignore' });
