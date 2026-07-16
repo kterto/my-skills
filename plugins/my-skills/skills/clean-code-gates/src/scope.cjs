@@ -28,11 +28,29 @@ function isExcluded(file, cfg) {
   return globs.some(g => globToRe(g).test(file));
 }
 
+/**
+ * Files changed since `baseRef`, including work that is not committed yet.
+ *
+ * Deliberately compares the base to the WORKING TREE rather than using
+ * `base..HEAD`. A two-dot range only sees committed history, so on the tree an
+ * agent is actually working on — uncommitted, often with HEAD at the base — it
+ * resolves to zero files and the run reports `pass` with no gates run: a
+ * vacuous green rather than a passing gate. Untracked files are included for
+ * the same reason; a brand-new source file is exactly what most needs gating.
+ */
 function realGitDiff(root) {
   return (baseRef) => {
     const base = baseRef || `$(git -C "${root}" merge-base HEAD origin/main 2>/dev/null || echo HEAD)`;
-    const out = cp.execSync(`git -C "${root}" diff --name-only ${base}..HEAD`, { encoding: 'utf8' });
-    return out.split('\n').map(s => s.trim()).filter(Boolean);
+    const run = (cmd) => {
+      try {
+        return cp.execSync(cmd, { encoding: 'utf8' }).split('\n');
+      } catch {
+        return [];
+      }
+    };
+    const tracked = run(`git -C "${root}" diff --name-only ${base}`);
+    const untracked = run(`git -C "${root}" ls-files --others --exclude-standard`);
+    return [...new Set([...tracked, ...untracked].map(s => s.trim()).filter(Boolean))];
   };
 }
 
@@ -75,4 +93,4 @@ function resolveScope(options, cfg, io) {
   return result;
 }
 
-module.exports = { resolveScope, fileStack };
+module.exports = { resolveScope, fileStack, realGitDiff };
