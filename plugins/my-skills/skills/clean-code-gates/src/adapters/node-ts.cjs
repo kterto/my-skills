@@ -4,6 +4,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { G1_EXEMPTIONS } = require('../../defaults.cjs');
+const { toPosix } = require('../scope.cjs');
 
 /**
  * node-ts adapter.
@@ -284,7 +285,7 @@ function runG1(files, stackCfg, io) {
   const byRel = new Map();
   for (const key of Object.keys(summary)) {
     if (key === 'total') continue;
-    byRel.set(path.relative(io.root, key), summary[key]);
+    byRel.set(toPosix(path.relative(io.root, key)), summary[key]);
   }
 
   const findings = [];
@@ -406,7 +407,7 @@ function runG2(files, stackCfg, io) {
 
   const findings = [];
   for (const file of report) {
-    const rel = path.relative(io.root, file.filePath);
+    const rel = toPosix(path.relative(io.root, file.filePath));
     for (const m of file.messages || []) {
       if (!m.ruleId || !(m.ruleId in G2_LIMIT_KEY)) continue;
       const finding = {
@@ -473,7 +474,7 @@ function runG4(files, stackCfg, io) {
 
   const findings = [];
   for (const file of report) {
-    const rel = path.relative(io.root, file.filePath);
+    const rel = toPosix(path.relative(io.root, file.filePath));
     for (const m of file.messages || []) {
       if (m.ruleId !== '@typescript-eslint/naming-convention') continue;
       const finding = {
@@ -617,7 +618,7 @@ function runG6(files, stackCfg, io) {
 
   const findings = [];
   for (const key of Object.keys(report.files || {})) {
-    const rel = path.isAbsolute(key) ? path.relative(io.root, key) : key;
+    const rel = toPosix(path.isAbsolute(key) ? path.relative(io.root, key) : key);
     findings.push(...mutationFindings(rel, report.files[key].mutants, threshold));
   }
 

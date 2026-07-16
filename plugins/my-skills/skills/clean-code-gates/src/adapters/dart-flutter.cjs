@@ -4,6 +4,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { G1_EXEMPTIONS } = require('../../defaults.cjs');
+const { toPosix } = require('../scope.cjs');
 
 /**
  * dart-flutter adapter.
@@ -228,8 +229,8 @@ function coverageFindings(rel, entry, thresholds) {
  * nothing.
  */
 function lcovKeyToRepoRel(key, root, pkgDir) {
-  if (path.isAbsolute(key)) return path.relative(root, key);
-  return pkgDir ? path.join(pkgDir, key) : key;
+  const rel = path.isAbsolute(key) ? path.relative(root, key) : pkgDir ? path.join(pkgDir, key) : key;
+  return toPosix(rel);
 }
 
 function runCoverage(flutter, root) {
@@ -394,9 +395,9 @@ function runG2(files, stackCfg, io) {
   );
   const findings = [];
   for (const record of report.records || []) {
-    const rel = path.isAbsolute(record.path)
-      ? path.relative(io.root, record.path)
-      : record.path;
+    const rel = toPosix(
+      path.isAbsolute(record.path) ? path.relative(io.root, record.path) : record.path,
+    );
     if (!inScope.has(rel)) continue;
     findings.push(...g2Findings({ ...record, path: rel }, thresholds));
   }
@@ -447,7 +448,7 @@ function runG4(files, stackCfg, io) {
     if (!line.includes('|')) continue;
     const rec = parseAnalyzeLine(line.trim());
     if (!rec || rec.type !== 'LINT' || !G4_NAMING_CODES.has(rec.code)) continue;
-    const rel = path.isAbsolute(rec.file) ? path.relative(io.root, rec.file) : rec.file;
+    const rel = toPosix(path.isAbsolute(rec.file) ? path.relative(io.root, rec.file) : rec.file);
     findings.push({
       id: `G4-${rel}:${rec.line}:${rec.code}`,
       severity: 'blocker',
@@ -548,7 +549,7 @@ function g6Verdict(parsed, { targets, threshold, command, stackCfg, io }) {
     });
   }
   for (const name of Object.keys(parsed.byFile)) {
-    const rel = path.isAbsolute(name) ? path.relative(io.root, name) : name;
+    const rel = toPosix(path.isAbsolute(name) ? path.relative(io.root, name) : name);
     if (isExempt(rel, stackCfg, 'G6')) continue;
     for (const line of parsed.byFile[name]) {
       findings.push({

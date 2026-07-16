@@ -3,6 +3,16 @@ const cp = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 
+/**
+ * Repo-relative paths are compared and matched across the pipeline (scope vs
+ * coverage keys, exemption globs, finding IDs). Git emits `/`, but Node's
+ * `path.relative`/`path.join` emit `\` on Windows, so a raw file list mixes
+ * separators and every lookup misses. Everything downstream assumes `/`.
+ */
+function toPosix(file) {
+  return file.replace(/\\/g, '/');
+}
+
 function fileStack(file, cfg) {
   for (const [stack, sc] of Object.entries(cfg.stacks || {})) {
     for (const root of sc.roots || []) {
@@ -91,6 +101,7 @@ function resolveScope(options, cfg, io) {
   else if (scope.kind === 'module') files = listFiles(scope.target);
   else if (scope.kind === 'files') files = scope.files;
 
+  files = files.map(toPosix);
   const kept = files.filter(f => fileStack(f, cfg) && !isExcluded(f, cfg));
   const stacks = [...new Set(kept.map(f => fileStack(f, cfg)))].sort();
   const result = { kind: scope.kind, files: kept, stacks };
@@ -98,4 +109,4 @@ function resolveScope(options, cfg, io) {
   return result;
 }
 
-module.exports = { resolveScope, fileStack, realGitDiff };
+module.exports = { resolveScope, fileStack, realGitDiff, toPosix };
