@@ -147,7 +147,7 @@ function resolvePackageDir(root, stackCfg) {
       dir = parent;
     }
   }
-  return fs.existsSync(path.join(root, 'pubspec.yaml')) ? '' : '';
+  return '';
 }
 
 /**
