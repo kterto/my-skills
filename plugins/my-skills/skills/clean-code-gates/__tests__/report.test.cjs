@@ -31,3 +31,34 @@ test('toMarkdown renders a per-gate section and the blocker', () => {
   assert.match(md, /a\.ts:2/);
   assert.match(md, /missing_tool/i);
 });
+
+// A gate that could not execute produces no findings. Deriving status from
+// finding counts alone therefore reports it as a passing gate that found
+// nothing — a green that proves nothing.
+const errored = {
+  ...base,
+  gateResults: [
+    { gate: 'G5', name: 'no-comments', stack: 'node-ts', status: 'pass', tool: 'builtin', findings: [] },
+    { gate: 'G1', name: 'coverage', stack: 'dart-flutter', status: 'error', tool: 'flutter', findings: [] },
+  ],
+};
+
+test('an errored gate never reports pass', () => {
+  assert.strictEqual(buildReport(errored).summary.status, 'error');
+});
+
+test('an errored gate is not counted as run', () => {
+  const r = buildReport(errored);
+  assert.deepStrictEqual(r.summary.gatesRun, ['G5']);
+  assert.deepStrictEqual(r.summary.gatesErrored, ['G1']);
+});
+
+test('a blocker still outranks an errored gate', () => {
+  const r = buildReport({ ...base, gateResults: [...base.gateResults, { gate: 'G1', name: 'coverage', stack: 'dart-flutter', status: 'error', tool: 'flutter', findings: [] }] });
+  assert.strictEqual(r.summary.status, 'blocked');
+  assert.deepStrictEqual(r.summary.gatesErrored, ['G1']);
+});
+
+test('toMarkdown surfaces errored gates in the header', () => {
+  assert.match(toMarkdown(buildReport(errored)), /Errored: G1/);
+});

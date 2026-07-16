@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { resolveScope, fileStack } = require('../src/scope.cjs');
+const { resolveScope, fileStack, toPosix } = require('../src/scope.cjs');
 
 const cfg = { stacks: {
   'node-ts': { roots: ['apps/backend/src', 'apps/landing/src'] },
@@ -50,6 +50,32 @@ test('per-stack exclude globs drop generated files from scope', () => {
     'apps/mobile/lib/src/a.g.dart',
     'apps/mobile/lib/src/a.freezed.dart',
     'apps/mobile/lib/src/gql/__generated__/schema.gql.dart',
+  ] } }, cfgX, { root: '/r' });
+  assert.deepStrictEqual(r.files, ['apps/mobile/lib/src/a.dart']);
+});
+
+test('toPosix rewrites Windows separators so downstream lookups match', () => {
+  assert.strictEqual(toPosix('apps\\mobile\\lib\\a.dart'), 'apps/mobile/lib/a.dart');
+  assert.strictEqual(toPosix('apps/backend/src/a.ts'), 'apps/backend/src/a.ts');
+});
+
+test('scope normalizes Windows-separated paths to the posix contract', () => {
+  // Node emits `\` from path.relative/join on Windows; git emits `/`. Without
+  // normalization the two never match and gates silently measure nothing.
+  const listFiles = () => ['apps\\backend\\src\\a.ts', 'apps\\backend\\src\\b.ts'];
+  const r = resolveScope({ scope: { kind: 'module', target: 'apps/backend/src' } }, cfg, { root: '/r', listFiles });
+  assert.deepStrictEqual(r.files, ['apps/backend/src/a.ts', 'apps/backend/src/b.ts']);
+  assert.deepStrictEqual(r.stacks, ['node-ts']);
+});
+
+test('exclude globs still apply to Windows-separated paths', () => {
+  const cfgX = { stacks: { 'dart-flutter': {
+    roots: ['apps/mobile/lib'],
+    exclude: ['**/*.g.dart'],
+  } } };
+  const r = resolveScope({ scope: { kind: 'files', files: [
+    'apps\\mobile\\lib\\src\\a.dart',
+    'apps\\mobile\\lib\\src\\a.g.dart',
   ] } }, cfgX, { root: '/r' });
   assert.deepStrictEqual(r.files, ['apps/mobile/lib/src/a.dart']);
 });

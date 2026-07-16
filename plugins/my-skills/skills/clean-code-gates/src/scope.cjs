@@ -3,6 +3,16 @@ const cp = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 
+/**
+ * Repo-relative paths are compared and matched across the pipeline (scope vs
+ * coverage keys, exemption globs, finding IDs). Git emits `/`, but Node's
+ * `path.relative`/`path.join` emit `\` on Windows, so a raw file list mixes
+ * separators and every lookup misses. Everything downstream assumes `/`.
+ */
+function toPosix(file) {
+  return file.replace(/\\/g, '/');
+}
+
 function fileStack(file, cfg) {
   for (const [stack, sc] of Object.entries(cfg.stacks || {})) {
     for (const root of sc.roots || []) {
@@ -28,11 +38,37 @@ function isExcluded(file, cfg) {
   return globs.some(g => globToRe(g).test(file));
 }
 
+/**
+ * Files changed since `baseRef`, including work that is not committed yet.
+ *
+ * Deliberately compares the base to the WORKING TREE rather than using
+ * `base..HEAD`. A two-dot range only sees committed history, so on the tree an
+ * agent is actually working on — uncommitted, often with HEAD at the base — it
+ * resolves to zero files and the run reports `pass` with no gates run: a
+ * vacuous green rather than a passing gate. Untracked files are included for
+ * the same reason; a brand-new source file is exactly what most needs gating.
+ */
 function realGitDiff(root) {
   return (baseRef) => {
-    const base = baseRef || `$(git -C "${root}" merge-base HEAD origin/main 2>/dev/null || echo HEAD)`;
-    const out = cp.execSync(`git -C "${root}" diff --name-only ${base}..HEAD`, { encoding: 'utf8' });
-    return out.split('\n').map(s => s.trim()).filter(Boolean);
+    const run = (cmd) => {
+      try {
+        return cp.execSync(cmd, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).split('\n');
+      } catch {
+        return [];
+      }
+    };
+    // Resolve the base ref in Node rather than via `$(...)` shell substitution:
+    // cmd.exe on Windows has no `$(...)`, `2>/dev/null`, or `echo` fallback, so
+    // the whole command would fail there. `stdio` suppresses stderr portably.
+    const base = baseRef || run(`git -C "${root}" merge-base HEAD origin/main`)[0]?.trim() || 'HEAD';
+    // Refresh first: build tooling (flutter/dart/jest) rewrites mtimes, leaving
+    // stat-dirty index entries. Without this the same tree yields a different
+    // file set run to run, so the scope — and therefore the verdict — is not
+    // reproducible.
+    run(`git -C "${root}" update-index --refresh`);
+    const tracked = run(`git -C "${root}" diff --name-only "${base}"`);
+    const untracked = run(`git -C "${root}" ls-files --others --exclude-standard`);
+    return [...new Set([...tracked, ...untracked].map(s => s.trim()).filter(Boolean))];
   };
 }
 
@@ -68,6 +104,7 @@ function resolveScope(options, cfg, io) {
   else if (scope.kind === 'module') files = listFiles(scope.target);
   else if (scope.kind === 'files') files = scope.files;
 
+  files = files.map(toPosix);
   const kept = files.filter(f => fileStack(f, cfg) && !isExcluded(f, cfg));
   const stacks = [...new Set(kept.map(f => fileStack(f, cfg)))].sort();
   const result = { kind: scope.kind, files: kept, stacks };
@@ -75,4 +112,4 @@ function resolveScope(options, cfg, io) {
   return result;
 }
 
-module.exports = { resolveScope, fileStack };
+module.exports = { resolveScope, fileStack, realGitDiff, toPosix };
