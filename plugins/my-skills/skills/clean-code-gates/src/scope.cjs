@@ -48,6 +48,11 @@ function realGitDiff(root) {
         return [];
       }
     };
+    // Refresh first: build tooling (flutter/dart/jest) rewrites mtimes, leaving
+    // stat-dirty index entries. Without this the same tree yields a different
+    // file set run to run, so the scope — and therefore the verdict — is not
+    // reproducible.
+    run(`git -C "${root}" update-index --refresh`);
     const tracked = run(`git -C "${root}" diff --name-only ${base}`);
     const untracked = run(`git -C "${root}" ls-files --others --exclude-standard`);
     return [...new Set([...tracked, ...untracked].map(s => s.trim()).filter(Boolean))];
