@@ -581,11 +581,13 @@ code {
        2b. Release readiness matrix (embedded compact view)
        Derived on demand (no stored state) from each story's status + release + system.
        Rows = named releases in releases[] order + an untiered row (release: null) +
-       backlog; columns = declared config.systems + an "(untagged)" column (system: null).
+       backlog; columns = declared config.systems + an "(untagged)" column (system: null) +
+       an "(unknown)" column ONLY when a story carries a non-null, undeclared system (an
+       orphan from a manual config edit; see roadmap/SKILL.md → Release readiness).
        Cells = done/total (superseded counts as done). The trailing READY? column marks a
        release ready only when every not-superseded story in that release is done, regardless
-       of system — no column, including "(untagged)", has remaining not-done work; laggard
-       columns (which may include "(untagged)") are called out. Rendered only when the roadmap has ≥1
+       of system — no column, including "(untagged)"/"(unknown)", has remaining not-done work; laggard
+       columns (which may include "(untagged)"/"(unknown)") are called out. Rendered only when the roadmap has ≥1
        declared system OR ≥1 tagged story; a legacy/untagged roadmap collapses to a single
        "(untagged)" column (and the section may be omitted when nothing is tagged). The
        full-grid dashboard lives in release-matrix.template.html; this is the compact index
@@ -604,6 +606,10 @@ code {
                (which may include `(untagged)`). -->
           {{readiness_matrix}}
         </div>
+        <!-- Link to the standalone dashboard /roadmap/release-matrix.<ext>. This .html variant
+             links release-matrix.html; the .md variant links release-matrix.md. Rendered
+             together with this section under the same gate; omit when the section is omitted. -->
+        <p class="readiness__dashboard-link"><a href="release-matrix.html">Full release &times; system readiness dashboard &rarr;</a></p>
       </div>
     </details>
   </section>

@@ -7,6 +7,9 @@ This document is the single source of truth for the `/roadmap/` directory struct
 ```
 /roadmap/
   README.md              # index: milestones, rollup status, progress %, legend, sequence order
+  release-matrix.md      # standalone release × system readiness dashboard (derived view; only
+                         #   when the roadmap has ≥1 declared system OR ≥1 tagged story — absent
+                         #   for legacy/untagged roadmaps). Ext follows output_format (.md/.html).
   CONTEXT.md             # roadmap context (own gate) OR roadmap addendum (orchestrator base exists)
   roadmap.lock.json      # machine state: IDs, statuses, content hashes, last-synced sha
   roadmap.config.json    # optional: roadmap-specific config overrides
@@ -38,7 +41,7 @@ A directory number, once assigned, is **never renumbered**. It is identity, not 
 
 ## Artifact format
 
-`output_format` controls all generated `.md`/`.html` artifacts (every README and item file). `roadmap.lock.json` is always JSON and is machine state, not a deliverable.
+`output_format` controls all generated `.md`/`.html` artifacts (every README, item file, and the `release-matrix` dashboard). `release-matrix.<ext>` is a **pure derived view** — recomputed from `roadmap.lock.json` + `config.systems` on every render, storing no new state (see `SKILL.md` → Release readiness). `roadmap.lock.json` is always JSON and is machine state, not a deliverable.
 
 ### Navigation link targets
 

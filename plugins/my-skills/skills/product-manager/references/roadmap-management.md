@@ -24,6 +24,7 @@ Each management verb maps to exactly one roadmap mutation op. Sugar verbs are th
 | `reorder <ids-in-order>` | `reorder <ids-in-order>` | Change `sequence`/`depends_on` of **not-done** items only. Accepts `--after <id>`. |
 | `revise <id>` | `revise <id>` | Retitle / re-scope, or split/merge via new stable IDs + supersede — **not-done** items only. |
 | `release <list\|reorder\|rename …>` | `release <list\|reorder\|rename …>` | Manage the ordered `releases[]` registry. `list` is read-only (no branch/PR). |
+| `system <list\|add\|rename\|remove …>` | `system <list\|add\|rename\|remove …>` | Manage the config-owned `config.systems` set with **referential integrity**: `rename` cascades to referencing stories; `remove` is guarded (refuses while referenced, or `--untag`); `add` is collision-guarded; `list` is read-only and reports orphan references. Prevents hand-edits from orphaning story `system` values. `list` runs with no branch/PR. |
 | `add-milestone <title>` | `add-item milestone` | Create a milestone; seeds a default phase `NNN.1-general` so tickets can drop straight in. |
 | `add-phase <title> --to <milestone>` | `add-item phase` | Create a phase under a milestone. |
 | `add-ticket <raw> [--to <phase\|milestone>]` | `add-item user-story` | Inline interview composes a story from raw text (bug or feat). `--to` a milestone auto-creates/uses a default phase. |
@@ -45,7 +46,7 @@ Every mutating verb runs this sequence (mirrors the `complete` machinery's base-
 4. **On approval** → the op writes files and prints a proposed commit message; PM commits `docs(roadmap): <verb> …`, pushes, and opens a planning PR (`templates/pr-body.template.md` planning variant).
 5. **On reject** → PM discards the empty branch and returns to the starting branch (see **Reject-and-discard**).
 
-`release list` and `release-status` are read-only: they print and exit with no branch, gate, or PR.
+`release list`, `system list`, and `release-status` are read-only: they print and exit with no branch, gate, or PR.
 
 The `add-*` verbs follow this same flow; `add-ticket` first runs the inline interview (below) to compose the story body before invoking `add-item`.
 
@@ -53,6 +54,15 @@ The `add-*` verbs follow this same flow; `add-ticket` first runs the inline inte
 
 - **`assign-system <system> <selection>`** resolves the selection to an id set (ids/globs **and** natural language, exactly like `assign`), cuts `pm/roadmap-assign-system-<slug>`, invokes roadmap `set-system` (which stages the `⊞ system` diff, gates, writes), then commits `docs(roadmap): assign-system …`, pushes, and opens the planning PR. `--yes` is supported (unambiguous ids). The system is **typo-guarded against `config.systems`**: an undeclared system stops before any branch is cut and prints the valid system names; `null` untags.
 - **`migrate-systems`** takes no selection — it cuts `pm/roadmap-migrate-systems`, then invokes roadmap `migrate-systems`, whose **interactive** procedure bootstraps `config.systems` (if empty), proposes a system for every untagged story (including `done` items), and presents one whole-roadmap staged `⊞ system` diff grouped by proposed system. On approval the op bulk-applies and PM commits `docs(roadmap): migrate-systems`, pushes, and opens the planning PR. The bare `/roadmap migrate-systems` direct command performs the same doc-only write **without** the git/PR wrapper. Idempotent — re-running only proposes for still-untagged stories.
+
+**`system <list | add | rename | remove>` specifics.** Manages the `config.systems` set with referential integrity — the system-band analog of `release <list|reorder|rename>` (there is no `reorder`; the set is unordered):
+
+- **`system list`** is **read-only** (no branch/gate/PR): prints the declared systems with per-system story counts and reports both **orphan** references (a story whose `system` is non-null but undeclared) **and shadowed systems** (a declared name colliding with a reserved word / release / milestone / phase, so its bare-`complete <name>` scope is unreachable — fix via `system rename`, or select it with the explicit `system:<name>` form). Mirrors `release list` / `release-status`.
+- **`system add <name> [path]`** cuts `pm/roadmap-system-add-<slug>`, invokes roadmap `system add`, commits `docs(roadmap): system add …`, pushes, opens the planning PR. **Name guard:** `<name>` is rejected if it collides with another declared system, a reserved scope word (`roadmap`, `backlog`), a registered release name, or a milestone/phase id/slug — a colliding system would be **shadowed** in the bare-`complete <name>` scope (use `system:<name>` to reach it). PM stops before cutting the branch and prints the conflict.
+- **`system rename <old> <new>`** cuts `pm/roadmap-system-rename-<slug>`; roadmap `system rename` stages a `~ changed` (config) + `⊞ system` (each referencing story) diff, gates, writes; PM commits `docs(roadmap): system rename …`, pushes, opens the PR. The rename **cascades to every referencing story atomically** (frozen items included), so no orphan is produced. `<new>` is subject to the **same name guard** as `system add` (rejected on collision with a reserved word / release / milestone-phase id); `system rename` is also the fix for a shadowed or orphaned system surfaced by `system list`.
+- **`system remove <name> [--untag]`** cuts `pm/roadmap-system-remove-<slug>`; roadmap `system remove` is **guarded** — it stops (before any write) while stories still reference `<name>`, printing the ids, unless `--untag` nulls them in the same staged diff. PM commits `docs(roadmap): system remove …`, pushes, opens the PR.
+
+`--yes` is supported on the writing sub-ops (unambiguous). A **manual `roadmap.config.json` edit** that orphans references is surfaced defensively — `system list` and `release-status` show the orphans; readiness views render an `(unknown)` column (see `roadmap/references/config.md` → Orphan handling).
 
 ---
 
@@ -75,7 +85,7 @@ Every mutating verb shows the staged diff and requires explicit approval before 
 
 - The gate displays the exact resolved id set and the `+ new` / `~ changed` / `! superseded` / `± release` rows the op will apply.
 - **`--yes`** skips the gate for trusted quick edits — PM passes it through to the roadmap op, which writes without prompting. Use only when the selection is unambiguous (explicit ids). `--yes` never bypasses the PR: the planning PR is still opened so the change is reviewable.
-- `release list` has no gate (read-only).
+- `release list`, `system list`, and `release-status` have no gate (read-only).
 
 ---
 

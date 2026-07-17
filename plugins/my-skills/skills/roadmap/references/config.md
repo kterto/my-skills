@@ -34,12 +34,21 @@ The **declared set of systems** — the source of truth for the `system` band (a
 
 Type: `array of {name: string, path?: string}`. Default `[]` (no systems declared). There is **no CLI flag** — the set is declared only in `/roadmap/roadmap.config.json`.
 
-- `name` — the system band value (e.g. `backend`). **Unique within the array.** This is the exact string a story's `system` field may take.
+- `name` — the system band value (e.g. `backend`). **Unique within the array**, and — so it stays reachable by the PM bare-`complete <name>` scope — it **must not collide with a reserved scope word (`roadmap`, `backlog`), a registered release name, or a milestone/phase id/slug** (a bare scope resolves those earlier, shadowing the system). The `system add`/`rename` ops enforce this guard; `system list` flags any pre-existing collision, and the explicit `system:<name>` PM scope reaches a system regardless (see `mutation-ops.md` → `system` and `product-manager/references/scope-resolution.md` → System scope). This is the exact string a story's `system` field may take.
 - `path` — optional monorepo package directory (e.g. `apps/api`). Advisory metadata only: it is **stored now and used for routing later** — the `product-manager` skill surfaces it (a context note on the orchestrator brief handoff and in the readiness matrix) but nothing changes where the orchestrator runs. Actual package-dir routing is a deferred future story.
 
 **Config-declared, not lazily created.** Unlike the `release` band — whose named trains are lazily appended to the `releases[]` registry in `roadmap.lock.json` on first use — the `systems` set lives entirely in this config file and is never auto-extended by an assignment.
 
 **Typo guard.** Assigning a `system` value not present in this set is an **error** (see `mutation-ops.md` → `set-system`). Rationale: systems are deployables, not free-form trains — a typo (`backedn`) should fail loudly rather than silently create a phantom system. `null` (untag) is always permitted.
+
+**Integrity lifecycle — manage the set with the `system` op, not by hand.** Because story `system` values persist references into this config-owned set, edit it through the `system <list | add | rename | remove>` mutation op (see `mutation-ops.md` → `system`), which preserves referential integrity:
+
+- `system add <name> [path]` appends a system (collision-guarded).
+- `system rename <old> <new>` renames the config entry **and cascades to every referencing story atomically** (including frozen `done`/`superseded` ones, so completed work stays counted).
+- `system remove <name>` is **guarded**: it refuses while any story still references the name (printing the referencing ids), unless `--untag` is passed to null those references in the same staged diff — so a removal never orphans a story.
+- `system list` prints the declared set with per-system counts **and reports any orphan references**.
+
+**Orphan handling (defensive rendering).** A **manual edit** of this file — renaming or deleting a `name` that stories still carry — bypasses the op and leaves an **orphan** `system` value (non-null but no longer declared). Orphans are **never silently dropped**: both readiness views bucket orphaned stories into an explicit **`(unknown)` column** (parallel to the `(untagged)` column for `null`) with an integrity note listing the affected ids, and a release with remaining not-done orphan work is **not** `READY`. Fix an orphan with `system rename <orphan> <declared>` (re-home) or `set-system null <ids>` / `system remove <orphan> --untag` (untag). See `SKILL.md` → Release readiness and `mutation-ops.md` → Orphan handling.
 
 **Backward compatibility.** An empty or absent `systems` array means the roadmap is **not system-partitioned** — fully backward-compatible: no `system` badges render anywhere, and the derived readiness matrix collapses to a single `(untagged)` column. `system` is nullable and lazily written; a legacy roadmap with no `systems` config and no story `system` fields renders and executes unchanged. No migration is forced (the opt-in `migrate-systems` procedure adopts systems on demand — see `mutation-ops.md`).
 

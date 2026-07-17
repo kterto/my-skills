@@ -219,23 +219,31 @@ code { font-family: var(--font-mono); font-size: 0.9em; background: var(--bg-ove
        Derived: cell(release r, system s) = { done: stories where release=r ∧ system=s ∧
        status ∈ {done, superseded}, total: stories where release=r ∧ system=s }. A release
        is READY only when every not-superseded story in that release is done, regardless of
-       system — no cell in the row, across every declared-system column AND the `(untagged)`
-       column, has remaining not-done work. `superseded` counts as no-remaining-work.
+       system — no cell in the row, across every declared-system column, the `(untagged)`
+       column, AND the `(unknown)` column when present, has remaining not-done work.
+       `superseded` counts as no-remaining-work.
        ============================================================ -->
   <section class="section" data-role="readiness-matrix">
     <p class="section__head">Matrix</p>
     <div class="readiness">
       <!-- {{readiness_matrix}} is a <table class="readiness__table"> the renderer fills:
            - THEAD: `release` + one <th scope="col"> per declared system (config.systems) +
-             an `(untagged)` column (system: null) + a trailing `READY?` column. A system
-             column header may carry its config `path` in a <span class="readiness__path">.
+             an `(untagged)` column (system: null) + an `(unknown)` column ONLY when ≥1 story
+             carries a non-null, undeclared system (an orphan from a manual config edit) +
+             a trailing `READY?` column. A system column header may carry its config `path`
+             in a <span class="readiness__path">.
            - TBODY: one row per named release in roadmap.lock.json `releases[]` order, then an
              `(untiered)` row (release: null), then `backlog`. Row header is <th scope="row">.
              Each cell is `done/total`; a cell with remaining not-done work carries
              .readiness__cell--lagging, a fully-done cell .readiness__cell--ready; the
-             `(untagged)` column cells carry .readiness__col--untagged. The READY? cell is
+             `(untagged)` column cells carry .readiness__col--untagged and the `(unknown)`
+             column cells .readiness__col--unknown. The READY? cell is
              .readiness__verdict--ready (`READY`) or .readiness__verdict--lagging
-             (`lagging: <col>, …` naming the laggard columns, which may include `(untagged)`).
+             (`lagging: <col>, …` naming the laggard columns, which may include `(untagged)`
+             and `(unknown)`).
+           - When an `(unknown)` column is present, render an integrity note below the table
+             (e.g. <p class="readiness__integrity">⚠ unknown system(s): <value> — stories
+             <ids>; fix via system rename / set-system null</p>).
            Backward compatibility: a roadmap with no declared systems and no tagged stories
            renders a single `(untagged)` column and every cell of work lands there. -->
       {{readiness_matrix}}
@@ -258,11 +266,15 @@ code { font-family: var(--font-mono); font-size: 0.9em; background: var(--bg-ove
       </div>
       <div class="legend__row">
         <span class="legend__key readiness__verdict--lagging">lagging: &lt;col&gt;…</span>
-        <span class="legend__desc">The release has remaining not-done work in the listed column(s), which may include <code>(untagged)</code>.</span>
+        <span class="legend__desc">The release has remaining not-done work in the listed column(s), which may include <code>(untagged)</code> and <code>(unknown)</code>.</span>
       </div>
       <div class="legend__row">
         <span class="legend__key readiness__col--untagged">(untagged)</span>
         <span class="legend__desc">Stories with <code>system: null</code> &mdash; nothing is silently dropped; a legacy/untagged roadmap collapses to only this column.</span>
+      </div>
+      <div class="legend__row">
+        <span class="legend__key readiness__col--unknown">(unknown)</span>
+        <span class="legend__desc">Stories with a <strong>non-null, undeclared</strong> <code>system</code> (orphaned by a manual config edit) &mdash; shown only when present so they are never dropped; counts as a laggard. Fix via <code>system rename</code> / <code>set-system null</code>.</span>
       </div>
       <div class="legend__row">
         <span class="legend__key">(untiered)</span>

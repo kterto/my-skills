@@ -111,7 +111,8 @@ On approval:
    - phase `{{story_list_ordered_by_sequence}}` → each user story links to `<NNN.M.T-slug>.<ext>`
    In md: `- [<id> — <title>](<target>) <status>`. In html: wrap the row label in `<a href="<target>">…</a>`, keeping the status pill and (phase user-story rows) the `<input type="checkbox" disabled>` outside the link. `<NNN-slug>` etc. is the same slug used to name the child's directory/file.
 3. Write `/roadmap/roadmap.lock.json` with version, `last_synced_sha: null`, and one entry per item.
-4. Print a summary of all written paths.
+4. **Render the readiness views** when the render gate is met (≥1 declared system OR ≥1 tagged story — see Release readiness → Render gate): the embedded matrix in `/roadmap/README.<ext>` **and** the standalone dashboard `/roadmap/release-matrix.<ext>` (from `templates/release-matrix.template.<ext>`). A freshly-built, untagged roadmap emits neither.
+5. Print a summary of all written paths (including `release-matrix.<ext>` when rendered).
 
 Item file schema (frontmatter keys, body sections, audit log format) is defined in `references/item-schema.md`. Every user-story file has exactly three body sections: `## Brief`, `## Acceptance`, `## Audit log`.
 
@@ -142,7 +143,7 @@ Beyond building, syncing, and re-evaluating, the roadmap skill exposes doc-only 
 
 **Release band.** Every item carries an optional `release` band (`string | null`) — classification metadata **orthogonal to `status`**, editable on items of any status. `null`/absent = active untiered; the reserved value `backlog` = parked; any other value = a named release train (`mvp`, `v1.1`, …) registered in the ordered `releases[]` array in `roadmap.lock.json`. The band is nullable and the registry is lazily created, so legacy roadmaps are untouched (no migration). See `references/item-schema.md` and `references/directory-layout.md`.
 
-**System band.** Every item also carries an optional `system` band (`string | null`) — a **second classification axis orthogonal to both `status` and `release`** (a monorepo story belongs to one deployable system, e.g. `backend`, and to one release train, e.g. `mvp`, at once). It mirrors the `release` band's machinery (nullable per-item field, cascade to not-done descendants, derived phase/milestone badge — `[cross-cutting]` in place of `[mixed]`, editable on frozen items) with deliberate differences: the set of systems is **config-declared** in `roadmap.config.json` → `systems` (not a lazily-grown lock registry), systems are an **unordered peer set**, each may carry an optional `path`, and assigning an **undeclared system is an error** (typo guard) — `null` (untag) is always permitted. The band is nullable and lazily written, so legacy roadmaps render and execute unchanged (no badges; no forced migration). See `references/config.md`, `references/item-schema.md`, and `references/directory-layout.md`.
+**System band.** Every item also carries an optional `system` band (`string | null`) — a **second classification axis orthogonal to both `status` and `release`** (a monorepo story belongs to one deployable system, e.g. `backend`, and to one release train, e.g. `mvp`, at once). It mirrors the `release` band's machinery (nullable per-item field, cascade to not-done descendants, derived phase/milestone badge — `[cross-cutting]` in place of `[mixed]`, editable on frozen items) with deliberate differences: the set of systems is **config-declared** in `roadmap.config.json` → `systems` (not a lazily-grown lock registry) and managed with referential integrity by the `system <list\|add\|rename\|remove>` op (below), systems are an **unordered peer set**, each may carry an optional `path`, and assigning an **undeclared system is an error** (typo guard) — `null` (untag) is always permitted. The band is nullable and lazily written, so legacy roadmaps render and execute unchanged (no badges; no forced migration). See `references/config.md`, `references/item-schema.md`, and `references/directory-layout.md`.
 
 **The ops at a glance** (each: **stage a diff → gate on approval → write files → propose a commit → never commit**):
 
@@ -154,6 +155,7 @@ Beyond building, syncing, and re-evaluating, the roadmap skill exposes doc-only 
 | `reorder <ids-in-order>` | Change `sequence`/`depends_on` of **not-done** items only. |
 | `revise <id>` | Retitle / re-scope, or split/merge via new stable IDs + supersede — **not-done** items only. |
 | `release <list\|reorder\|rename>` | Manage the `releases[]` registry order and names. |
+| `system <list\|add\|rename\|remove>` | Manage the config-owned `config.systems` set with **referential integrity**: `rename` cascades to every referencing story atomically; `remove` is guarded (refuses while referenced, or `--untag` nulls them in the same diff); `add`/`rename` reject names colliding with a reserved word / release / milestone-phase id (so the PM bare-`complete <name>` scope stays reachable); `list` reports orphan **and** shadowed-name references. Prevents hand-edits from orphaning story `system` values. |
 | `add-item <kind> [--to <parent-id>]` | Append one new milestone/phase/user-story directly, without a spec file; owns id assignment and id-dependent fields (accepts an optional `system` at creation). |
 
 Alongside the ops, the **`migrate-systems`** procedure adopts the `system` band on an existing roadmap: config bootstrap (if `config.systems` is empty) → per-untagged-story inference (including `done` items, so completed work counts toward readiness) → one whole-roadmap staged diff grouped by proposed system → gate → bulk apply via `set-system` semantics → propose commit `docs(roadmap): migrate-systems`, never commit. Idempotent; un-inferable stories stay `null` and are reported. See `references/mutation-ops.md` → `migrate-systems`.
@@ -173,19 +175,25 @@ cell(release r, system s) := { done:  |stories where release=r ∧ system=s ∧ 
                                total: |stories where release=r ∧ system=s| }
 
 READY(r) := every not-superseded story with release=r is done, regardless of system
-          ( equivalently: no cell in row r — every declared-system column AND the (untagged) column — has remaining not-done work )
+          ( equivalently: no cell in row r — every declared-system column, the (untagged) column,
+            AND the (unknown) column when present — has remaining not-done work )
 ```
 
 - `superseded` stories count toward "no remaining work" exactly as in the rollup function (`references/sync-and-reeval.md` → Rollup rules) — they are done-or-gone.
 - **Untagged (`system: null`) stories** appear in a dedicated **`(untagged)` column** so nothing is silently dropped. A legacy roadmap with nothing tagged collapses to this single column.
-- Rows are the named releases in `roadmap.lock.json` → `releases[]` order, plus an **untiered row** for `release: null` stories; `backlog` is included as its own row. Columns are the declared `config.systems` (any order — systems are unordered peers) plus `(untagged)`.
+- **Orphan (undeclared) stories** — a story whose `system` is **non-null but not in `config.systems`** (an integrity violation, e.g. left by a manual `roadmap.config.json` rename/removal) is bucketed into an explicit **`(unknown)` column** rather than dropped. The column is rendered **only when ≥1 orphan exists**, and both views emit an **integrity note listing the affected story ids** (the fix is `system rename <orphan> <declared>` or `set-system null <ids>` — see `references/mutation-ops.md` → `system` / Orphan handling). The `(unknown)` column counts as a laggard in `READY` exactly like a declared column: a release with remaining not-done orphan work is **not** `READY`. Going through the `system` op never creates orphans — only hand-editing config can.
+- Rows are the named releases in `roadmap.lock.json` → `releases[]` order, plus an **untiered row** for `release: null` stories; `backlog` is included as its own row. Columns are the declared `config.systems` (any order — systems are unordered peers), then `(untagged)`, then `(unknown)` **only when orphans exist**.
 
 ### Where it renders
 
 The same derivation surfaces in **two** locations (both are pure views — neither stores state):
 
 1. **Roadmap index README section** — an embedded compact readiness matrix in the top-level `/roadmap/README.<ext>` (see `templates/roadmap-readme.template.*` and design prompt `docs/design-prompts/13-roadmap-system-badge-and-matrix-additions.md`).
-2. **Dedicated dashboard artifact** — a standalone `release-matrix` template rendering the full `release × system` grid with per-cell `done/total`, a `READY?` verdict column, and laggard callouts (see `templates/release-matrix.template.*` and design prompt `docs/design-prompts/12-roadmap-release-matrix.md`).
+2. **Dedicated dashboard artifact** — a standalone file `/roadmap/release-matrix.<ext>` (rendered from `templates/release-matrix.template.*`; `<ext>` per `output_format`) showing the full `release × system` grid with per-cell `done/total`, a `READY?` verdict column, and laggard callouts (see design prompt `docs/design-prompts/12-roadmap-release-matrix.md`). It sits at the roadmap root beside `README.<ext>` (see `references/directory-layout.md`) and is linked from the index's Release-readiness section.
+
+**Render gate (both views).** Both are rendered **only when the roadmap has ≥1 declared system OR ≥1 tagged story** (a `release` or `system` band). A legacy/untagged roadmap emits **neither** — no embedded section and no `release-matrix.<ext>` file — consistent with the no-forced-migration model. The first band assignment (the first `set-release`/`set-system`/`add-item` with a band, or `migrate-systems`) is what brings both views into existence.
+
+**Refresh rule (normative — the readiness views are derived, never stored).** Any lifecycle step that changes a **readiness input** MUST re-render **both** views in the **same write pass** that applies the change. The readiness inputs are: a story's `status`, `release`, or `system`; the `releases[]` registry order or names; and the `config.systems` set. Steps that touch **none** of these inputs (e.g. `reorder`, which changes only `sequence`) leave both views untouched. The concrete lifecycle sites that carry this obligation are Materialize (build, below), the Sync and Re-eval procedures (`references/sync-and-reeval.md`), and the mutation ops apply contract (`references/mutation-ops.md`).
 
 The `product-manager` skill exposes the same derivation read-only via its `release-status [release]` verb (`product-manager/references/scope-resolution.md` / `product-manager/SKILL.md`); it computes exactly the matrix defined here — no divergent logic.
 
@@ -199,9 +207,9 @@ All normative details live in these files (relative to `plugins/my-skills/skills
 |---|---|
 | `references/directory-layout.md` | Directory tree, ID scheme, stable-identity rule, `roadmap.lock.json` schema (incl. `items[].system`; the `system` set lives in config) |
 | `references/item-schema.md` | Frontmatter keys (incl. `release` and `system` bands), body sections, audit log format (incl. release-change + system-change rows), rollup function, derived badges (`[mixed]`/`[cross-cutting]`), html rendering rules |
-| `references/config.md` | Config keys (incl. `systems: [{name, path?}]`), precedence chain, typo-guard rationale, `roadmap.config.json` schema |
+| `references/config.md` | Config keys (incl. `systems: [{name, path?}]`), precedence chain, typo-guard rationale, `system`-op integrity lifecycle + orphan handling, `roadmap.config.json` schema |
 | `references/sync-and-reeval.md` | Rollup rules, Sync procedure (git command + steps), Re-eval procedure (incl. band preservation for `release` + `system` + `ingest-spec`) |
-| `references/mutation-ops.md` | Mutation ops (`set-release`, `set-system`, `ingest-spec`, `reorder`, `revise`, `release`, `add-item`) + `migrate-systems`, staged-diff markers (incl. `⊞ system`), cascade + `[mixed]`/`[cross-cutting]` badges, structural immutability |
+| `references/mutation-ops.md` | Mutation ops (`set-release`, `set-system`, `ingest-spec`, `reorder`, `revise`, `release`, `system`, `add-item`) + `migrate-systems`, staged-diff markers (incl. `⊞ system`), cascade + `[mixed]`/`[cross-cutting]` badges, structural immutability, orphan handling |
 
 Templates (rendered per `output_format`):
 

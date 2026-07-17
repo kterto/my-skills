@@ -45,14 +45,22 @@
 
 {{readiness_matrix}}
 
+→ **Full dashboard:** [release × system readiness matrix](release-matrix.md)
+
+<!-- Link target is the standalone dashboard /roadmap/release-matrix.<ext> (this .md variant
+     links release-matrix.md; the .html variant links release-matrix.html). Rendered together
+     with this section under the same gate; omit the link when the section itself is omitted. -->
+
 <!-- Embedded compact `release × system` readiness matrix, derived on demand (no stored
      state) from each story's status + release + system. Rows = named releases in
      roadmap.lock.json `releases[]` order + an untiered row (release: null) + backlog;
-     columns = declared config.systems + an `(untagged)` column for system: null. Each
+     columns = declared config.systems + an `(untagged)` column for system: null + an
+     `(unknown)` column ONLY when a story carries a non-null, undeclared system (an orphan
+     from a manual config edit; see roadmap/SKILL.md → Release readiness). Each
      cell shows `done/total` (superseded counts as done). A trailing `READY?` column marks
      a release ready only when every not-superseded story in that release is done, regardless
-     of system — no column, including `(untagged)`, has remaining not-done work; laggard
-     columns (which may include `(untagged)`) are called out. The full-grid dashboard lives in the
+     of system — no column, including `(untagged)` and `(unknown)`, has remaining not-done
+     work; laggard columns (which may include `(untagged)`/`(unknown)`) are called out. The full-grid dashboard lives in the
      dedicated release-matrix template; this is the compact index view. Rendered only when
      the roadmap has ≥1 declared system OR ≥1 tagged story; a legacy/untagged roadmap
      collapses the whole matrix to a single `(untagged)` column (and the section may be

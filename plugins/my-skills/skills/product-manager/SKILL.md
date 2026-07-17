@@ -28,7 +28,7 @@ For each story in the resolved queue, PM: (1) cuts a stacked branch, (2) invokes
 
 | Argument / Flag | Values | Description |
 |---|---|---|
-| `<scope>` | `roadmap`, milestone id (e.g. `001` or `001-bootstrap`), phase id (e.g. `001.2`), release name (e.g. `mvp`, `backlog`), or a **declared system name** (e.g. `backend`) | Which user stories to execute. A bare declared system name selects that system's not-done stories across releases (backlog excluded). See `references/scope-resolution.md` → **Scope matching** / **System scope**. |
+| `<scope>` | `roadmap`, milestone id (e.g. `001` or `001-bootstrap`), phase id (e.g. `001.2`), release name (e.g. `mvp`, `backlog`), `system:<name>` (explicit, e.g. `system:backend`), or a **bare declared system name** (e.g. `backend`) | Which user stories to execute. `system:<name>` selects that system's not-done stories across releases (backlog excluded) and **cannot be shadowed**; the bare name is sugar resolved last (shadowed by any same-named earlier scope). See `references/scope-resolution.md` → **Scope matching** / **System scope**. |
 | `--system <name>` | a name declared in `config.systems` | **Universal intersect filter** composable with any base `<scope>` — narrows the queue to stories whose `system` band equals `<name>` (applied after base scope matching, before Filter). Typo-guarded: an undeclared system stops and prints the valid names. See `references/scope-resolution.md` → **System filter**. |
 | `--conservative` | `true` (default) \| `false` | When `true`, halt after any story that requires human validation. When `false`, continue and queue the validation spot. |
 | `--base <branch>` | branch name | Override the run base branch (the branch PM started on is used if omitted). |
@@ -143,6 +143,7 @@ Beyond `complete <scope>` (which *executes* stories), PM exposes a set of **mana
 | `reorder <ids-in-order>` | `reorder <ids-in-order>` | `sequence`/`depends_on` of **not-done** items only (`--after <id>` accepted). |
 | `revise <id>` | `revise <id>` | Retitle / re-scope, or split/merge via new stable IDs + supersede — **not-done** only. |
 | `release <list\|reorder\|rename …>` | `release <list\|reorder\|rename …>` | Manage the ordered `releases[]` registry. `list` is read-only. |
+| `system <list\|add\|rename\|remove …>` | `system <list\|add\|rename\|remove …>` | Manage the config-owned `config.systems` set with **referential integrity**: `rename` cascades to referencing stories, `remove` is guarded (`--untag` to null in the same diff), `add` collision-guarded, `list` (read-only) reports orphan references. Stops hand-edits from orphaning story `system` values. |
 | `add-milestone <title>` | `add-item milestone` | Create a milestone; seeds a default phase `NNN.1-general` so tickets can drop straight in. |
 | `add-phase <title> --to <milestone>` | `add-item phase` | Create a phase under a milestone. |
 | `add-ticket <raw> [--to <phase\|milestone>]` | `add-item user-story` | Inline interview composes a story from raw text (bug or feat). `--to` a milestone auto-creates/uses a default phase. |
@@ -175,11 +176,11 @@ See `references/roadmap-management.md` → Spec-creation two-step.
 
 ### System name as a `complete` scope + the `--system` filter
 
-`complete <scope>` also accepts a **bare declared system name** (`complete backend`) — every not-done `system=backend` story across all releases, backlog excluded — and a **universal `--system <name>` intersect filter** composable with any base scope (`complete mvp --system backend`, `complete 001 --system app`). Both validate `<name>` against `config.systems`; an undeclared system **stops and prints the valid names**. See `references/scope-resolution.md` → System scope, System filter, System typo guard.
+`complete <scope>` selects by system two ways: the **explicit `system:<name>`** form (`complete system:backend`) and its **bare sugar** (`complete backend`) — both select every not-done `system=backend` story across all releases, backlog excluded. The explicit form is matched **first and cannot be shadowed**; the bare form is resolved **last** and is shadowed by any reserved word / release / milestone / phase of the same name — so **prefer `system:<name>` when a system's name might collide** (the `system add`/`rename` ops reject new collisions, and `system list` flags pre-existing ones). Separately, a **universal `--system <name>` intersect filter** composes with any base scope (`complete mvp --system backend`, `complete 001 --system app`). All three validate `<name>` against `config.systems`; an undeclared system **stops and prints the valid names**. See `references/scope-resolution.md` → System scope, System filter, System typo guard.
 
 ### `release-status [release]` — readiness matrix (read-only)
 
-`release-status` prints the derived **`release × system` readiness matrix** — per-cell `done/total`, a `READY?` verdict per release, and laggard callouts — for all releases (or one, if named). It **computes exactly the derivation defined in `roadmap/SKILL.md` → Release readiness** — PM adds no divergent logic. Each system's `path` (from `config.systems`) is surfaced in the matrix. Read-only: **no branch, no gate, no PR** — it mirrors `release list`.
+`release-status` prints the derived **`release × system` readiness matrix** — per-cell `done/total`, a `READY?` verdict per release, and laggard callouts — for all releases (or one, if named). It **computes exactly the derivation defined in `roadmap/SKILL.md` → Release readiness** — PM adds no divergent logic. Each system's `path` (from `config.systems`) is surfaced in the matrix. Stories with a **non-null, undeclared `system`** (orphaned by a manual `roadmap.config.json` edit) are **never dropped** — they surface in the matrix's `(unknown)` column with an integrity note listing the affected ids (fix via `system rename` / `assign-system null`). Read-only: **no branch, no gate, no PR** — it mirrors `release list`.
 
 ### `--system` on `add-ticket` / `add-milestone` / `add-phase`
 

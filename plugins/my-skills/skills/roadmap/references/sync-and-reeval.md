@@ -31,7 +31,7 @@ Rollup derives a phase status from its user stories, and a milestone status from
 2. Run the git trailer scan (see command below). When `last_synced_sha` is `null`, scan full history. Per commit, extract: matched user-story id(s), author name/email, author date (ISO-8601), sha.
 3. For each matched user story not already `done` or `superseded`: set `status: done`, append a full audit row (`when` = commit author date, `status` = `done`, `who` = author name/email, `evidence` = commit sha).
 4. Roll up phase and milestone statuses (see Rollup rules above); append rollup audit rows only where the derived status changed.
-5. Update `last_synced_sha` to `HEAD`, refresh README progress %, print a summary of stamped stories.
+5. Update `last_synced_sha` to `HEAD`, refresh README progress %, and — because sync changes story `status` (a readiness input) — **re-render both readiness views** (the embedded index matrix and `/roadmap/release-matrix.<ext>`) per the refresh rule in `SKILL.md` → Release readiness, subject to its render gate. Print a summary of stamped stories.
 
 ### Git command
 
@@ -68,7 +68,7 @@ Triggered by running `/roadmap` when `/roadmap/` already exists. Re-evaluation r
    - **Scope-changed** items → stage body/acceptance update; status unchanged unless the change obsoletes the item (`~ changed`).
    - **Obsoleted** items: if `done` → `status: superseded` (kept + flagged, audit row); if not-done → `status: superseded` as well (kept for audit; never hard-deleted) (`! superseded`).
 3. Present the staged diff with markers `+ new`, `~ changed`, `! superseded`; require user approval before applying.
-4. On approval → apply changes, append audit rows for every status transition, update `roadmap.lock.json`.
+4. On approval → apply changes, append audit rows for every status transition, update `roadmap.lock.json`. New/superseded items change cell totals and `done` counts (readiness inputs), so **re-render both readiness views** (the embedded index matrix and `/roadmap/release-matrix.<ext>`) per the refresh rule in `SKILL.md` → Release readiness, subject to its render gate.
 
 ### Band preservation (`release` and `system`)
 
