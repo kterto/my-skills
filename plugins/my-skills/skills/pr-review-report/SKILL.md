@@ -58,7 +58,7 @@ Follow `references/memory-schema.md`.
 
 ```bash
 # static context (read-only) — deferred/forbidden items + domain invariants
-[ -f PROJECT-CONTEXT.md ] && sed -n '/^##* *Out of scope/,/^##* /p;/^##* *Invariants/,/^##* /p' PROJECT-CONTEXT.md
+[ -f .orchestrator/PROJECT-CONTEXT.md ] && sed -n '/^##* *Out of scope/,/^##* /p;/^##* *Invariants/,/^##* /p' .orchestrator/PROJECT-CONTEXT.md
 # evolving review memory (read every run)
 [ -f .pr-review/memory.md ] && cat .pr-review/memory.md
 ```
@@ -83,7 +83,7 @@ recommendations where criteria match — recommend only, write no files), Securi
 and Bugs & Improvements.
 
 For each candidate finding, apply the memory rules from `references/memory-schema.md`:
-match semantically against `.pr-review/memory.md` entries and `PROJECT-CONTEXT.md`
+match semantically against `.pr-review/memory.md` entries and `.orchestrator/PROJECT-CONTEXT.md`
 §Out-of-scope. When a finding merely **restates a known-deferred decision**, apply
 the entry's `effect` (default `acknowledge`: mark `acknowledged: true` + `memoryRef`,
 drop from severity counts). A genuine new defect that happens to touch a deferred

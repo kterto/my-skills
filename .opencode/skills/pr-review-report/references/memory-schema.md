@@ -8,7 +8,7 @@ purpose), and proposes updates to its own memory after each review.
 
 ### 1. Static project context — read-only
 
-`PROJECT-CONTEXT.md` at the repo root, if present. Read two sections:
+`.orchestrator/PROJECT-CONTEXT.md`, if present. Read two sections:
 
 - **`Out of scope`** — deferred or explicitly-forbidden items. The strongest
   signal that a "missing X" finding is intentional.
