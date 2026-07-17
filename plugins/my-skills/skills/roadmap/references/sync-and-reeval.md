@@ -70,10 +70,10 @@ Triggered by running `/roadmap` when `/roadmap/` already exists. Re-evaluation r
 3. Present the staged diff with markers `+ new`, `~ changed`, `! superseded`; require user approval before applying.
 4. On approval → apply changes, append audit rows for every status transition, update `roadmap.lock.json`.
 
-### Release-band preservation
+### Band preservation (`release` and `system`)
 
-Re-eval is **band-preserving**: it **never changes an item's existing `release` value**. New items introduced by a re-eval default to `release: null` (untiered) unless a spec explicitly pins a band. Band changes are the job of the `set-release` op (see `mutation-ops.md`), not re-eval.
+Re-eval is **band-preserving for both bands**: it **never changes an item's existing `release` value, and never changes its existing `system` value**. New items introduced by a re-eval default to `release: null` (untiered) **and `system: null` (untagged)** unless a spec explicitly pins a band. Band changes are the job of the `set-release` / `set-system` ops (and the `migrate-systems` procedure) — see `mutation-ops.md` — not re-eval.
 
 ### `ingest-spec` — targeted re-eval
 
-`ingest-spec <path>` is the Re-eval procedure above **scoped to a single explicit spec path**: only the milestones/phases/stories that spec introduces or changes are staged; the rest of the tree is untouched. Band-preservation (above) and `done`-immutability apply exactly as in a full re-eval. It is the mutation invoked by the PM `add-spec` verb. Full op semantics live in `references/mutation-ops.md` → `ingest-spec`.
+`ingest-spec <path>` is the Re-eval procedure above **scoped to a single explicit spec path**: only the milestones/phases/stories that spec introduces or changes are staged; the rest of the tree is untouched. Band-preservation (above — both `release` and `system`) and `done`-immutability apply exactly as in a full re-eval: existing `system` values are preserved and new items default to `system: null`. It is the mutation invoked by the PM `add-spec` verb. Full op semantics live in `references/mutation-ops.md` → `ingest-spec`.

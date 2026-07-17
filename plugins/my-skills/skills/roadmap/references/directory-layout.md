@@ -52,7 +52,7 @@ Items link to each other by relative path derived from the ID scheme: a mileston
   "last_synced_sha": "<sha or null>",
   "releases": ["mvp", "v1.1"],
   "items": [
-    { "id": "001.1.1", "kind": "user-story", "status": "todo", "release": "mvp", "content_hash": "<sha256>", "sequence": 1 }
+    { "id": "001.1.1", "kind": "user-story", "status": "todo", "release": "mvp", "system": "backend", "content_hash": "<sha256>", "sequence": 1 }
   ]
 }
 ```
@@ -69,6 +69,7 @@ Keys:
 | `items[].kind` | string | `milestone` \| `phase` \| `user-story`. |
 | `items[].status` | string | Current status (see item-schema.md for the status enum). |
 | `items[].release` | string \| null | Release band for this item (see item-schema.md → `release`). `null`/absent = active untiered; `backlog` = parked; any other value must appear in the top-level `releases[]` registry. For `kind: milestone`/`kind: phase` entries this stored value is **non-authoritative for rendering** — the badge is derived from not-done descendants (see item-schema.md → derived display, mutation-ops.md → Cascade); release-scope matching (`scope-resolution.md`) reads this field only for `kind: user-story` items. |
+| `items[].system` | string \| null | **System band** for this item (see item-schema.md → `system`). `null`/absent = untagged; any other value must be a `name` declared in `config.systems` (see `config.md`). The lock stores only the per-item value — scope matching reads this field without opening every story file. For `kind: milestone`/`kind: phase` entries the stored value is **non-authoritative for rendering** — the badge is derived from not-done descendants (`[<system>]`/`[cross-cutting]`/none), consistent with `release`. The systems *set* lives in config, not the lock — see the section below. |
 | `items[].content_hash` | string | SHA-256 of the item file body, used for change detection during re-evaluation. |
 | `items[].sequence` | integer | Logical execution order within the parent scope. |
 
@@ -77,3 +78,10 @@ Keys:
 - **Ordered, not a set.** Position is meaningful: it is the render order and the cross-band "runs before" order. `backlog` is reserved, is never a registry entry, and always sorts after every named band.
 - **Implicit create on first use.** The first time the `set-release` op assigns a release name that is not already present, that name is appended to `releases[]` in order. Re-ordering and renaming are done explicitly via the `release` op (see `mutation-ops.md`).
 - **Backward compatibility (legacy roadmaps).** An absent or empty `releases[]` is treated as an empty registry; items with no `release` field are untiered (`null`). **No migration is performed** — a legacy `roadmap.lock.json` without `releases` and items without `release` is valid and renders/executes unchanged. The keys are added lazily only when the first band is assigned.
+
+### The `system` set lives in config (not the lock)
+
+Unlike `releases[]`, there is **no `systems` registry in `roadmap.lock.json`** — the declared set of systems is owned by `roadmap.config.json` → `systems` (see `config.md`). The lock carries only the per-item `items[].system` value. This is the deliberate `system`-vs-`release` difference: the release set is a lazily-grown lock registry, while the system set is config-declared and typo-guarded. Consequently:
+
+- **No lazy creation.** The lock is never extended with a new system name on assignment; an undeclared system is rejected at the op layer (`mutation-ops.md` → `set-system`).
+- **Backward compatibility.** A lock whose items carry no `system` field is valid — those items are untagged (`null`). No migration is performed; the `system` field is written lazily, only when a story is first tagged (or `migrate-systems` runs). A legacy roadmap with no `systems` config and no item `system` fields renders and executes unchanged.

@@ -4,6 +4,7 @@ kind: phase
 title: {{title}}
 status: {{rollup_status}}
 release: {{release}}
+system: {{system}}
 milestone: "{{milestone}}"
 sequence: {{sequence}}
 depends_on: {{depends_on}}
@@ -12,15 +13,22 @@ updated_at: {{updated_at}}
 ---
 [Roadmap](../../README.md) / [{{milestone}}](../README.md) / {{id}}
 
-# Phase {{id}} — {{title}} {{release_badge}}
+# Phase {{id}} — {{title}} {{release_badge}} {{system_badge}}
 
 <!-- {{release_badge}} is the phase's DERIVED release badge: the shared band of its
      not-done child stories (e.g. `[mvp]`), or `[mixed]` when those children differ,
      or omitted entirely when all not-done children are untiered (null). Legacy phases
      with no release data render no badge. See references/mutation-ops.md. -->
 
+<!-- {{system_badge}} is the phase's DERIVED system badge (parallel to release): the
+     shared system of its not-done child stories (e.g. `[backend]`), or `[cross-cutting]`
+     when those children differ, or omitted entirely when all not-done children are
+     untagged (null). Legacy phases with no system data render no badge. It sits next to
+     {{release_badge}}; the two bands are orthogonal. See references/mutation-ops.md. -->
+
 **Status:** {{rollup_status}}
 **Release:** {{release_derived}}   <!-- derived band or `mixed`/`untiered`; omit line when legacy/untiered -->
+**System:** {{system_derived}}   <!-- derived system or `cross-cutting`/`untagged`; omit line when legacy/untagged -->
 
 ## Progress
 
@@ -31,8 +39,9 @@ updated_at: {{updated_at}}
 {{story_list_ordered_by_sequence}}
 
 <!-- Each story row carries its own release badge token (`[<release>]`, omitted when
-     untiered) alongside its id/title/status, e.g.
-     `- [001.1.1 — Init repo](001.1.1-init-repo.md) [mvp] todo` -->
+     untiered) and system badge token (`[<system>]`, omitted when untagged) alongside its
+     id/title/status, e.g.
+     `- [001.1.1 — Init repo](001.1.1-init-repo.md) [mvp] [backend] todo` -->
 
 ## User stories by release
 {{story_groups_by_release}}

@@ -228,6 +228,23 @@ h1 .h1__pill { align-self: center; }
 .release-badge--backlog { color: var(--status-muted); background: var(--status-muted-bg); border-color: transparent; }
 .release-badge--mixed   { color: var(--status-warning); background: var(--status-warning-bg); border-color: transparent; }
 
+/* System band badge — [backend] / [app] / … (derived [cross-cutting] on phase/milestone).
+   Orthogonal to the release badge; both may render together. Rendered only when the item
+   is tagged; JS hides it when system is null/absent or the {{system}} token is unresolved,
+   so legacy untagged items show no badge. Shares tokens → readable in light + dark. */
+.system-badge {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+  background: var(--accent-subtle);
+  color: var(--accent);
+  border: 1px solid var(--rule-heavy);
+  padding: 1px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.system-badge--cross-cutting { color: var(--status-warning); background: var(--status-warning-bg); border-color: transparent; }
+
 /* ============================================================
    Field rows (depends / spec refs)
    ============================================================ */
@@ -509,7 +526,7 @@ code {
 </style>
 </head>
 <body>
-<main data-id="{{id}}" data-kind="user-story" data-status="{{status}}" data-release="{{release}}"
+<main data-id="{{id}}" data-kind="user-story" data-status="{{status}}" data-release="{{release}}" data-system="{{system}}"
       data-created-at="{{created_at}}" data-updated-at="{{updated_at}}">
 
   <nav class="crumbs"><a href="../../README.html">Roadmap</a><span class="sep">/</span><a href="../README.html">{{milestone}}</a><span class="sep">/</span><a href="README.html">{{phase}}</a><span class="sep">/</span><span>{{id}}</span></nav>
@@ -532,6 +549,7 @@ code {
       <span>{{title}}</span>
       <span class="h1__pill"><span class="pill pill--active">{{status}}</span></span>
       <span class="h1__pill"><span class="release-badge" data-release="{{release}}" hidden>[{{release}}]</span></span>
+      <span class="h1__pill"><span class="system-badge" data-system="{{system}}" hidden>[{{system}}]</span></span>
     </h1>
 
     <!-- 2. ID / meta header block -->
@@ -677,7 +695,23 @@ code {
     if (release === "backlog") badge.classList.add("release-badge--backlog");
   }
 
-  function init() { syncHeaderPill(); syncReleaseBadge(); }
+  function syncSystemBadge() {
+    var root = document.querySelector('main[data-kind="user-story"]');
+    if (!root) return;
+    var system = root.getAttribute("data-system");
+    var badge = document.querySelector(".system-badge");
+    if (!badge) return;
+    // null / absent / unresolved token → untagged, show no badge (legacy-safe)
+    if (!system || system === "null" || system === "{{" + "system}}") {
+      badge.hidden = true;
+      return;
+    }
+    badge.hidden = false;
+    badge.textContent = "[" + system + "]";
+    // a story's raw system is never "cross-cutting" (that is derived only on phase/milestone)
+  }
+
+  function init() { syncHeaderPill(); syncReleaseBadge(); syncSystemBadge(); }
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);

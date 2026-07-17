@@ -1,6 +1,6 @@
 # Roadmap — Mutation Operations Reference
 
-This document is the single source of truth for the six doc-only **mutation operations** the `roadmap` skill exposes on an existing `/roadmap/`: `set-release`, `ingest-spec`, `reorder`, `revise`, `release`, and `add-item`. It also defines the staged-diff marker set, the phase/milestone cascade + derived `[mixed]` badge, and the structural-immutability rule that all ops obey.
+This document is the single source of truth for the doc-only **mutation operations** the `roadmap` skill exposes on an existing `/roadmap/`: `set-release`, `set-system`, `ingest-spec`, `reorder`, `revise`, `release`, `add-item`, and the `migrate-systems` procedure. It also defines the staged-diff marker set, the phase/milestone cascade + derived `[mixed]`/`[cross-cutting]` badges, and the structural-immutability rule that all ops obey.
 
 These ops are the mutation engine invoked by the `product-manager` skill's management verbs (see `product-manager/references/roadmap-management.md`). The roadmap skill applies the mutation; the PM skill resolves the selection, cuts a branch, and commits/pushes/PRs. **Exactly one skill (`roadmap`) writes `/roadmap/`.**
 
@@ -22,7 +22,7 @@ If the user rejects at the gate, **no files are written** and the op reports the
 
 ## Staged-diff marker set
 
-The mutation ops extend the existing re-eval markers (`+ new`, `~ changed`, `! superseded`) with a band marker:
+The mutation ops extend the existing re-eval markers (`+ new`, `~ changed`, `! superseded`) with two band markers:
 
 | Marker | Meaning |
 |---|---|
@@ -30,8 +30,9 @@ The mutation ops extend the existing re-eval markers (`+ new`, `~ changed`, `! s
 | `~ changed` | An in-place body/acceptance/order change on a **not-done** item (`revise`, `reorder`). |
 | `! superseded` | A not-done item retired via `status: superseded` (e.g. the old story replaced by a split/merge). |
 | `± release` | A **release-band** change on an item (the `set-release` op). Orthogonal to status; applies to items of any status. |
+| `⊞ system` | A **system-band** change on an item (the `set-system` op, and the bulk `migrate-systems` procedure). Orthogonal to status; applies to items of any status. |
 
-Every staged diff header lists the **exact resolved id set** the op will touch before any `+ ~ ! ±` rows.
+Every staged diff header lists the **exact resolved id set** the op will touch before any `+ ~ ! ± ⊞` rows.
 
 ---
 
@@ -40,18 +41,17 @@ Every staged diff header lists the **exact resolved id set** the op will touch b
 Reaffirms `sync-and-reeval.md` and the item schema:
 
 - `done` and `superseded` items are **structurally frozen**: their `id`, `sequence`, `depends_on`, title, `## Brief`, `## Acceptance`, and history never change.
-- **The only mutation permitted on a frozen item is a `release`-band change** (`± release`) — bands are classification metadata orthogonal to status.
+- **The mutations permitted on a frozen item are a `release`-band change (`± release`) or a `system`-band change (`⊞ system`)** — both bands are classification metadata orthogonal to status, so either may be edited on `done`/`superseded` items. (Tagging done work with a `system` is in fact required so the `release × system` readiness matrix counts completed stories — see `migrate-systems`.)
 - Structural verbs — `reorder`, `revise`, and the split/merge folded into `revise` — apply to **not-done** items only (`todo`, `in_progress`, `blocked`). They never renumber and never touch done work; scope convergence happens by **appending** new stable IDs and **superseding** the old not-done stories.
 
 ---
 
-## Cascade + derived `[mixed]` badge
+## Cascade + derived `[mixed]` / `[cross-cutting]` badges
 
-`release` is stored on items, but phase/milestone **rendering** derives its badge from children:
+Both bands are stored on items, but phase/milestone **rendering** derives its badge from children. The `release` and `system` bands cascade and derive identically — only the derived-"they-differ" badge label differs (`[mixed]` for release, `[cross-cutting]` for system):
 
-- Assigning a band to a **phase or milestone** id cascades the band to **all not-done descendant stories** (done/superseded descendants keep their existing band; only a band change is allowed on them, and cascade does not force one).
-- A phase/milestone **README shows a derived badge**: the shared band when all its not-done descendant stories agree (e.g. `[mvp]`), or `[mixed]` when they differ. An untiered scope (all not-done children `null`) shows **no badge**.
-- Per-release progress and grouping in the READMEs derive from the same descendant bands (see the templates).
+- **`release`.** Assigning a band to a **phase or milestone** id cascades the band to **all not-done descendant stories** (done/superseded descendants keep their existing band; only a band change is allowed on them, and cascade does not force one). A phase/milestone **README shows a derived badge**: the shared band when all its not-done descendant stories agree (e.g. `[mvp]`), or `[mixed]` when they differ. An untiered scope (all not-done children `null`) shows **no badge**. Per-release progress and grouping in the READMEs derive from the same descendant bands (see the templates).
+- **`system`.** Assigning a system to a **phase or milestone** id cascades it to **all not-done descendant stories** exactly as `release` does (done/superseded descendants keep their existing system; a system change is still allowed on them, but cascade does not force one). A phase/milestone **README shows a derived system badge**: the shared system when all its not-done descendant stories agree (e.g. `[backend]`), or `[cross-cutting]` when they differ. An untagged scope (all not-done children `null`) shows **no badge**. `[cross-cutting]` is the system-band analog of `[mixed]`.
 
 ---
 
@@ -67,15 +67,26 @@ Assign a release band to the selected items.
 - Editable on items of **any** status. A band change appends the release-change audit row (`± release`), leaving `status` unchanged (see `item-schema.md` → Release-change audit row).
 - Diff marker: `± release`.
 
+### `set-system <system> <ids…>`
+
+Assign a system band to the selected items — **fully parallel to `set-release`**, with the deliberate `system`-vs-`release` differences (config-declared set, typo guard, no reserved value):
+
+- **Story id** → set that story's `system` directly.
+- **Phase / milestone id** → cascade the system to all **not-done descendant stories** (see Cascade above); the phase/milestone renders the derived badge (`[<system>]` / `[cross-cutting]` / none).
+- `<system>` must be a **declared system in `config.systems`** (see `config.md`), or `null` to untag. **An undeclared system is an error** (typo guard) — the op stops and prints the valid declared system names; unlike `set-release`, it never lazily creates the value. `null` (untag) is always permitted.
+- Editable on items of **any** status, including `done`/`superseded` (a system band is permitted on frozen items — this is what lets migration tag completed work). A band change appends the system-change audit row (`⊞ system`), leaving `status` unchanged (see `item-schema.md` → System-change audit row).
+- Writes the per-item `system` value into `roadmap.lock.json` `items[]` (see `directory-layout.md`); does **not** touch the `config.systems` set.
+- Diff marker: `⊞ system`.
+
 ### `ingest-spec <path>`
 
 Read a spec file at an **explicit, location-agnostic path** and append its new work as a **targeted re-eval** limited to that spec's content.
 
 - Runs the re-eval diff (see `sync-and-reeval.md` → Re-eval procedure) but **scoped to the referenced spec** rather than the whole context: only milestones/phases/stories the spec introduces or changes are staged.
 - **Immutable to `done` work** — never rewrites or renumbers completed items; converges by append + supersede like a normal re-eval.
-- **New items default to `release: null`** (untiered) unless the spec itself pins a band.
-- **Preserves existing `release` values** on any item it touches (see `sync-and-reeval.md`).
-- Diff markers: `+ new`, `~ changed`, `! superseded` (and `± release` only if the spec explicitly re-bands an item).
+- **New items default to `release: null`** (untiered) and **`system: null`** (untagged) unless the spec itself pins a band.
+- **Preserves existing `release` and `system` values** on any item it touches (see `sync-and-reeval.md`).
+- Diff markers: `+ new`, `~ changed`, `! superseded` (and `± release` / `⊞ system` only if the spec explicitly re-bands an item).
 
 ### `reorder <ids-in-order>` (or `--after <id>`)
 
@@ -109,7 +120,7 @@ Append **one new item** — a `milestone`, `phase`, or `user-story` — directly
 - `<kind>` ∈ `milestone | phase | user-story`.
 - `--to <parent-id>` names the parent scope: a `user-story` targets a **phase** (or a **milestone** — auto-phase, below); a `phase` targets a **milestone**; a `milestone` takes no parent.
 - **ID assignment (stable-identity rule):** the new item takes the **next available number** in its parent scope — `NNN` (milestone), `NNN.M` (phase), `NNN.M.T` (story). Never renumbers existing items.
-- New-item frontmatter: `status: todo`, `release: null`, `sequence` = (max `sequence` in the parent scope) + 1, `created_at`/`updated_at` = write timestamp.
+- New-item frontmatter: `status: todo`, `release: null`, `system: null`, `sequence` = (max `sequence` in the parent scope) + 1, `created_at`/`updated_at` = write timestamp. The caller (PM front-door) may pass a `system` value to set it at creation instead of `null` — it must be a declared `config.systems` name or the op errors (same typo guard as `set-system`); `null` is always permitted. `add-item` writes the field but does not append a separate `⊞ system` audit row (the creation row already records the new item).
 - **`user-story`:** the op owns the id-dependent fields — it assigns the id, sets `commit_trailer: Roadmap-Story: <id>`, and appends `Commit with trailer: Roadmap-Story: <id>` as the final line of `## Brief`. The caller passes only `title`, the Brief body, and `## Acceptance`. Body sections are written in schema order (`## Brief`, `## Acceptance`, `## Audit log`).
 - **`milestone`:** creates `NNN-<slug>/README.md` and **seeds one default phase** `NNN.1-general/README.md` (empty) so a later `add-item user-story --to <milestone>` has a landing phase. Both appear as `+ new` rows.
 - **`phase`:** creates `NNN.M-<slug>/README.md` under the target milestone.
@@ -118,8 +129,25 @@ Append **one new item** — a `milestone`, `phase`, or `user-story` — directly
 - **Immutable to existing work:** only appends new stable ids; never rewrites, renumbers, or supersedes existing items, and never touches `done`/`superseded` work.
 - Diff marker: `+ new` (one row per new file; a milestone add shows two — the milestone and its default phase).
 
+### `migrate-systems`
+
+Adopt the `system` band on an **existing** roadmap by interactive inference. It is a doc-only procedure that runs the standard apply contract once over the whole roadmap (one staged diff → gate → bulk write → propose commit → never commit). **Idempotent** — re-running only picks up still-untagged stories. **Tags done items too** — the system band is permitted on frozen items, and completed work must be tagged or it is invisible to the readiness matrix.
+
+Steps:
+
+1. **Config bootstrap.** If `config.systems` (see `config.md`) is **empty**, prompt the user to declare systems one at a time — `name` + optional `path` — via structured questions (`AskUserQuestion` in Claude Code, `question` in opencode), and write them to `/roadmap/roadmap.config.json`. If systems are already declared, skip this step.
+2. **Propose per untagged story.** For **every untagged story** (`system: null`, **regardless of status — `done`/`superseded` included**), auto-propose a system by analyzing its `title`, `## Brief`, and parent phase title against the declared system `name`s and their `path` hints. Stories already tagged are left untouched (this is what makes re-running idempotent).
+3. **One whole-roadmap staged diff.** Present the entire proposal as a **single** staged diff of `⊞ system` rows, **grouped by proposed system**, so the user can correct any row before applying. Un-inferable stories are shown **untagged** (left `null`) and called out — migration never guesses blindly.
+4. **Gate + bulk apply.** On approval, apply every proposed assignment via `set-system` semantics in bulk: write each story's `system` frontmatter, append one system-change audit row per changed story (`⊞ system`, status unchanged), and update `roadmap.lock.json` `items[].system`. Then **propose the commit `docs(roadmap): migrate-systems`**. **Never commit.**
+5. **Report.** Print a summary: how many stories were tagged, the per-system counts, and the list of un-inferable stories left `null` for the user to `set-system` / PM `assign-system` manually later.
+
+Diff marker: `⊞ system` (one row per newly-tagged story). Backward compatibility: migration is **opt-in** — a legacy roadmap that never runs it keeps working (untagged, no badges, the readiness matrix shows only an `(untagged)` column).
+
 ---
 
 ## Backward compatibility
 
-All ops honor the nullable/lazy model: a legacy roadmap with no `releases[]` and no item `release` fields is valid. The first `set-release` (or PM `assign`) lazily creates `releases[]` and adds the item's `release` field; nothing is migrated retroactively, and untiered items keep rendering with **no badge**.
+All ops honor the nullable/lazy model:
+
+- **`release`:** a legacy roadmap with no `releases[]` and no item `release` fields is valid. The first `set-release` (or PM `assign`) lazily creates `releases[]` and adds the item's `release` field; nothing is migrated retroactively, and untiered items keep rendering with **no badge**.
+- **`system`:** a legacy roadmap with no `config.systems` and no item `system` fields is valid. `system` is nullable and lazily written — the field is added only when a story is first tagged via `set-system` (PM `assign-system`), passed to `add-item` at creation, or bulk-tagged by `migrate-systems`. **No forced migration**; untagged items keep rendering with **no badge**, and the derived `release × system` readiness matrix collapses to a single `(untagged)` column. `null` is always a permitted assignment.

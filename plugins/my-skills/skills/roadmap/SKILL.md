@@ -17,6 +17,8 @@ description: Decomposes a project spec into an auditable milestone→phase→use
 |---|---|
 | `/roadmap` | Auto-detect: `/roadmap/` does not exist → **build** (context gate → decompose → materialize); `/roadmap/` exists → **re-evaluate** (diff + preserve, see Sync + Re-eval). |
 | `/roadmap sync` | Scan git commit trailers, stamp matched stories `done`, roll up phase/milestone statuses, refresh progress %. |
+| `/roadmap migrate-systems` | Adopt the `system` band on an existing roadmap by interactive inference (config bootstrap → per-untagged-story proposal incl. done items → one staged diff → apply → propose commit). Doc-only — writes files, proposes a commit, never commits. See `references/mutation-ops.md` → `migrate-systems`. |
+| `/roadmap set-system <system> <ids…>` | Assign the `system` band directly (parity with the other mutation ops; also driven via the PM `assign-system` front-door). Doc-only — stages a diff, gates, writes, proposes a commit, never commits. See `references/mutation-ops.md` → `set-system`. |
 
 **Flags** (override config for the current run):
 
@@ -136,22 +138,56 @@ The full algorithms — rollup rules, the Sync procedure, and the Re-eval proced
 
 ## Mutation operations
 
-Beyond building, syncing, and re-evaluating, the roadmap skill exposes six doc-only **mutation operations** on an existing `/roadmap/`. They are the engine behind the `product-manager` skill's management verbs; the full normative spec is in `references/mutation-ops.md`.
+Beyond building, syncing, and re-evaluating, the roadmap skill exposes doc-only **mutation operations** on an existing `/roadmap/`, plus the `migrate-systems` procedure. They are the engine behind the `product-manager` skill's management verbs; the full normative spec is in `references/mutation-ops.md`.
 
 **Release band.** Every item carries an optional `release` band (`string | null`) — classification metadata **orthogonal to `status`**, editable on items of any status. `null`/absent = active untiered; the reserved value `backlog` = parked; any other value = a named release train (`mvp`, `v1.1`, …) registered in the ordered `releases[]` array in `roadmap.lock.json`. The band is nullable and the registry is lazily created, so legacy roadmaps are untouched (no migration). See `references/item-schema.md` and `references/directory-layout.md`.
 
-**The six ops at a glance** (each: **stage a diff → gate on approval → write files → propose a commit → never commit**):
+**System band.** Every item also carries an optional `system` band (`string | null`) — a **second classification axis orthogonal to both `status` and `release`** (a monorepo story belongs to one deployable system, e.g. `backend`, and to one release train, e.g. `mvp`, at once). It mirrors the `release` band's machinery (nullable per-item field, cascade to not-done descendants, derived phase/milestone badge — `[cross-cutting]` in place of `[mixed]`, editable on frozen items) with deliberate differences: the set of systems is **config-declared** in `roadmap.config.json` → `systems` (not a lazily-grown lock registry), systems are an **unordered peer set**, each may carry an optional `path`, and assigning an **undeclared system is an error** (typo guard) — `null` (untag) is always permitted. The band is nullable and lazily written, so legacy roadmaps render and execute unchanged (no badges; no forced migration). See `references/config.md`, `references/item-schema.md`, and `references/directory-layout.md`.
+
+**The ops at a glance** (each: **stage a diff → gate on approval → write files → propose a commit → never commit**):
 
 | Op | Purpose |
 |---|---|
-| `set-release <release> <ids…>` | Assign a band; cascades to not-done descendant stories for a phase/milestone id, derived `[mixed]` badge when children differ. |
-| `ingest-spec <path>` | Targeted re-eval scoped to one spec file; appends new work (default `release: null`), immutable to done work, preserves existing bands. |
+| `set-release <release> <ids…>` | Assign a release band; cascades to not-done descendant stories for a phase/milestone id, derived `[mixed]` badge when children differ. |
+| `set-system <system> <ids…>` | Assign a system band (parallel to `set-release`); cascades to not-done descendant stories for a phase/milestone id, derived `[cross-cutting]` badge when children differ. `<system>` must be declared in `config.systems` or `null` — undeclared errors (typo guard). |
+| `ingest-spec <path>` | Targeted re-eval scoped to one spec file; appends new work (default `release: null`, `system: null`), immutable to done work, preserves existing bands. |
 | `reorder <ids-in-order>` | Change `sequence`/`depends_on` of **not-done** items only. |
 | `revise <id>` | Retitle / re-scope, or split/merge via new stable IDs + supersede — **not-done** items only. |
 | `release <list\|reorder\|rename>` | Manage the `releases[]` registry order and names. |
-| `add-item <kind> [--to <parent-id>]` | Append one new milestone/phase/user-story directly, without a spec file; owns id assignment and id-dependent fields. |
+| `add-item <kind> [--to <parent-id>]` | Append one new milestone/phase/user-story directly, without a spec file; owns id assignment and id-dependent fields (accepts an optional `system` at creation). |
 
-The staged-diff marker set extends the re-eval markers with a band marker: `+ new`, `~ changed`, `! superseded`, `± release`. Structural edits (`reorder`, `revise`, split/merge) apply to not-done items only; a frozen `done`/`superseded` item may only have its `release` band changed.
+Alongside the ops, the **`migrate-systems`** procedure adopts the `system` band on an existing roadmap: config bootstrap (if `config.systems` is empty) → per-untagged-story inference (including `done` items, so completed work counts toward readiness) → one whole-roadmap staged diff grouped by proposed system → gate → bulk apply via `set-system` semantics → propose commit `docs(roadmap): migrate-systems`, never commit. Idempotent; un-inferable stories stay `null` and are reported. See `references/mutation-ops.md` → `migrate-systems`.
+
+The staged-diff marker set extends the re-eval markers with two band markers: `+ new`, `~ changed`, `! superseded`, `± release`, `⊞ system`. Structural edits (`reorder`, `revise`, split/merge) apply to not-done items only; a frozen `done`/`superseded` item may only have its `release` band or `system` band changed.
+
+---
+
+## Release readiness
+
+Because `release` and `system` are **orthogonal** bands, a story sits in exactly one cell of a **`release × system` matrix**. Release readiness is the question "is this release shippable across *every* system, or is one lagging?" — answered by a **pure derivation** over story `status`, `release`, and `system`. **No new state is stored**; the matrix is recomputed on demand from `roadmap.lock.json` (the per-item `status`/`release`/`system` values) and the `config.systems` set.
+
+### Derivation
+
+```
+cell(release r, system s) := { done:  |stories where release=r ∧ system=s ∧ status ∈ {done, superseded}|,
+                               total: |stories where release=r ∧ system=s| }
+
+READY(r) := every not-superseded story with release=r is done, regardless of system
+          ( equivalently: no cell in row r — every declared-system column AND the (untagged) column — has remaining not-done work )
+```
+
+- `superseded` stories count toward "no remaining work" exactly as in the rollup function (`references/sync-and-reeval.md` → Rollup rules) — they are done-or-gone.
+- **Untagged (`system: null`) stories** appear in a dedicated **`(untagged)` column** so nothing is silently dropped. A legacy roadmap with nothing tagged collapses to this single column.
+- Rows are the named releases in `roadmap.lock.json` → `releases[]` order, plus an **untiered row** for `release: null` stories; `backlog` is included as its own row. Columns are the declared `config.systems` (any order — systems are unordered peers) plus `(untagged)`.
+
+### Where it renders
+
+The same derivation surfaces in **two** locations (both are pure views — neither stores state):
+
+1. **Roadmap index README section** — an embedded compact readiness matrix in the top-level `/roadmap/README.<ext>` (see `templates/roadmap-readme.template.*` and design prompt `docs/design-prompts/13-roadmap-system-badge-and-matrix-additions.md`).
+2. **Dedicated dashboard artifact** — a standalone `release-matrix` template rendering the full `release × system` grid with per-cell `done/total`, a `READY?` verdict column, and laggard callouts (see `templates/release-matrix.template.*` and design prompt `docs/design-prompts/12-roadmap-release-matrix.md`).
+
+The `product-manager` skill exposes the same derivation read-only via its `release-status [release]` verb (`product-manager/references/scope-resolution.md` / `product-manager/SKILL.md`); it computes exactly the matrix defined here — no divergent logic.
 
 ---
 
@@ -161,11 +197,11 @@ All normative details live in these files (relative to `plugins/my-skills/skills
 
 | File | Content |
 |---|---|
-| `references/directory-layout.md` | Directory tree, ID scheme, stable-identity rule, `roadmap.lock.json` schema |
-| `references/item-schema.md` | Frontmatter keys (incl. `release` band), body sections, audit log format (incl. release-change row), rollup function, html rendering rules |
-| `references/config.md` | Config keys, precedence chain, `roadmap.config.json` schema |
-| `references/sync-and-reeval.md` | Rollup rules, Sync procedure (git command + steps), Re-eval procedure (incl. band preservation + `ingest-spec`) |
-| `references/mutation-ops.md` | Mutation ops (`set-release`, `ingest-spec`, `reorder`, `revise`, `release`, `add-item`), staged-diff markers, cascade + `[mixed]` badge, structural immutability |
+| `references/directory-layout.md` | Directory tree, ID scheme, stable-identity rule, `roadmap.lock.json` schema (incl. `items[].system`; the `system` set lives in config) |
+| `references/item-schema.md` | Frontmatter keys (incl. `release` and `system` bands), body sections, audit log format (incl. release-change + system-change rows), rollup function, derived badges (`[mixed]`/`[cross-cutting]`), html rendering rules |
+| `references/config.md` | Config keys (incl. `systems: [{name, path?}]`), precedence chain, typo-guard rationale, `roadmap.config.json` schema |
+| `references/sync-and-reeval.md` | Rollup rules, Sync procedure (git command + steps), Re-eval procedure (incl. band preservation for `release` + `system` + `ingest-spec`) |
+| `references/mutation-ops.md` | Mutation ops (`set-release`, `set-system`, `ingest-spec`, `reorder`, `revise`, `release`, `add-item`) + `migrate-systems`, staged-diff markers (incl. `⊞ system`), cascade + `[mixed]`/`[cross-cutting]` badges, structural immutability |
 
 Templates (rendered per `output_format`):
 
@@ -179,3 +215,7 @@ Templates (rendered per `output_format`):
 | `templates/phase-readme.template.html` | Phase `README.html` (html mode) |
 | `templates/user-story.template.md` | User-story file (md mode) |
 | `templates/user-story.template.html` | User-story file (html mode) |
+| `templates/release-matrix.template.md` | `release × system` readiness dashboard (md mode) |
+| `templates/release-matrix.template.html` | `release × system` readiness dashboard (html mode) |
+
+All four item templates (`roadmap-readme`, `milestone-readme`, `phase-readme`, `user-story`) carry a `system` badge token alongside the existing release badge; the `roadmap-readme` index additionally embeds a compact readiness-matrix section. Both `.md` and `.html` variants stay at parity. The Claude-design prompts that specify these templates are `docs/design-prompts/12-roadmap-release-matrix.md` (the dashboard) and `docs/design-prompts/13-roadmap-system-badge-and-matrix-additions.md` (the badge + embedded matrix additions).

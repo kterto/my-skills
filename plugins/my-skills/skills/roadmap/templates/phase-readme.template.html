@@ -225,6 +225,22 @@ h1 .h1__pill { align-self: center; }
 .release-badge--backlog { color: var(--status-muted); background: var(--status-muted-bg); border-color: transparent; }
 .release-badge--mixed   { color: var(--status-warning); background: var(--status-warning-bg); border-color: transparent; }
 
+/* System band badge — derived on a phase: shared system, or [cross-cutting] when children
+   differ, hidden when untagged/legacy. Orthogonal to the release badge (both may render
+   together). Uses shared tokens → readable light + dark. */
+.system-badge {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+  background: var(--accent-subtle);
+  color: var(--accent);
+  border: 1px solid var(--rule-heavy);
+  padding: 1px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.system-badge--cross-cutting { color: var(--status-warning); background: var(--status-warning-bg); border-color: transparent; }
+
 /* Per-release progress + grouping view */
 .release-progress { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-top: var(--sp-4); font-family: var(--font-mono); font-size: var(--text-sm); color: var(--text-secondary); }
 .release-progress__item { display: inline-flex; gap: var(--sp-2); align-items: baseline; }
@@ -476,7 +492,7 @@ code {
 </style>
 </head>
 <body>
-<main data-id="{{id}}" data-kind="phase" data-status="{{rollup_status}}" data-release="{{release_derived}}"
+<main data-id="{{id}}" data-kind="phase" data-status="{{rollup_status}}" data-release="{{release_derived}}" data-system="{{system_derived}}"
       data-created-at="{{created_at}}" data-updated-at="{{updated_at}}">
 
   <nav class="crumbs"><a href="../../README.html">Roadmap</a><span class="sep">/</span><a href="../README.html">{{milestone}}</a><span class="sep">/</span><span>{{id}}</span></nav>
@@ -497,6 +513,7 @@ code {
       <span>{{title}}</span>
       <span class="h1__pill"><span class="pill pill--active">{{rollup_status}}</span></span>
       <span class="h1__pill"><span class="release-badge" data-release="{{release_derived}}" hidden>[{{release_derived}}]</span></span>
+      <span class="h1__pill"><span class="system-badge" data-system="{{system_derived}}" hidden>[{{system_derived}}]</span></span>
     </h1>
 
     <!-- 2. ID / meta header block -->
@@ -542,11 +559,11 @@ code {
       <div class="details__body">
         <ol class="tasks">
           <!-- renderer emits one <li> per user story, each carrying the story's
-               release badge alongside its status pill:
-               <li data-status="…" data-release="mvp"><input type="checkbox" disabled [checked]>
+               release badge AND system badge alongside its status pill:
+               <li data-status="…" data-release="mvp" data-system="backend"><input type="checkbox" disabled [checked]>
                  <span class="task__title">…</span>
-                 <span class="task__status"><span class="pill">…</span> <span class="release-badge">[mvp]</span></span></li>
-               The badge is omitted for untiered stories. -->
+                 <span class="task__status"><span class="pill">…</span> <span class="release-badge">[mvp]</span> <span class="system-badge">[backend]</span></span></li>
+               Each badge is omitted for untiered/untagged stories respectively. -->
           {{story_list_ordered_by_sequence}}
         </ol>
       </div>
@@ -649,7 +666,23 @@ code {
     else if (release === "mixed") badge.classList.add("release-badge--mixed");
   }
 
-  function init() { syncHeaderPill(); syncReleaseBadge(); }
+  function syncSystemBadge() {
+    var root = document.querySelector('main[data-kind="phase"]');
+    if (!root) return;
+    var system = root.getAttribute("data-system"); // derived system or "cross-cutting"
+    var badge = document.querySelector(".system-badge");
+    if (!badge) return;
+    // null / absent / unresolved token → untagged phase, show no badge (legacy-safe)
+    if (!system || system === "null" || system === "untagged" || system === "{{" + "system_derived}}") {
+      badge.hidden = true;
+      return;
+    }
+    badge.hidden = false;
+    badge.textContent = "[" + system + "]";
+    if (system === "cross-cutting") badge.classList.add("system-badge--cross-cutting");
+  }
+
+  function init() { syncHeaderPill(); syncReleaseBadge(); syncSystemBadge(); }
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);

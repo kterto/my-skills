@@ -44,8 +44,8 @@ Everything not in this table is identical to the `release` band.
 ```
 cell(release r, system s) := { done: |stories where release=r ∧ system=s ∧ status∈{done,superseded}|,
                                total:|stories where release=r ∧ system=s| }
-READY(r) := for every declared system s, every not-superseded story with release=r is done
-          ( i.e. no cell in row r has remaining not-done work )
+READY(r) := every not-superseded story with release=r is done, regardless of system
+          ( i.e. no cell in row r — every declared-system column AND the (untagged) column — has remaining not-done work )
 ```
 
 `superseded` stories count toward "no remaining work" exactly as in the existing rollup function. Untagged (`system: null`) stories in a band appear in an `(untagged)` column so nothing is silently dropped from the matrix. No new fields are persisted — the matrix is recomputed on demand.

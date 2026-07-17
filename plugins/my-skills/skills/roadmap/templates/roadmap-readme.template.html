@@ -230,6 +230,36 @@ h1 {
 .release-badge--backlog { color: var(--status-muted); background: var(--status-muted-bg); border-color: transparent; }
 .release-badge--mixed   { color: var(--status-warning); background: var(--status-warning-bg); border-color: transparent; }
 
+/* System band badge — per milestone at index level: named system, or derived
+   [cross-cutting]; hidden when untagged/legacy. Orthogonal to the release badge (both
+   may render on the same row). Shared tokens → light + dark. */
+.system-badge {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+  background: var(--accent-subtle);
+  color: var(--accent);
+  border: 1px solid var(--rule-heavy);
+  padding: 1px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.system-badge--cross-cutting { color: var(--status-warning); background: var(--status-warning-bg); border-color: transparent; }
+
+/* Release × system readiness matrix (embedded compact view) — derived, no stored state.
+   Rows = releases (releases[] order) + untiered + backlog; columns = declared systems +
+   an (untagged) column. Cells = done/total. Horizontally scrollable on narrow viewports;
+   never lets the page body scroll sideways. Theme-aware via shared tokens. */
+.readiness { margin-top: var(--sp-4); overflow-x: auto; }
+.readiness__table { border-collapse: collapse; width: 100%; font-family: var(--font-mono); font-size: var(--text-sm); }
+.readiness__table th, .readiness__table td { padding: var(--sp-2) var(--sp-3); text-align: left; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+.readiness__table th { color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; font-size: var(--text-xs); }
+.readiness__cell--ready { color: var(--status-success); }
+.readiness__cell--lagging { color: var(--status-warning); }
+.readiness__col--untagged { color: var(--text-muted); }
+.readiness__verdict--ready { color: var(--status-success); }
+.readiness__verdict--lagging { color: var(--status-warning); }
+
 /* Per-release progress + grouping view */
 .release-progress { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-top: var(--sp-4); font-family: var(--font-mono); font-size: var(--text-sm); color: var(--text-secondary); }
 .release-progress__item { display: inline-flex; gap: var(--sp-2); align-items: baseline; }
@@ -548,6 +578,37 @@ code {
   </section>
 
   <!-- ============================================================
+       2b. Release readiness matrix (embedded compact view)
+       Derived on demand (no stored state) from each story's status + release + system.
+       Rows = named releases in releases[] order + an untiered row (release: null) +
+       backlog; columns = declared config.systems + an "(untagged)" column (system: null).
+       Cells = done/total (superseded counts as done). The trailing READY? column marks a
+       release ready only when every not-superseded story in that release is done, regardless
+       of system — no column, including "(untagged)", has remaining not-done work; laggard
+       columns (which may include "(untagged)") are called out. Rendered only when the roadmap has ≥1
+       declared system OR ≥1 tagged story; a legacy/untagged roadmap collapses to a single
+       "(untagged)" column (and the section may be omitted when nothing is tagged). The
+       full-grid dashboard lives in release-matrix.template.html; this is the compact index
+       view. See roadmap/SKILL.md → Release readiness.
+       ============================================================ -->
+  <section class="section" data-role="readiness-matrix">
+    <details open>
+      <summary>Release readiness <span class="summary__meta">release &times; system</span></summary>
+      <div class="details__body">
+        <div class="readiness">
+          <!-- {{readiness_matrix}} is a <table class="readiness__table"> the renderer fills:
+               a header row of `release` + one column per declared system + `(untagged)` + `READY?`;
+               one body row per release (releases[] order), then an untiered row, then backlog;
+               each cell `done/total` with .readiness__cell--ready / --lagging; the READY? cell
+               carries .readiness__verdict--ready / --lagging and lists laggard columns
+               (which may include `(untagged)`). -->
+          {{readiness_matrix}}
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <!-- ============================================================
        3. Milestone list (collapsible, open by default)
        ============================================================ -->
   <section class="section">
@@ -555,8 +616,9 @@ code {
       <summary>Milestones <span class="summary__meta">by sequence</span></summary>
       <div class="details__body">
         <ol class="milestones">
-          <!-- each milestone row carries its derived release badge alongside its status pill;
-               omitted for untiered milestones -->
+          <!-- each milestone row carries its derived release badge AND its derived system
+               badge alongside its status pill; each is omitted independently when the
+               milestone is untiered / untagged (the two bands are orthogonal) -->
           {{milestone_list_ordered_by_sequence}}
         </ol>
       </div>
@@ -637,6 +699,33 @@ code {
           <div class="legend__row">
             <span class="release-badge" style="opacity:0.6">(none)</span>
             <span class="legend__desc">Untiered — active but not assigned to a release train.</span>
+          </div>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <!-- ============================================================
+       5b. System legend (collapsible, collapsed by default)
+       Omitted for roadmaps with no declared systems and no tagged items. The system band
+       is orthogonal to release — a milestone/phase/story may show both badges.
+       ============================================================ -->
+  <section class="section" data-role="system-legend">
+    <details>
+      <summary>System legend <span class="summary__meta">bands</span></summary>
+      <div class="details__body">
+        <div class="legend">
+          <div class="legend__row">
+            <span class="system-badge">[backend]</span>
+            <span class="legend__desc">Named system — a deployable declared in <code>roadmap.config.json</code> &rarr; <code>systems</code> (unordered peer set).</span>
+          </div>
+          <div class="legend__row">
+            <span class="system-badge system-badge--cross-cutting">[cross-cutting]</span>
+            <span class="legend__desc">Derived badge on a milestone/phase whose not-done children span different systems.</span>
+          </div>
+          <div class="legend__row">
+            <span class="system-badge" style="opacity:0.6">(none)</span>
+            <span class="legend__desc">Untagged — active but not assigned to a system.</span>
           </div>
         </div>
       </div>

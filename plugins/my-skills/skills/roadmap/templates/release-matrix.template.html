@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Release readiness — release × system</title>
+<style>
+/* ============================================================
+   EDITORIAL DESIGN SYSTEM v1 — Color tokens (shared with the roadmap templates)
+   Self-contained, no external assets. Light + dark via prefers-color-scheme.
+   ============================================================ */
+:root {
+  --bg-page:        #faf9f7;
+  --bg-surface:     #f3f1ee;
+  --bg-overlay:     #ece9e4;
+
+  --text-primary:   #1a1917;
+  --text-secondary: #4a4844;
+  --text-muted:     #8a8680;
+
+  --accent:         #3730a3;
+  --accent-subtle:  #e0e7ff;
+  --accent-focus:   #4f46e5;
+
+  --rule:           #d6d2cb;
+  --rule-heavy:     #b5b0a8;
+
+  --status-success: #166534;
+  --status-success-bg: #dcfce7;
+  --status-active:  #92400e;
+  --status-active-bg: #fef3c7;
+  --status-warning: #9a3412;
+  --status-warning-bg: #ffedd5;
+  --status-danger:  #991b1b;
+  --status-danger-bg: #fee2e2;
+  --status-muted:   #374151;
+  --status-muted-bg: #f3f4f6;
+
+  --font-serif: Georgia, "Times New Roman", serif;
+  --font-sans:  -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                "Helvetica Neue", Arial, sans-serif;
+  --font-mono:  ui-monospace, "SF Mono", "Cascadia Code", "Fira Mono",
+                Menlo, Consolas, monospace;
+
+  --text-xs:   0.75rem;
+  --text-sm:   0.875rem;
+  --text-base: 1rem;
+  --text-lg:   1.125rem;
+  --text-xl:   1.25rem;
+  --text-2xl:  1.5rem;
+  --text-3xl:  2rem;
+
+  --sp-1:  0.25rem;
+  --sp-2:  0.5rem;
+  --sp-3:  0.75rem;
+  --sp-4:  1rem;
+  --sp-6:  1.5rem;
+  --sp-8:  2rem;
+  --sp-12: 3rem;
+  --sp-16: 4rem;
+
+  --measure: 70ch;
+  --line-height-body: 1.65;
+  --line-height-heading: 1.2;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-page:        #141312;
+    --bg-surface:     #1e1c1a;
+    --bg-overlay:     #272420;
+
+    --text-primary:   #f0ece6;
+    --text-secondary: #b8b3ab;
+    --text-muted:     #7a7570;
+
+    --accent:         #818cf8;
+    --accent-subtle:  #1e1b4b;
+    --accent-focus:   #a5b4fc;
+
+    --rule:           #2e2b28;
+    --rule-heavy:     #3d3a36;
+
+    --status-success: #86efac;
+    --status-success-bg: #14532d;
+    --status-active:  #fcd34d;
+    --status-active-bg: #451a03;
+    --status-warning: #fb923c;
+    --status-warning-bg: #431407;
+    --status-danger:  #fca5a5;
+    --status-danger-bg: #450a0a;
+    --status-muted:   #9ca3af;
+    --status-muted-bg: #1f2937;
+  }
+}
+
+/* ============================================================
+   Base reset
+   ============================================================ */
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--line-height-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+main {
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: var(--sp-16) var(--sp-8) var(--sp-16);
+}
+@media (max-width: 640px) {
+  main { padding: var(--sp-12) var(--sp-6) var(--sp-12); }
+}
+::selection { background: var(--accent-subtle); color: var(--accent); }
+a { color: var(--accent); }
+
+/* ============================================================
+   Masthead
+   ============================================================ */
+.masthead { margin-bottom: var(--sp-8); }
+.masthead__eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--text-muted);
+  margin: 0 0 var(--sp-3);
+}
+h1 {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: clamp(2rem, 5vw, 2.75rem);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  margin: 0 0 var(--sp-4);
+  color: var(--text-primary);
+}
+.masthead__summary {
+  font-family: var(--font-serif);
+  font-size: var(--text-lg);
+  font-style: italic;
+  color: var(--text-secondary);
+  max-width: 48ch;
+  margin: 0;
+}
+
+/* ============================================================
+   Section scaffolding
+   ============================================================ */
+.section { margin-top: var(--sp-8); }
+.section__head {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin: 0 0 var(--sp-3);
+}
+
+/* ============================================================
+   Release × system readiness matrix — derived, no stored state.
+   Rows = releases (releases[] order) + untiered + backlog; columns = declared systems +
+   an (untagged) column + a trailing READY? verdict. Cells = done/total. The table scrolls
+   horizontally inside its own container so the page body never scrolls sideways.
+   Theme-aware via shared tokens.
+   ============================================================ */
+.readiness { overflow-x: auto; margin-top: var(--sp-4); border: 1px solid var(--rule); border-radius: 8px; }
+.readiness__table { border-collapse: collapse; width: 100%; font-family: var(--font-mono); font-size: var(--text-sm); }
+.readiness__table caption { caption-side: bottom; text-align: left; color: var(--text-muted); font-size: var(--text-xs); padding: var(--sp-3); }
+.readiness__table th,
+.readiness__table td { padding: var(--sp-3) var(--sp-4); text-align: left; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+.readiness__table thead th {
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: var(--text-xs);
+  background: var(--bg-surface);
+}
+.readiness__table tbody th { color: var(--text-secondary); font-weight: 600; }
+.readiness__table tbody tr:last-child td,
+.readiness__table tbody tr:last-child th { border-bottom: none; }
+.readiness__cell--ready   { color: var(--status-success); }
+.readiness__cell--lagging { color: var(--status-warning); }
+.readiness__col--untagged { color: var(--text-muted); }
+.readiness__verdict--ready   { color: var(--status-success); font-weight: 700; }
+.readiness__verdict--lagging { color: var(--status-warning); }
+.readiness__path { color: var(--text-muted); font-size: var(--text-xs); }
+
+/* Legend */
+.legend { margin-top: var(--sp-6); display: grid; gap: var(--sp-2); }
+.legend__row { display: flex; gap: var(--sp-3); align-items: baseline; font-size: var(--text-sm); }
+.legend__key { font-family: var(--font-mono); color: var(--text-secondary); white-space: nowrap; }
+.legend__desc { color: var(--text-muted); }
+code { font-family: var(--font-mono); font-size: 0.9em; background: var(--bg-overlay); padding: 1px 4px; border-radius: 3px; }
+</style>
+</head>
+<body>
+<main data-kind="release-matrix" data-created-at="{{created_at}}" data-updated-at="{{updated_at}}">
+
+  <!-- ============================================================
+       1. Masthead
+       ============================================================ -->
+  <header class="masthead">
+    <p class="masthead__eyebrow">Roadmap · Release readiness</p>
+    <h1>Release &times; System</h1>
+    <p class="masthead__summary">Is each release shippable across every system, or is one lagging? Derived on demand from story status &mdash; no stored state.</p>
+    <p class="masthead__summary" style="font-style:normal;font-family:var(--font-mono);font-size:var(--text-sm);margin-top:var(--sp-3);">{{done_count}}/{{total_count}} stories done ({{pct}}%)</p>
+  </header>
+
+  <!-- ============================================================
+       2. The matrix
+       Derived: cell(release r, system s) = { done: stories where release=r ∧ system=s ∧
+       status ∈ {done, superseded}, total: stories where release=r ∧ system=s }. A release
+       is READY only when every not-superseded story in that release is done, regardless of
+       system — no cell in the row, across every declared-system column AND the `(untagged)`
+       column, has remaining not-done work. `superseded` counts as no-remaining-work.
+       ============================================================ -->
+  <section class="section" data-role="readiness-matrix">
+    <p class="section__head">Matrix</p>
+    <div class="readiness">
+      <!-- {{readiness_matrix}} is a <table class="readiness__table"> the renderer fills:
+           - THEAD: `release` + one <th scope="col"> per declared system (config.systems) +
+             an `(untagged)` column (system: null) + a trailing `READY?` column. A system
+             column header may carry its config `path` in a <span class="readiness__path">.
+           - TBODY: one row per named release in roadmap.lock.json `releases[]` order, then an
+             `(untiered)` row (release: null), then `backlog`. Row header is <th scope="row">.
+             Each cell is `done/total`; a cell with remaining not-done work carries
+             .readiness__cell--lagging, a fully-done cell .readiness__cell--ready; the
+             `(untagged)` column cells carry .readiness__col--untagged. The READY? cell is
+             .readiness__verdict--ready (`READY`) or .readiness__verdict--lagging
+             (`lagging: <col>, …` naming the laggard columns, which may include `(untagged)`).
+           Backward compatibility: a roadmap with no declared systems and no tagged stories
+           renders a single `(untagged)` column and every cell of work lands there. -->
+      {{readiness_matrix}}
+    </div>
+  </section>
+
+  <!-- ============================================================
+       3. Legend
+       ============================================================ -->
+  <section class="section">
+    <p class="section__head">Legend</p>
+    <div class="legend">
+      <div class="legend__row">
+        <span class="legend__key">done/total</span>
+        <span class="legend__desc">Stories complete (<code>done</code>+<code>superseded</code>) over total in that release &times; system cell.</span>
+      </div>
+      <div class="legend__row">
+        <span class="legend__key readiness__verdict--ready">READY</span>
+        <span class="legend__desc">Every not-superseded story in the release is done regardless of system &mdash; no column, including <code>(untagged)</code>, has remaining not-done work; shippable.</span>
+      </div>
+      <div class="legend__row">
+        <span class="legend__key readiness__verdict--lagging">lagging: &lt;col&gt;…</span>
+        <span class="legend__desc">The release has remaining not-done work in the listed column(s), which may include <code>(untagged)</code>.</span>
+      </div>
+      <div class="legend__row">
+        <span class="legend__key readiness__col--untagged">(untagged)</span>
+        <span class="legend__desc">Stories with <code>system: null</code> &mdash; nothing is silently dropped; a legacy/untagged roadmap collapses to only this column.</span>
+      </div>
+      <div class="legend__row">
+        <span class="legend__key">(untiered)</span>
+        <span class="legend__desc">Stories with <code>release: null</code> (active but not on a named train).</span>
+      </div>
+    </div>
+  </section>
+
+</main>
+</body>
+</html>

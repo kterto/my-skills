@@ -23,12 +23,13 @@ For each story in the resolved queue, PM: (1) cuts a stacked branch, (2) invokes
 ## Invocation + Config
 
 ```
-/product-manager complete <scope> [--conservative=true|false] [--base <branch>] [--dry-run]
+/product-manager complete <scope> [--system <name>] [--conservative=true|false] [--base <branch>] [--dry-run]
 ```
 
 | Argument / Flag | Values | Description |
 |---|---|---|
-| `<scope>` | `roadmap`, milestone id (e.g. `001` or `001-bootstrap`), phase id (e.g. `001.2`) | Which user stories to execute. See `references/scope-resolution.md` → **Scope matching**. |
+| `<scope>` | `roadmap`, milestone id (e.g. `001` or `001-bootstrap`), phase id (e.g. `001.2`), release name (e.g. `mvp`, `backlog`), or a **declared system name** (e.g. `backend`) | Which user stories to execute. A bare declared system name selects that system's not-done stories across releases (backlog excluded). See `references/scope-resolution.md` → **Scope matching** / **System scope**. |
+| `--system <name>` | a name declared in `config.systems` | **Universal intersect filter** composable with any base `<scope>` — narrows the queue to stories whose `system` band equals `<name>` (applied after base scope matching, before Filter). Typo-guarded: an undeclared system stops and prints the valid names. See `references/scope-resolution.md` → **System filter**. |
 | `--conservative` | `true` (default) \| `false` | When `true`, halt after any story that requires human validation. When `false`, continue and queue the validation spot. |
 | `--base <branch>` | branch name | Override the run base branch (the branch PM started on is used if omitted). |
 | `--dry-run` | flag | Print the resolved story queue, mode, and git plan — then stop without asking for confirmation and without executing anything. |
@@ -93,7 +94,7 @@ For each story in the queue, PM executes the following steps in order:
 
 1. **Resolve base and cut branch.** Determine the base commit using the rules in `references/git-flow.md` → **Base resolution**, then cut `pm/<id>-<slug>` from it per `references/git-flow.md` → **Branch naming** and **Cutting the branch**.
 
-2. **Run the orchestrator.** Invoke the `orchestrator` skill with the story's `## Brief` section passed verbatim as the task input. Do not summarize, rewrite, or trim the brief — it is an orchestrator-ready contract and must be handed over exactly as written.
+2. **Run the orchestrator.** Invoke the `orchestrator` skill with the story's `## Brief` section passed verbatim as the task input. Do not summarize, rewrite, or trim the brief — it is an orchestrator-ready contract and must be handed over exactly as written. If the story carries a `system` whose `config.systems` entry declares a `path`, **append** a single trailing context line to the handoff (e.g. `System: app (package: apps/mobile)`) — this is additive metadata, not an edit of the brief, and does not change where the orchestrator runs (see **Path — store now, route later**).
 
    **Answer the orchestrator's Step 0 prompt with option 1.** The orchestrator's Step 0 pre-flight always asks a workspace question and never auto-selects (orchestrator `SKILL.md` → Step 0, Case A). PM has already cut and checked out `pm/<id>-<slug>`, and the single up-front confirmation authorizes this run, so PM answers Step 0 on the user's behalf by choosing **"use this branch"**. PM MUST NOT pick new-branch, new-worktree, or cancel — those move the work off the `pm/<id>-<slug>` branch PM tracks and push, yielding an empty PR / trailer mismatch.
 
@@ -132,6 +133,9 @@ Beyond `complete <scope>` (which *executes* stories), PM exposes a set of **mana
 | PM verb | Roadmap op (`roadmap/references/mutation-ops.md`) | Notes |
 |---|---|---|
 | `assign <release> <selection>` | `set-release <release> <ids…>` | Assign a named band or `backlog`; implicitly registers a new band in `releases[]`. |
+| `assign-system <system> <selection>` | `set-system <system> <ids…>` | Assign a **system** band to the resolved id set. `<system>` must be declared in `config.systems` (typo-guarded) or `null` to untag; unknown stops with valid names. No lazy creation. |
+| `migrate-systems` | `migrate-systems` | Adopt the `system` band across the existing roadmap (config bootstrap → per-untagged-story inference incl. done items → one staged diff → bulk apply), wrapped in the planning-PR flow. Interactive; idempotent. |
+| `release-status [release]` | *(read-only; no op)* | Print the derived `release × system` readiness matrix (per-cell `done/total`, `READY?`/laggards). All releases if none named; one row if named. No branch, no gate, no PR — mirrors `release list`. |
 | `park <selection>` | `set-release backlog <ids…>` | Sugar for `assign backlog <selection>`. |
 | `unpark <selection> [<release>]` | `set-release <release-or-null> <ids…>` | Sugar; with a release re-tiers to it, omitting the release un-tiers to `null`. |
 | `add-spec <path>` | `ingest-spec <path>` | Targeted re-eval appending a spec's new work (new items default `release: null`). |
@@ -148,7 +152,7 @@ Beyond `complete <scope>` (which *executes* stories), PM exposes a set of **mana
 
 1. **Resolve selection** → an exact id set. Selection accepts **ids/globs** (`001.1.*`, `002.1.1`) **and natural language** ("make auth and onboarding the MVP"); either way the resolved id set is shown in the staged diff before applying (`references/roadmap-management.md` → Selection resolution).
 2. **Cut** `pm/roadmap-<verb>-<slug>` off the PM starting branch (existing base resolution; `references/git-flow.md` → Planning-PR flow).
-3. **Invoke the roadmap op** → it stages a diff (markers `+ new`, `~ changed`, `! superseded`, `± release`), **gates on approval**, then writes files and prints a proposed commit message.
+3. **Invoke the roadmap op** → it stages a diff (markers `+ new`, `~ changed`, `! superseded`, `± release`, `⊞ system`), **gates on approval**, then writes files and prints a proposed commit message. (`release list` and `release-status` are read-only — they print and exit with no branch, gate, op, or PR.)
 4. **On approval** → commit `docs(roadmap): <verb> …`, push, open the planning PR (`templates/pr-body.template.md` planning variant).
 5. **On reject / empty diff** → discard the empty branch and return to the starting branch (`references/git-flow.md` → Reject-and-discard). No PR.
 
@@ -169,6 +173,22 @@ See `references/roadmap-management.md` → Spec-creation two-step.
 
 `complete <scope>` additionally accepts a **release name**: `complete mvp` / `complete v1.1` / `complete backlog` runs every not-done story in that band across all milestones, topo-ordered. Active-scope runs (`complete roadmap`/`<milestone>`/`<phase>`) **exclude `backlog`**. See `references/scope-resolution.md` → Release scope + Backlog exclusion.
 
+### System name as a `complete` scope + the `--system` filter
+
+`complete <scope>` also accepts a **bare declared system name** (`complete backend`) — every not-done `system=backend` story across all releases, backlog excluded — and a **universal `--system <name>` intersect filter** composable with any base scope (`complete mvp --system backend`, `complete 001 --system app`). Both validate `<name>` against `config.systems`; an undeclared system **stops and prints the valid names**. See `references/scope-resolution.md` → System scope, System filter, System typo guard.
+
+### `release-status [release]` — readiness matrix (read-only)
+
+`release-status` prints the derived **`release × system` readiness matrix** — per-cell `done/total`, a `READY?` verdict per release, and laggard callouts — for all releases (or one, if named). It **computes exactly the derivation defined in `roadmap/SKILL.md` → Release readiness** — PM adds no divergent logic. Each system's `path` (from `config.systems`) is surfaced in the matrix. Read-only: **no branch, no gate, no PR** — it mirrors `release list`.
+
+### `--system` on `add-ticket` / `add-milestone` / `add-phase`
+
+The `add-*` verbs accept `--system <name>` to set the new item's `system` at creation (passed through to roadmap `add-item`, which writes the field). Typo-guarded against `config.systems` (undeclared stops with valid names; `null` permitted). When **omitted**: **conservative** mode asks which system via a structured question (offering the declared set + "leave untagged"); **autonomous** mode leaves `system: null`.
+
+### Path — store now, route later
+
+When a story is system-scoped, PM reads that system's `path` from `config.systems` and **appends a context note** to the orchestrator brief handoff (a trailing line, e.g. `System: app (package: apps/mobile)`) so the implementer knows the target package. This is **additive** — the `## Brief` contract is still handed over verbatim (per-story loop step 2); the note is appended, never a rewrite. PM does **not** change where the orchestrator runs — actual package-dir routing from `path` is a deferred future story. The `path` is likewise surfaced in the `release-status` matrix.
+
 ---
 
 ## Error handling
@@ -181,7 +201,9 @@ See `references/roadmap-management.md` → Spec-creation two-step.
 - **Orchestrator prints a `Status: STALLED` stop banner** (cycle-limit, tester BLOCKED, qa BLOCKED_STALE, or spec DRAFT) → stop the entire run. Report the stop banner, the story id, and the unprocessed queue. Stories completed before the stall are preserved (their branches, commits, and PRs remain). Note: there is no terminal `BLOCKED` status — `BLOCKED` is an internal intermediate only; PM keys off the orchestrator's printed STALLED banner.
 - **`pipeline complete` banner but no FINAL artifact on disk** → the orchestrator's Step 7 write was dropped while the banner still printed. Re-invoke the orchestrator once to re-persist (per-story loop step 3, **Artifact verification**); if `plans/final/FINAL-{NNN}-{slug}.md` is still missing after the retry, halt the run like a STALLED stop. Never commit the story — the pipeline did not finish.
 - **Dependency cycle detected** → stop before executing any story and report the offending story ids.
-- **Unrecognized `<scope>` argument** → stop and print the list of valid milestone ids and phase ids from `roadmap.lock.json`.
+- **Unrecognized `<scope>` argument** → stop and print the list of valid milestone ids and phase ids from `roadmap.lock.json`, the release names from `releases[]` (and `backlog`), and the declared system names from `roadmap.config.json` → `systems`.
+- **Unknown system** (bare-system `<scope>`, `--system <name>`, or `assign-system`/`add-* --system` naming a system not in `config.systems`) → stop and print the valid declared system names (e.g. ``unknown system `backedn`; declared systems: backend, app, admin, landing``). Never silently return an empty queue or lazily create the system — the `system` set is config-declared and typo-guarded. `null` (untag) is always permitted.
+- **`--system` with no declared systems** (`config.systems` empty/absent) → the roadmap is not system-partitioned; stop and tell the user to declare systems in `roadmap.config.json` (or run `migrate-systems` to bootstrap them). Legacy untagged roadmaps otherwise run unchanged.
 - **Trailer mismatch after `/roadmap sync`** → warn and stop. If the story's `roadmap.lock.json` status is not `done` after sync, the trailer may contain a typo. See `references/git-flow.md` → **Trailer-mismatch guard**.
 - **`add-*` with an unresolvable `--to <parent>`** → stop and print the valid milestone/phase ids from `roadmap.lock.json` (same list as an unrecognized `complete` scope).
 - **`add-phase` / `add-ticket --to` naming a `done`/`superseded` parent** → allowed (append under an existing scope is not a structural edit of the frozen item); the new child is `todo`. Only refuse if the parent id does not exist.
@@ -196,8 +218,8 @@ All normative details live in these files (relative to `plugins/my-skills/skills
 
 | File | Content |
 |---|---|
-| `references/roadmap-management.md` | Management verb catalog + op mapping, selection resolution (ids/globs + natural language), confirmation gate + `--yes`, reject-and-discard, `new-spec → add-spec` two-step |
-| `references/scope-resolution.md` | Scope matching (incl. release-as-scope + backlog exclusion), Filter, Ordering algorithm, Out-of-scope dependencies |
+| `references/roadmap-management.md` | Management verb catalog + op mapping (incl. `assign-system`, `migrate-systems`, `⊞ system` marker), selection resolution (ids/globs + natural language), confirmation gate + `--yes`, reject-and-discard, `new-spec → add-spec` two-step |
+| `references/scope-resolution.md` | Scope matching (incl. release-as-scope, **system-as-scope**, `--system` filter, system typo guard, backlog exclusion), Filter, Ordering algorithm, Out-of-scope dependencies |
 | `references/git-flow.md` | Base resolution, Branch naming (`pm/<id>-<slug>`), Success-path sequence (commit+trailer → /roadmap sync → commit sync docs → push → stacked PR), Stacked PR ordering, Planning-PR flow (`pm/roadmap-<verb>-<slug>`, `docs(roadmap):`, reject-and-discard), Trailer-mismatch guard |
 | `references/human-validation.md` | Detection sources, conservative mode, autonomous mode, Marker list, Invariant |
 | `references/resume-and-logging.md` | `/roadmap/pm-progress.md` log, Entry fields, Resume algorithm (including stacked-branch reconstruction) |

@@ -10,7 +10,7 @@ This document is the single source of truth for turning the `<scope>` CLI argume
 
 The information PM needs is split across two sources. Getting the split right matters: the lock does **not** carry the fields PM most often wants.
 
-- **`roadmap.lock.json` items** carry ONLY `{ id, kind, status, release, content_hash, sequence }` (the top-level lock also carries the ordered `releases[]` registry). There is **no** `milestone`, `phase`, `depends_on`, `title`, or `commit_trailer` field in the lock. `release` (`string | null`) IS in the lock — it is the field release-scope matching and backlog exclusion read (absent/`null` on legacy roadmaps). The lock DOES contain `kind: milestone` and `kind: phase` items (identified by their `id`, e.g. `001`, `001.2`) alongside `kind: user-story` items.
+- **`roadmap.lock.json` items** carry ONLY `{ id, kind, status, release, system, content_hash, sequence }` (the top-level lock also carries the ordered `releases[]` registry; the **`system` set** lives in `roadmap.config.json` → `systems`, **not** the lock). There is **no** `milestone`, `phase`, `depends_on`, `title`, or `commit_trailer` field in the lock. `release` (`string | null`) and `system` (`string | null`) are BOTH in the lock — they are the fields release-scope / system-scope matching and backlog exclusion read (absent/`null` on legacy roadmaps). Because `system` is a per-item lock field, system scope and `--system` filtering read it **without opening any story file**. The lock DOES contain `kind: milestone` and `kind: phase` items (identified by their `id`, e.g. `001`, `001.2`) alongside `kind: user-story` items.
 - **The user-story file frontmatter** (`<NNN.M.T-slug>.md`) carries the per-story fields PM reads at execution time: `depends_on`, `title`, `commit_trailer`, and (when present) `milestone`/`phase`.
 
 Implications used throughout this document:
@@ -31,7 +31,8 @@ The `<scope>` argument controls which user stories enter the queue. The table be
 | Milestone id (e.g. `001` or `001-bootstrap`) | User stories belonging to that milestone — i.e. whose id-prefix is the milestone ordinal (`001.*.*`) and/or whose story-file frontmatter `milestone` matches — **excluding `backlog`-band items**. The bare ordinal (`001`) matches the numeric prefix of the milestone id or the full directory-slug (`001-bootstrap`). |
 | Phase id (e.g. `001.2`) | User stories belonging to that phase — i.e. whose id-prefix is the phase id (`001.2.*`) and/or whose story-file frontmatter `phase` matches exactly — **excluding `backlog`-band items**. |
 | **Release name** (e.g. `mvp`, `v1.1`, `backlog`) | Every `kind: user-story` item whose `release` band equals the name, **across all milestones** (see **Release scope**). A named band (`mvp`) selects that train's not-done stories; `backlog` selects parked stories — this is the **only** scope that runs parked work. |
-| Anything else | **Stop.** Print the list of valid scopes — the milestone and phase ids from the lock's `kind: milestone` / `kind: phase` item `id`s (and/or a story-file scan), plus the release names from `roadmap.lock.json` → `releases[]` (and `backlog`) — so the caller can correct the argument. |
+| **System name** (e.g. `backend`, `app` — a name declared in `config.systems`) | Every `kind: user-story` item whose `system` band equals the name, **across all releases**, **excluding `backlog`-band items** (active-scope rule). Resolved **after** milestone / phase / release matching fails but **before** the unrecognized-scope stop (see **System scope**). |
+| Anything else | **Stop.** Print the list of valid scopes — the milestone and phase ids from the lock's `kind: milestone` / `kind: phase` item `id`s (and/or a story-file scan), the release names from `roadmap.lock.json` → `releases[]` (and `backlog`), plus the declared system names from `roadmap.config.json` → `systems` — so the caller can correct the argument. |
 
 ### Release scope (`complete mvp` / `complete v1.1` / `complete backlog`)
 
@@ -44,6 +45,29 @@ The active-scope forms — `complete roadmap`, `complete <milestone>`, `complete
 ### Milestone id matching rule
 
 Accept both short and long forms: `001` matches stories under milestone `001` whether identified by id-prefix (`001.*.*`) or by a story-file `milestone` frontmatter value of `001` or `001-bootstrap` (the bare ordinal matches the numeric prefix of the full slug, regardless of the name part). This means a user can type either form interchangeably. Note: `milestone`/`phase` are story-file frontmatter fields — they are **not** present in `roadmap.lock.json`, so membership is resolved from id-prefix and/or the story file, never from a lock field.
+
+### System scope (`complete backend` — a bare declared system name)
+
+A `<scope>` that matches a **declared system name** in `roadmap.config.json` → `systems` resolves to **every not-done `kind: user-story` item carrying that `system` band, across all releases**. Like every active scope, it **excludes `backlog`-band items** (parked work runs only via `complete backlog`). The candidate set spans the whole roadmap and is then ordered by the existing **Ordering algorithm** exactly as any other scope.
+
+**Resolution order matters:** a bare system name is tried **after** `roadmap` / milestone / phase / release-name matching all fail, and **before** the unrecognized-scope stop. (A name is a system scope only if no earlier rule claimed it; declared system names should not collide with milestone/phase ids or release names.) Legacy roadmaps with no `config.systems` have no system names, so this form simply never matches and falls through to the stop.
+
+### System filter (`--system <name>`) — universal intersect
+
+`--system <name>` is a **universal filter** composable with **any** base scope, rather than a new family of scope tokens. It is applied **after base scope matching, before the Filter step below**: PM first resolves the base `<scope>` to a candidate set, then **intersects** it with the stories whose `system` band equals `<name>`.
+
+| Invocation | Resolved queue |
+|---|---|
+| `complete mvp --system backend` | stories where `release=mvp ∧ system=backend`, not-done, topo-ordered |
+| `complete backend` (bare system name as scope) | all not-done `system=backend` stories across releases; **backlog excluded** |
+| `complete 001 --system app` | milestone `001` stories filtered to `system=app` |
+| `complete mvp` (unchanged) | whole `mvp` band, all systems (no `--system` given) |
+
+`--system` reads the per-item `system` field from `roadmap.lock.json` (no story-file open needed). The intersect narrows the candidate set; the surviving stories still pass through **Filter** (drop `done`/`superseded`) and **Ordering** unchanged.
+
+### System typo guard (unknown system stops)
+
+Both the bare-system scope and the `--system <name>` filter **validate the name against `config.systems`**. An **undeclared** system is an **error**: PM **stops** and prints the valid declared system names so the caller can correct the argument (parallel to the unrecognized-scope stop, but specific to systems — e.g. ``unknown system `backedn`; declared systems: backend, app, admin, landing``). PM never silently returns an empty queue for a mistyped system.
 
 ---
 

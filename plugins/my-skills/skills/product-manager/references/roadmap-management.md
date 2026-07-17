@@ -15,6 +15,8 @@ Each management verb maps to exactly one roadmap mutation op. Sugar verbs are th
 | PM verb | Roadmap op | Notes |
 |---|---|---|
 | `assign <release> <selection>` | `set-release <release> <ids…>` | Assign a named band (or `backlog`) to the resolved id set. Implicitly creates the band in `releases[]` on first use. |
+| `assign-system <system> <selection>` | `set-system <system> <ids…>` | Assign a **system** band to the resolved id set. `<system>` must be declared in `config.systems` (typo-guarded) or `null` to untag — unknown stops and prints the valid system names. Does **not** create a band lazily (unlike `assign`). |
+| `migrate-systems` | `migrate-systems` | Adopt the `system` band on the existing roadmap via the roadmap `migrate-systems` procedure (config bootstrap → per-untagged-story inference incl. done items → one staged diff → bulk apply). Wrapped in the planning-PR flow. |
 | `park <selection>` | `set-release backlog <ids…>` | Sugar for `assign backlog <selection>`. Parks work out of the active plan. |
 | `unpark <selection> [<release>]` | `set-release <release-or-null> <ids…>` | Sugar. With a release name → re-tier to that band; omitting the release → un-tier to `null` (active untiered). |
 | `add-spec <path>` | `ingest-spec <path>` | Append a spec's new work as a targeted re-eval (new items default `release: null`). Location-agnostic explicit path. |
@@ -27,7 +29,9 @@ Each management verb maps to exactly one roadmap mutation op. Sugar verbs are th
 | `add-ticket <raw> [--to <phase\|milestone>]` | `add-item user-story` | Inline interview composes a story from raw text (bug or feat). `--to` a milestone auto-creates/uses a default phase. |
 | `add-userstory …` | `add-item user-story` | Alias of `add-ticket`. |
 
-The staged-diff marker set (shared with re-eval + the roadmap ops) is `+ new`, `~ changed`, `! superseded`, `± release`. A band change (`assign`/`park`/`unpark`) shows as `± release`.
+The staged-diff marker set (shared with re-eval + the roadmap ops) is `+ new`, `~ changed`, `! superseded`, `± release`, `⊞ system`. A release-band change (`assign`/`park`/`unpark`) shows as `± release`; a system-band change (`assign-system`, and the bulk `migrate-systems`) shows as `⊞ system`.
+
+**Read-only reporting verb.** `release-status [release]` prints the derived `release × system` readiness matrix (per-cell `done/total`, `READY?`/laggards) and, like `release list`, runs with **no branch, no gate, no PR** — it maps to no mutation op. It computes exactly the matrix defined in `roadmap/SKILL.md` → Release readiness (no divergent logic). See `SKILL.md` → Verb → roadmap op mapping.
 
 ---
 
@@ -41,9 +45,14 @@ Every mutating verb runs this sequence (mirrors the `complete` machinery's base-
 4. **On approval** → the op writes files and prints a proposed commit message; PM commits `docs(roadmap): <verb> …`, pushes, and opens a planning PR (`templates/pr-body.template.md` planning variant).
 5. **On reject** → PM discards the empty branch and returns to the starting branch (see **Reject-and-discard**).
 
-`release list` is read-only: it prints the registry and exits with no branch, gate, or PR.
+`release list` and `release-status` are read-only: they print and exit with no branch, gate, or PR.
 
 The `add-*` verbs follow this same flow; `add-ticket` first runs the inline interview (below) to compose the story body before invoking `add-item`.
+
+**`assign-system` / `migrate-systems` specifics.**
+
+- **`assign-system <system> <selection>`** resolves the selection to an id set (ids/globs **and** natural language, exactly like `assign`), cuts `pm/roadmap-assign-system-<slug>`, invokes roadmap `set-system` (which stages the `⊞ system` diff, gates, writes), then commits `docs(roadmap): assign-system …`, pushes, and opens the planning PR. `--yes` is supported (unambiguous ids). The system is **typo-guarded against `config.systems`**: an undeclared system stops before any branch is cut and prints the valid system names; `null` untags.
+- **`migrate-systems`** takes no selection — it cuts `pm/roadmap-migrate-systems`, then invokes roadmap `migrate-systems`, whose **interactive** procedure bootstraps `config.systems` (if empty), proposes a system for every untagged story (including `done` items), and presents one whole-roadmap staged `⊞ system` diff grouped by proposed system. On approval the op bulk-applies and PM commits `docs(roadmap): migrate-systems`, pushes, and opens the planning PR. The bare `/roadmap migrate-systems` direct command performs the same doc-only write **without** the git/PR wrapper. Idempotent — re-running only proposes for still-untagged stories.
 
 ---
 
