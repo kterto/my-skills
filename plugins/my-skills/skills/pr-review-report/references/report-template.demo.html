@@ -675,6 +675,114 @@ summary::-webkit-details-marker { display: none; }
 .ann:hover::before { transform: translate(-50%, -50%) scale(1.25); }
 .ann:focus-visible { outline: 2px solid var(--accent-focus); outline-offset: -2px; }
 
+/* ============================================================ Finding state + thread (review cycles) */
+/* Per-finding state control: open / fixed / ignored / acknowledge */
+.finding__state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: var(--sp-3);
+}
+.finding__state .state-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-right: 4px;
+}
+.state-btn {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--rule-heavy);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  line-height: 1.5;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.state-btn:hover { border-color: var(--text-muted); color: var(--text-secondary); }
+.state-btn[aria-pressed="true"] {
+  color: var(--text-primary);
+  border-color: var(--text-primary);
+  background: var(--bg-surface);
+  font-weight: 600;
+}
+/* skill-derived state pill (resolved / regressed) — read-only annotation */
+.state-derived {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 4px;
+  color: #fff;
+}
+.state-derived--resolved { background: #16a34a; }
+.state-derived--regressed { background: var(--sev-critical); }
+
+/* Comment thread */
+.finding__thread {
+  margin-top: var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  max-width: var(--measure);
+}
+.thread-msg {
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--bg-surface);
+}
+.thread-msg--user { border-left: 2px solid var(--accent); }
+.thread-msg--skill { border-left: 2px solid var(--rule-heavy); background: var(--bg-sunken); }
+.thread-msg__head {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: baseline;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+.thread-msg__author { font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.06em; }
+.thread-msg__body { color: var(--text-primary); }
+
+/* Comment box */
+.finding__comment {
+  margin-top: var(--sp-3);
+  max-width: var(--measure);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.finding__comment textarea {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  background: var(--bg-page);
+  border: 1px solid var(--rule-heavy);
+  border-radius: var(--radius);
+  padding: var(--sp-2) var(--sp-3);
+  resize: vertical;
+  min-height: 2.6em;
+  width: 100%;
+}
+.finding__comment textarea:focus-visible { outline: 2px solid var(--accent-focus); outline-offset: 1px; }
+.finding__comment .comment-actions { display: flex; justify-content: flex-end; }
+
+/* State filter chips (extend the controls row) — same look as .tog */
+.tog[data-state][aria-pressed="true"] .dot { background: var(--text-primary); }
+
+/* Resolved / Ignored groups reuse the collapsed .ack chrome via shared class */
+.ack.stategroup--resolved { border-color: #16a34a55; }
+.ack.stategroup--ignored { opacity: 0.92; }
+
 @media (max-width: 720px) {
   .summary__badges { margin-left: 0; width: 100%; }
   .topbar__inner { padding: var(--sp-3) var(--sp-4); }
@@ -711,8 +819,17 @@ summary::-webkit-details-marker { display: none; }
         <button class="tog tog--sec" data-section="security"     aria-pressed="true">Security</button>
         <button class="tog tog--sec" data-section="bugs"         aria-pressed="true">Bugs &amp; Improvements</button>
       </div>
+      <div class="ctl-group" role="group" aria-label="Filter by state">
+        <span class="ctl-label">State</span>
+        <button class="tog" data-state="open"     aria-pressed="true"><span class="dot"></span>Open</button>
+        <button class="tog" data-state="fixed"    aria-pressed="true"><span class="dot"></span>Fixed</button>
+        <button class="tog" data-state="regressed" aria-pressed="true"><span class="dot"></span>Regressed</button>
+        <button class="tog" data-state="resolved" aria-pressed="true"><span class="dot"></span>Resolved</button>
+        <button class="tog" data-state="ignored"  aria-pressed="true"><span class="dot"></span>Ignored</button>
+      </div>
       <div class="controls__spacer"></div>
       <div class="ctl-group">
+        <button class="btn" id="save-state" title="Save review state to .pr-review/review-state.json">Save review state</button>
         <button class="btn" id="collapse-all" data-collapsed="false">Collapse all</button>
         <select class="jump-select" id="jump-to-file" aria-label="Jump to file">
           <option value="">Jump to file&hellip;</option>
@@ -733,6 +850,23 @@ summary::-webkit-details-marker { display: none; }
   </div>
 
   <div id="lenses"></div>
+
+  <details class="ack stategroup--resolved" id="resolved-group" hidden>
+    <summary>
+      <span class="ack__title">Resolved</span>
+      <span class="ack__count" id="resolved-count"></span>
+    </summary>
+    <div class="ack__body" id="resolved-body"></div>
+  </details>
+
+  <details class="ack stategroup--ignored" id="ignored-group" hidden>
+    <summary>
+      <span class="ack__title">Ignored</span>
+      <span class="ack__count" id="ignored-count"></span>
+    </summary>
+    <div class="ack__body" id="ignored-body"></div>
+  </details>
+
   <details class="ack" id="ack-group" hidden>
     <summary>
       <span class="ack__title">Acknowledged &amp; out&#8209;of&#8209;scope</span>
@@ -763,11 +897,11 @@ summary::-webkit-details-marker { display: none; }
   },
   "counts": {
     "critical": 1,
-    "high": 2,
-    "medium": 3,
-    "low": 1,
-    "info": 2,
-    "acknowledged": 2
+    "high": 1,
+    "medium": 2,
+    "low": 0,
+    "info": 1,
+    "acknowledged": 3
   },
   "findings": [
     {
@@ -782,7 +916,21 @@ summary::-webkit-details-marker { display: none; }
       "adr": {
         "title": "ADR-014: Storage port for the export pipeline",
         "context": "We expect a second deployment on GCS within two quarters. Abstracting the store now avoids a rewrite and unblocks fast unit tests."
-      }
+      },
+      "fingerprint": "architecture|src/export/worker.ts|export-worker-couples-directly-to-the-objectstore-sdk",
+      "state": "fixed",
+      "thread": [
+        {
+          "author": "user",
+          "text": "Fixed \u2014 introduced a BlobStore port and inject it.",
+          "ts": "2026-07-14T10:02:00Z"
+        },
+        {
+          "author": "skill",
+          "text": "Marked fixed; I'll verify the port is wired at the composition root on the next run.",
+          "ts": "2026-07-14T10:03:00Z"
+        }
+      ]
     },
     {
       "id": "arch-2",
@@ -792,7 +940,9 @@ summary::-webkit-details-marker { display: none; }
       "file": "src/export/queue.ts",
       "line": 58,
       "rationale": "Backoff constants are defined in both the enqueue path and the worker, and they already disagree (5s vs 3s). Divergence will cause confusing retry behavior.",
-      "fix": "Hoist the backoff schedule into a single `retry.ts` module consumed by both."
+      "fix": "Hoist the backoff schedule into a single `retry.ts` module consumed by both.",
+      "fingerprint": "architecture|src/export/queue.ts|retry-policy-duplicated-across-queue-and-worker",
+      "state": "open"
     },
     {
       "id": "sec-1",
@@ -802,7 +952,21 @@ summary::-webkit-details-marker { display: none; }
       "file": "src/export/download.ts",
       "line": 42,
       "rationale": "The presigned URL is generated with no expiry, so any leaked link grants permanent read access to an export that may contain PII. This is a data-exposure risk.",
-      "fix": "Pass an explicit `expiresIn` (e.g. 900s) and document the window. Consider scoping the URL to the requesting user's IP where supported."
+      "fix": "Pass an explicit `expiresIn` (e.g. 900s) and document the window. Consider scoping the URL to the requesting user's IP where supported.",
+      "fingerprint": "security|src/export/download.ts|signed-download-url-never-expires",
+      "state": "regressed",
+      "thread": [
+        {
+          "author": "user",
+          "text": "Added an expiry \u2014 should be handled now.",
+          "ts": "2026-07-14T09:15:00Z"
+        },
+        {
+          "author": "skill",
+          "text": "Re-checked the new diff: the signed URL is still generated without an expiry on line 42, so this regressed. Reopened and counted.",
+          "ts": "2026-07-14T09:16:00Z"
+        }
+      ]
     },
     {
       "id": "sec-2",
@@ -812,7 +976,9 @@ summary::-webkit-details-marker { display: none; }
       "file": "src/export/download.ts",
       "line": 61,
       "rationale": "`req.query.format` is concatenated into the object key without validation, allowing path traversal into sibling prefixes (`../`).",
-      "fix": "Validate `format` against an allow-list ({csv, json}) before building the key; reject anything else with 400."
+      "fix": "Validate `format` against an allow-list ({csv, json}) before building the key; reject anything else with 400.",
+      "fingerprint": "security|src/export/download.ts|format-parameter-interpolated-into-the-storage-key",
+      "state": "open"
     },
     {
       "id": "bug-1",
@@ -822,7 +988,21 @@ summary::-webkit-details-marker { display: none; }
       "file": "src/export/request.ts",
       "line": 54,
       "rationale": "Two requests for the same workspace differing only in format collide on the idempotency key, so the second silently returns the first's artifact.",
-      "fix": "Include `format` in the idempotency key hash."
+      "fix": "Include `format` in the idempotency key hash.",
+      "fingerprint": "bugs|src/export/request.ts|idempotency-key-omits-the-export-format",
+      "state": "resolved",
+      "thread": [
+        {
+          "author": "user",
+          "text": "Included the format in the idempotency key.",
+          "ts": "2026-07-13T18:40:00Z"
+        },
+        {
+          "author": "skill",
+          "text": "Verified against the new diff \u2014 the key now hashes the format. Resolved.",
+          "ts": "2026-07-14T09:10:00Z"
+        }
+      ]
     },
     {
       "id": "bug-2",
@@ -832,7 +1012,9 @@ summary::-webkit-details-marker { display: none; }
       "file": "src/export/request.ts",
       "line": 88,
       "rationale": "When the row count is re-estimated mid-run, `done/total` can briefly report 103%. Cosmetic but erodes trust in the progress UI.",
-      "fix": "Clamp the ratio to [0, 1] before formatting."
+      "fix": "Clamp the ratio to [0, 1] before formatting.",
+      "fingerprint": "bugs|src/export/request.ts|progress-percentage-can-exceed-100",
+      "state": "open"
     },
     {
       "id": "bug-3",
@@ -842,7 +1024,16 @@ summary::-webkit-details-marker { display: none; }
       "file": "src/export/download.ts",
       "line": 12,
       "rationale": "The 72-hour retention is hard-coded next to unrelated logic.",
-      "fix": "Lift it to config alongside the other retention settings. See https://docs.internal/retention for the shared keys."
+      "fix": "Lift it to config alongside the other retention settings. See https://docs.internal/retention for the shared keys.",
+      "fingerprint": "bugs|src/export/download.ts|magic-number-for-the-expiry-window",
+      "state": "ignored",
+      "thread": [
+        {
+          "author": "user",
+          "text": "Not worth a constant right now \u2014 ignoring.",
+          "ts": "2026-07-13T18:44:00Z"
+        }
+      ]
     },
     {
       "id": "info-1",
@@ -852,7 +1043,16 @@ summary::-webkit-details-marker { display: none; }
       "file": "src/export/worker.ts",
       "line": 74,
       "rationale": "Logs mix `exportId` and `export_id`; downstream queries have to handle both.",
-      "fix": "Standardize on `exportId`."
+      "fix": "Standardize on `exportId`.",
+      "fingerprint": "bugs|src/export/worker.ts|inconsistent-log-field-casing",
+      "state": "acknowledged",
+      "thread": [
+        {
+          "author": "user",
+          "text": "Log field casing is intentional for the legacy sink \u2014 acknowledging.",
+          "ts": "2026-07-13T18:50:00Z"
+        }
+      ]
     },
     {
       "id": "info-2",
@@ -862,7 +1062,9 @@ summary::-webkit-details-marker { display: none; }
       "file": "src/export/request.ts",
       "line": 20,
       "rationale": "The exported `requestExport` helper has no doc comment describing its tracking-object return shape.",
-      "fix": "Add a short JSDoc block."
+      "fix": "Add a short JSDoc block.",
+      "fingerprint": "architecture|src/export/request.ts|missing-jsdoc-on-the-public-request-helper",
+      "state": "open"
     },
     {
       "id": "ack-1",
@@ -874,7 +1076,9 @@ summary::-webkit-details-marker { display: none; }
       "rationale": "The endpoint accepts unlimited concurrent export requests per user.",
       "fix": "Add a per-user token bucket once the shared limiter middleware lands.",
       "acknowledged": true,
-      "memoryRef": "MEM-7"
+      "memoryRef": "MEM-7",
+      "fingerprint": "security|src/export/request.ts|no-rate-limiting-on-the-export-endpoint",
+      "state": "acknowledged"
     },
     {
       "id": "ack-2",
@@ -890,7 +1094,9 @@ summary::-webkit-details-marker { display: none; }
       "adr": {
         "title": "ADR-011: Defer worker isolation to GA",
         "context": "Traffic in the MVP window is well within a single process. Isolation is tracked for GA."
-      }
+      },
+      "fingerprint": "architecture|src/export/worker.ts|worker-runs-in-the-api-process-for-the-mvp",
+      "state": "acknowledged"
     }
   ],
   "files": [
@@ -1110,6 +1316,50 @@ summary::-webkit-details-marker { display: none; }
     bugs:         "correctness & polish"
   };
 
+  // Review-cycle state model. User-set: open/fixed/ignored/acknowledged.
+  // Skill-derived (verification only, read-only in the browser): resolved/regressed.
+  var USER_STATES = ["open", "fixed", "ignored", "acknowledged"];
+  var STATE_LABELS = {
+    open: "Open", fixed: "Fixed", ignored: "Ignored",
+    acknowledged: "Acknowledge", resolved: "Resolved", regressed: "Regressed"
+  };
+
+  var DATA = null;        // the parsed REVIEW_DATA
+  var STORE = {};         // fingerprint -> { state, thread, history, lastFinding }
+  var LS_KEY = null;      // pr-review-state:<branch> — branch-namespaced autosave
+  var saveHandle = null;  // retained File System Access handle for one-click re-saves
+
+  function nowTs() { return new Date().toISOString(); }
+
+  // Effective per-finding state/thread come from STORE (browser edits win),
+  // falling back to what the skill emitted in REVIEW_DATA.
+  function effState(f) {
+    var e = f.fingerprint && STORE[f.fingerprint];
+    if (e && e.state) return e.state;
+    if (f.state) return f.state;
+    return f.acknowledged ? "acknowledged" : "open";
+  }
+  function effThread(f) {
+    var e = f.fingerprint && STORE[f.fingerprint];
+    if (e && e.thread) return e.thread;
+    return f.thread || [];
+  }
+  function isAck(f) { return f.acknowledged === true || effState(f) === "acknowledged"; }
+  // Which group a finding renders in: 'ack' | 'resolved' | 'ignored' | 'lens'.
+  function groupOf(f) {
+    if (isAck(f)) return "ack";
+    var s = effState(f);
+    if (s === "resolved") return "resolved";
+    if (s === "ignored")  return "ignored";
+    return "lens"; // open, fixed, regressed
+  }
+  // Counted toward the five severity totals: only open/regressed, non-acknowledged.
+  function isCounted(f) {
+    if (isAck(f)) return false;
+    var s = effState(f);
+    return s === "open" || s === "regressed";
+  }
+
   /* ---------- tiny helpers ---------- */
   function el(id) { return document.getElementById(id); }
   function esc(s) {
@@ -1151,10 +1401,21 @@ summary::-webkit-details-marker { display: none; }
     catch (e) { console.error("review-data is not valid JSON:", e); return null; }
   }
 
+  // Recompute severity counts from EFFECTIVE state so the summary reflects live
+  // browser edits (ignored/resolved/acknowledged drop out; open/regressed count).
+  function liveCounts(data) {
+    var c = { critical: 0, high: 0, medium: 0, low: 0, info: 0, acknowledged: 0 };
+    (data.findings || []).forEach(function (f) {
+      if (isAck(f)) { c.acknowledged++; return; }
+      if (isCounted(f) && c[f.severity] != null) c[f.severity]++;
+    });
+    return c;
+  }
+
   /* ---------- render: summary ---------- */
   function renderSummary(data) {
     var meta = data.meta || {};
-    var counts = data.counts || {};
+    var counts = liveCounts(data);
 
     if (meta.branch) {
       document.title = "PR Review — " + meta.branch;
@@ -1237,30 +1498,85 @@ summary::-webkit-details-marker { display: none; }
       ? ' data-diffline="diffline-' + fileSlug(f.file) + "-" + f.line + '"'
       : "";
 
+    var state = effState(f);
+    var fp = f.fingerprint || "";
+    var fpAttr = fp ? ' data-fp="' + esc(fp) + '"' : "";
+
     return '<article class="finding finding--' + esc(sev) + '"' +
       ' id="finding-' + esc(f.id) + '"' +
       ' data-severity="' + esc(sev) + '"' +
       ' data-section="' + esc(f.section || "") + '"' +
-      (opts.acknowledged ? ' data-acknowledged="true"' : "") +
+      ' data-state="' + esc(state) + '"' +
+      fpAttr +
+      (opts.acknowledged || isAck(f) ? ' data-acknowledged="true"' : "") +
       dlAttr + '>' +
         '<div class="finding__head">' + head.join("") + "</div>" +
         '<h3 class="finding__title">' + esc(f.title) + "</h3>" +
         loc +
         '<p class="finding__desc">' + linkify(f.rationale || "") + "</p>" +
         fix + adr +
+        stateControl(f, state, fp) +
+        threadBlock(f) +
+        commentBox(fp) +
       "</article>";
+  }
+
+  /* ---------- render: per-finding state control ---------- */
+  function stateControl(f, state, fp) {
+    if (!fp) return ""; // no fingerprint → no persistable state (legacy finding)
+    var derived = (state === "resolved" || state === "regressed")
+      ? '<span class="state-derived state-derived--' + esc(state) + '">' +
+        esc(STATE_LABELS[state]) + "</span>"
+      : "";
+    var btns = USER_STATES.map(function (s) {
+      var pressed = state === s;
+      return '<button type="button" class="state-btn" data-state-set="' + esc(s) +
+        '" aria-pressed="' + (pressed ? "true" : "false") + '">' +
+        esc(STATE_LABELS[s]) + "</button>";
+    }).join("");
+    return '<div class="finding__state" data-fp="' + esc(fp) + '">' +
+      '<span class="state-label">State</span>' + btns + derived + "</div>";
+  }
+
+  /* ---------- render: comment thread ---------- */
+  function threadBlock(f) {
+    var thread = effThread(f);
+    if (!thread.length) return "";
+    var msgs = thread.map(function (m) {
+      var who = m.author === "skill" ? "skill" : "user";
+      return '<div class="thread-msg thread-msg--' + who + '">' +
+        '<div class="thread-msg__head">' +
+          '<span class="thread-msg__author">' + esc(who) + "</span>" +
+          (m.ts ? '<span class="thread-msg__ts">' + esc(m.ts) + "</span>" : "") +
+        "</div>" +
+        '<div class="thread-msg__body">' + linkify(m.text || "") + "</div>" +
+      "</div>";
+    }).join("");
+    return '<div class="finding__thread">' + msgs + "</div>";
+  }
+
+  /* ---------- render: comment box ---------- */
+  function commentBox(fp) {
+    if (!fp) return "";
+    return '<div class="finding__comment" data-fp="' + esc(fp) + '">' +
+      '<textarea class="comment-input" rows="2" placeholder="Add a comment for the reviewer&hellip;" aria-label="Add a comment"></textarea>' +
+      '<div class="comment-actions">' +
+        '<button type="button" class="btn comment-add">Add comment</button>' +
+      "</div>" +
+    "</div>";
   }
 
   /* ---------- render: lens sections ---------- */
   function renderLenses(data) {
-    var findings = (data.findings || []).filter(function (f) { return !f.acknowledged; });
+    // lens group = open / fixed / regressed (not acknowledged/resolved/ignored)
+    var findings = (data.findings || []).filter(function (f) { return groupOf(f) === "lens"; });
     var host = el("lenses");
     var html = SECTIONS.map(function (sec) {
       var items = findings.filter(function (f) { return f.section === sec; });
 
-      // per-severity mini counts for the summary line
+      // per-severity mini counts — only counted findings (open/regressed)
       var mini = SEVERITIES.map(function (s) {
-        var n = items.filter(function (f) { return f.severity === s; }).length;
+        var n = items.filter(function (f) { return f.severity === s && isCounted(f); }).length;
         return n ? '<span class="mini" data-sev="' + s + '"><span class="dot"></span>' + n + "</span>" : "";
       }).join("");
 
@@ -1280,22 +1596,24 @@ summary::-webkit-details-marker { display: none; }
     }).join("");
     host.innerHTML = html;
 
-    // section counts strip
+    // section counts strip — counted findings only
     el("summary-sectioncounts").innerHTML = SECTIONS.map(function (sec) {
-      var n = findings.filter(function (f) { return f.section === sec; }).length;
+      var n = findings.filter(function (f) { return f.section === sec && isCounted(f); }).length;
       return '<span class="sc">' + SECTION_LABELS[sec] + ': <span class="n">' + n + "</span></span>";
     }).join("");
   }
 
-  /* ---------- render: acknowledged group ---------- */
-  function renderAck(data) {
-    var acked = (data.findings || []).filter(function (f) { return f.acknowledged; });
-    var group = el("ack-group");
-    if (!acked.length) { group.hidden = true; return; }
+  /* ---------- render: a collapsed finding group (Resolved / Ignored / Acknowledged) ---------- */
+  // Group ids follow "<name>-group / -count / -body". Ack items carry the
+  // acknowledged flag so their MEM tag renders; other groups pass it false.
+  function renderGroup(data, groupName) {
+    var items = (data.findings || []).filter(function (f) { return groupOf(f) === groupName; });
+    var group = el(groupName + "-group");
+    if (!items.length) { group.hidden = true; return; }
     group.hidden = false;
-    el("ack-count").textContent = acked.length + " item" + (acked.length === 1 ? "" : "s");
-    el("ack-body").innerHTML = acked
-      .map(function (f) { return findingCard(f, { acknowledged: true }); })
+    el(groupName + "-count").textContent = items.length + " item" + (items.length === 1 ? "" : "s");
+    el(groupName + "-body").innerHTML = items
+      .map(function (f) { return findingCard(f, { acknowledged: groupName === "ack" }); })
       .join("");
   }
 
@@ -1350,24 +1668,28 @@ summary::-webkit-details-marker { display: none; }
   /* ---------- filters ---------- */
   var sevActive = { critical: true, high: true, medium: true, low: true, info: true };
   var secActive = { architecture: true, security: true, bugs: true };
+  var stateActive = { open: true, fixed: true, regressed: true, resolved: true, ignored: true };
 
-  // Apply both filters. A gutter marker must be hidden whenever its finding card
-  // is hidden by EITHER filter, so we resolve each marker's card and mirror it.
+  // Apply all filters. A gutter marker must be hidden whenever its finding card
+  // is hidden by ANY filter, so we resolve each marker's card and mirror it.
   function applyFilters() {
     // 1) whole lens sections toggle by section filter
     document.querySelectorAll(".lens[data-section]").forEach(function (lens) {
       lens.hidden = !secActive[lens.getAttribute("data-section")];
     });
 
-    // 2) individual finding cards (incl. acknowledged) toggle by severity.
+    // 2) individual finding cards (incl. acknowledged) toggle by severity + state.
     //    Non-acknowledged cards also depend on their section being active.
     document.querySelectorAll(".finding").forEach(function (card) {
       var sev = card.getAttribute("data-severity");
-      var isAck = card.getAttribute("data-acknowledged") === "true";
+      var acked = card.getAttribute("data-acknowledged") === "true";
       var sec = card.getAttribute("data-section");
+      var st = card.getAttribute("data-state");
       var sevOk = !!sevActive[sev];
-      var secOk = isAck ? true : !!secActive[sec]; // ack group isn't one of the 3 lenses
-      var visible = sevOk && secOk;
+      var secOk = acked ? true : !!secActive[sec]; // ack group isn't one of the 3 lenses
+      // state filter — acknowledged has its own group and no state chip, so it passes
+      var stOk = (st in stateActive) ? !!stateActive[st] : true;
+      var visible = sevOk && secOk && stOk;
       card.style.display = visible ? "" : "none";
       card.dataset.filtered = visible ? "" : "1";
     });
@@ -1406,12 +1728,21 @@ summary::-webkit-details-marker { display: none; }
         applyFilters();
       });
     });
+    // state toggles
+    document.querySelectorAll(".tog[data-state]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var s = btn.getAttribute("data-state");
+        stateActive[s] = !stateActive[s];
+        btn.setAttribute("aria-pressed", String(stateActive[s]));
+        applyFilters();
+      });
+    });
 
     // collapse / expand all — sections, ack group, and diff-file blocks
     var collapseBtn = el("collapse-all");
     collapseBtn.addEventListener("click", function () {
       var collapse = collapseBtn.getAttribute("data-collapsed") === "false";
-      document.querySelectorAll(".lens > details, #ack-group, .diff-file")
+      document.querySelectorAll(".lens > details, #resolved-group, #ignored-group, #ack-group, .diff-file")
         .forEach(function (d) { d.open = !collapse; });
       collapseBtn.setAttribute("data-collapsed", String(collapse));
       collapseBtn.textContent = collapse ? "Expand all" : "Collapse all";
@@ -1473,6 +1804,164 @@ summary::-webkit-details-marker { display: none; }
     });
   }
 
+  /* ---------- review-state store + persistence ---------- */
+  // Seed STORE from REVIEW_DATA, then overlay any branch-namespaced localStorage
+  // edits the user made in a previous session (browser edits win over emitted data).
+  function buildStore(data) {
+    STORE = {};
+    (data.findings || []).forEach(function (f) {
+      if (!f.fingerprint) return;
+      STORE[f.fingerprint] = {
+        state: f.state || (f.acknowledged ? "acknowledged" : "open"),
+        thread: (f.thread || []).slice(),
+        history: [],
+        lastFinding: {
+          id: f.id, severity: f.severity, section: f.section,
+          title: f.title, file: f.file, line: f.line
+        }
+      };
+    });
+    LS_KEY = "pr-review-state:" + ((data.meta && data.meta.branch) || "default");
+    overlayLocalStorage();
+  }
+
+  function overlayLocalStorage() {
+    if (!LS_KEY) return;
+    var raw;
+    try { raw = window.localStorage.getItem(LS_KEY); } catch (e) { return; }
+    if (!raw) return;
+    var saved;
+    try { saved = JSON.parse(raw); } catch (e) { return; }
+    Object.keys(saved || {}).forEach(function (fp) {
+      var s = saved[fp];
+      if (!s) return;
+      if (!STORE[fp]) STORE[fp] = { state: "open", thread: [], history: [], lastFinding: null };
+      if (s.state) STORE[fp].state = s.state;
+      if (s.thread) STORE[fp].thread = s.thread;
+      if (s.history) STORE[fp].history = s.history;
+      if (s.lastFinding && !STORE[fp].lastFinding) STORE[fp].lastFinding = s.lastFinding;
+    });
+  }
+
+  function persist() {
+    if (!LS_KEY) return;
+    try { window.localStorage.setItem(LS_KEY, JSON.stringify(STORE)); } catch (e) { /* quota / private mode */ }
+  }
+
+  // User sets a finding's state. Records an append-on-transition history entry.
+  function setFindingState(fp, next) {
+    var e = STORE[fp];
+    if (!e) return;
+    if (e.state !== next) {
+      e.history = e.history || [];
+      e.history.push({ from: e.state, to: next, ts: nowTs(), by: "user" });
+      e.state = next;
+    }
+    persist();
+    rerender();
+  }
+
+  // User appends a comment turn to a finding's thread.
+  function addUserComment(fp, text) {
+    var e = STORE[fp];
+    if (!e || !text) return;
+    e.thread = e.thread || [];
+    e.thread.push({ author: "user", text: text, ts: nowTs() });
+    persist();
+    rerender();
+  }
+
+  // Build the review-state.json object per references/review-state-schema.md.
+  function buildSaveObject() {
+    var out = {
+      version: 1,
+      branch: (DATA && DATA.meta && DATA.meta.branch) || "",
+      findings: {}
+    };
+    Object.keys(STORE).forEach(function (fp) {
+      var e = STORE[fp];
+      out.findings[fp] = {
+        state: e.state,
+        lastFinding: e.lastFinding || null,
+        history: e.history || [],
+        thread: e.thread || []
+      };
+    });
+    return out;
+  }
+
+  // "Save review state" — File System Access API when available (retaining the
+  // handle for one-click re-saves), else an <a download> fallback. Local only.
+  function saveReviewState() {
+    var json = JSON.stringify(buildSaveObject(), null, 2);
+    if (window.showSaveFilePicker) {
+      var opts = {
+        suggestedName: "review-state.json",
+        types: [{ description: "Review state", accept: { "application/json": [".json"] } }]
+      };
+      var chain = saveHandle
+        ? Promise.resolve(saveHandle)
+        : window.showSaveFilePicker(opts).then(function (h) { saveHandle = h; return h; });
+      chain.then(function (handle) {
+        return handle.createWritable().then(function (w) {
+          return w.write(json).then(function () { return w.close(); });
+        });
+      }).catch(function (e) {
+        if (e && e.name === "AbortError") return; // user cancelled the dialog
+        downloadFallback(json);
+      });
+      return;
+    }
+    downloadFallback(json);
+  }
+
+  // Fallback: land the file in Downloads; the user moves it into .pr-review/ once.
+  function downloadFallback(json) {
+    var blob = new Blob([json], { type: "application/json" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "review-state.json";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 0);
+  }
+
+  // Re-render the finding-bearing regions after a state/comment change and
+  // re-apply filters. Data seam is untouched; everything derives from STORE.
+  function rerender() {
+    renderSummary(DATA);
+    renderLenses(DATA);
+    renderGroup(DATA, "resolved");
+    renderGroup(DATA, "ignored");
+    renderGroup(DATA, "ack");
+    applyFilters();
+  }
+
+  // Delegated wiring for per-finding state buttons, comment box, and Save button.
+  function wireState() {
+    document.body.addEventListener("click", function (e) {
+      var setBtn = e.target.closest(".state-btn");
+      if (setBtn) {
+        var host = setBtn.closest(".finding__state");
+        var fp = host && host.getAttribute("data-fp");
+        if (fp) setFindingState(fp, setBtn.getAttribute("data-state-set"));
+        return;
+      }
+      var addBtn = e.target.closest(".comment-add");
+      if (addBtn) {
+        var box = addBtn.closest(".finding__comment");
+        var fp2 = box && box.getAttribute("data-fp");
+        var ta = box && box.querySelector(".comment-input");
+        if (fp2 && ta && ta.value.trim()) addUserComment(fp2, ta.value.trim());
+        return;
+      }
+    });
+    var saveBtn = el("save-state");
+    if (saveBtn) saveBtn.addEventListener("click", saveReviewState);
+  }
+
   /* ---------- boot ---------- */
   function showEmptyShell() {
     el("empty-state").hidden = false;
@@ -1489,13 +1978,18 @@ summary::-webkit-details-marker { display: none; }
   function init() {
     wireControls();
     wireJumps();
+    wireState();
 
     var data = readData();
     if (!data) { showEmptyShell(); return; }
+    DATA = data;
+    buildStore(data);
 
     renderSummary(data);
     renderLenses(data);
-    renderAck(data);
+    renderGroup(data, "resolved");
+    renderGroup(data, "ignored");
+    renderGroup(data, "ack");
     renderDiff(data);
     populateJumpSelect(data);
     applyFilters();
