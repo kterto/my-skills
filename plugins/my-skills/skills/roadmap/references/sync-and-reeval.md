@@ -31,7 +31,7 @@ Rollup derives a phase status from its user stories, and a milestone status from
 2. Run the git trailer scan (see command below). When `last_synced_sha` is `null`, scan full history. Per commit, extract: matched user-story id(s), author name/email, author date (ISO-8601), sha.
 3. For each matched user story not already `done` or `superseded`: set `status: done`, append a full audit row (`when` = commit author date, `status` = `done`, `who` = author name/email, `evidence` = commit sha).
 4. Roll up phase and milestone statuses (see Rollup rules above); append rollup audit rows only where the derived status changed.
-5. Update `last_synced_sha` to `HEAD`, refresh README progress %, print a summary of stamped stories.
+5. Update `last_synced_sha` to `HEAD`, refresh README progress %, and — because sync changes story `status` (a readiness input) — **re-render the readiness views** per the refresh rule in `SKILL.md` → Release readiness: the **embedded index matrix always** (it is unconditional), and the **standalone `/roadmap/release-matrix.<ext>` dashboard when it exists** (gated). Print a summary of stamped stories.
 
 ### Git command
 
@@ -68,12 +68,12 @@ Triggered by running `/roadmap` when `/roadmap/` already exists. Re-evaluation r
    - **Scope-changed** items → stage body/acceptance update; status unchanged unless the change obsoletes the item (`~ changed`).
    - **Obsoleted** items: if `done` → `status: superseded` (kept + flagged, audit row); if not-done → `status: superseded` as well (kept for audit; never hard-deleted) (`! superseded`).
 3. Present the staged diff with markers `+ new`, `~ changed`, `! superseded`; require user approval before applying.
-4. On approval → apply changes, append audit rows for every status transition, update `roadmap.lock.json`.
+4. On approval → apply changes, append audit rows for every status transition, update `roadmap.lock.json`. New/superseded items change cell totals and `done` counts (readiness inputs), so **re-render the readiness views** per the refresh rule in `SKILL.md` → Release readiness: the **embedded index matrix always**, and the **standalone `/roadmap/release-matrix.<ext>` dashboard when it exists or the change (e.g. a first-tagged new item) first warrants it** (gated).
 
-### Release-band preservation
+### Band preservation (`release` and `system`)
 
-Re-eval is **band-preserving**: it **never changes an item's existing `release` value**. New items introduced by a re-eval default to `release: null` (untiered) unless a spec explicitly pins a band. Band changes are the job of the `set-release` op (see `mutation-ops.md`), not re-eval.
+Re-eval is **band-preserving for both bands**: it **never changes an item's existing `release` value, and never changes its existing `system` value**. New items introduced by a re-eval default to `release: null` (untiered) **and `system: null` (untagged)** unless a spec explicitly pins a band. Band changes are the job of the `set-release` / `set-system` ops (and the `migrate-systems` procedure) — see `mutation-ops.md` — not re-eval.
 
 ### `ingest-spec` — targeted re-eval
 
-`ingest-spec <path>` is the Re-eval procedure above **scoped to a single explicit spec path**: only the milestones/phases/stories that spec introduces or changes are staged; the rest of the tree is untouched. Band-preservation (above) and `done`-immutability apply exactly as in a full re-eval. It is the mutation invoked by the PM `add-spec` verb. Full op semantics live in `references/mutation-ops.md` → `ingest-spec`.
+`ingest-spec <path>` is the Re-eval procedure above **scoped to a single explicit spec path**: only the milestones/phases/stories that spec introduces or changes are staged; the rest of the tree is untouched. Band-preservation (above — both `release` and `system`) and `done`-immutability apply exactly as in a full re-eval: existing `system` values are preserved and new items default to `system: null`. It is the mutation invoked by the PM `add-spec` verb. Full op semantics live in `references/mutation-ops.md` → `ingest-spec`.
