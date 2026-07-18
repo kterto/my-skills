@@ -167,7 +167,7 @@ h1 .h1__id {
   align-self: center;
 }
 
-h1 .h1__pill { align-self: center; }
+h1 .h1__pill { align-self: center; display: inline-flex; gap: var(--sp-2); align-items: center; }
 
 /* ID / meta header block */
 .meta {
@@ -238,6 +238,7 @@ h1 .h1__pill { align-self: center; }
   white-space: nowrap;
 }
 .system-badge--cross-cutting { color: var(--status-warning); background: var(--status-warning-bg); border-color: transparent; }
+.system-badge[hidden] { display: none; }  /* stay hidden pre-JS (avoids a flash of the empty badge) */
 
 /* Per-release progress + grouping view */
 .release-progress { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-top: var(--sp-4); font-family: var(--font-mono); font-size: var(--text-sm); color: var(--text-secondary); }

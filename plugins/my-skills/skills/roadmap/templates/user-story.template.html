@@ -170,7 +170,7 @@ h1 .h1__id {
   align-self: center;
 }
 
-h1 .h1__pill { align-self: center; }
+h1 .h1__pill { align-self: center; display: inline-flex; gap: var(--sp-2); align-items: center; }
 
 /* ID / meta header block */
 .meta {
@@ -244,6 +244,7 @@ h1 .h1__pill { align-self: center; }
   white-space: nowrap;
 }
 .system-badge--cross-cutting { color: var(--status-warning); background: var(--status-warning-bg); border-color: transparent; }
+.system-badge[hidden] { display: none; }  /* stay hidden pre-JS (avoids a flash of the empty badge) */
 
 /* ============================================================
    Field rows (depends / spec refs)

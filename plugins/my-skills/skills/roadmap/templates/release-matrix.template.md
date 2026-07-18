@@ -1,4 +1,6 @@
 <!-- roadmap-release-matrix -->
+[← Roadmap index](README.md)
+
 # Release readiness — release × system
 
 **Progress:** {{done_count}}/{{total_count}} stories done ({{pct}}%)
