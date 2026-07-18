@@ -260,12 +260,22 @@ projection; without `reviewState` a browser "Save review state" rebuilds a
 Inject the JSON into the template — do not author HTML:
 
 1. Read `references/report-template.html`.
-2. Replace the full, unique seam element
+2. **HTML-neutralize the JSON text (MANDATORY — security, sec-1).** After validating
+   the JSON parses, escape the serialized string before injection: replace every `<`
+   → `\u003c`, `>` → `\u003e`, `&` → `\u0026` (JSON Unicode escapes, **not** HTML
+   entities). `REVIEW_DATA` carries arbitrary user text (`thread`/`title`/`fix` and
+   the whole `reviewState` envelope) from the uncommitted, possibly attacker-authored
+   `.pr-review/review-state.json`; unescaped, a `</script>` in it closes the raw-text
+   `type="application/json"` seam and executes attacker JS. The escapes round-trip
+   through `JSON.parse`, so the data is unchanged. Cannot be done template-side (the
+   parser break precedes any template JS). See `references/review-data-schema.md`
+   §Seam-injection safety.
+3. Replace the full, unique seam element
    `<script id="review-data" type="application/json">/*__REVIEW_DATA__*/</script>`
-   with the same element wrapping the JSON text. Replace the whole element, not
-   the bare `/*__REVIEW_DATA__*/` substring (it also appears in the template's JS
-   guard). See `references/review-data-schema.md`.
-3. Write to `$root/docs/reviews/<branch>-<YYYY-MM-DD>.html` (create `$root/docs/reviews/` if absent) — anchored to the git root (`$root` from step 1) so the report lands in the repo even when the skill is invoked from a subdirectory, never in `<cwd>/docs/reviews/`.
+   with the same element wrapping the **escaped** JSON text. Replace the whole
+   element, not the bare `/*__REVIEW_DATA__*/` substring (it also appears in the
+   template's JS guard). See `references/review-data-schema.md`.
+4. Write to `$root/docs/reviews/<branch>-<YYYY-MM-DD>.html` (create `$root/docs/reviews/` if absent) — anchored to the git root (`$root` from step 1) so the report lands in the repo even when the skill is invoked from a subdirectory, never in `<cwd>/docs/reviews/`.
 
 Fallback: if `references/report-template.html` is missing, author the HTML directly
 against `references/review-data-schema.md`'s structure so the skill stays functional.

@@ -60,5 +60,19 @@ if [ -f "$SAMPLE" ]; then
   if ! grep -q 'id="diffline-' "$SAMPLE"; then echo "FAIL: sample has no diffline anchors"; fail=1; fi
 fi
 
+# 6. seam-injection safety (sec-1): raw thread text must not terminate the JSON
+#    seam. The template is parity-checked (#4), so testing the marketplace copy
+#    covers both ports. Requires node; skip with a notice if unavailable.
+SEAM_TEST="$MARKET_DIR/__tests__/seam-injection.test.cjs"
+if [ -f "$SEAM_TEST" ]; then
+  if command -v node >/dev/null 2>&1; then
+    if ! node "$SEAM_TEST"; then echo "FAIL: seam-injection safety test (sec-1)"; fail=1; fi
+  else
+    echo "SKIP: node not found — seam-injection test (sec-1) not run"
+  fi
+else
+  echo "FAIL: missing __tests__/seam-injection.test.cjs (sec-1 regression fixture)"; fail=1
+fi
+
 [ "$fail" -eq 0 ] && echo "PASS: pr-review-report skill (marketplace + opencode)" || true
 exit "$fail"

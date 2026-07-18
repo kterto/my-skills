@@ -206,17 +206,49 @@ either as acknowledged.
 ## Injection
 
 1. Read `references/report-template.html`.
-2. Replace the **full seam element** — this exact, unique string:
+2. **HTML-neutralize the JSON text (MANDATORY — security, sec-1).** After
+   serializing `REVIEW_DATA` and validating it parses, escape the serialized string
+   before wrapping it in the seam: replace every `<` → `\u003c`, `>` → `\u003e`,
+   and `&` → `\u0026` (JSON Unicode escapes — **not** HTML entities like `&lt;`,
+   which would not decode back). See **Seam-injection safety** below — not optional.
+3. Replace the **full seam element** — this exact, unique string:
    ```
    <script id="review-data" type="application/json">/*__REVIEW_DATA__*/</script>
    ```
-   with `<script id="review-data" type="application/json">` + the JSON text +
-   `</script>`. Replace the whole element, **not** the bare `/*__REVIEW_DATA__*/`
-   substring — that placeholder also appears in the template's JS guard
-   (`raw === "/*__REVIEW_DATA__*/"`), so a bare-substring replace is
+   with `<script id="review-data" type="application/json">` + the **escaped** JSON
+   text + `</script>`. Replace the whole element, **not** the bare
+   `/*__REVIEW_DATA__*/` substring — that placeholder also appears in the template's
+   JS guard (`raw === "/*__REVIEW_DATA__*/"`), so a bare-substring replace is
    order-dependent and must not be used. The full element occurs exactly once.
-3. Write the result to `docs/reviews/<branch>-<YYYY-MM-DD>.html`.
+4. Write the result to `docs/reviews/<branch>-<YYYY-MM-DD>.html`.
 
 Validate the JSON parses before injecting. Loading the file offline must render a
 full report; if the seam is left as the placeholder the template shows an empty
 shell.
+
+### Seam-injection safety (sec-1)
+
+The seam is a raw-text `<script type="application/json">` element: the HTML parser
+copies its content verbatim until the first `</script`. `REVIEW_DATA` carries
+**arbitrary user text** — `thread[]` comments, `title`, `rationale`, `fix`, and the
+whole embedded `reviewState` envelope — and that text can come from the
+**uncommitted, possibly attacker-authored** `.pr-review/review-state.json`. A comment
+of `</script><script>fetch(...)</script>` injected verbatim would close the data
+element and execute attacker-controlled JavaScript when the report opens — exposing
+the embedded diff and letting the displayed verdict be altered.
+
+So the JSON text MUST be HTML-neutralized before injection (step 2):
+
+- Escape `<` → `\u003c`, `>` → `\u003e`, `&` → `\u0026`.
+- These characters appear **only inside JSON string values**, never in JSON
+  structure, and `\u003c`/`\u003e`/`\u0026` are valid JSON string escapes that
+  `JSON.parse` decodes back to `<`/`>`/`&`. So a blind global replace on the whole
+  serialized string leaves the parsed data **byte-for-byte identical** while making
+  it impossible for the injected text to contain `</script>`, `<script`, or `<!--`.
+- The template reads the seam with `JSON.parse(node.textContent)`, so the escapes
+  round-trip transparently; no template change is needed. The escaping cannot be
+  done template-side — the parser break happens before any template JS runs — so it
+  is the **injector's** responsibility and is mandatory in both ports.
+- This is defense the render path already has for the DOM (every field is emitted
+  through `esc()` / `linkify()`); the seam is the one raw path and this step closes
+  it.
