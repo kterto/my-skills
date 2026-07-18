@@ -32,7 +32,9 @@ finding is looked up in O(1) across runs regardless of how its diff line moved.
 ```jsonc
 {
   "version": 1,                       // integer; schema version of THIS file. Write 1.
-  "branch": "feat/streaming-export",  // string; the branch this state belongs to
+  "branch": "feat/streaming-export",  // string; the branch this state belongs to.
+                                      // ENFORCED — must equal the current branch before
+                                      // reconciliation. See "Branch ownership" below.
 
   // Map: fingerprint string -> per-finding persisted state.
   "findings": {
@@ -128,10 +130,46 @@ word-separating hyphens, so the two words join. This is intentional and
 deterministic — the recipe cares only that the same title always maps to the same
 key, not that the key is re-splittable.)
 
+## Branch ownership — enforce `branch` before reconciliation (ADR-0004)
+
+`.pr-review/review-state.json` is a single uncommitted working-tree file, so it
+**survives a branch switch**: checking out a different branch leaves the previous
+branch's state file in place. The `branch` field records which branch the triage
+belongs to, but recording is not enforcing — reconciling by fingerprint alone would
+carry `ignored` / `acknowledged` / `fixed` states from another branch into the
+current review and silently alter its counts.
+
+So `branch` is a **hard gate on reconciliation**, not a label:
+
+- **Exact match required.** Reconcile against the stored state (step 4) **only when
+  `state.branch` equals the current branch**. An absent `branch` is treated as the
+  current branch (legacy / first write) — back-compat, not a bypass.
+- **Mismatch → preserve but ignore by default.** If `state.branch` names a
+  *different* branch, do **not** apply it: every finding starts `open` as if no
+  prior state existed. **Never silently discard the file** — it is the other
+  branch's triage. Surface the mismatch to the user (which branch it belongs to vs.
+  the current branch) and **ask before importing** it.
+- **Import is opt-in.** Only on explicit user approval, reattach the mismatched
+  triage by fingerprint into the current branch; the file's `branch` is rewritten to
+  the current branch on the next write (it now belongs to this branch).
+- **Never clobber a different-branch file without consent.** Because storage is one
+  file, writing the current branch's state (step 7b) would overwrite a
+  different-branch file. Do not overwrite a mismatched file unless the user chose to
+  *import* (takeover) or explicitly to *discard and start fresh*. Absent that
+  choice, **skip the state write** this run and tell the user to commit or move the
+  other branch's file first — preserving their triage over persisting this run's.
+
+This keeps single-file storage (no schema restructure, envelope contract from
+ADR-0002 unchanged) while closing the cross-branch leak. The browser side is already
+branch-scoped: its `localStorage` autosave is keyed `pr-review-state:<branch>` and
+`buildSaveObject` stamps the current `branch`, so a mismatch cannot arise there.
+
 ## Reconciliation: matching this run's findings to stored state
 
 On each run (`SKILL.md` step 4) every freshly produced finding is matched to a
-stored entry:
+stored entry. **Precondition:** the branch-ownership gate above passed (the stored
+`branch` matches the current branch, or the user imported a mismatched file);
+otherwise there is no prior state to match and every finding starts `open`.
 
 1. **Fingerprint match (primary).** Compute the finding's fingerprint and look it
    up in `findings`. A hit carries `state` + `thread` + `history` forward.

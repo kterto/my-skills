@@ -128,7 +128,18 @@ Load the accumulated triage so this run is a *cycle*, not a fresh start. Follow
 # / the merge-base would miss the user's latest triage. Under opencode the session
 # cwd may be a repo subdir, so $root anchoring still matters here.
 root="$(git rev-parse --show-toplevel 2>/dev/null)"
-[ -f "$root/.pr-review/review-state.json" ] && cat "$root/.pr-review/review-state.json"
+state="$root/.pr-review/review-state.json"
+if [ -f "$state" ]; then
+  cat "$state"
+  # Branch ownership: this single uncommitted file survives branch switches, so its
+  # triage may belong to a DIFFERENT branch. Reconcile only if it owns the current
+  # branch (arch-3 / ADR-0004). Surface a mismatch mechanically.
+  cur="$(git branch --show-current)"
+  owner="$(sed -n 's/.*"branch"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$state" | head -1)"
+  if [ -n "$owner" ] && [ "$owner" != "$cur" ]; then
+    echo "STATE-BRANCH-MISMATCH: review-state.json belongs to '$owner' but current branch is '$cur' — do NOT reconcile against it; preserve it and ask the user before importing."
+  fi
+fi
 ```
 
 - **This is a deliberately different trust anchor from step 2.** Policy files
@@ -138,6 +149,15 @@ root="$(git rev-parse --show-toplevel 2>/dev/null)"
   and the browser writes it uncommitted — so it loads from the **working tree**
   anchored to `$root`. Never route the state file through `$mb`, nor policy
   through the working tree.
+- **Branch ownership (enforced).** The state file's `branch` is a **hard gate**, not
+  a label. Reconcile against it in step 4 **only when it equals the current branch**
+  (an absent `branch` counts as the current branch — legacy/first-write). On a
+  `STATE-BRANCH-MISMATCH` (the file belongs to another branch — it survived a branch
+  switch), do **not** apply its triage: review as if no prior state exists, **preserve
+  the file untouched**, tell the user which branch it belongs to, and **ask before
+  importing**. Only on explicit approval reattach its triage to this branch. Never
+  silently carry another branch's `ignored`/`acknowledged`/`fixed` into this review.
+  See `review-state-schema.md` §Branch ownership.
 - **Absent file → skip silently.** No prior state means every finding starts
   `open` with no thread; the report renders exactly as before (backward compat).
 - **`version` handling** — write `version: 1`; read a higher unknown version
@@ -171,7 +191,10 @@ drop from severity counts). A genuine new defect that happens to touch a deferre
 area is NOT the deferred fact — keep it a normal, counted finding.
 
 **Reconcile with prior state.** Now fold in the state loaded in step 2b, per
-`references/review-state-schema.md`:
+`references/review-state-schema.md`. **Branch gate first:** only reconcile if the
+state file owns the current branch (step 2b). On a `STATE-BRANCH-MISMATCH` that the
+user did not approve importing, skip reconciliation entirely — every finding starts
+`open`, no prior `thread`/`state` is applied.
 
 1. **Match each finding to prior state.** Compute its `fingerprint`
    (`section|file|normalized-title`, recipe in `review-state-schema.md`) and look
@@ -271,6 +294,14 @@ once and use it for both the on-disk write and the embed so they never diverge
 - **`history[]` append-on-transition.** Append a `{ from, to, ts, by }` record
   only when a finding's `state` actually changed this run; `by` is `skill` for a
   verification, `user` for a user-driven change.
+- **Never clobber a different-branch file (arch-3 / ADR-0004).** Storage is one
+  file, so writing this branch's state overwrites whatever branch owns the file on
+  disk. On an unresolved `STATE-BRANCH-MISMATCH` (the file belongs to another branch
+  and the user chose neither to *import* it into this branch nor to *discard and
+  start fresh*), **do not write** — preserve the other branch's triage and tell the
+  user to commit or move it first. Only write when the file owns the current branch,
+  the user imported it (this branch takes ownership — stamp `branch` = current), or
+  the user chose to overwrite. Always write the current `branch` into the file.
 - **Anchor to `$root`** — like the report (`$root/docs/reviews/…`) and memory
   (`$root/.pr-review/memory.md`) writes — so it lands in the repo even when the
   skill is invoked from a subdirectory (common under opencode), never in a stray
