@@ -931,6 +931,10 @@ body[data-state-readonly] .finding__comment {
   var KNOWN_STATE_VERSION = 1; // review-state.json schema version this template understands
   var STATE_VERSION = 1;  // version of the source envelope — written back verbatim, never downgraded
   var STATE_READONLY = false; // true when the source envelope is a newer, unknown version
+  var EMITTED_REV = "";   // newest transition/thread ts reflected in the embedded envelope;
+                          // cached user ops at/below it are already merged and are pruned
+  var OP_LOG = [];        // user ops performed in-browser SINCE EMITTED_REV, replayed over
+                          // the envelope so stale cache can't overwrite newer skill state (arch-2)
 
   function nowTs() { return new Date().toISOString(); }
 
@@ -1419,6 +1423,8 @@ body[data-state-readonly] .finding__comment {
     STORE = {};
     STATE_VERSION = KNOWN_STATE_VERSION;
     STATE_READONLY = false;
+    EMITTED_REV = "";
+    OP_LOG = [];
 
     var envelope = data.reviewState;
     if (envelope && typeof envelope === "object") {
@@ -1438,6 +1444,10 @@ body[data-state-readonly] .finding__comment {
           history: (s.history || []).slice(),
           lastFinding: s.lastFinding || null
         };
+        // The report revision is the newest ts the envelope reflects: any cached
+        // user op at/below it is already merged into this envelope by the skill.
+        (s.history || []).forEach(function (h) { if (h && h.ts && h.ts > EMITTED_REV) EMITTED_REV = h.ts; });
+        (s.thread || []).forEach(function (t) { if (t && t.ts && t.ts > EMITTED_REV) EMITTED_REV = t.ts; });
       });
     }
 
@@ -1461,38 +1471,97 @@ body[data-state-readonly] .finding__comment {
     overlayLocalStorage();
   }
 
+  // Thread-turn / history-record identity for idempotent, truncation-free merges.
+  function sameTurn(a, b) { return a.ts === b.ts && a.author === b.author && a.text === b.text; }
+  function hasTurn(list, t) { return (list || []).some(function (m) { return sameTurn(m, t); }); }
+  function hasTransition(list, op) {
+    return (list || []).some(function (h) { return h.ts === op.ts && h.from === op.from && h.to === op.to; });
+  }
+  function mergeThread(entry, turns) {
+    entry.thread = entry.thread || [];
+    (turns || []).forEach(function (t) { if (t && !hasTurn(entry.thread, t)) entry.thread.push(t); });
+    entry.thread.sort(function (a, b) {
+      var x = a.ts || "", y = b.ts || ""; return x < y ? -1 : x > y ? 1 : 0;
+    });
+  }
+
+  // Replay a single user op over STORE (idempotent). Ops carry their own ts so
+  // out-of-band replay reconstructs the same state + audit trail.
+  function applyOp(op) {
+    if (!op || !op.fp) return;
+    var e = STORE[op.fp];
+    if (!e) return;
+    if (op.type === "state") {
+      if (e.state !== op.to) {
+        e.history = e.history || [];
+        if (!hasTransition(e.history, op)) e.history.push({ from: op.from, to: op.to, ts: op.ts, by: "user" });
+        e.state = op.to;
+      }
+    } else if (op.type === "comment") {
+      var turn = { author: "user", text: op.text, ts: op.ts };
+      e.thread = e.thread || [];
+      if (!hasTurn(e.thread, turn)) e.thread.push(turn);
+    }
+  }
+
+  // Overlay this browser's own autosave. The cache is a REVISIONED OP-LOG: only
+  // user ops newer than the report revision (EMITTED_REV) are replayed, so a stale
+  // cache can never overwrite a newer skill-derived transition (resolved/regressed)
+  // or truncate a thread the skill extended (arch-2). Ops at/below EMITTED_REV are
+  // already folded into the envelope and are pruned.
   function overlayLocalStorage() {
     // A newer-version file is read-only; never resurrect stale local edits onto it.
     if (!LS_KEY || STATE_READONLY) return;
     var raw;
     try { raw = window.localStorage.getItem(LS_KEY); } catch (e) { return; }
     if (!raw) return;
-    var saved;
-    try { saved = JSON.parse(raw); } catch (e) { return; }
-    Object.keys(saved || {}).forEach(function (fp) {
-      var s = saved[fp];
+    var cache;
+    try { cache = JSON.parse(raw); } catch (e) { return; }
+    if (!cache) return;
+
+    if (cache.ops && cache.ops.constructor === Array) {
+      OP_LOG = cache.ops.filter(function (op) { return op && op.ts && op.ts > EMITTED_REV; });
+      OP_LOG.forEach(applyOp);
+      return;
+    }
+
+    // Legacy snapshot format (pre-op-log). With an authoritative envelope present,
+    // never let the stale full snapshot clobber newer skill state/history — only
+    // rescue user comment turns (merged, deduped). Without an envelope (a legacy
+    // single-writer report) fall back to the original full overlay.
+    Object.keys(cache).forEach(function (fp) {
+      var s = cache[fp];
       if (!s) return;
       if (!STORE[fp]) STORE[fp] = { state: "open", thread: [], history: [], lastFinding: null };
-      if (s.state) STORE[fp].state = s.state;
-      if (s.thread) STORE[fp].thread = s.thread;
-      if (s.history) STORE[fp].history = s.history;
-      if (s.lastFinding && !STORE[fp].lastFinding) STORE[fp].lastFinding = s.lastFinding;
+      if (EMITTED_REV === "") {
+        if (s.state) STORE[fp].state = s.state;
+        if (s.thread) STORE[fp].thread = s.thread;
+        if (s.history) STORE[fp].history = s.history;
+        if (s.lastFinding && !STORE[fp].lastFinding) STORE[fp].lastFinding = s.lastFinding;
+      } else if (s.thread) {
+        mergeThread(STORE[fp], s.thread);
+      }
     });
   }
 
+  // Autosave the browser's own edits as a revisioned op-log (see overlayLocalStorage).
   function persist() {
     if (!LS_KEY || STATE_READONLY) return;
-    try { window.localStorage.setItem(LS_KEY, JSON.stringify(STORE)); } catch (e) { /* quota / private mode */ }
+    try { window.localStorage.setItem(LS_KEY, JSON.stringify({ rev: EMITTED_REV, ops: OP_LOG })); }
+    catch (e) { /* quota / private mode */ }
   }
 
-  // User sets a finding's state. Records an append-on-transition history entry.
+  // User sets a finding's state. Records an append-on-transition history entry and
+  // logs the op so it survives a refresh but is pruned once the skill folds it in.
   function setFindingState(fp, next) {
     if (STATE_READONLY) return; // newer-version file — triage is read-only
     var e = STORE[fp];
     if (!e) return;
     if (e.state !== next) {
+      var ts = nowTs();
       e.history = e.history || [];
-      e.history.push({ from: e.state, to: next, ts: nowTs(), by: "user" });
+      e.history.push({ from: e.state, to: next, ts: ts, by: "user" });
+      OP_LOG.push({ type: "state", fp: fp, from: e.state, to: next, ts: ts });
       e.state = next;
     }
     persist();
@@ -1504,8 +1573,10 @@ body[data-state-readonly] .finding__comment {
     if (STATE_READONLY) return; // newer-version file — triage is read-only
     var e = STORE[fp];
     if (!e || !text) return;
+    var ts = nowTs();
     e.thread = e.thread || [];
-    e.thread.push({ author: "user", text: text, ts: nowTs() });
+    e.thread.push({ author: "user", text: text, ts: ts });
+    OP_LOG.push({ type: "comment", fp: fp, text: text, ts: ts });
     persist();
     rerender();
   }

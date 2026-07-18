@@ -209,6 +209,17 @@ state object rather than compete as unequal full-state writers:
 - **The browser is a faithful editor.** It seeds from `reviewState`, applies user
   edits, and writes the same complete envelope back (preserving history, orphans,
   `version`). It is not a competing re-constructor.
+- **The browser autosave is a revisioned op-log, not a snapshot (ADR-0003).** The
+  browser's `localStorage` cache stores the *user operations* it performed plus the
+  report revision they were made against (the newest transition/thread `ts` the
+  embedded envelope reflects). On load it replays only ops **newer** than that
+  revision; ops at/below it are already folded into the envelope and are pruned. So
+  a stale cache can never revert a newer skill-derived transition
+  (`fixed`→`resolved`/`regressed`) nor truncate a thread the skill extended — cached
+  state never overrides a newer skill transition, and thread turns merge by identity
+  rather than replace. A legacy full-snapshot cache is honored only when no envelope
+  is present; with an envelope it contributes user comment turns (merged) but never
+  clobbers state/history.
 
 ## `history[]` cadence
 
