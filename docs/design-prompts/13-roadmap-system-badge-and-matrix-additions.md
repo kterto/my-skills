@@ -58,14 +58,14 @@ Rendered in the item header next to the existing release badge.
 
 **HTML contract (per template):**
 
-- Add a `data-system` attribute to the root `<main>` next to the existing `data-release`:
-  - user-story: `data-system="{{system}}"`
-  - milestone / phase: `data-system="{{system_derived}}"`
-- Add a header badge element next to the release badge:
+- Add **two** attributes to the root `<main>` next to the existing `data-release` — **state is carried separately from the name** so a real system named `cross-cutting`/`null`/`untagged` is never mistaken for a synthetic state (the `system` grammar has no reserved value):
+  - `data-system-state="{{system_state}}"` — one of `none` | `named` | `cross-cutting` (user-story never `cross-cutting`).
+  - `data-system="{{system…}}"` — the raw configured name, meaningful only when state is `named` (`{{system}}` on user-story, `{{system_derived}}` on milestone/phase).
+- Add a header badge element next to the release badge (carrying the same two attributes):
   ```html
-  <span class="h1__pill"><span class="system-badge" data-system="{{system…}}" hidden>[{{system…}}]</span></span>
+  <span class="h1__pill"><span class="system-badge" data-system-state="{{system_state}}" data-system="{{system…}}" hidden>[{{system…}}]</span></span>
   ```
-- Add a `syncSystemBadge()` JS function (mirroring the existing `syncReleaseBadge()`): read `data-system`; if `null`/absent/unresolved-token → keep the badge `hidden` (legacy-safe); otherwise show `[value]`; on milestone/phase, apply `.system-badge--cross-cutting` when the value is `cross-cutting`. Call it from `init()` after `syncReleaseBadge()`.
+- Add a `syncSystemBadge()` JS function (mirroring `syncReleaseBadge()`) that keys off **`data-system-state`, never the name string**: `named` → show `[` + `data-system` + `]` (via `textContent`, injection-safe); on milestone/phase, `cross-cutting` → show `[cross-cutting]` and apply `.system-badge--cross-cutting`; anything else (`none`/absent/unresolved token) → keep the badge `hidden` (legacy-safe). Call it from `init()` after `syncReleaseBadge()`. **Do not** compare `data-system` against `null`/`untagged`/`cross-cutting` — those are valid names, not states.
 
 **Markdown contract (per template — plain-text parity):**
 
@@ -80,7 +80,7 @@ Add one new section to the index (both variants) rendering a **compact** `releas
 - **HTML:** a `<section data-role="readiness-matrix">` containing a `.readiness` scroll wrapper and the `{{readiness_matrix}}` `<table>` (header `release` + declared systems + `(untagged)` + `READY?`; rows in `releases[]` order + `(untiered)` + `backlog`; cells `done/total`).
 - **MD:** a `## Release readiness` section with the same `{{readiness_matrix}}` injection point rendering a plain-text markdown table.
 - Add a **System legend** entry (parallel to the existing Release legend): `[backend]` named system, `[cross-cutting]` derived, `(none)` untagged.
-- The section is omitted / collapses to a single `(untagged)` column for legacy roadmaps with no declared systems and nothing tagged.
+- The section **always renders** — it is **never omitted**. For a legacy roadmap with no declared systems and nothing tagged it **collapses to a single `(untagged)` column** (rows = the `releases[]`/`(untiered)`/`backlog` that exist; a release-less roadmap shows just the `(untiered)` row). The `(untagged)` column is never dropped (locked backward-compatibility contract — matches the invariant in the Parity/robustness checklist: "the embedded matrix always keeps a column for `system: null`"). The *separate* standalone `release-matrix.<ext>` dashboard FILE is gated (materialized only once ≥1 system/tag exists); this embedded index section is unconditional.
 
 The full-grid standalone dashboard is `12-roadmap-release-matrix.md`; this embedded view reuses the **same** readiness state class names so the two stay visually consistent.
 
@@ -90,7 +90,8 @@ The full-grid standalone dashboard is `12-roadmap-release-matrix.md`; this embed
 |---|---|---|
 | `{{system_badge}}` | user-story, milestone, phase (`.md` heading) | Pre-rendered `[<system>]` / `[cross-cutting]` badge, or empty when untagged. The index (`roadmap-readme.md`) has no literal `{{system_badge}}` — it renders per-milestone badges inside `{{milestone_list_ordered_by_sequence}}`, mirroring the release badge. |
 | `{{system}}` | user-story, milestone, phase (`.md` frontmatter); user-story (`.html` `data-system`) | Raw/cascaded stored system value or `null`. Milestone/phase store it in frontmatter; their visible badge/line uses `{{system_derived}}`. |
-| `{{system_derived}}` | milestone, phase (`.md` line + `.html` `data-system`) | Derived shared/`cross-cutting`/untagged system |
+| `{{system_derived}}` | milestone, phase (`.md` line + `.html` `data-system`) | Derived **shared** system name (verbatim), meaningful only when `{{system_state}}` is `named`; empty for `none`/`cross-cutting`. |
+| `{{system_state}}` | user-story, milestone, phase (`.html` `data-system-state`) | Derived badge **state**: `none` \| `named` \| `cross-cutting` (user-story never `cross-cutting`). Carries the synthetic-state signal **separately from the name** so a real system named `cross-cutting`/`null`/`untagged` renders as its actual band. The renderer computes this structurally; the badge JS keys off it, never off the name string. |
 | `{{readiness_matrix}}` | `roadmap-index` (both variants) | Renderer-injected compact `release × system` matrix |
 
 ### Readiness state class names (shared with prompt 12)
@@ -106,7 +107,8 @@ Extend each template's existing gallery (do not replace it) with:
 3. **Item with only a system badge** — release `null`, system tagged.
 4. **Derived `[cross-cutting]`** (milestone/phase) — descendants span different systems.
 5. **Legacy/untagged item** — neither badge renders; identical to the pre-system layout.
-6. **(index only) embedded readiness matrix** — a ready row, a lagging row, the `(untagged)` column, and the legacy single-column collapse.
+6. **Name/state collision guard** — a real declared system literally named `cross-cutting` (state `named`, `data-system="cross-cutting"`) renders as `[cross-cutting]` **without** the derived-mixed styling — i.e. as its actual band, not a synthetic state. (Same guard for a system named `null`/`untagged`: it shows `[null]`/`[untagged]`, never hidden.)
+7. **(index only) embedded readiness matrix** — a ready row, a lagging row, the `(untagged)` column, and the legacy single-column collapse.
 
 ## Interactions
 

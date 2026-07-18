@@ -591,11 +591,14 @@ code {
        Cells = done/total (superseded counts as done). The trailing READY? column marks a
        release ready only when every not-superseded story in that release is done, regardless
        of system — no column, including "(untagged)"/"(unknown)", has remaining not-done work; laggard
-       columns (which may include "(untagged)"/"(unknown)") are called out. Rendered only when the roadmap has ≥1
-       declared system OR ≥1 tagged story; a legacy/untagged roadmap collapses to a single
-       "(untagged)" column (and the section may be omitted when nothing is tagged). The
-       full-grid dashboard lives in release-matrix.template.html; this is the compact index
-       view. See roadmap/SKILL.md → Release readiness.
+       columns (which may include "(untagged)"/"(unknown)") are called out. This section ALWAYS
+       renders (never omitted): a legacy/untagged roadmap collapses the matrix to a single
+       "(untagged)" column (rows = the releases[]/(untiered)/backlog that exist — just (untiered)
+       for a release-less roadmap); the "(untagged)" column is never dropped (locked
+       backward-compatibility contract). The full-grid standalone dashboard
+       (release-matrix.template.html) is a SEPARATE gated FILE — materialized only when ≥1
+       declared system OR ≥1 tagged story; this compact index section is unconditional.
+       See roadmap/SKILL.md → Release readiness.
        ============================================================ -->
   <section class="section" data-role="readiness-matrix">
     <details open>
@@ -611,8 +614,10 @@ code {
           {{readiness_matrix}}
         </div>
         <!-- Link to the standalone dashboard /roadmap/release-matrix.<ext>. This .html variant
-             links release-matrix.html; the .md variant links release-matrix.md. Rendered
-             together with this section under the same gate; omit when the section is omitted. -->
+             links release-matrix.html; the .md variant links release-matrix.md. The section
+             itself is unconditional, but this LINK renders only when the standalone dashboard
+             FILE exists (gated: ≥1 declared system OR ≥1 tagged story) — omit the link on a
+             legacy/untagged roadmap that has no release-matrix file yet. -->
         <p class="readiness__dashboard-link"><a href="release-matrix.html">Full release &times; system readiness dashboard &rarr;</a></p>
       </div>
     </details>

@@ -492,7 +492,7 @@ code {
 </style>
 </head>
 <body>
-<main data-id="{{id}}" data-kind="phase" data-status="{{rollup_status}}" data-release="{{release_derived}}" data-system="{{system_derived}}"
+<main data-id="{{id}}" data-kind="phase" data-status="{{rollup_status}}" data-release="{{release_derived}}" data-system-state="{{system_state}}" data-system="{{system_derived}}"
       data-created-at="{{created_at}}" data-updated-at="{{updated_at}}">
 
   <nav class="crumbs"><a href="../../README.html">Roadmap</a><span class="sep">/</span><a href="../README.html">{{milestone}}</a><span class="sep">/</span><span>{{id}}</span></nav>
@@ -513,7 +513,7 @@ code {
       <span>{{title}}</span>
       <span class="h1__pill"><span class="pill pill--active">{{rollup_status}}</span></span>
       <span class="h1__pill"><span class="release-badge" data-release="{{release_derived}}" hidden>[{{release_derived}}]</span></span>
-      <span class="h1__pill"><span class="system-badge" data-system="{{system_derived}}" hidden>[{{system_derived}}]</span></span>
+      <span class="h1__pill"><span class="system-badge" data-system-state="{{system_state}}" data-system="{{system_derived}}" hidden>[{{system_derived}}]</span></span>
     </h1>
 
     <!-- 2. ID / meta header block -->
@@ -669,17 +669,25 @@ code {
   function syncSystemBadge() {
     var root = document.querySelector('main[data-kind="phase"]');
     if (!root) return;
-    var system = root.getAttribute("data-system"); // derived system or "cross-cutting"
     var badge = document.querySelector(".system-badge");
     if (!badge) return;
-    // null / absent / unresolved token → untagged phase, show no badge (legacy-safe)
-    if (!system || system === "null" || system === "untagged" || system === "{{" + "system_derived}}") {
+    // State is carried SEPARATELY from the configured name so a real system named
+    // "cross-cutting"/"null"/"untagged" is never mistaken for a synthetic state.
+    // data-system-state ∈ none | named | cross-cutting; data-system holds the raw
+    // configured name (meaningful only when state === "named"). Never infer state
+    // from the name string.
+    var state = root.getAttribute("data-system-state");
+    if (state === "named") {
+      badge.hidden = false;
+      badge.textContent = "[" + root.getAttribute("data-system") + "]"; // textContent = injection-safe
+    } else if (state === "cross-cutting") {
+      badge.hidden = false;
+      badge.textContent = "[cross-cutting]";
+      badge.classList.add("system-badge--cross-cutting");
+    } else {
+      // none / absent / unresolved template token → untagged, no badge (legacy-safe)
       badge.hidden = true;
-      return;
     }
-    badge.hidden = false;
-    badge.textContent = "[" + system + "]";
-    if (system === "cross-cutting") badge.classList.add("system-badge--cross-cutting");
   }
 
   function init() { syncHeaderPill(); syncReleaseBadge(); syncSystemBadge(); }

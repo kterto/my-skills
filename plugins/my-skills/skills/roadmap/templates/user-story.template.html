@@ -526,7 +526,7 @@ code {
 </style>
 </head>
 <body>
-<main data-id="{{id}}" data-kind="user-story" data-status="{{status}}" data-release="{{release}}" data-system="{{system}}"
+<main data-id="{{id}}" data-kind="user-story" data-status="{{status}}" data-release="{{release}}" data-system-state="{{system_state}}" data-system="{{system}}"
       data-created-at="{{created_at}}" data-updated-at="{{updated_at}}">
 
   <nav class="crumbs"><a href="../../README.html">Roadmap</a><span class="sep">/</span><a href="../README.html">{{milestone}}</a><span class="sep">/</span><a href="README.html">{{phase}}</a><span class="sep">/</span><span>{{id}}</span></nav>
@@ -549,7 +549,7 @@ code {
       <span>{{title}}</span>
       <span class="h1__pill"><span class="pill pill--active">{{status}}</span></span>
       <span class="h1__pill"><span class="release-badge" data-release="{{release}}" hidden>[{{release}}]</span></span>
-      <span class="h1__pill"><span class="system-badge" data-system="{{system}}" hidden>[{{system}}]</span></span>
+      <span class="h1__pill"><span class="system-badge" data-system-state="{{system_state}}" data-system="{{system}}" hidden>[{{system}}]</span></span>
     </h1>
 
     <!-- 2. ID / meta header block -->
@@ -698,17 +698,22 @@ code {
   function syncSystemBadge() {
     var root = document.querySelector('main[data-kind="user-story"]');
     if (!root) return;
-    var system = root.getAttribute("data-system");
     var badge = document.querySelector(".system-badge");
     if (!badge) return;
-    // null / absent / unresolved token → untagged, show no badge (legacy-safe)
-    if (!system || system === "null" || system === "{{" + "system}}") {
+    // State is carried SEPARATELY from the configured name so a real system named
+    // "null"/"untagged"/"cross-cutting" is rendered as its actual band, never hidden
+    // or mis-styled. data-system-state ∈ none | named (a story's raw system is never
+    // "cross-cutting" — that is derived only on phase/milestone). data-system holds the
+    // raw configured name (meaningful only when state === "named"). Never infer state
+    // from the name string.
+    var state = root.getAttribute("data-system-state");
+    if (state === "named") {
+      badge.hidden = false;
+      badge.textContent = "[" + root.getAttribute("data-system") + "]"; // textContent = injection-safe
+    } else {
+      // none / absent / unresolved template token → untagged, no badge (legacy-safe)
       badge.hidden = true;
-      return;
     }
-    badge.hidden = false;
-    badge.textContent = "[" + system + "]";
-    // a story's raw system is never "cross-cutting" (that is derived only on phase/milestone)
   }
 
   function init() { syncHeaderPill(); syncReleaseBadge(); syncSystemBadge(); }

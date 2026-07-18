@@ -70,6 +70,13 @@ Same frontmatter shape as a user-story file, with the following differences:
 - `status` is **derived** (rolled up from children) rather than set directly — see the rollup function below.
 - `release` is likewise **derived** for display: a phase/milestone shows the shared band of its **not-done** descendant stories, or the derived badge `mixed` when those children differ (see `mutation-ops.md` → cascade + derived `[mixed]` badge). A phase/milestone frontmatter `release` may still be stored when `set-release` cascades a band, but rendering always reflects the derived value.
 - `system` is derived for display in exactly the same way (parallel to `release`): a phase/milestone shows the shared system of its **not-done** descendant stories as `[<system>]` (e.g. `[backend]`), the derived badge `[cross-cutting]` when those children differ, or **no badge** when all not-done descendants are untagged (`null`). A phase/milestone frontmatter `system` may still be stored when `set-system` cascades a band, but rendering always reflects the derived value. (`[cross-cutting]` is the system-band analog of the release band's `[mixed]`.)
+
+  **State is separate from the configured name (never infer state from the name string).** Because the `system` grammar has **no reserved value** (a real system may legitimately be named `cross-cutting`, `null`, `untagged`, `none`, …), the renderer must decide the badge from the *derived state*, computed structurally — **not** by string-matching the name. The three states are:
+  - **`none`** — untagged (all not-done descendants `null`, or a story with `system: null`): **no badge**.
+  - **`named`** — a single shared declared system: badge `[<name>]`, where `<name>` is the configured value **verbatim** (a system literally named `cross-cutting` renders `[cross-cutting]` as a real band, **without** the derived-mixed styling).
+  - **`cross-cutting`** — derived mixed (phase/milestone whose not-done children differ): badge `[cross-cutting]` with the mixed styling. Never applies to a raw user-story.
+
+  In **html**, this is carried by a dedicated `data-system-state="none|named|cross-cutting"` attribute alongside `data-system="<raw name>"`; the badge JS keys off `data-system-state` and reads the name only when the state is `named` (see the badge templates). In **md**, the renderer emits `[<name>]` / `[cross-cutting]` / nothing by the same state, never by parsing the name. The pre-rendered per-milestone badges in the index (`roadmap-readme`) follow the identical state rule.
 - No `orchestrator_brief` field.
 - Body includes an ordered list of children rendered by `sequence`, plus the audit log.
 

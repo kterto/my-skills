@@ -48,8 +48,10 @@
 → **Full dashboard:** [release × system readiness matrix](release-matrix.md)
 
 <!-- Link target is the standalone dashboard /roadmap/release-matrix.<ext> (this .md variant
-     links release-matrix.md; the .html variant links release-matrix.html). Rendered together
-     with this section under the same gate; omit the link when the section itself is omitted. -->
+     links release-matrix.md; the .html variant links release-matrix.html). The standalone
+     dashboard FILE is gated (materialized only when ≥1 declared system OR ≥1 tagged story);
+     render this link only when that file exists. The Release-readiness SECTION and its matrix
+     above are NOT gated — see below. -->
 
 <!-- Embedded compact `release × system` readiness matrix, derived on demand (no stored
      state) from each story's status + release + system. Rows = named releases in
@@ -61,10 +63,11 @@
      a release ready only when every not-superseded story in that release is done, regardless
      of system — no column, including `(untagged)` and `(unknown)`, has remaining not-done
      work; laggard columns (which may include `(untagged)`/`(unknown)`) are called out. The full-grid dashboard lives in the
-     dedicated release-matrix template; this is the compact index view. Rendered only when
-     the roadmap has ≥1 declared system OR ≥1 tagged story; a legacy/untagged roadmap
-     collapses the whole matrix to a single `(untagged)` column (and the section may be
-     omitted entirely when nothing is tagged). See roadmap/SKILL.md → Release readiness and
+     dedicated release-matrix template; this is the compact index view. This section ALWAYS
+     renders (never omitted): a legacy/untagged roadmap collapses the matrix to a single
+     `(untagged)` column (rows = the releases[]/(untiered)/backlog that exist — just (untiered)
+     for a release-less roadmap); the `(untagged)` column is never dropped (locked
+     backward-compatibility contract). See roadmap/SKILL.md → Release readiness and
      templates/release-matrix.template.md. -->
 
 ## Milestones (in execution order)
