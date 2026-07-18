@@ -42,7 +42,7 @@ This template is **new** — it has no prior minimal version. It joins the exist
 | untagged / untiered | `system: null` column, `release: null` row | `muted` gray |
 
 **Core components:**
-- **Matrix table:** header row of `release` + one column per declared system + an `(untagged)` column + a trailing `READY?` column; one body row per release (registry order), then an `(untiered)` row, then `backlog`. Row/column headers use `scope="row"`/`scope="col"`. Cells are monospace `done/total`.
+- **Matrix table:** header row of `release` + one column per declared system + an `(untagged)` column + a trailing `READY?` column; one body row per release (registry order), then a single `(untiered)` row. There is **no `backlog` row** — parked work is not a shippable release, so `release: backlog` stories are excluded from the matrix. Row/column headers use `scope="row"`/`scope="col"`. Cells are monospace `done/total`.
 - **Cell state:** a fully-done cell reads in `success`; a cell with remaining work reads in `warning`; the `(untagged)` column reads in `muted`.
 - **READY? verdict:** `READY` in `success`, or `lagging: <col>, …` in `warning` naming the laggard columns, which may include `(untagged)`.
 - **System path chip (optional):** a declared system may carry a `path` (monorepo package dir) surfaced under its column header in `--text-muted` mono XS.
@@ -61,7 +61,7 @@ This template is **new** — it has no prior minimal version. It joins the exist
 The release-matrix dashboard renders:
 
 1. **Page header** — `<h1>` naming the view (`Release × System`) plus a one-line summary and, optionally, the overall `{{done_count}}/{{total_count}} ({{pct}}%)`.
-2. **The matrix** — the `{{readiness_matrix}}` injection point: a `<table>` whose header row is `release` + one `<th scope="col">` per declared system + an `(untagged)` column + a trailing `READY?` column; whose body rows are the named releases in registry order, then an `(untiered)` row (`release: null`), then `backlog`. Each data cell is `done/total`; the `READY?` cell is the per-release verdict.
+2. **The matrix** — the `{{readiness_matrix}}` injection point: a `<table>` whose header row is `release` + one `<th scope="col">` per declared system + an `(untagged)` column + a trailing `READY?` column; whose body rows are the named releases in registry order, then a single `(untiered)` row (`release: null`) — **no `backlog` row** (parked work is not a shippable release; `release: backlog` stories are excluded). Each data cell is `done/total`; the `READY?` cell is the per-release verdict.
 3. **Legend** — a short key: `done/total`, `READY`, `lagging: <system>…`, `(untagged)` column, `(untiered)` row.
 
 ### Root element
@@ -103,7 +103,7 @@ Gallery must include:
 1. **A fully-ready release row** — every declared-system cell done, `READY` verdict in green.
 2. **A lagging release row** — at least one cell with remaining work in orange, `lagging: <system>, …` verdict naming the laggard columns.
 3. **The `(untagged)` column** — a column of `muted` cells holding `system: null` work, shown never-dropped.
-4. **The `(untiered)` row and `backlog` row** — `release: null` work and parked work.
+4. **The `(untiered)` row** — `release: null` work (active, not on a named train). Parked `backlog` work is **not** a matrix row.
 5. **Backward-compat / legacy state** — a roadmap with **no declared systems and nothing tagged**: the matrix collapses to a single `(untagged)` column and every cell of work lands there; no system columns, no badges.
 6. **A system column with a `path` chip** — e.g. `app` with `apps/mobile` under the header.
 7. **Legend** — all keys side by side.
@@ -146,4 +146,4 @@ Both light and dark must be styled — `@media (prefers-color-scheme: dark)` at 
 
 ### `.md` / `.html` parity
 
-The `release-matrix.template.md` variant must carry the **same** `{{readiness_matrix}}` injection point and render the matrix as a plain-text markdown table (header `release | <systems…> | (untagged) | READY?`; rows in registry order + untiered + backlog; cells `done/total`). Any *content* token added to one variant is added to the other (`{{readiness_matrix}}`, `{{done_count}}`, `{{total_count}}`, `{{pct}}`). The html root's `{{created_at}}`/`{{updated_at}}` (`data-*` attributes) are the sole exception — the `.md` dashboard is a rendered view with no frontmatter, so it carries no timestamp tokens. `output_format: md` stays at full parity with `html` on the matrix itself — the same derivation, rendered as text.
+The `release-matrix.template.md` variant must carry the **same** `{{readiness_matrix}}` injection point and render the matrix as a plain-text markdown table (header `release | <systems…> | (untagged) | READY?`; rows in registry order + a single untiered row, no backlog row; cells `done/total`). Any *content* token added to one variant is added to the other (`{{readiness_matrix}}`, `{{done_count}}`, `{{total_count}}`, `{{pct}}`). The html root's `{{created_at}}`/`{{updated_at}}` (`data-*` attributes) are the sole exception — the `.md` dashboard is a rendered view with no frontmatter, so it carries no timestamp tokens. `output_format: md` stays at full parity with `html` on the matrix itself — the same derivation, rendered as text.

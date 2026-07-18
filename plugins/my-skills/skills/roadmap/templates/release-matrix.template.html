@@ -421,9 +421,8 @@ h1 .h1__times {
 .readiness__verdict--lagging b { font-weight: 700; letter-spacing: 0.04em; }
 .readiness__verdict--lagging .laggards { color: var(--text-secondary); }
 
-/* Special rows */
-.readiness__table tbody tr.readiness__row--untiered th[scope="row"],
-.readiness__table tbody tr.readiness__row--backlog th[scope="row"] {
+/* Special row — untiered (release: null). No backlog row: parked work is excluded. */
+.readiness__table tbody tr.readiness__row--untiered th[scope="row"] {
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   font-weight: 500;
@@ -431,8 +430,7 @@ h1 .h1__times {
   font-style: italic;
 }
 
-.readiness__table tbody tr.readiness__row--untiered,
-.readiness__table tbody tr.readiness__row--backlog {
+.readiness__table tbody tr.readiness__row--untiered {
   background: var(--bg-surface);
 }
 
@@ -619,9 +617,10 @@ code {
              and attribute-escape in any attribute, before emitting — here and in every cell,
              the (unknown) value, and the integrity note. Never inject a raw name/path.
            - TBODY: one row per named release in roadmap.lock.json `releases[]` order (with an
-             optional <span class="readiness__release-id"> under the name), then an
-             `(untiered)` row (release: null, tr class readiness__row--untiered), then
-             `backlog` (tr class readiness__row--backlog). Row header is <th scope="row">.
+             optional <span class="readiness__release-id"> under the name), then a single
+             `(untiered)` row (release: null, tr class readiness__row--untiered). There is NO
+             `backlog` row — parked work is not a shippable release, so stories with
+             release: backlog are excluded from the matrix. Row header is <th scope="row">.
              Each cell is `done/total`; a cell with remaining not-done work carries
              .readiness__cell--lagging, a fully-done cell .readiness__cell--ready, a
              zero-total cell .readiness__cell--none; the `(untagged)` column cells carry
@@ -668,7 +667,7 @@ code {
           </div>
           <div class="legend__row">
             <span class="legend__key"><code>(untiered)</code></span>
-            <span class="legend__desc">The row for stories with no <code>release</code>. <code>backlog</code> collects parked work below it.</span>
+            <span class="legend__desc">The row for stories with no <code>release</code> (active, not on a named train). Parked <code>backlog</code> work is not shown here — it is not a shippable release; see <code>complete backlog</code> and the by-release grouping.</span>
           </div>
         </div>
       </div>

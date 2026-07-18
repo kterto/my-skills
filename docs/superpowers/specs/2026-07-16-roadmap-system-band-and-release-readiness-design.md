@@ -52,6 +52,8 @@ READY(r) := every not-superseded story with release=r is done, regardless of sys
 
 `superseded` stories count toward "no remaining work" exactly as in the existing rollup function. Untagged (`system: null`) stories in a band appear in an `(untagged)` column so nothing is silently dropped from the matrix. No new fields are persisted — the matrix is recomputed on demand.
 
+**Rows are the named releases (`releases[]` order) + a single `(untiered)` row for `release: null`.** The reserved `backlog` band is **not** a matrix row: parked work is not a shippable release, so a `READY?` verdict on it would be meaningless — `release: backlog` stories are excluded from the readiness matrix (they remain visible via `complete backlog`, the per-release progress summary, and the by-release grouping). This is the authoritative row definition; the templates and design prompts 12/13 conform to it.
+
 ## Roadmap skill changes
 
 ### `references/config.md`

@@ -55,7 +55,8 @@
 
 <!-- Embedded compact `release × system` readiness matrix, derived on demand (no stored
      state) from each story's status + release + system. Rows = named releases in
-     roadmap.lock.json `releases[]` order + an untiered row (release: null) + backlog;
+     roadmap.lock.json `releases[]` order + a single untiered row (release: null) — NO backlog
+     row (parked work is not a shippable release; release: backlog stories are excluded);
      columns = declared config.systems + an `(untagged)` column for system: null + an
      `(unknown)` column ONLY when a story carries a non-null, undeclared system (an orphan
      from a manual config edit; see roadmap/SKILL.md → Release readiness). Each
@@ -65,7 +66,7 @@
      work; laggard columns (which may include `(untagged)`/`(unknown)`) are called out. The full-grid dashboard lives in the
      dedicated release-matrix template; this is the compact index view. This section ALWAYS
      renders (never omitted): a legacy/untagged roadmap collapses the matrix to a single
-     `(untagged)` column (rows = the releases[]/(untiered)/backlog that exist — just (untiered)
+     `(untagged)` column (rows = the releases[] + the (untiered) row — just (untiered)
      for a release-less roadmap); the `(untagged)` column is never dropped (locked
      backward-compatibility contract). See roadmap/SKILL.md → Release readiness and
      templates/release-matrix.template.md. -->

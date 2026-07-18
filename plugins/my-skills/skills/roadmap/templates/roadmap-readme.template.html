@@ -251,7 +251,8 @@ h1 {
 .system-badge--cross-cutting { color: var(--status-warning); background: var(--status-warning-bg); border-color: transparent; }
 
 /* Release × system readiness matrix (embedded compact view) — derived, no stored state.
-   Rows = releases (releases[] order) + untiered + backlog; columns = declared systems +
+   Rows = releases (releases[] order) + a single (untiered) row (no backlog row — parked
+   work is not a shippable release); columns = declared systems +
    an (untagged) column (+ an (unknown) column when orphans exist). Cells = done/total.
    Horizontally scrollable on narrow viewports; never lets the page body scroll sideways.
    Shares the readiness state classes with the standalone release-matrix dashboard so the two
@@ -294,10 +295,8 @@ h1 {
 .readiness__verdict--lagging { color: var(--status-warning); }
 .readiness__verdict--lagging b { font-weight: 700; letter-spacing: 0.04em; }
 .readiness__verdict--lagging .laggards { color: var(--text-secondary); }
-.readiness__table tbody tr.readiness__row--untiered th[scope="row"],
-.readiness__table tbody tr.readiness__row--backlog th[scope="row"] { font-family: var(--font-mono); font-size: var(--text-sm); font-weight: 500; color: var(--text-muted); font-style: italic; }
-.readiness__table tbody tr.readiness__row--untiered,
-.readiness__table tbody tr.readiness__row--backlog { background: var(--bg-surface); }
+.readiness__table tbody tr.readiness__row--untiered th[scope="row"] { font-family: var(--font-mono); font-size: var(--text-sm); font-weight: 500; color: var(--text-muted); font-style: italic; }
+.readiness__table tbody tr.readiness__row--untiered { background: var(--bg-surface); }
 .readiness__table tbody tr:hover th[scope="row"] { color: var(--accent); }
 .readiness__table tbody tr:hover td { background-color: var(--bg-overlay); }
 .readiness__table tbody tr:hover td.readiness__cell--ready { background: var(--status-success-bg); }
@@ -624,8 +623,9 @@ code {
   <!-- ============================================================
        2b. Release readiness matrix (embedded compact view)
        Derived on demand (no stored state) from each story's status + release + system.
-       Rows = named releases in releases[] order + an untiered row (release: null) +
-       backlog; columns = declared config.systems + an "(untagged)" column (system: null) +
+       Rows = named releases in releases[] order + a single untiered row (release: null) —
+       NO backlog row (parked work is not a shippable release; release: backlog stories are
+       excluded); columns = declared config.systems + an "(untagged)" column (system: null) +
        an "(unknown)" column ONLY when a story carries a non-null, undeclared system (an
        orphan from a manual config edit; see roadmap/SKILL.md → Release readiness).
        Cells = done/total (superseded counts as done). The trailing READY? column marks a
@@ -633,7 +633,7 @@ code {
        of system — no column, including "(untagged)"/"(unknown)", has remaining not-done work; laggard
        columns (which may include "(untagged)"/"(unknown)") are called out. This section ALWAYS
        renders (never omitted): a legacy/untagged roadmap collapses the matrix to a single
-       "(untagged)" column (rows = the releases[]/(untiered)/backlog that exist — just (untiered)
+       "(untagged)" column (rows = the releases[] + the (untiered) row — just (untiered)
        for a release-less roadmap); the "(untagged)" column is never dropped (locked
        backward-compatibility contract). The full-grid standalone dashboard
        (release-matrix.template.html) is a SEPARATE gated FILE — materialized only when ≥1
@@ -658,8 +658,9 @@ code {
                  bare-name column. SECURITY: HTML-escape the untrusted system name/path
                  (& < > " ') in text and attribute-escape in attributes (config.md → name/path).
                - TBODY: one <th scope="row"> per release in releases[] order (optional
-                 <span class="readiness__release-id"> under it), then an `(untiered)` row
-                 (tr.readiness__row--untiered), then `backlog` (tr.readiness__row--backlog).
+                 <span class="readiness__release-id"> under it), then a single `(untiered)` row
+                 (tr.readiness__row--untiered). NO backlog row — release: backlog stories are
+                 excluded (parked work is not a shippable release).
                  Each cell `done/total` with .readiness__cell--ready / --lagging / --none; the
                  READY? cell carries .readiness__verdict--ready / --lagging and lists laggard
                  columns (which may include `(untagged)` and `(unknown)`).

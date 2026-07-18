@@ -14,8 +14,9 @@
 {{readiness_matrix}}
 
 <!-- {{readiness_matrix}} is a markdown table the renderer fills:
-     - ROWS: one per named release in roadmap.lock.json `releases[]` order, then an
-       `(untiered)` row for release: null, then `backlog`.
+     - ROWS: one per named release in roadmap.lock.json `releases[]` order, then a single
+       `(untiered)` row for release: null. `backlog` is NOT a row — parked work is not a
+       shippable release; stories with release: backlog are excluded from the matrix.
      - COLUMNS: one per declared system in roadmap.config.json `systems` (any order —
        systems are an unordered peer set). System `name`/`path` are untrusted config: they
        are grammar-constrained on write (config.md → name/path) and escaped on render — never
@@ -38,7 +39,6 @@
      | mvp | 6/6 | 4/4 | 3/3 | 2/2 | 0/0 | READY |
      | v1.1 | 1/4 | 0/3 | 0/1 | 0/0 | 0/0 | lagging: backend, app, admin |
      | (untiered) | 0/0 | 0/0 | 0/0 | 0/0 | 2/5 | lagging: (untagged) |
-     | backlog | 0/2 | 0/1 | 0/0 | 0/0 | 0/0 | lagging: backend, app |
 
      When orphans exist, append an `(unknown)` column before `READY?` and, below the table,
      an integrity note: `⚠ unknown system(s): <value> — stories <ids>; fix via system rename/set-system null`.
