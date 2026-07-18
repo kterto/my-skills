@@ -232,6 +232,10 @@ code { font-family: var(--font-mono); font-size: 0.9em; background: var(--bg-ove
              carries a non-null, undeclared system (an orphan from a manual config edit) +
              a trailing `READY?` column. A system column header may carry its config `path`
              in a <span class="readiness__path">.
+             SECURITY: the system `name` and `path` are untrusted contributor-editable config
+             (see roadmap/references/config.md → name/path). HTML-escape them (& < > " ') in text,
+             and attribute-escape in any attribute, before emitting — here and in every cell,
+             the (unknown) value, and the integrity note. Never inject a raw name/path.
            - TBODY: one row per named release in roadmap.lock.json `releases[]` order, then an
              `(untiered)` row (release: null), then `backlog`. Row header is <th scope="row">.
              Each cell is `done/total`; a cell with remaining not-done work carries

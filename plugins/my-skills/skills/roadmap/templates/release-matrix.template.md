@@ -15,7 +15,10 @@
      - ROWS: one per named release in roadmap.lock.json `releases[]` order, then an
        `(untiered)` row for release: null, then `backlog`.
      - COLUMNS: one per declared system in roadmap.config.json `systems` (any order —
-       systems are an unordered peer set), then an `(untagged)` column for system: null,
+       systems are an unordered peer set). System `name`/`path` are untrusted config: they
+       are grammar-constrained on write (config.md → name/path) and escaped on render — never
+       emit a raw value (matters when this markdown is converted to html).
+       Then an `(untagged)` column for system: null,
        then an `(unknown)` column ONLY when ≥1 story carries a non-null, undeclared system
        (an orphan left by a manual config edit — see below), then a trailing `READY?` column.
      - CELLS: `done/total` for cell(release r, system s) — done counts status ∈ {done,

@@ -232,7 +232,11 @@ h1 {
 
 /* System band badge — per milestone at index level: named system, or derived
    [cross-cutting]; hidden when untagged/legacy. Orthogonal to the release badge (both
-   may render on the same row). Shared tokens → light + dark. */
+   may render on the same row). Shared tokens → light + dark.
+   SECURITY: the system name rendered in this badge (and in the embedded readiness matrix
+   headers/cells/integrity note below) is untrusted contributor-editable config — HTML-escape
+   it (& < > " ') in text and attribute-escape in any attribute before emitting; never inject
+   a raw name. See roadmap/references/config.md → name and references/item-schema.md → html mode. */
 .system-badge {
   font-family: var(--font-mono);
   font-size: var(--text-xs);

@@ -191,6 +191,10 @@ html-mode items follow the orchestrator's artifact format (see `orchestrator/ref
 - Each body section (`Brief`, `Acceptance`, `Audit log`) is wrapped in a collapsible `<details><summary>Section Title</summary>…</details>`.
 - User-story lists rendered as `<input type="checkbox" disabled>` (disabled checkboxes).
 - Self-contained, no external assets.
+- **Injection safety (system `name` + `path`).** These come from contributor-editable config and are surfaced widely; renderers MUST treat them as untrusted:
+  - **YAML.** Write a `system:` value as a **safe scalar** (a grammar-valid name — see `config.md` → `name` — needs no quoting; any value that is not grammar-valid must be single-quoted with internal quotes escaped, or the write is refused). Never emit a value that could introduce a newline or a sibling key into frontmatter or the lock.
+  - **HTML.** **Context-aware-escape** every system `name` and `path` (and the derived `[<name>]`/`[cross-cutting]` badges and audit-row values) before emitting it into HTML — HTML-escape `& < > " '` in text nodes, and attribute-escape when placed in an attribute (e.g. a `data-*` value or `title`). This applies to renderer-generated readiness markup too (the `release-matrix` column headers, cells, and integrity notes). A grammar-valid name is already inert, but escaping is required so a hand-edited/legacy value can never inject executable markup into a rendered artifact.
+  - A value failing the `config.md` grammar/validation (surfaced by `system list`) is escaped/neutralized on render, never passed through raw.
 
 ## Output navigation
 
