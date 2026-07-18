@@ -50,7 +50,7 @@ context; the human decides whether to persist it.
 ## Applying memory
 
 Before finalizing a finding, check it against the review memory (see
-`memory-schema.md`): `PROJECT-CONTEXT.md` §Out-of-scope and `.pr-review/memory.md`
+`memory-schema.md`): `.orchestrator/PROJECT-CONTEXT.md` §Out-of-scope and `.pr-review/memory.md`
 entries. When a finding merely **restates a known-deferred decision** (e.g.
 "auth is missing" in an MVP that deferred auth on purpose), apply the matching
 entry's `effect` — default `acknowledge`: set `acknowledged: true` + `memoryRef`
