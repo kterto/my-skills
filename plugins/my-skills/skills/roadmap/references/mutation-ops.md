@@ -126,14 +126,15 @@ Manage the **`config.systems` set** (in `/roadmap/roadmap.config.json` — see `
 
 `system add`/`rename`/`remove` obey the apply contract (stage → gate → write → propose commit → never commit). `system list` is read-only. All three writing sub-ops change a readiness input (the `config.systems` set and/or a story `system`), so each re-renders both readiness views per the apply-contract Write step.
 
-### `add-item <kind> [--to <parent-id>]`
+### `add-item <kind> [--to <parent-id>] [--system <name|null>]`
 
 Append **one new item** — a `milestone`, `phase`, or `user-story` — directly to an existing `/roadmap/`, without a spec file. The caller (PM front-door) supplies the item body; this op owns id assignment and all id-dependent fields.
 
 - `<kind>` ∈ `milestone | phase | user-story`.
 - `--to <parent-id>` names the parent scope: a `user-story` targets a **phase** (or a **milestone** — auto-phase, below); a `phase` targets a **milestone**; a `milestone` takes no parent.
 - **ID assignment (stable-identity rule):** the new item takes the **next available number** in its parent scope — `NNN` (milestone), `NNN.M` (phase), `NNN.M.T` (story). Never renumbers existing items.
-- New-item frontmatter: `status: todo`, `release: null`, `system: null`, `sequence` = (max `sequence` in the parent scope) + 1, `created_at`/`updated_at` = write timestamp. The caller (PM front-door) may pass a `system` value to set it at creation instead of `null` — it must be a declared `config.systems` name or the op errors (same typo guard as `set-system`); `null` is always permitted. `add-item` writes the field but does not append a separate `⊞ system` audit row (the creation row already records the new item).
+- **`--system <name|null>` flag (optional).** Sets the new item's `system` band at creation. `<name>` must be a **declared `config.systems` name** (and grammar-valid — see `config.md` → `name`) or the op **errors** (same typo/name guard as `set-system`); `--system null` (or omitting the flag) leaves it `null` (untagged). `null` is always permitted. `add-item` writes the field but does **not** append a separate `⊞ system` audit row (the creation row already records the new item).
+- New-item frontmatter: `status: todo`, `release: null`, `system:` = the `--system` value (default `null`), `sequence` = (max `sequence` in the parent scope) + 1, `created_at`/`updated_at` = write timestamp.
 - **`user-story`:** the op owns the id-dependent fields — it assigns the id, sets `commit_trailer: Roadmap-Story: <id>`, and appends `Commit with trailer: Roadmap-Story: <id>` as the final line of `## Brief`. The caller passes only `title`, the Brief body, and `## Acceptance`. Body sections are written in schema order (`## Brief`, `## Acceptance`, `## Audit log`).
 - **`milestone`:** creates `NNN-<slug>/README.md` and **seeds one default phase** `NNN.1-general/README.md` (empty) so a later `add-item user-story --to <milestone>` has a landing phase. Both appear as `+ new` rows.
 - **`phase`:** creates `NNN.M-<slug>/README.md` under the target milestone.

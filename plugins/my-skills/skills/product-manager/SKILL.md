@@ -156,10 +156,10 @@ Beyond `complete <scope>` (which *executes* stories), PM exposes a set of **mana
 | `revise <id>` | `revise <id>` | Retitle / re-scope, or split/merge via new stable IDs + supersede — **not-done** only. |
 | `release <list\|reorder\|rename …>` | `release <list\|reorder\|rename …>` | Manage the ordered `releases[]` registry. `list` is read-only. |
 | `system <list\|add\|rename\|remove …>` | `system <list\|add\|rename\|remove …>` | Manage the config-owned `config.systems` set with **referential integrity**: `rename` cascades to referencing stories, `remove` is guarded (`--untag` to null in the same diff), `add` collision-guarded, `list` (read-only) reports orphan references. Stops hand-edits from orphaning story `system` values. |
-| `add-milestone <title>` | `add-item milestone` | Create a milestone; seeds a default phase `NNN.1-general` so tickets can drop straight in. |
-| `add-phase <title> --to <milestone>` | `add-item phase` | Create a phase under a milestone. |
-| `add-ticket <raw> [--to <phase\|milestone>]` | `add-item user-story` | Inline interview composes a story from raw text (bug or feat). `--to` a milestone auto-creates/uses a default phase. |
-| `add-userstory …` | `add-item user-story` | Alias of `add-ticket`. |
+| `add-milestone <title> [--system <name\|null>]` | `add-item milestone [--system …]` | Create a milestone; seeds a default phase `NNN.1-general` so tickets can drop straight in. |
+| `add-phase <title> --to <milestone> [--system <name\|null>]` | `add-item phase [--system …]` | Create a phase under a milestone. |
+| `add-ticket <raw> [--to <phase\|milestone>] [--system <name\|null>]` | `add-item user-story [--system …]` | Inline interview composes a story from raw text (bug or feat). `--to` a milestone auto-creates/uses a default phase. |
+| `add-userstory …` | `add-item user-story [--system …]` | Alias of `add-ticket`. |
 
 ### Front-door flow (per mutating verb)
 

@@ -25,10 +25,10 @@ Each management verb maps to exactly one roadmap mutation op. Sugar verbs are th
 | `revise <id>` | `revise <id>` | Retitle / re-scope, or split/merge via new stable IDs + supersede — **not-done** items only. |
 | `release <list\|reorder\|rename …>` | `release <list\|reorder\|rename …>` | Manage the ordered `releases[]` registry. `list` is read-only (no branch/PR). |
 | `system <list\|add\|rename\|remove …>` | `system <list\|add\|rename\|remove …>` | Manage the config-owned `config.systems` set with **referential integrity**: `rename` cascades to referencing stories; `remove` is guarded (refuses while referenced, or `--untag`); `add` is collision-guarded; `list` is read-only and reports orphan references. Prevents hand-edits from orphaning story `system` values. `list` runs with no branch/PR. |
-| `add-milestone <title>` | `add-item milestone` | Create a milestone; seeds a default phase `NNN.1-general` so tickets can drop straight in. |
-| `add-phase <title> --to <milestone>` | `add-item phase` | Create a phase under a milestone. |
-| `add-ticket <raw> [--to <phase\|milestone>]` | `add-item user-story` | Inline interview composes a story from raw text (bug or feat). `--to` a milestone auto-creates/uses a default phase. |
-| `add-userstory …` | `add-item user-story` | Alias of `add-ticket`. |
+| `add-milestone <title> [--system <name\|null>]` | `add-item milestone [--system …]` | Create a milestone; seeds a default phase `NNN.1-general` so tickets can drop straight in. |
+| `add-phase <title> --to <milestone> [--system <name\|null>]` | `add-item phase [--system …]` | Create a phase under a milestone. |
+| `add-ticket <raw> [--to <phase\|milestone>] [--system <name\|null>]` | `add-item user-story [--system …]` | Inline interview composes a story from raw text (bug or feat). `--to` a milestone auto-creates/uses a default phase. |
+| `add-userstory …` | `add-item user-story [--system …]` | Alias of `add-ticket`. |
 
 The staged-diff marker set (shared with re-eval + the roadmap ops) is `+ new`, `~ changed`, `! superseded`, `± release`, `⊞ system`. A release-band change (`assign`/`park`/`unpark`) shows as `± release`; a system-band change (`assign-system`, and the bulk `migrate-systems`) shows as `⊞ system`.
 
