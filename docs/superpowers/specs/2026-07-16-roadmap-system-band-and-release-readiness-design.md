@@ -17,6 +17,8 @@ The user needs:
 
 ## Chosen approach
 
+> **Decision record:** [ADR-0001 — Model systems as an orthogonal roadmap band](../../adr/0001-orthogonal-system-band.md) captures this choice, its trade-offs, and the alternatives rejected.
+
 Introduce **`system` as a second orthogonal band**, mirroring the existing `release` band machinery (registry, cascade, derived badge, scope matching, nullable/backward-compatible). Release readiness is a **pure derivation** — a `release × system` matrix computed from `status` + `release` + `system`, with **no new stored state**.
 
 ### Why a band (not a structural partition)

@@ -30,12 +30,21 @@ Minimum holistic confidence score (0–1) the roadmap skill must reach before pr
 
 ### `systems`
 
-The **declared set of systems** — the source of truth for the `system` band (a second orthogonal classification axis alongside `release`; see `item-schema.md` → `system`). A monorepo project typically comprises several distinct deployable systems (e.g. `backend`, `landing`, `admin`, `app`) that all advance toward a shared release; `systems` names them so roadmap work can be scoped by system and a `release × system` readiness matrix can be derived.
+The **declared set of systems** — the source of truth for the `system` band (a second orthogonal classification axis alongside `release`; see `item-schema.md` → `system`). The decision to model systems as config-owned orthogonal metadata rather than directory structure, and the referential-integrity + namespace obligations it carries, is recorded in [ADR-0001](../../../../../docs/adr/0001-orthogonal-system-band.md). A monorepo project typically comprises several distinct deployable systems (e.g. `backend`, `landing`, `admin`, `app`) that all advance toward a shared release; `systems` names them so roadmap work can be scoped by system and a `release × system` readiness matrix can be derived.
 
 Type: `array of {name: string, path?: string}`. Default `[]` (no systems declared). There is **no CLI flag** — the set is declared only in `/roadmap/roadmap.config.json`.
 
 - `name` — the system band value (e.g. `backend`). **Unique within the array**, and — so it stays reachable by the PM bare-`complete <name>` scope — it **must not collide with a reserved scope word (`roadmap`, `backlog`), a registered release name, or a milestone/phase id/slug** (a bare scope resolves those earlier, shadowing the system). The `system add`/`rename` ops enforce this guard; `system list` flags any pre-existing collision, and the explicit `system:<name>` PM scope reaches a system regardless (see `mutation-ops.md` → `system` and `product-manager/references/scope-resolution.md` → System scope). This is the exact string a story's `system` field may take.
 - `path` — optional monorepo package directory (e.g. `apps/api`). Advisory metadata only: it is **stored now and used for routing later** — the `product-manager` skill surfaces it (a context note on the orchestrator brief handoff and in the readiness matrix) but nothing changes where the orchestrator runs. Actual package-dir routing is a deferred future story.
+
+  **Path validation (security — `path` is untrusted input).** `roadmap.config.json` is a repository file any contributor can edit, and PM surfaces `path` into a **command-capable agent's** task input (the orchestrator handoff). An unvalidated `path` is therefore a **repository-data → agent-instruction injection vector** (e.g. embedded newlines carrying fake instructions). A `path`, when present, **must be a normalized repository-relative path** and is **rejected** otherwise:
+  - **relative**, not absolute — no leading `/`, no `~`, no Windows drive/UNC (`C:\`, `\\`);
+  - **no `..` segments** and no `.` segments (must already be normalized);
+  - **no control characters** — no newline (`\n`), carriage return (`\r`), tab, or NUL, and no other C0/C1 control bytes;
+  - restricted to the portable path charset `[A-Za-z0-9._/-]`, single internal `/` separators, no trailing `/`;
+  - a sane length cap (**≤ 200 chars**).
+
+  This rule is **enforced on write** by `system add` / `system rename` and the `migrate-systems` config bootstrap (an invalid `path` is an error — see `mutation-ops.md` → `system` / `migrate-systems`), and **re-validated on read** by PM before the value is ever surfaced to an agent (a manual config edit that bypasses the ops is caught there — PM omits the note and flags it; see `product-manager/SKILL.md` → Per-story loop step 2). When surfaced, `path` is passed as **clearly delimited untrusted metadata that the agent must not interpret as instructions**, never spliced into the instruction body.
 
 **Config-declared, not lazily created.** Unlike the `release` band — whose named trains are lazily appended to the `releases[]` registry in `roadmap.lock.json` on first use — the `systems` set lives entirely in this config file and is never auto-extended by an assignment.
 
