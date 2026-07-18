@@ -236,6 +236,15 @@ memoryRef where applicable. `files[]` carries per-file diff lines with `kind`,
 `diffline-<slug>-<line>` matches its finding's file+line so the bidirectional jump
 aligns. Validate the JSON parses.
 
+**Mandatory fingerprint collision check (arch-4 / ADR-0005).** Before emit, verify
+every finding's `fingerprint` is unique. If two findings share a base key
+(`section|file|normalized-title` — e.g. two same-titled findings in one file),
+disambiguate by appending a deterministic `discriminator`: a normalized enclosing
+**symbol** (function/class/type) where available, else a deterministic ordinal
+(sort by `line` then `id`; the first keeps the bare key, the rest get `|2`, `|3`).
+No two findings may share a fingerprint. See `review-state-schema.md` §Collision
+handling.
+
 **Embed the authoritative state envelope.** Set the top-level **`reviewState`** to
 the *complete* merged review-state object — the exact object you persist in step 7b
 (every fingerprint **including orphans**, full `history`, `lastFinding`, `thread`,

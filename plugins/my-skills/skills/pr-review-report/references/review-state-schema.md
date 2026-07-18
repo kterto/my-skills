@@ -81,10 +81,11 @@ finding is looked up in O(1) across runs regardless of how its diff line moved.
 ## Fingerprint — line-independent finding identity
 
 A finding must be re-identified across runs even after its code moved up or down,
-so identity is **not** line-based. The `fingerprint` is a composite key:
+so identity is **not** line-based. The `fingerprint` is a composite key with an
+optional fourth **discriminator** component appended only to break a collision:
 
 ```
-section|file|normalized-title
+section|file|normalized-title[|discriminator]
 ```
 
 - **`section`** — the finding's lens (`architecture` | `security` | `bugs`),
@@ -92,8 +93,13 @@ section|file|normalized-title
 - **`file`** — the finding's repo-relative `file` path, verbatim (not slugged).
 - **`normalized-title`** — the finding's `title` run through the normalization
   recipe below.
+- **`discriminator`** *(optional)* — present **only when two findings in one report
+  would otherwise share the first three parts**. Deterministic; defined in
+  §Collision handling below. Absent in the common (non-colliding) case, so a
+  non-colliding finding's key is byte-identical to the pre-collision `version: 1`
+  form — no migration, history preserved.
 
-The three parts are joined with a literal pipe `|`. Example: a security finding
+The parts are joined with a literal pipe `|`. Example: a security finding
 titled "Unsanitized filename in Content-Disposition!" in
 `src/export/download.ts` yields:
 
@@ -129,6 +135,46 @@ Worked example: `"  Unsanitized  filename in Content-Disposition!  "`
 word-separating hyphens, so the two words join. This is intentional and
 deterministic — the recipe cares only that the same title always maps to the same
 key, not that the key is re-splittable.)
+
+### Collision handling & the discriminator (ADR-0005)
+
+Two findings in the **same file** with the **same normalized title** (e.g. two
+"unvalidated input" findings in different functions of one file) produce the same
+first three parts. Because `findings` is keyed by the fingerprint, an unbroken
+collision would let one finding's `state`, `history`, and `thread` overwrite or
+attach to the other. The pre-collision schema only *asserted* this must not happen;
+this section makes it **detected and resolved deterministically**.
+
+**Mandatory collision detection.** When building a report (`SKILL.md` step 5) every
+finding's fingerprint MUST be checked for uniqueness *before emit*. Any base-key
+(`section|file|normalized-title`) shared by two or more findings MUST be
+disambiguated by appending a `discriminator`, so no two findings ever share a
+fingerprint. This is a hard build-time invariant, not a hope.
+
+**The discriminator is chosen deterministically, in this order:**
+
+1. **Normalized symbol (preferred).** The name of the code symbol the finding is
+   about — the enclosing function / method / class / type — run through the same
+   five-step normalization recipe. It is line-independent (survives code movement)
+   and stable across runs. E.g. two "unvalidated input" findings become
+   `…|unvalidated-input|parsequery` and `…|unvalidated-input|parsebody`.
+2. **Deterministic ordinal (fallback).** When no distinguishing symbol is available
+   (top-level code, config/data files) or symbols still tie, sort the colliding
+   findings by ascending emitted `line`, then by `id`, and number them from the
+   second: the first (lowest) keeps the **bare** base key, the next get `|2`, `|3`,
+   … Uniqueness is guaranteed even here; only reattachment stability is weaker than
+   the symbol case (a same-title reorder can swap ordinals — accepted for this rare
+   double-collision-without-symbol case; correctness over perfect reattachment).
+
+The first colliding finding keeps the bare base key wherever possible so it still
+matches an existing stored `version: 1` entry (history preserved); only the
+*additional* colliding finding(s) gain a discriminator.
+
+**No version bump.** The key is a **superset**: a non-colliding finding's key is
+unchanged, and a discriminator is only ever *appended*. Old files stay readable and
+their bare keys still match non-colliding findings. There is nothing to migrate — a
+`version: 1` file could not have stored the second colliding finding's state anyway
+(the collision meant only one entry existed). Keep writing `version: 1`.
 
 ## Branch ownership — enforce `branch` before reconciliation (ADR-0004)
 
@@ -182,6 +228,15 @@ otherwise there is no prior state to match and every finding starts `open`.
 3. **Substantially-reworded miss = new finding.** If neither matches, treat it as
    a genuinely new finding: `state` defaults to `open`, empty `thread`, and a
    first `history` record `{ from: null, to: "open" }`.
+
+**Newly-colliding stored key.** If a stored **bare** key (written before collision
+handling, or when only one such finding existed) now matches **two or more** of this
+run's findings (they collide, per §Collision handling), the stored entry belongs to
+at most one of them. Use the **semantic fallback (step 2)** to attach the stored
+`state`/`thread`/`history` to the finding it actually describes; the other colliding
+finding(s) receive their fresh **discriminated** key and start `open`. This keeps the
+prior triage with the correct finding instead of letting the first-emitted one
+capture it by position.
 
 ## Orphan handling
 

@@ -1454,8 +1454,17 @@ body[data-state-readonly] .finding__comment {
     // Fill in any finding the envelope did not cover from the per-finding
     // REVIEW_DATA fields (no history is available this way — the envelope is the
     // only history source). An envelope entry always wins over this fallback.
+    // The skill guarantees unique fingerprints (SKILL.md step 5 / ADR-0005);
+    // defensively warn if two findings still collide — a silent merge would attach
+    // one finding's state/thread to the other and corrupt its audit trail.
+    var seenFp = {};
     (data.findings || []).forEach(function (f) {
-      if (!f.fingerprint || STORE[f.fingerprint]) return;
+      if (!f.fingerprint) return;
+      if (seenFp[f.fingerprint]) {
+        try { console.warn("pr-review-report: duplicate fingerprint in REVIEW_DATA, findings will share state — " + f.fingerprint); } catch (e) {}
+      }
+      seenFp[f.fingerprint] = true;
+      if (STORE[f.fingerprint]) return; // already seeded by the envelope or an earlier finding
       STORE[f.fingerprint] = {
         state: f.state || (f.acknowledged ? "acknowledged" : "open"),
         thread: (f.thread || []).slice(),

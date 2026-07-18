@@ -111,11 +111,14 @@ consumed verbatim by the template — match them exactly.
 - **`slug`** — if you omit it the template derives it from `path`; emit it anyway
   for determinism, using the same `/`→`-`, `.`→`-` rule the finding anchors use.
 - **`fingerprint`** *(required)* — the finding's line-independent identity,
-  `section|file|normalized-title`. It is the key under which the finding's `state`
-  and `thread` persist across runs in `.pr-review/review-state.json`. Its exact
-  form and the five-step title-normalization recipe are defined once, normatively,
-  in `review-state-schema.md` — this file does not restate them. Two findings must
-  never share a fingerprint within one report.
+  `section|file|normalized-title` with an optional `|discriminator` appended only to
+  break a collision. It is the key under which the finding's `state` and `thread`
+  persist across runs in `.pr-review/review-state.json`. Its exact form, the
+  five-step title-normalization recipe, and the deterministic collision discriminator
+  are defined once, normatively, in `review-state-schema.md` — this file does not
+  restate them. Two findings sharing a fingerprint within one report is a **hard
+  error**: run the mandatory collision check (`SKILL.md` step 5) and disambiguate
+  before emit, so no two findings ever collide.
 - **`state`** *(enum, six values)* — `open | fixed | ignored | acknowledged |
   resolved | regressed`. Defaults to `open` for a finding with no prior state.
   - **user-set:** `open` (default), `fixed` (user reports it handled), `ignored`
