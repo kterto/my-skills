@@ -146,7 +146,7 @@ Beyond `complete <scope>` (which *executes* stories), PM exposes a set of **mana
 |---|---|---|
 | `assign <release> <selection>` | `set-release <release> <ids…>` | Assign a named band or `backlog`; implicitly registers a new band in `releases[]`. |
 | `assign-system <system> <selection>` | `set-system <system> <ids…>` | Assign a **system** band to the resolved id set. `<system>` must be declared in `config.systems` (typo-guarded) or `null` to untag; unknown stops with valid names. No lazy creation. |
-| `migrate-systems` | `migrate-systems` | Adopt the `system` band across the existing roadmap (config bootstrap → per-untagged-story inference incl. done items → one staged diff → bulk apply), wrapped in the planning-PR flow. Interactive; idempotent. |
+| `migrate-systems` | `migrate-systems` | Adopt the `system` band across the existing roadmap (collect systems declaration → per-untagged-story inference incl. done items → one staged diff **incl. the config change** → apply-on-approval, reject writes nothing), wrapped in the planning-PR flow. Interactive; idempotent. |
 | `release-status [release]` | *(read-only; no op)* | Print the derived `release × system` readiness matrix (per-cell `done/total`, `READY?`/laggards). All releases if none named; one row if named. No branch, no gate, no PR — mirrors `release list`. |
 | `park <selection>` | `set-release backlog <ids…>` | Sugar for `assign backlog <selection>`. |
 | `unpark <selection> [<release>]` | `set-release <release-or-null> <ids…>` | Sugar; with a release re-tiers to it, omitting the release un-tiers to `null`. |
