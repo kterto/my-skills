@@ -66,6 +66,20 @@ consumed verbatim by the template — match them exactly.
     }
   ],
 
+  // OPTIONAL. The complete, authoritative review-state envelope — the exact
+  // object written to .pr-review/review-state.json this run (see
+  // review-state-schema.md). Embedding it lets the browser seed its store from the
+  // full state (history, prior-only orphans, source version) instead of the lossy
+  // per-finding projection above, so a browser "Save review state" round-trips the
+  // whole contract instead of clobbering it. Omit for a legacy report (the
+  // template falls back to per-finding state/thread). See "Embedded review-state
+  // envelope" below and ADR-0002.
+  "reviewState": {
+    "version": 1,
+    "branch": "feat/x",
+    "findings": { "<fingerprint>": { "state": "…", "lastFinding": {}, "history": [], "thread": [] } }
+  },
+
   // One entry per changed file, in --stat magnitude order. Powers the diff
   // viewer, gutter markers, and diffline-<slug>-<line> anchors.
   "files": [
@@ -135,11 +149,38 @@ semantic fallback), orphan handling, the skill-side merge, the append-on-transit
 file defines only how those fields appear **inside `REVIEW_DATA`** for the template
 to render; it does not duplicate the store contract.
 
-This schema is a **strict superset** of the pre-cycle schema: `fingerprint`,
-`state`, and `thread` are the only additions and legacy data (no `state`, no
-`thread`) stays valid — a finding with no `state` is treated as `open` and one
-with no `thread` renders without a conversation. The Resolved and Ignored groups
+This schema is a **strict superset** of the pre-cycle schema: per-finding
+`fingerprint`, `state`, `thread`, and the top-level `reviewState` envelope are the
+only additions, and legacy data (no `state`, no `thread`, no `reviewState`) stays
+valid — a finding with no `state` is treated as `open`, one with no `thread`
+renders without a conversation, and an absent `reviewState` falls back to seeding
+from the per-finding fields. The Resolved and Ignored groups
 simply stay empty when no finding carries those states.
+
+## Embedded review-state envelope
+
+`reviewState` *(optional, top-level)* carries the **complete** authoritative state
+object — the exact envelope the skill writes to `.pr-review/review-state.json` this
+run (shape and merge rules in `review-state-schema.md`). It exists because the
+per-finding `state`/`thread` fields above are a **lossy projection**: they do not
+carry `history[]`, prior-only **orphans**, or the source file `version`. Without
+the full envelope the browser's "Save review state" would rebuild a `version: 1`
+file with empty history and no orphans, erasing the audit trail the store contract
+requires (ADR-0002).
+
+- **The skill emits `reviewState` = the same object it persists in `SKILL.md` step
+  7b.** Write it and embed it from one merged object so the two never diverge.
+- **The template seeds its store from `reviewState` when present** (authoritative:
+  all fingerprints incl. orphans, full `history`, `lastFinding`, `version`), applies
+  the user's edits, and writes the same complete envelope back — preserving history,
+  orphans, and version. When `reviewState` is **absent** it falls back to seeding
+  from the per-finding `state`/`thread` (legacy report; empty history). This keeps
+  the field **additive** — the "strict superset" guarantee below is unaffected.
+- **Unknown forward version → read-only.** If `reviewState.version` exceeds the
+  version the template understands, the template disables all writes (Save,
+  per-finding mutations, `localStorage` autosave) and shows a read-only notice —
+  mirroring the skill's conservative read (`review-state-schema.md` §Version
+  handling). Neither port ever rewrites or downgrades a forward-version file.
 
 ## Acknowledged findings
 

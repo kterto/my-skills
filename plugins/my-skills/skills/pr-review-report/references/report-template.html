@@ -725,6 +725,14 @@ summary::-webkit-details-marker { display: none; }
 .state-derived--resolved { background: #16a34a; }
 .state-derived--regressed { background: var(--sev-critical); }
 
+/* Read-only: source state file is a newer, unknown version — writes are locked
+   and preserved untouched. Dim + disable the finding mutation controls. */
+body[data-state-readonly] .finding__state,
+body[data-state-readonly] .finding__comment {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
 /* Comment thread */
 .finding__thread {
   margin-top: var(--sp-3);
@@ -920,6 +928,9 @@ summary::-webkit-details-marker { display: none; }
   var STORE = {};         // fingerprint -> { state, thread, history, lastFinding }
   var LS_KEY = null;      // pr-review-state:<branch> — branch-namespaced autosave
   var saveHandle = null;  // retained File System Access handle for one-click re-saves
+  var KNOWN_STATE_VERSION = 1; // review-state.json schema version this template understands
+  var STATE_VERSION = 1;  // version of the source envelope — written back verbatim, never downgraded
+  var STATE_READONLY = false; // true when the source envelope is a newer, unknown version
 
   function nowTs() { return new Date().toISOString(); }
 
@@ -1397,12 +1408,44 @@ summary::-webkit-details-marker { display: none; }
   }
 
   /* ---------- review-state store + persistence ---------- */
-  // Seed STORE from REVIEW_DATA, then overlay any branch-namespaced localStorage
-  // edits the user made in a previous session (browser edits win over emitted data).
+  // Seed STORE from the complete state envelope the skill embedded
+  // (data.reviewState) — the authoritative on-disk .pr-review/review-state.json,
+  // carrying history, prior-only orphans, and the source version that the
+  // per-finding REVIEW_DATA projection cannot. Fall back to the per-finding
+  // fields for any finding the envelope did not cover (legacy REVIEW_DATA with no
+  // reviewState, or a brand-new finding), then overlay this browser's own
+  // localStorage edits. See references/review-state-schema.md and ADR-0002.
   function buildStore(data) {
     STORE = {};
+    STATE_VERSION = KNOWN_STATE_VERSION;
+    STATE_READONLY = false;
+
+    var envelope = data.reviewState;
+    if (envelope && typeof envelope === "object") {
+      var v = envelope.version;
+      // Newer, unknown schema — never rewrite or downgrade it. Preserve the
+      // version and render triage read-only (mirrors the skill's conservative read).
+      if (typeof v === "number") {
+        STATE_VERSION = v;
+        if (v > KNOWN_STATE_VERSION) STATE_READONLY = true;
+      }
+      var fmap = envelope.findings || {};
+      Object.keys(fmap).forEach(function (fp) {
+        var s = fmap[fp] || {};
+        STORE[fp] = {
+          state: s.state || "open",
+          thread: (s.thread || []).slice(),
+          history: (s.history || []).slice(),
+          lastFinding: s.lastFinding || null
+        };
+      });
+    }
+
+    // Fill in any finding the envelope did not cover from the per-finding
+    // REVIEW_DATA fields (no history is available this way — the envelope is the
+    // only history source). An envelope entry always wins over this fallback.
     (data.findings || []).forEach(function (f) {
-      if (!f.fingerprint) return;
+      if (!f.fingerprint || STORE[f.fingerprint]) return;
       STORE[f.fingerprint] = {
         state: f.state || (f.acknowledged ? "acknowledged" : "open"),
         thread: (f.thread || []).slice(),
@@ -1413,12 +1456,14 @@ summary::-webkit-details-marker { display: none; }
         }
       };
     });
+
     LS_KEY = "pr-review-state:" + ((data.meta && data.meta.branch) || "default");
     overlayLocalStorage();
   }
 
   function overlayLocalStorage() {
-    if (!LS_KEY) return;
+    // A newer-version file is read-only; never resurrect stale local edits onto it.
+    if (!LS_KEY || STATE_READONLY) return;
     var raw;
     try { raw = window.localStorage.getItem(LS_KEY); } catch (e) { return; }
     if (!raw) return;
@@ -1436,12 +1481,13 @@ summary::-webkit-details-marker { display: none; }
   }
 
   function persist() {
-    if (!LS_KEY) return;
+    if (!LS_KEY || STATE_READONLY) return;
     try { window.localStorage.setItem(LS_KEY, JSON.stringify(STORE)); } catch (e) { /* quota / private mode */ }
   }
 
   // User sets a finding's state. Records an append-on-transition history entry.
   function setFindingState(fp, next) {
+    if (STATE_READONLY) return; // newer-version file — triage is read-only
     var e = STORE[fp];
     if (!e) return;
     if (e.state !== next) {
@@ -1455,6 +1501,7 @@ summary::-webkit-details-marker { display: none; }
 
   // User appends a comment turn to a finding's thread.
   function addUserComment(fp, text) {
+    if (STATE_READONLY) return; // newer-version file — triage is read-only
     var e = STORE[fp];
     if (!e || !text) return;
     e.thread = e.thread || [];
@@ -1464,9 +1511,12 @@ summary::-webkit-details-marker { display: none; }
   }
 
   // Build the review-state.json object per references/review-state-schema.md.
+  // STORE was seeded from the complete embedded envelope, so this emits the full
+  // state back: every fingerprint (orphans included), full history, and the
+  // source version verbatim — never a lossy re-construction. See ADR-0002.
   function buildSaveObject() {
     var out = {
-      version: 1,
+      version: STATE_VERSION,
       branch: (DATA && DATA.meta && DATA.meta.branch) || "",
       findings: {}
     };
@@ -1485,6 +1535,7 @@ summary::-webkit-details-marker { display: none; }
   // "Save review state" — File System Access API when available (retaining the
   // handle for one-click re-saves), else an <a download> fallback. Local only.
   function saveReviewState() {
+    if (STATE_READONLY) return; // newer-version file — never overwrite/downgrade it
     var json = JSON.stringify(buildSaveObject(), null, 2);
     if (window.showSaveFilePicker) {
       var opts = {
@@ -1554,6 +1605,20 @@ summary::-webkit-details-marker { display: none; }
     if (saveBtn) saveBtn.addEventListener("click", saveReviewState);
   }
 
+  // A newer-version state file is preserved untouched: lock every write path and
+  // signal it in the UI. Mutations are already guarded; this reflects it visually.
+  function applyReadOnly() {
+    if (!STATE_READONLY) return;
+    document.body.setAttribute("data-state-readonly", "");
+    var saveBtn = el("save-state");
+    if (saveBtn) {
+      saveBtn.disabled = true;
+      saveBtn.textContent = "Read-only (newer state file)";
+      saveBtn.title = "review-state.json is a newer schema version (" + STATE_VERSION +
+        ") — shown read-only and preserved untouched.";
+    }
+  }
+
   /* ---------- boot ---------- */
   function showEmptyShell() {
     el("empty-state").hidden = false;
@@ -1576,6 +1641,7 @@ summary::-webkit-details-marker { display: none; }
     if (!data) { showEmptyShell(); return; }
     DATA = data;
     buildStore(data);
+    applyReadOnly();
 
     renderSummary(data);
     renderLenses(data);

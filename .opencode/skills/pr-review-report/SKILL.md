@@ -218,6 +218,16 @@ memoryRef where applicable. `files[]` carries per-file diff lines with `kind`,
 `diffline-<slug>-<line>` matches its finding's file+line so the bidirectional jump
 aligns. Validate the JSON parses.
 
+**Embed the authoritative state envelope.** Set the top-level **`reviewState`** to
+the *complete* merged review-state object — the exact object you persist in step 7b
+(every fingerprint **including orphans**, full `history`, `lastFinding`, `thread`,
+and `version`). Build the embedded envelope and the on-disk file from **one** merged
+object so they never diverge. The per-finding `state`/`thread` are only a lossy
+projection; without `reviewState` a browser "Save review state" rebuilds a
+`version: 1` file with empty history and no orphans, erasing the audit trail. See
+`references/review-data-schema.md` §Embedded review-state envelope and
+`docs/adr/0002-review-state-authoritative-writer.md`.
+
 ### 6. Render the report
 
 Inject the JSON into the template — do not author HTML:
@@ -248,7 +258,10 @@ a subdirectory. Never write memory without approval.
 After rendering, write the merged state back to
 `$root/.pr-review/review-state.json` so this run's verifications (`resolved`/
 `regressed`) and `skill` replies survive even before the user re-saves from the
-browser. Follow `references/review-state-schema.md` §Skill-side merge.
+browser. Follow `references/review-state-schema.md` §Skill-side merge. This is the
+**same** merged object embedded as `REVIEW_DATA.reviewState` in step 5 — build it
+once and use it for both the on-disk write and the embed so they never diverge
+(ADR-0002).
 
 - **Skill-side merge, never a wholesale overwrite.** Start from the prior read
   (step 2b) — which already reflects any browser-saved user triage — and layer

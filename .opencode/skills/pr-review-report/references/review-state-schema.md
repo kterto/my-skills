@@ -191,6 +191,25 @@ Merge policy:
   freshly-built object that ignores prior content; always start from the prior
   read and layer this run's changes on top.
 
+## Authoritative writer — one envelope, two editors (ADR-0002)
+
+The skill and the browser both write this file, so they must share one complete
+state object rather than compete as unequal full-state writers:
+
+- **The skill is the primary merger.** The object built by the merge above (step
+  7b) is the authoritative envelope — all fingerprints incl. orphans, full
+  `history`, `lastFinding`, `thread`, and `version`.
+- **That same object is embedded into `REVIEW_DATA` as `reviewState`** (see
+  `review-data-schema.md`). The per-finding `state`/`thread` in `REVIEW_DATA` are a
+  *lossy projection* (no `history`, no orphans, no source `version`); the browser
+  must seed from the full `reviewState` envelope, not that projection, or a browser
+  save erases the audit trail, drops orphans, and downgrades the version. Emit and
+  persist from **one** merged object so the embedded and on-disk copies never
+  diverge.
+- **The browser is a faithful editor.** It seeds from `reviewState`, applies user
+  edits, and writes the same complete envelope back (preserving history, orphans,
+  `version`). It is not a competing re-constructor.
+
 ## `history[]` cadence
 
 `history[]` is **append-only on transition**:
@@ -213,6 +232,12 @@ Merge policy:
   is understood, do **not** rewrite or downgrade it, and tell the user the state
   file is a newer version so triage is shown read-only rather than silently
   discarded. Never delete or truncate a forward-version file.
+- **The browser enforces the same rule.** When the embedded `reviewState.version`
+  exceeds the version the template understands, the template disables every write
+  path (the Save button, per-finding state/comment mutations, and `localStorage`
+  autosave) and shows a read-only notice — so opening a report built from a
+  newer-version file can never overwrite or downgrade it. Both ports behave
+  identically (ADR-0002).
 
 ## Backward compatibility
 
