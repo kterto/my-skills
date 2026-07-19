@@ -301,6 +301,15 @@ projection; without `reviewState` a browser "Save review state" rebuilds a
 `references/review-data-schema.md` §Embedded review-state envelope and
 `docs/adr/0002-review-state-authoritative-writer.md`.
 
+**Carry the read-only signal (bug-1).** Set `meta.stateVersion` to the on-disk state
+file's `version` and `meta.stateReadOnly: true` whenever that version is newer/unknown
+(read-only) — **independently of `reviewState`**, since a future file the skill cannot
+parse has no embeddable envelope. The template honors `meta.stateReadOnly` as
+authoritative and preserves `meta.stateVersion` on Save, so a newer state file is
+never downgraded to `version: 1`. For a normal (current-version) run, `stateReadOnly`
+is `false` (or omitted) and `stateVersion` is `1`. See `references/review-data-schema.md`
+§Read-only signal.
+
 ### 6. Render the report
 
 Inject the JSON into the template — do not author HTML:
@@ -346,6 +355,11 @@ browser. Follow `references/review-state-schema.md` §Skill-side merge. This is 
 once and use it for both the on-disk write and the embed so they never diverge
 (ADR-0002).
 
+- **Read-only future version → do NOT write (bug-1).** If the on-disk state file is
+  a newer, unknown `version` (the `version`-handling read in step 2b), it is
+  read-only: **skip this persistence step entirely**, preserving the file untouched —
+  never rewrite or downgrade it. In that case emit `meta.stateReadOnly: true` and
+  `meta.stateVersion: <that version>` in step 5 so the browser also stays read-only.
 - **Skill-side merge, never a wholesale overwrite.** Start from the prior read
   (step 2b) — which already reflects any browser-saved user triage — and layer
   this run's derived changes on top: union of fingerprints (orphans retained as

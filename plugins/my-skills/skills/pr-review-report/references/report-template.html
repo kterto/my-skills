@@ -1426,6 +1426,15 @@ body[data-state-readonly] .finding__comment {
     EMITTED_REV = "";
     OP_LOG = [];
 
+    // Explicit read-only signal (bug-1): the skill sets meta.stateReadOnly /
+    // meta.stateVersion so a future, unknown on-disk version stays read-only even
+    // when the skill could not parse it to embed a reviewState envelope. This is the
+    // authoritative signal; the reviewState.version check below is a fallback that
+    // can only ever *raise* read-only, never clear it.
+    var meta = data.meta || {};
+    if (typeof meta.stateVersion === "number") STATE_VERSION = meta.stateVersion;
+    if (meta.stateReadOnly === true) STATE_READONLY = true;
+
     var envelope = data.reviewState;
     if (envelope && typeof envelope === "object") {
       var v = envelope.version;

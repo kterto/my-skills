@@ -90,5 +90,17 @@ else
   echo "FAIL: missing __tests__/symlink-guard.test.sh (sec-3 regression fixture)"; fail=1
 fi
 
+# 9. read-only signal (bug-1): future/unknown state version stays read-only, no downgrade.
+RO_TEST="$MARKET_DIR/__tests__/readonly-signal.test.cjs"
+if [ -f "$RO_TEST" ]; then
+  if command -v node >/dev/null 2>&1; then
+    if ! node "$RO_TEST" >/dev/null; then echo "FAIL: read-only signal test (bug-1)"; fail=1; fi
+  else
+    echo "SKIP: node not found — read-only signal test (bug-1) not run"
+  fi
+else
+  echo "FAIL: missing __tests__/readonly-signal.test.cjs (bug-1 regression fixture)"; fail=1
+fi
+
 [ "$fail" -eq 0 ] && echo "PASS: pr-review-report skill (marketplace + opencode)" || true
 exit "$fail"

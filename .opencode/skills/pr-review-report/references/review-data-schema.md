@@ -23,7 +23,11 @@ consumed verbatim by the template — match them exactly.
     "commitRange": "ab12cd3..HEAD",
     "generatedAt": "2026-07-13",  // YYYY-MM-DD
     "commitCount": 7,             // integer
-    "filesChanged": 4             // integer; falls back to files.length if absent
+    "filesChanged": 4,            // integer; falls back to files.length if absent
+    "stateVersion": 1,            // OPTIONAL int; version of the on-disk review-state
+                                  // file this report was built from. Default 1.
+    "stateReadOnly": false        // OPTIONAL bool; true when that version is newer/
+                                  // unknown, so the browser must not write. See below.
   },
 
   // Severity totals for the badges. EXCLUDE acknowledged findings from these
@@ -184,6 +188,27 @@ requires (ADR-0002).
   per-finding mutations, `localStorage` autosave) and shows a read-only notice —
   mirroring the skill's conservative read (`review-state-schema.md` §Version
   handling). Neither port ever rewrites or downgrades a forward-version file.
+
+## Read-only signal — `meta.stateVersion` / `meta.stateReadOnly` (bug-1)
+
+Deriving read-only *only* from `reviewState.version` is not enough: when the on-disk
+state file is a **future, unknown version the skill cannot parse**, the skill does
+not embed a `reviewState` envelope for it, so the template would see no version and
+leave controls + Save enabled — then a Save would emit `version: 1` and **downgrade**
+the newer file. So the read-only decision is carried **explicitly**:
+
+- **The skill sets `meta.stateVersion`** to the on-disk file's version and
+  **`meta.stateReadOnly: true`** whenever that version is newer/unknown (read-only),
+  *independently of whether it embedded `reviewState`*.
+- **The template honors `meta.stateReadOnly` as authoritative** — it forces
+  `STATE_READONLY` even with no `reviewState`. The `reviewState.version` check is a
+  fallback that can only ever *raise* read-only, never clear it. `STATE_VERSION`
+  written back on Save is the preserved version (`meta.stateVersion` or
+  `reviewState.version`), never hardcoded `1`.
+- **Read-only disables all five write paths:** state buttons, comment box,
+  `localStorage` overlay + autosave, browser Save, **and** the skill-side write
+  (`SKILL.md` step 7b does not persist a read-only future-version file — it preserves
+  it untouched).
 
 ## Acknowledged findings
 
