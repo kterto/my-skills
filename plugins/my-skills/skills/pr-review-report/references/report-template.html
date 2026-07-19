@@ -711,6 +711,17 @@ summary::-webkit-details-marker { display: none; }
   background: var(--bg-surface);
   font-weight: 600;
 }
+/* orphan marker — a prior-only finding whose code left the current diff (bug-2) */
+.finding__loc--orphan { color: var(--text-secondary); }
+.orphan-note {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-left: 6px;
+}
+
 /* skill-derived state pill (resolved / regressed) — read-only annotation */
 .state-derived {
   font-family: var(--font-mono);
@@ -1081,13 +1092,23 @@ body[data-state-readonly] .finding__comment {
     }
     head.push('<span class="finding__id">' + esc(f.id) + "</span>");
 
+    // Orphans (prior-only findings whose code left the diff, bug-2) have no diff
+    // line to link to — render the location as plain text with a marker instead of a
+    // dead anchor, and skip the finding→diff jump below.
+    var isOrphan = f.orphan === true;
     var loc = "";
     if (f.file) {
-      var slug = fileSlug(f.file);
-      var dl = "diffline-" + slug + "-" + f.line;
-      loc = '<div class="finding__loc"><a href="#' + esc(dl) +
-        '" class="loc-link" data-diffline="' + esc(dl) + '">' +
-        esc(f.file) + (f.line != null ? ":" + esc(f.line) : "") + "</a></div>";
+      if (isOrphan) {
+        loc = '<div class="finding__loc finding__loc--orphan">' +
+          esc(f.file) + (f.line != null ? ":" + esc(f.line) : "") +
+          ' <span class="orphan-note">no longer in the current diff</span></div>';
+      } else {
+        var slug = fileSlug(f.file);
+        var dl = "diffline-" + slug + "-" + f.line;
+        loc = '<div class="finding__loc"><a href="#' + esc(dl) +
+          '" class="loc-link" data-diffline="' + esc(dl) + '">' +
+          esc(f.file) + (f.line != null ? ":" + esc(f.line) : "") + "</a></div>";
+      }
     }
 
     var fix = f.fix
@@ -1101,7 +1122,7 @@ body[data-state-readonly] .finding__comment {
         '<p class="adr-ctx">' + linkify(f.adr.context || "") + "</p></div>"
       : "";
 
-    var dlAttr = (f.file && f.line != null)
+    var dlAttr = (!isOrphan && f.file && f.line != null)
       ? ' data-diffline="diffline-' + fileSlug(f.file) + "-" + f.line + '"'
       : "";
 

@@ -66,7 +66,12 @@ consumed verbatim by the template — match them exactly.
 
       // acknowledged findings only:
       "acknowledged": true,       // omit or false for normal findings
-      "memoryRef": "MEM-7"        // the .pr-review/memory.md entry that acknowledged it
+      "memoryRef": "MEM-7",       // the .pr-review/memory.md entry that acknowledged it
+
+      // orphan (prior-only) findings only:
+      "orphan": true              // omit or false for normal findings. Marks a finding
+                                  // materialized from review-state (its code left the
+                                  // current diff). Rendered with no diff-jump. See below.
     }
   ],
 
@@ -227,6 +232,27 @@ excluded from the five severity counts the same way. It has no `memoryRef` until
 converges with the memory-driven acknowledge behavior. `acknowledged: true` and
 `state: "acknowledged"` are two routes to the one Acknowledged group — treat
 either as acknowledged.
+
+## Orphan (prior-only) findings (bug-2)
+
+An **orphan** is a fingerprint retained in `review-state.json` that the current run
+did **not** reproduce — its code left the diff (see `review-state-schema.md` §Orphan
+handling). The template renders **only** from `REVIEW_DATA.findings`, so an orphan
+that is not materialized here persists on disk but **vanishes from the report**,
+silently dropping the audit record. So the skill MUST synthesize every retained
+orphan into `findings[]`:
+
+- **Materialize from `lastFinding`.** Emit a finding using the stored snapshot: `id`,
+  `severity`, `section`, `title`, `file`, `line`, plus the persisted `fingerprint`,
+  `state`, and `thread`, and the marker **`orphan: true`**.
+- **No diff line.** An orphan has no entry in `files[]`; the template renders its
+  location as plain text ("no longer in the current diff") with **no diff-jump**, and
+  no `diffline-*` anchor is expected. Do not fabricate a `files[]` line for it.
+- **Destination group by state** (routed by the template's existing `groupOf`):
+  `resolved` → Resolved, `ignored` → Ignored, `acknowledged` → Acknowledged. An
+  orphan whose prior `state` was `open`/`fixed` is promoted to `resolved` (its
+  concern appears gone — see `review-state-schema.md`). An orphan is **never**
+  `open`/`regressed`, so it is always **excluded from the five severity counts**.
 
 ## Injection
 

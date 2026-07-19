@@ -248,11 +248,18 @@ conservatively:
 - It is a **candidate `resolved`**: the concern the finding raised appears to be
   gone. If its stored `state` was `fixed`, verifying its absence in the new diff
   promotes it to `resolved` (see `SKILL.md` step 4).
-- It is **rendered from its `lastFinding` snapshot**, so the user still sees what
-  was resolved and the thread that led there.
+- It is **materialized into `REVIEW_DATA.findings` from its `lastFinding` snapshot**
+  with `orphan: true` (bug-2), so the user still sees what was resolved and the
+  thread that led there. **Retaining it on disk is not enough** — the template
+  renders only from `REVIEW_DATA.findings`, so an un-materialized orphan disappears
+  from the report even while its record survives in the file. See the **prior-only
+  reconciliation pass** in `SKILL.md` step 4 and `review-data-schema.md` §Orphan
+  (prior-only) findings.
 - It is **never silently dropped.** Losing a fingerprint would erase the audit
-  trail; orphans are retained in the state file and surfaced (in the Resolved
-  group) until the user explicitly ignores them.
+  trail; orphans are retained in the state file **and** surfaced in the report —
+  `resolved` → Resolved group, `ignored` → Ignored, `acknowledged` → Acknowledged —
+  until the user explicitly ignores them. An orphan is never `open`/`regressed`, so
+  it never pollutes the five severity counts.
 
 ## Skill-side merge rules
 

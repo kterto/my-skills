@@ -102,5 +102,17 @@ else
   echo "FAIL: missing __tests__/readonly-signal.test.cjs (bug-1 regression fixture)"; fail=1
 fi
 
+# 10. orphan render (bug-2): a materialized prior-only finding routes + renders safely.
+ORPHAN_TEST="$MARKET_DIR/__tests__/orphan-render.test.cjs"
+if [ -f "$ORPHAN_TEST" ]; then
+  if command -v node >/dev/null 2>&1; then
+    if ! node "$ORPHAN_TEST" >/dev/null; then echo "FAIL: orphan render test (bug-2)"; fail=1; fi
+  else
+    echo "SKIP: node not found — orphan render test (bug-2) not run"
+  fi
+else
+  echo "FAIL: missing __tests__/orphan-render.test.cjs (bug-2 regression fixture)"; fail=1
+fi
+
 [ "$fail" -eq 0 ] && echo "PASS: pr-review-report skill (marketplace + opencode)" || true
 exit "$fail"
