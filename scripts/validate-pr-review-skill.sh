@@ -114,5 +114,17 @@ else
   echo "FAIL: missing __tests__/orphan-render.test.cjs (bug-2 regression fixture)"; fail=1
 fi
 
+# 11. comment draft persistence (bug-3): unsent drafts survive a rerender.
+DRAFT_TEST="$MARKET_DIR/__tests__/comment-draft.test.cjs"
+if [ -f "$DRAFT_TEST" ]; then
+  if command -v node >/dev/null 2>&1; then
+    if ! node "$DRAFT_TEST" >/dev/null; then echo "FAIL: comment draft test (bug-3)"; fail=1; fi
+  else
+    echo "SKIP: node not found — comment draft test (bug-3) not run"
+  fi
+else
+  echo "FAIL: missing __tests__/comment-draft.test.cjs (bug-3 regression fixture)"; fail=1
+fi
+
 [ "$fail" -eq 0 ] && echo "PASS: pr-review-report skill (marketplace + opencode)" || true
 exit "$fail"

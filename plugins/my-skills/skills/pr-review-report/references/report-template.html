@@ -946,6 +946,8 @@ body[data-state-readonly] .finding__comment {
                           // cached user ops at/below it are already merged and are pruned
   var OP_LOG = [];        // user ops performed in-browser SINCE EMITTED_REV, replayed over
                           // the envelope so stale cache can't overwrite newer skill state (arch-2)
+  var DRAFTS = {};        // fingerprint -> unsent comment textarea text; kept across rerenders
+                          // so editing one card never discards a draft on another (bug-3)
 
   function nowTs() { return new Date().toISOString(); }
 
@@ -1186,8 +1188,11 @@ body[data-state-readonly] .finding__comment {
   /* ---------- render: comment box ---------- */
   function commentBox(fp) {
     if (!fp) return "";
+    // Restore any unsent draft so a rerender (triggered by editing another card)
+    // does not wipe it — the textarea's DOM value is otherwise lost on rebuild (bug-3).
+    var draft = DRAFTS[fp] || "";
     return '<div class="finding__comment" data-fp="' + esc(fp) + '">' +
-      '<textarea class="comment-input" rows="2" placeholder="Add a comment for the reviewer&hellip;" aria-label="Add a comment"></textarea>' +
+      '<textarea class="comment-input" rows="2" placeholder="Add a comment for the reviewer&hellip;" aria-label="Add a comment">' + esc(draft) + '</textarea>' +
       '<div class="comment-actions">' +
         '<button type="button" class="btn comment-add">Add comment</button>' +
       "</div>" +
@@ -1616,6 +1621,7 @@ body[data-state-readonly] .finding__comment {
     e.thread = e.thread || [];
     e.thread.push({ author: "user", text: text, ts: ts });
     OP_LOG.push({ type: "comment", fp: fp, text: text, ts: ts });
+    delete DRAFTS[fp]; // draft consumed — clear so the rebuilt box comes back empty
     persist();
     rerender();
   }
@@ -1710,6 +1716,16 @@ body[data-state-readonly] .finding__comment {
         if (fp2 && ta && ta.value.trim()) addUserComment(fp2, ta.value.trim());
         return;
       }
+    });
+    // Persist comment drafts on every keystroke so a rerender (from editing another
+    // card) restores them instead of discarding them (bug-3).
+    document.body.addEventListener("input", function (e) {
+      var ta = e.target && e.target.closest && e.target.closest(".comment-input");
+      if (!ta) return;
+      var box = ta.closest(".finding__comment");
+      var fp = box && box.getAttribute("data-fp");
+      if (!fp) return;
+      if (ta.value) DRAFTS[fp] = ta.value; else delete DRAFTS[fp];
     });
     var saveBtn = el("save-state");
     if (saveBtn) saveBtn.addEventListener("click", saveReviewState);

@@ -21,7 +21,7 @@ function extractFn(src, name) {
 }
 
 // Globals + constants the render helpers close over.
-let STORE = {}, STATE_READONLY = false;
+let STORE = {}, STATE_READONLY = false, DRAFTS = {};
 const SECTION_LABELS = { architecture: "Architecture", security: "Security", bugs: "Bugs" };
 const STATE_LABELS = { open: "Open", fixed: "Fixed", ignored: "Ignored", acknowledged: "Acknowledge", resolved: "Resolved", regressed: "Regressed" };
 const USER_STATES = ["open", "fixed", "ignored", "acknowledged"];
