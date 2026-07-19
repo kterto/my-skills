@@ -381,9 +381,19 @@ So provenance is a **hard gate**, checked in `SKILL.md` step 2b:
 - **Validate the schema.** Even a trusted local file is validated against this
   document (a JSON object with a `findings` map of the documented shape) before use;
   a malformed file is surfaced and ignored, never partially applied.
+- **No symlinks; canonical containment (sec-3).** Never follow a symlink for
+  `.pr-review` **or** `review-state.json`. A committed symlink would let a read
+  (`cat` in step 2b) expose a secret **outside** the repo — embedding it in the
+  report — or redirect the step-7b write to overwrite an unrelated file; a symlinked
+  `.pr-review` directory is the same escape. Reject either symlink
+  (`STATE-SYMLINK-REJECTED`), and require the file's real path to resolve to a
+  **regular file under the canonical repo root** (`pwd -P` / `STATE-PATH-ESCAPE`).
+  The write persists via a **temp regular file + atomic rename**, re-checking for a
+  symlink just before the rename (TOCTOU). Both ports enforce this identically.
 
-This gate composes with §Branch ownership: provenance (*is it trustworthy at all?*)
-is checked first, then branch ownership (*does it belong to this branch?*).
+This gate composes with §Branch ownership: the symlink/path guard runs first (is the
+path even safe to touch?), then provenance (*is it trustworthy at all?*), then branch
+ownership (*does it belong to this branch?*).
 
 ## Trust boundary
 

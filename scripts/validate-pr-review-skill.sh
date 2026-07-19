@@ -82,5 +82,13 @@ else
   echo "FAIL: missing __tests__/provenance-gate.test.sh (sec-2 regression fixture)"; fail=1
 fi
 
+# 8. symlink / path-escape guard (sec-3): symlinked state must not be read or written.
+SYM_TEST="$MARKET_DIR/__tests__/symlink-guard.test.sh"
+if [ -f "$SYM_TEST" ]; then
+  if ! bash "$SYM_TEST" >/dev/null; then echo "FAIL: symlink guard test (sec-3)"; fail=1; fi
+else
+  echo "FAIL: missing __tests__/symlink-guard.test.sh (sec-3 regression fixture)"; fail=1
+fi
+
 [ "$fail" -eq 0 ] && echo "PASS: pr-review-report skill (marketplace + opencode)" || true
 exit "$fail"

@@ -129,8 +129,21 @@ Load the accumulated triage so this run is a *cycle*, not a fresh start. Follow
 # cwd may be a repo subdir, so $root anchoring still matters here.
 root="$(git rev-parse --show-toplevel 2>/dev/null)"
 mb="$(git merge-base "$base" HEAD 2>/dev/null)"   # $base from step 1 (re-resolve; shell state does not persist)
-state="$root/.pr-review/review-state.json"
-if [ -f "$state" ]; then
+dir="$root/.pr-review"
+state="$dir/review-state.json"
+# sec-3: refuse to follow a symlinked dir or file. A committed symlink could read a
+# secret OUTSIDE the repo (embedding it in the report) on this cat, or redirect the
+# step-7b write to overwrite an unrelated file. Require a regular file whose real
+# path stays under the canonical repo root; blank $state to skip on any violation.
+if [ -L "$dir" ] || [ -L "$state" ]; then
+  echo "STATE-SYMLINK-REJECTED: .pr-review or review-state.json is a symlink — refusing to read/write it (path-escape risk). Must be a regular file under the repo."
+  state=""
+elif [ -e "$state" ]; then
+  rp_root="$(cd "$root" 2>/dev/null && pwd -P)"; rp_dir="$(cd "$dir" 2>/dev/null && pwd -P)"
+  { [ "$rp_dir" = "$rp_root/.pr-review" ] && [ -f "$state" ]; } || {
+    echo "STATE-PATH-ESCAPE: review-state.json does not resolve to a regular file under $rp_root/.pr-review — refusing."; state=""; }
+fi
+if [ -n "$state" ] && [ -f "$state" ]; then
   cat "$state"
   # Provenance gate (sec-2): the state file is trusted ONLY as the reviewer's own
   # uncommitted local data — i.e. UNTRACKED. A branch that commits/tracks it (or
@@ -159,6 +172,13 @@ fi
   and the browser writes it uncommitted — so it loads from the **working tree**
   anchored to `$root`. Never route the state file through `$mb`, nor policy
   through the working tree.
+- **Symlink / path-escape guard (security, sec-3).** Before reading, reject a
+  symlinked `.pr-review` **or** `review-state.json` and any path that does not
+  resolve to a regular file under the canonical repo root (`STATE-SYMLINK-REJECTED`
+  / `STATE-PATH-ESCAPE`). A committed symlink would otherwise make this `cat` read a
+  secret **outside** the repo — embedding it in the report — or redirect the step-7b
+  write to overwrite an unrelated file. The same guard applies to the write in
+  step 7b. See `review-state-schema.md` §Provenance & trust.
 - **Provenance gate (security, sec-2) — trusted only if untracked.** The working
   tree is trusted for this file **only because a browser writes it uncommitted**.
   That assumption fails if the branch **tracks** the file: a PR could commit a
@@ -351,6 +371,23 @@ once and use it for both the on-disk write and the embed so they never diverge
   (`$root/.pr-review/memory.md`) writes — so it lands in the repo even when the
   skill is invoked from a subdirectory (common under opencode), never in a stray
   `<cwd>/.pr-review/`. Create `$root/.pr-review/` if absent. Write `version: 1`.
+- **Symlink-safe atomic write (security, sec-3).** Never persist through a symlink —
+  a symlinked `.pr-review` or `review-state.json` would redirect the write to
+  overwrite an arbitrary file. Reject symlinks, then write a temp regular file and
+  atomically rename it over the target after re-checking (TOCTOU). Write the JSON to
+  `"$tmp"` in the block below (heredoc or the Write tool), not directly to `$state`:
+
+  ```bash
+  root="$(git rev-parse --show-toplevel 2>/dev/null)"; dir="$root/.pr-review"; state="$dir/review-state.json"
+  if [ -L "$dir" ] || [ -L "$state" ]; then
+    echo "STATE-SYMLINK-REJECTED (write): .pr-review or review-state.json is a symlink — refusing to persist (path-escape risk)."
+  else
+    mkdir -p "$dir"                                  # real dir; fails if $dir is a dangling symlink
+    tmp="$(mktemp "$dir/.review-state.XXXXXX")"      # temp regular file, same filesystem
+    # ... write the merged JSON to "$tmp" (heredoc / Write tool) ...
+    if [ -L "$state" ]; then rm -f "$tmp"; echo "STATE-SYMLINK-REJECTED (write, race): aborting."; else mv -f "$tmp" "$state"; fi
+  fi
+  ```
 - This is a **write of review data to the working tree**, deliberately distinct
   from the merge-base policy anchor; it is never committed by the skill.
 - **Keep it untracked (sec-2).** `review-state.json` is reviewer-local data — never
