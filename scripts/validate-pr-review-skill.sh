@@ -74,5 +74,13 @@ else
   echo "FAIL: missing __tests__/seam-injection.test.cjs (sec-1 regression fixture)"; fail=1
 fi
 
+# 7. provenance gate (sec-2): tracked/branch-modified review-state must be untrusted.
+PROV_TEST="$MARKET_DIR/__tests__/provenance-gate.test.sh"
+if [ -f "$PROV_TEST" ]; then
+  if ! bash "$PROV_TEST" >/dev/null; then echo "FAIL: provenance gate test (sec-2)"; fail=1; fi
+else
+  echo "FAIL: missing __tests__/provenance-gate.test.sh (sec-2 regression fixture)"; fail=1
+fi
+
 [ "$fail" -eq 0 ] && echo "PASS: pr-review-report skill (marketplace + opencode)" || true
 exit "$fail"
