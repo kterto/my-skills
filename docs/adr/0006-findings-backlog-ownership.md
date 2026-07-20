@@ -2,13 +2,15 @@
 
 - **Status:** Accepted
 - **Date:** 2026-07-20
-- **Skills affected:** `pr-review-report` (both ports: `plugins/my-skills/`, `.opencode/`); `validation-fixer` (consumer contract, unchanged behavior)
+- **Skills affected:** `pr-review-report` (both ports: `plugins/my-skills/`, `.opencode/`); `validation-fixer` (the backlog's consumer — **this ADR's merge decision requires no change to it**; its own consumer-side contract on this branch — per-item clean-tree precondition, untrusted-evidence trust boundary, and per-item commit ownership + rollback — is defined by its `SKILL.md` and **ADR-0007**, not here)
 - **Source finding:** arch-2 — "Re-review overwrites the consumer-owned backlog" (`SKILL.md` Step 6b, `references/findings-md-schema.md`)
 
 ## Context
 
 `pr-review-report` Step 6b emits a Markdown findings backlog at the **stable** path
-`docs/reviews/<branch>-<YYYY-MM-DD>.md` (same basename as the HTML report). That file
+`docs/reviews/<branch_slug>-<YYYY-MM-DD>.md` (same basename as the HTML report;
+`<branch_slug>` is the filesystem-safe branch name — the raw branch, which may contain
+`/`, appears only in the title heading, never in the path — bug-2). That file
 is the hand-off to `validation-fixer`, which **edits it in place** as its resumable
 source of truth: it flips `- [ ]` → `- [x]` on a fixed item, writes `- [~]` for an
 attempted-no-commit item, and appends a `_fixed via <sha> · <date>_` /
@@ -105,8 +107,12 @@ The full protocol lives in `references/findings-md-schema.md` §Regeneration & m
 
 - Step 6b gains a read-parse-merge path; the empty-file case is unchanged, so first
   runs are unaffected.
-- `validation-fixer` is **unchanged** — its in-place edits are now respected instead of
-  clobbered. The producer adapts to the consumer, not the reverse.
+- `validation-fixer` needs **no change for this ADR's merge decision** — its in-place
+  edits are now respected instead of clobbered; the producer adapts to the consumer, not
+  the reverse. (Separately, this branch *does* change `validation-fixer` elsewhere — its
+  per-item commit ownership + rollback and its untrusted-evidence trust boundary /
+  clean-tree precondition — but those belong to its own `SKILL.md` and ADR-0007, not to
+  the producer-side merge decided here.)
 - The `.md` remains outside `review-state.json` (no round-trip), but is no longer a
   lossy artifact: its own content is the durable store, and the merge makes that store
   safe across regenerations — including when a finding leaves the diff, since prior-only
