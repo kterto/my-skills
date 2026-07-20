@@ -1,0 +1,206 @@
+{
+  "version": 1,
+  "branch": "feat/pr-review-md-backlog",
+  "findings": {
+    "architecture|plugins/my-skills/skills/commit-pr/SKILL.md|preserve-the-commitprdev-public-interface": {
+      "state": "open",
+      "lastFinding": {
+        "id": "arch-1",
+        "severity": "high",
+        "section": "architecture",
+        "title": "Preserve the commit-pr-dev public interface",
+        "file": "plugins/my-skills/skills/commit-pr/SKILL.md",
+        "line": 2
+      },
+      "history": [
+        {
+          "from": null,
+          "to": "open",
+          "ts": "2026-07-20T02:18:54Z",
+          "by": "skill"
+        }
+      ],
+      "thread": []
+    },
+    "architecture|plugins/my-skills/skills/pr-review-report/SKILL.md|rereview-overwrites-the-consumerowned-backlog": {
+      "state": "open",
+      "lastFinding": {
+        "id": "arch-2",
+        "severity": "high",
+        "section": "architecture",
+        "title": "Re-review overwrites the consumer-owned backlog",
+        "file": "plugins/my-skills/skills/pr-review-report/SKILL.md",
+        "line": 390
+      },
+      "history": [
+        {
+          "from": null,
+          "to": "open",
+          "ts": "2026-07-20T02:18:54Z",
+          "by": "skill"
+        }
+      ],
+      "thread": []
+    },
+    "architecture|plugins/my-skills/skills/pr-review-report/SKILL.md|step-6b-contradicts-its-authoritative-schema": {
+      "state": "open",
+      "lastFinding": {
+        "id": "arch-3",
+        "severity": "medium",
+        "section": "architecture",
+        "title": "Step 6b contradicts its authoritative schema",
+        "file": "plugins/my-skills/skills/pr-review-report/SKILL.md",
+        "line": 385
+      },
+      "history": [
+        {
+          "from": null,
+          "to": "open",
+          "ts": "2026-07-20T02:18:54Z",
+          "by": "skill"
+        }
+      ],
+      "thread": []
+    },
+    "security|plugins/my-skills/skills/pr-review-report/SKILL.md|predictable-backlog-path-permits-symlink-overwrite": {
+      "state": "open",
+      "lastFinding": {
+        "id": "sec-1",
+        "severity": "high",
+        "section": "security",
+        "title": "Predictable backlog path permits symlink overwrite",
+        "file": "plugins/my-skills/skills/pr-review-report/SKILL.md",
+        "line": 363
+      },
+      "history": [
+        {
+          "from": null,
+          "to": "open",
+          "ts": "2026-07-20T02:18:54Z",
+          "by": "skill"
+        }
+      ],
+      "thread": []
+    },
+    "security|plugins/my-skills/skills/pr-review-report/SKILL.md|backlog-data-crosses-unchanged-into-an-autonomousagent-prompt": {
+      "state": "open",
+      "lastFinding": {
+        "id": "sec-2",
+        "severity": "high",
+        "section": "security",
+        "title": "Backlog data crosses unchanged into an autonomous-agent prompt",
+        "file": "plugins/my-skills/skills/pr-review-report/SKILL.md",
+        "line": 382
+      },
+      "history": [
+        {
+          "from": null,
+          "to": "open",
+          "ts": "2026-07-20T02:18:54Z",
+          "by": "skill"
+        }
+      ],
+      "thread": []
+    },
+    "bugs|plugins/my-skills/skills/pr-review-report/SKILL.md|orchestrator-fixes-cannot-satisfy-the-commit-gate": {
+      "state": "open",
+      "lastFinding": {
+        "id": "bug-1",
+        "severity": "high",
+        "section": "bugs",
+        "title": "Orchestrator fixes cannot satisfy the commit gate",
+        "file": "plugins/my-skills/skills/pr-review-report/SKILL.md",
+        "line": 358
+      },
+      "history": [
+        {
+          "from": null,
+          "to": "open",
+          "ts": "2026-07-20T02:18:54Z",
+          "by": "skill"
+        }
+      ],
+      "thread": []
+    },
+    "bugs|plugins/my-skills/skills/pr-review-report/SKILL.md|slashcontaining-branches-break-the-backlog-path": {
+      "state": "open",
+      "lastFinding": {
+        "id": "bug-2",
+        "severity": "high",
+        "section": "bugs",
+        "title": "Slash-containing branches break the backlog path",
+        "file": "plugins/my-skills/skills/pr-review-report/SKILL.md",
+        "line": 364
+      },
+      "history": [
+        {
+          "from": null,
+          "to": "open",
+          "ts": "2026-07-20T02:18:54Z",
+          "by": "skill"
+        }
+      ],
+      "thread": []
+    },
+    "bugs|plugins/my-skills/skills/index.json|hosted-index-omits-the-required-schema": {
+      "state": "open",
+      "lastFinding": {
+        "id": "bug-3",
+        "severity": "medium",
+        "section": "bugs",
+        "title": "Hosted index omits the required schema",
+        "file": "plugins/my-skills/skills/index.json",
+        "line": 80
+      },
+      "history": [
+        {
+          "from": null,
+          "to": "open",
+          "ts": "2026-07-20T02:18:54Z",
+          "by": "skill"
+        }
+      ],
+      "thread": []
+    },
+    "bugs|plugins/my-skills/skills/pr-review-report/__tests__/findings-md-format.test.cjs|format-test-does-not-require-rationale-and-fix": {
+      "state": "open",
+      "lastFinding": {
+        "id": "bug-4",
+        "severity": "low",
+        "section": "bugs",
+        "title": "Format test does not require rationale and fix",
+        "file": "plugins/my-skills/skills/pr-review-report/__tests__/findings-md-format.test.cjs",
+        "line": 100
+      },
+      "history": [
+        {
+          "from": null,
+          "to": "open",
+          "ts": "2026-07-20T02:18:54Z",
+          "by": "skill"
+        }
+      ],
+      "thread": []
+    },
+    "bugs|plans/eval/EVAL-20260720T011254Z-dec5-pr-review-md-findings-backlog.md|verification-artifacts-report-an-obsolete-test-result": {
+      "state": "open",
+      "lastFinding": {
+        "id": "bug-5",
+        "severity": "low",
+        "section": "bugs",
+        "title": "Verification artifacts report an obsolete test result",
+        "file": "plans/eval/EVAL-20260720T011254Z-dec5-pr-review-md-findings-backlog.md",
+        "line": 53
+      },
+      "history": [
+        {
+          "from": null,
+          "to": "open",
+          "ts": "2026-07-20T02:18:54Z",
+          "by": "skill"
+        }
+      ],
+      "thread": []
+    }
+  }
+}
