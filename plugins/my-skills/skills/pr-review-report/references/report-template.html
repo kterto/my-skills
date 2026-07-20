@@ -961,8 +961,11 @@ body[data-state-readonly] .finding__comment {
   }
   function effThread(f) {
     var e = f.fingerprint && STORE[f.fingerprint];
-    if (e && e.thread) return e.thread;
-    return f.thread || [];
+    // STORE threads are pre-sanitized to arrays; guard the REVIEW_DATA fallback so a
+    // malformed f.thread (e.g. a string) can never reach thread.map and abort the
+    // render (bug-4).
+    if (e && Array.isArray(e.thread)) return e.thread;
+    return Array.isArray(f.thread) ? f.thread : [];
   }
   function isAck(f) { return f.acknowledged === true || effState(f) === "acknowledged"; }
   // Which group a finding renders in: 'ack' | 'resolved' | 'ignored' | 'lens'.
@@ -1438,6 +1441,45 @@ body[data-state-readonly] .finding__comment {
   }
 
   /* ---------- review-state store + persistence ---------- */
+  // Shape validation (bug-4): browser cache / envelope data must never be trusted on
+  // truthiness alone — a string where an array is expected reaches thread.map and
+  // aborts the whole report. Coerce each field to a valid shape, drop malformed
+  // parts, and flag it so a single warning is surfaced.
+  var STATE_ENUM = { open: 1, fixed: 1, ignored: 1, acknowledged: 1, resolved: 1, regressed: 1 };
+  var sawMalformed = false;
+  function markMalformed() { sawMalformed = true; }
+  function sanitizeState(s, fallback) {
+    if (typeof s === "string" && STATE_ENUM[s]) return s;
+    if (s != null) markMalformed();
+    return fallback || "open";
+  }
+  function sanitizeThread(t) {
+    if (t == null) return [];
+    if (!Array.isArray(t)) { markMalformed(); return []; }
+    return t.filter(function (m) {
+      var ok = m && typeof m === "object" &&
+        (m.author === "user" || m.author === "skill") &&
+        typeof m.text === "string" && typeof m.ts === "string";
+      if (!ok) markMalformed();
+      return ok;
+    });
+  }
+  function sanitizeHistory(h) {
+    if (h == null) return [];
+    if (!Array.isArray(h)) { markMalformed(); return []; }
+    return h.filter(function (r) {
+      var ok = r && typeof r === "object" &&
+        typeof r.to === "string" && typeof r.ts === "string";
+      if (!ok) markMalformed();
+      return ok;
+    });
+  }
+  function sanitizeLastFinding(lf) {
+    if (lf == null) return null;
+    if (typeof lf !== "object" || Array.isArray(lf)) { markMalformed(); return null; }
+    return lf;
+  }
+
   // Seed STORE from the complete state envelope the skill embedded
   // (data.reviewState) — the authoritative on-disk .pr-review/review-state.json,
   // carrying history, prior-only orphans, and the source version that the
@@ -1451,6 +1493,7 @@ body[data-state-readonly] .finding__comment {
     STATE_READONLY = false;
     EMITTED_REV = "";
     OP_LOG = [];
+    sawMalformed = false;
 
     // Explicit read-only signal (bug-1): the skill sets meta.stateReadOnly /
     // meta.stateVersion so a future, unknown on-disk version stays read-only even
@@ -1470,19 +1513,20 @@ body[data-state-readonly] .finding__comment {
         STATE_VERSION = v;
         if (v > KNOWN_STATE_VERSION) STATE_READONLY = true;
       }
-      var fmap = envelope.findings || {};
+      var fmap = (envelope.findings && typeof envelope.findings === "object") ? envelope.findings : {};
       Object.keys(fmap).forEach(function (fp) {
-        var s = fmap[fp] || {};
-        STORE[fp] = {
-          state: s.state || "open",
-          thread: (s.thread || []).slice(),
-          history: (s.history || []).slice(),
-          lastFinding: s.lastFinding || null
+        var s = (fmap[fp] && typeof fmap[fp] === "object") ? fmap[fp] : {};
+        var entry = {
+          state: sanitizeState(s.state, "open"),
+          thread: sanitizeThread(s.thread),
+          history: sanitizeHistory(s.history),
+          lastFinding: sanitizeLastFinding(s.lastFinding)
         };
+        STORE[fp] = entry;
         // The report revision is the newest ts the envelope reflects: any cached
         // user op at/below it is already merged into this envelope by the skill.
-        (s.history || []).forEach(function (h) { if (h && h.ts && h.ts > EMITTED_REV) EMITTED_REV = h.ts; });
-        (s.thread || []).forEach(function (t) { if (t && t.ts && t.ts > EMITTED_REV) EMITTED_REV = t.ts; });
+        entry.history.forEach(function (h) { if (h.ts > EMITTED_REV) EMITTED_REV = h.ts; });
+        entry.thread.forEach(function (t) { if (t.ts > EMITTED_REV) EMITTED_REV = t.ts; });
       });
     }
 
@@ -1501,8 +1545,8 @@ body[data-state-readonly] .finding__comment {
       seenFp[f.fingerprint] = true;
       if (STORE[f.fingerprint]) return; // already seeded by the envelope or an earlier finding
       STORE[f.fingerprint] = {
-        state: f.state || (f.acknowledged ? "acknowledged" : "open"),
-        thread: (f.thread || []).slice(),
+        state: sanitizeState(f.state, f.acknowledged ? "acknowledged" : "open"),
+        thread: sanitizeThread(f.thread),
         history: [],
         lastFinding: {
           id: f.id, severity: f.severity, section: f.section,
@@ -1513,6 +1557,9 @@ body[data-state-readonly] .finding__comment {
 
     LS_KEY = "pr-review-state:" + ((data.meta && data.meta.branch) || "default");
     overlayLocalStorage();
+    if (sawMalformed) {
+      try { console.warn("pr-review-report: dropped malformed review-state fields (bad state/thread/history shape); rendering the valid remainder."); } catch (e) {}
+    }
   }
 
   // Thread-turn / history-record identity for idempotent, truncation-free merges.
@@ -1532,19 +1579,23 @@ body[data-state-readonly] .finding__comment {
   // Replay a single user op over STORE (idempotent). Ops carry their own ts so
   // out-of-band replay reconstructs the same state + audit trail.
   function applyOp(op) {
-    if (!op || !op.fp) return;
+    if (!op || typeof op.fp !== "string" || typeof op.ts !== "string") { if (op) markMalformed(); return; }
     var e = STORE[op.fp];
     if (!e) return;
     if (op.type === "state") {
+      if (!(typeof op.to === "string" && STATE_ENUM[op.to])) { markMalformed(); return; }
       if (e.state !== op.to) {
         e.history = e.history || [];
         if (!hasTransition(e.history, op)) e.history.push({ from: op.from, to: op.to, ts: op.ts, by: "user" });
         e.state = op.to;
       }
     } else if (op.type === "comment") {
+      if (typeof op.text !== "string") { markMalformed(); return; }
       var turn = { author: "user", text: op.text, ts: op.ts };
       e.thread = e.thread || [];
       if (!hasTurn(e.thread, turn)) e.thread.push(turn);
+    } else {
+      markMalformed();
     }
   }
 
@@ -1563,27 +1614,34 @@ body[data-state-readonly] .finding__comment {
     try { cache = JSON.parse(raw); } catch (e) { return; }
     if (!cache) return;
 
-    if (cache.ops && cache.ops.constructor === Array) {
-      OP_LOG = cache.ops.filter(function (op) { return op && op.ts && op.ts > EMITTED_REV; });
-      OP_LOG.forEach(applyOp);
+    // Op-log format (the current shape). A malformed `ops` is dropped, not
+    // reinterpreted as a legacy snapshot (which would treat `rev`/`ops` as fingerprints).
+    if (cache.ops != null || cache.rev != null) {
+      if (Array.isArray(cache.ops)) {
+        OP_LOG = cache.ops.filter(function (op) { return op && typeof op.ts === "string" && op.ts > EMITTED_REV; });
+        OP_LOG.forEach(applyOp);
+      } else {
+        markMalformed();
+      }
       return;
     }
 
     // Legacy snapshot format (pre-op-log). With an authoritative envelope present,
     // never let the stale full snapshot clobber newer skill state/history — only
     // rescue user comment turns (merged, deduped). Without an envelope (a legacy
-    // single-writer report) fall back to the original full overlay.
+    // single-writer report) fall back to the original full overlay. Every field is
+    // shape-validated (bug-4) so a corrupt cache can't inject a non-array thread.
     Object.keys(cache).forEach(function (fp) {
       var s = cache[fp];
-      if (!s) return;
+      if (!s || typeof s !== "object") { if (s != null) markMalformed(); return; }
       if (!STORE[fp]) STORE[fp] = { state: "open", thread: [], history: [], lastFinding: null };
       if (EMITTED_REV === "") {
-        if (s.state) STORE[fp].state = s.state;
-        if (s.thread) STORE[fp].thread = s.thread;
-        if (s.history) STORE[fp].history = s.history;
-        if (s.lastFinding && !STORE[fp].lastFinding) STORE[fp].lastFinding = s.lastFinding;
-      } else if (s.thread) {
-        mergeThread(STORE[fp], s.thread);
+        if (s.state != null) STORE[fp].state = sanitizeState(s.state, STORE[fp].state);
+        if (s.thread != null) STORE[fp].thread = sanitizeThread(s.thread);
+        if (s.history != null) STORE[fp].history = sanitizeHistory(s.history);
+        if (s.lastFinding != null && !STORE[fp].lastFinding) STORE[fp].lastFinding = sanitizeLastFinding(s.lastFinding);
+      } else if (s.thread != null) {
+        mergeThread(STORE[fp], sanitizeThread(s.thread));
       }
     });
   }

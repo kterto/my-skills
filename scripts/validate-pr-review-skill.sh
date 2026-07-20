@@ -126,5 +126,17 @@ else
   echo "FAIL: missing __tests__/comment-draft.test.cjs (bug-3 regression fixture)"; fail=1
 fi
 
+# 12. malformed state resilience (bug-4): bad cache/envelope shapes must not abort render.
+MALFORMED_TEST="$MARKET_DIR/__tests__/malformed-state.test.cjs"
+if [ -f "$MALFORMED_TEST" ]; then
+  if command -v node >/dev/null 2>&1; then
+    if ! node "$MALFORMED_TEST" >/dev/null; then echo "FAIL: malformed state test (bug-4)"; fail=1; fi
+  else
+    echo "SKIP: node not found — malformed state test (bug-4) not run"
+  fi
+else
+  echo "FAIL: missing __tests__/malformed-state.test.cjs (bug-4 regression fixture)"; fail=1
+fi
+
 [ "$fail" -eq 0 ] && echo "PASS: pr-review-report skill (marketplace + opencode)" || true
 exit "$fail"
