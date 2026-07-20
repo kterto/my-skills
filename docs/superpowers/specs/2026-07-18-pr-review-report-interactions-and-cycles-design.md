@@ -55,9 +55,15 @@ overwritten wholesale.
 
 ## Stable finding identity
 
-New field per finding: **`fingerprint`** = a stable hash of
-`section + file + normalized(title/rationale)`, **excluding the line number** so it
-survives code drift. Reconciliation each run:
+New field per finding: **`fingerprint`** = the human-readable composite
+`section|file|normalized-title` (with an optional `|discriminator` appended only to
+break a collision), **excluding the line number** so it survives code drift.
+`rationale` is **not** part of identity, and the key is a greppable composite, not a
+hash — the normative definition (title-normalization recipe + collision
+discriminator) lives in `references/review-state-schema.md` §Fingerprint. (This
+supersedes an earlier draft that proposed a hash of `section + file +
+normalized(title/rationale)`; the composite was chosen so the key is greppable and
+rationale churn does not change identity — see ADR-0005.) Reconciliation each run:
 
 1. Match new findings to prior state entries by `fingerprint`.
 2. On a miss, **semantic fallback** — reuse the memory-matching judgment
