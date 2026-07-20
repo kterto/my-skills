@@ -36,9 +36,12 @@ Reverting to strict compliance (leave every fix at `READY_TO_COMMIT`, human comm
    after a finding leaves the diff. Both require a per-item **SHA** that only a commit
    produces.
 2. **Clean-tree-per-item precondition.** Each item's framework run assumes a clean start;
-   leaving item *N*'s changes uncommitted co-mingles them with item *N+1*, and the
+   leaving item *N*'s **code** changes uncommitted co-mingles them with item *N+1*, and the
    rollback (`git reset --hard $BEFORE_SHA`) that protects a rejected/failed item would
-   then also destroy prior items' accepted work.
+   then also destroy prior items' accepted work. (The precondition is clean-except-the-
+   validation-file: that file is the skill's untracked scratchpad, exempt from the gate and
+   never committed — see `SKILL.md` Step 3.1, bug-6. Its untracked-ness is also what keeps
+   the `reset --hard` rollback from discarding prior items' in-file bookkeeping.)
 3. **Resumability.** `- [x] … _fixed via <sha>_` lets a re-run skip already-fixed items;
    without a commit boundary there is no durable per-item done-marker.
 
