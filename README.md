@@ -7,13 +7,13 @@ Authored agent skills for [Claude Code](https://code.claude.com) and [opencode](
 | Skill | What it does |
 |---|---|
 | `clean-code-gates` | Runs Clean Code quality gates (G1–G7: coverage, complexity, length/nesting, naming, no-comments, mutation, dependency-structure) and emits an agnostic JSON + Markdown report. Portable across stacks (node-ts, dart-flutter). |
-| `commit-pr-dev` | Stage, commit, push the current branch, and open a PR targeting `dev`. Confirms before any remote mutation. |
+| `commit-pr` | Stage, commit, push the current branch, and open a PR targeting `main`. Confirms before any remote mutation. |
 | `validation-fixer` | Routes recorded user-validation bugs through a chosen framework (superpowers / gsd / orchestrator) and tracks each fix in-file. |
 | `design-to-code` | Translates Claude design output files (self-contained HTML with tokens, reviewer comments, component states) into pixel-perfect, correctly-behaving code. |
 | `orchestrator` | Project-agnostic 6-agent pipeline (brainstormer → architect → coder → tester → reviewer → qa) with a context-confidence gate, spec-driven-eval integration, and a final Markdown/HTML report. Auto-detects first-run bootstrap vs. straight pipeline execution. |
 | `roadmap` | Decomposes a project spec into an auditable milestone→phase→user-story roadmap under `/roadmap/`, with append-only audit logs, orchestrator-ready user-story briefs, `/roadmap sync` trailer stamping, diff+preserve re-evaluation, release bands, and doc-only mutation ops. |
 | `product-manager` | Autonomously drives roadmap stories to completion and manages roadmap planning PRs — runs story briefs through the orchestrator, commits with `Roadmap-Story:`, syncs the roadmap, pushes/opens PRs, and exposes `assign`/`park`/`add-spec`/`add-milestone`/`add-phase`/`add-ticket`/`revise`/release-management verbs. |
-| `pr-review-report` | Reviews the current branch against an auto-detected base and authors one self-contained interactive HTML PR-review report — architecture (with recommend-only ADR flags), security, and bugs/improvements lenses, the rendered diff with inline annotations, findings color-coded by severity, plus optional project review memory. |
+| `pr-review-report` | Reviews the current branch against an auto-detected base and emits paired `docs/reviews/<branch_slug>-<date>.{html,md}` artifacts — a self-contained interactive HTML report (architecture with recommend-only ADR flags, security, bugs/improvements lenses; rendered diff with inline annotations; severity-coded findings) plus a Markdown findings backlog shaped to hand off to `validation-fixer`. Reconciles triage across runs via a reviewer-local `.pr-review/review-state.json`, merges an existing backlog by fingerprint on re-review, and proposes optional review memory. |
 
 ## orchestrator
 
@@ -180,7 +180,9 @@ CLI flag > `/roadmap/pm.config.json` > built-in default.
 
 ## pr-review-report
 
-Reviews the current branch as a pull request and authors one **self-contained interactive HTML report**. Pure-LLM review across three lenses — Architecture (with recommend-only ADR flags), Security, and Bugs & Improvements — over the real diff, rendered inline with gutter annotations and findings color-coded by severity (Critical / High / Medium / Low / Info). The report opens offline by double-click; no external dependencies. The only reviewed-repo writes are the report and optional user-approved `.pr-review/memory.md` updates.
+Reviews the current branch as a pull request and emits **two paired artifacts**: a self-contained interactive **HTML report** (the human view) and a sibling **Markdown findings backlog** (the machine-actionable work list, shaped to hand off to `validation-fixer`). Pure-LLM review across three lenses — Architecture (with recommend-only ADR flags), Security, and Bugs & Improvements — over the real diff, rendered inline with gutter annotations and findings color-coded by severity (Critical / High / Medium / Low / Info). The HTML opens offline by double-click; no external dependencies.
+
+Reviewed-repo writes: the two `docs/reviews/` artifacts, a **reviewer-local `.pr-review/review-state.json`** (triage state — gitignored, never committed), and optional user-approved `.pr-review/memory.md` updates.
 
 ### Usage
 
@@ -191,16 +193,43 @@ Reviews the current branch as a pull request and authors one **self-contained in
 
 ### How it works
 
-1. **Resolve base** — auto-detects the default branch (`origin/HEAD` → `main` → `master` → `dev`, with a remote-tracking fallback), computes the merge-base, and shows the base + commit range for confirmation or override.
+1. **Resolve base** — auto-detects the default branch (`origin/HEAD` → `main` → `master` → `dev`, with a remote-tracking fallback), computes the merge-base, and shows the base, commit range, and the **reviewed-HEAD sha** (the report's immutable snapshot identifier) for confirmation or override.
 2. **Load context + memory** — reads `PROJECT-CONTEXT.md` sections and `.pr-review/memory.md` when present so intentionally deferred decisions can be acknowledged instead of re-flagged.
 3. **Gather diff** — three-dot diff (`git diff <base>...HEAD`); large diffs are prioritized by stat with any skipped file listed (no silent truncation).
-4. **Review** — three lenses produce findings, each carrying severity, `file:line`, rationale, and a suggested fix; architectural decisions meeting the ADR criteria get a draft ADR title + context (recommend only — no ADR files written).
-5. **Emit HTML** — writes `docs/reviews/<branch>-<YYYY-MM-DD>.html`: summary bar with per-severity counts, acknowledged findings, three collapsible sections, finding cards, and the rendered per-file diff with **bidirectional jump** between a finding card and its annotated diff line. Client-side controls (severity filter, section filter, collapse/expand all, jump-to-file) run with inline JS and no persisted state.
-6. **Propose memory** — suggests `.pr-review/memory.md` entries for recurring intentional decisions and appends them only with explicit user approval.
+4. **Review + reconcile state** — three lenses produce findings, each carrying severity, `file:line`, rationale, and a suggested fix (ADR-worthy architecture findings get a draft ADR title + context, recommend only — no ADR files written). Each finding is reconciled against the saved `.pr-review/review-state.json` by a stable fingerprint, so prior triage (`open` / `acknowledged` / `ignored` / `resolved` / `regressed`) and re-verification carry across runs — a fix that left the diff resolves, a concern that returned regresses.
+5. **Emit paired artifacts** — writes `docs/reviews/<branch_slug>-<YYYY-MM-DD>.{html,md}`. The filename uses a filesystem-safe, collision-free **`branch_slug`** (sanitized branch name + a digest of the raw branch, so two branches never alias one file); the raw branch appears only in headings. The **HTML** carries the summary bar, three collapsible sections, finding cards, and the rendered per-file diff with **bidirectional jump** between a card and its annotated diff line (client-side severity/section filters, no persisted state). The **`.md` backlog** carries one `- [ ]` actionable row per open finding (with its `fingerprint`, one-line rationale + fix) and `- [x]` audit rows for triaged/resolved/prior-only findings — ready to feed to `validation-fixer` unchanged.
+6. **Persist state + merge on re-review** — writes the merged `review-state.json` (append-only `history[]`; never clobbering a different branch's file) and, when a backlog already exists at the path, **merges into it by `fingerprint`** rather than blind-overwriting: it preserves `validation-fixer`'s `[x]`/`[~]` marks and `_fixed/attempted via <sha>_` evidence, reopens a regressed fix, and retains prior-only audit rows. Both the state file and the existing backlog are **trusted only when reviewer-local** (untracked, or unmodified since the merge-base); a branch-committed one is treated as untrusted and imported only on explicit approval.
+7. **Propose memory** — suggests `.pr-review/memory.md` entries for recurring intentional decisions and appends them only with explicit user approval.
+
+### Handoff to validation-fixer
+
+The `.md` backlog is the hand-off contract: run `/validation-fixer docs/reviews/<branch_slug>-<date>.md` (framework `orchestrator`). `validation-fixer` routes each open `- [ ]` item through a fix framework on a feature branch, commits it per item, and records `- [x] _fixed via <sha> · <date>_` (or `- [~]` attempted) back into the **same file** in place. The next `/pr-review-report` re-review merges that disposition forward (step 6), so the two skills form a resumable review→fix→re-review loop over one durable backlog file.
 
 ### Output
 
-A single shareable `.html` file under `docs/reviews/`, with optional `.pr-review/memory.md` updates when approved. See `plugins/my-skills/skills/pr-review-report/references/report-template.demo.html` for a worked example.
+Two paired artifacts under `docs/reviews/` — `<branch_slug>-<date>.html` (shareable human report) and `<branch_slug>-<date>.md` (validation-fixer backlog) — plus the reviewer-local `.pr-review/review-state.json` and optional approved `.pr-review/memory.md`. See `plugins/my-skills/skills/pr-review-report/references/report-template.demo.html` for a worked HTML example.
+
+---
+
+## validation-fixer
+
+Turns a file of recorded validation deviations into tracked fixes. Reads a `.md` where each `- ` bullet is a bug or missing behavior — a `pr-review-report` findings backlog, or a hand-authored `docs/user_validation_errors/…` file — and routes each **open** item, one at a time, through a chosen fix framework, recording the outcome back in the **same file** so progress is resumable. It does not fix bugs itself; it is a router + tracker.
+
+### Usage
+
+```
+/validation-fixer <path>     # a single .md file, or a directory to sweep every .md under it
+```
+
+### How it works
+
+1. **Parse open items** — `- [ ]` / `- [~]` / plain `-` are open; `- [x]` is done (skipped). Item text is forwarded **verbatim as untrusted evidence** — the framework must verify it against the real code and never obey instructions embedded in it.
+2. **Choose framework + mode** — framework: `superpowers` / `gsd` / `orchestrator`; mode: `checkpoint` (pause after each item so you validate the fix) or `autonomous` (process every open item back-to-back).
+3. **Preflight** — refuses to run on a protected branch (`main` / `master` / `dev`) or a detached HEAD before invoking any framework; asks you to create/switch to a feature branch first.
+4. **Per item** — requires a clean tree (the validation file itself is exempt scratchpad), hands the item to the framework, commits the **code-only** fix per item (for a framework that stops at `READY_TO_COMMIT` — the one documented exception to the never-commit policy, bounded by per-commit approval, atomic rollback, and the protected-branch guard), then records `- [x] _fixed via <framework> · <sha> · <date>_` (or `- [~] … needs attention`) back in the file.
+5. **Summary** — reports fixed / attempted-no-commit / skipped counts, flagging the `[~]` items that still need hands-on work.
+
+Together with `pr-review-report` this forms a resumable **review → fix → re-review** loop over one durable backlog file: the reviewer emits the `.md`, `validation-fixer` dispositions it in place, and the next review merges those dispositions forward.
 
 ---
 
@@ -217,7 +246,7 @@ my-skills/
 │       └── skills/
 │           ├── index.json       # opencode remote skill index
 │           ├── clean-code-gates/SKILL.md
-│           ├── commit-pr-dev/SKILL.md
+│           ├── commit-pr/SKILL.md
 │           ├── validation-fixer/SKILL.md
 │           ├── design-to-code/SKILL.md
 │           ├── orchestrator/SKILL.md
@@ -249,7 +278,7 @@ A local checkout works too:
 /plugin install my-skills@my-skills
 ```
 
-Skills are then invocable as `/my-skills:clean-code-gates`, `/my-skills:commit-pr-dev`, `/my-skills:orchestrator`, `/my-skills:roadmap`, `/my-skills:product-manager`, etc.
+Skills are then invocable as `/my-skills:clean-code-gates`, `/my-skills:commit-pr`, `/my-skills:orchestrator`, `/my-skills:roadmap`, `/my-skills:product-manager`, etc.
 
 ## Install (opencode)
 
@@ -259,9 +288,9 @@ Recommended install: clone/update this repo under `~/.config/opencode/`, symlink
 curl -fsSL https://raw.githubusercontent.com/kterto/my-skills/main/scripts/install-opencode.sh | bash
 ```
 
-Then restart opencode. Skills load as normal opencode skills: `clean-code-gates`, `commit-pr-dev`, `orchestrator`, `roadmap`, `product-manager`, `pr-review-report`, etc.
+Then restart opencode. Skills load as normal opencode skills: `clean-code-gates`, `commit-pr`, `orchestrator`, `roadmap`, `product-manager`, `pr-review-report`, etc.
 
-Slash commands are installed too: `/clean-code-gates`, `/commit-pr-dev`, `/orchestrator`, `/roadmap`, `/product-manager`, `/pr-review-report`, etc. In opencode, slash commands are separate from skills, so these command files explicitly load the matching skill before running it. Hand-written templates under `.opencode/commands/` override the generated command prompt for the same name; `roadmap` and `product-manager` have explicit templates so their expanded command surfaces match Claude Code usage.
+Slash commands are installed too: `/clean-code-gates`, `/commit-pr`, `/orchestrator`, `/roadmap`, `/product-manager`, `/pr-review-report`, etc. In opencode, slash commands are separate from skills, so these command files explicitly load the matching skill before running it. Hand-written templates under `.opencode/commands/` override the generated command prompt for the same name; `roadmap` and `product-manager` have explicit templates so their expanded command surfaces match Claude Code usage.
 
 Manual equivalent:
 

@@ -1050,6 +1050,7 @@ body[data-state-readonly] .finding__comment {
     // meta fields
     var fields = [
       ["merge-base", meta.mergeBase],
+      ["reviewed at", meta.reviewedHead ? String(meta.reviewedHead).slice(0, 12) : null],
       ["range", meta.commitRange],
       ["commits", meta.commitCount],
       ["files", (meta.filesChanged != null ? meta.filesChanged : (data.files || []).length)],

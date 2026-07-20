@@ -24,7 +24,7 @@ check_skill_dir() {
 
   # 2. references exist
   local ref
-  for ref in review-rubric.md review-data-schema.md memory-schema.md report-template.html report-template.demo.html; do
+  for ref in review-rubric.md review-data-schema.md review-state-schema.md memory-schema.md findings-md-schema.md report-template.html report-template.demo.html; do
     if [ ! -f "$dir/references/$ref" ]; then echo "FAIL[$label]: missing references/$ref"; fail=1; fi
   done
   # retired reference must be gone
@@ -39,13 +39,22 @@ check_skill_dir() {
 check_skill_dir "$MARKET_DIR" "marketplace"
 check_skill_dir "$OPENCODE_DIR" "opencode"
 
-# 4. opencode port template must stay byte-identical to the marketplace one
-#    (the seam and render JS are load-bearing; drift here silently breaks opencode).
-if [ -d "$OPENCODE_DIR" ] \
-   && [ -f "$MARKET_DIR/references/report-template.html" ] \
-   && [ -f "$OPENCODE_DIR/references/report-template.html" ] \
-   && ! cmp -s "$MARKET_DIR/references/report-template.html" "$OPENCODE_DIR/references/report-template.html"; then
-  echo "FAIL: opencode report-template.html out of parity with marketplace"; fail=1
+# 4. opencode port must stay byte-identical to the marketplace for EVERY shared
+#    normative reference — not just the template. These are load-bearing duplicated
+#    contracts (the seam + render JS, the review/data/state/findings schemas); silent
+#    drift breaks the port or lets the two copies specify different behavior.
+#    EXCLUDED (intentional host divergences, per the opencode-port-parity invariant):
+#      - SKILL.md          — opencode intro framing, `question` tool, cwd notes
+#      - memory-schema.md  — a "(common under opencode)" subdir note
+#    When adding a shared reference, add it here too, or it can drift unchecked (arch-7).
+PARITY_REFS="review-rubric.md review-data-schema.md review-state-schema.md findings-md-schema.md report-template.html report-template.demo.html"
+if [ -d "$OPENCODE_DIR" ]; then
+  for ref in $PARITY_REFS; do
+    m="$MARKET_DIR/references/$ref"; o="$OPENCODE_DIR/references/$ref"
+    if [ -f "$m" ] && [ -f "$o" ] && ! cmp -s "$m" "$o"; then
+      echo "FAIL: opencode references/$ref out of byte-parity with marketplace"; fail=1
+    fi
+  done
 fi
 
 # 5. if a sample report exists, it must be self-contained (no remotely-loaded
@@ -88,6 +97,14 @@ if [ -f "$SYM_TEST" ]; then
   if ! bash "$SYM_TEST" >/dev/null; then echo "FAIL: symlink guard test (sec-3)"; fail=1; fi
 else
   echo "FAIL: missing __tests__/symlink-guard.test.sh (sec-3 regression fixture)"; fail=1
+fi
+
+# 8b. branch-slug injectivity (bug-8): distinct branches must not alias to one filename.
+SLUG_TEST="$MARKET_DIR/__tests__/branch-slug.test.sh"
+if [ -f "$SLUG_TEST" ]; then
+  if ! bash "$SLUG_TEST" >/dev/null; then echo "FAIL: branch-slug injectivity test (bug-8)"; fail=1; fi
+else
+  echo "FAIL: missing __tests__/branch-slug.test.sh (bug-8 regression fixture)"; fail=1
 fi
 
 # 9. read-only signal (bug-1): future/unknown state version stays read-only, no downgrade.
@@ -136,6 +153,30 @@ if [ -f "$MALFORMED_TEST" ]; then
   fi
 else
   echo "FAIL: missing __tests__/malformed-state.test.cjs (bug-4 regression fixture)"; fail=1
+fi
+
+# 13. findings-md backlog format contract: the emitted .md must parse under the
+#     validation-fixer parse rules (mirrors findings-md-schema.md).
+FMT_TEST="$MARKET_DIR/__tests__/findings-md-format.test.cjs"
+if [ -f "$FMT_TEST" ]; then
+  if command -v node >/dev/null 2>&1; then
+    if ! node "$FMT_TEST" >/dev/null; then echo "FAIL: findings-md backlog format contract"; fail=1; fi
+  else
+    echo "SKIP: node not found — findings-md format contract not run"
+  fi
+else
+  echo "FAIL: missing __tests__/findings-md-format.test.cjs (backlog format fixture)"; fail=1
+fi
+
+# 14. hosted skill-index freshness: a reference/test/template added without
+#     regenerating index.json would ship a skill pointing at a file that hosted /
+#     index-based installs never download. Catch it here rather than in the wild.
+if command -v node >/dev/null 2>&1; then
+  if ! node "$ROOT/scripts/generate-opencode-skill-index.mjs" --check >/dev/null; then
+    echo "FAIL: plugins/my-skills/skills/index.json is stale — run scripts/generate-opencode-skill-index.mjs"; fail=1
+  fi
+else
+  echo "SKIP: node not found — skill-index freshness not checked"
 fi
 
 [ "$fail" -eq 0 ] && echo "PASS: pr-review-report skill (marketplace + opencode)" || true

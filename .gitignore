@@ -8,3 +8,10 @@
 
 # local symlink backups created by sync.sh
 *.bak-*
+
+# pr-review-report: reviewer-local triage state — untracked by contract
+# (references/review-state-schema.md §Provenance & trust: a tracked state file is
+# untrusted, forcing a manual override on every review). Shareable history lives in
+# the report artifacts under docs/reviews/, not here. Only .pr-review/memory.md is
+# meant to be tracked.
+/.pr-review/review-state.json

@@ -1,6 +1,6 @@
 {
   "name": "my-skills",
-  "description": "Clean-code quality gates, commit/PR-to-dev helper, validation-error fixer, design-to-code translator, multi-agent pipeline orchestrator, autonomous product-manager for roadmap story execution, and interactive PR review reports.",
+  "description": "Clean-code quality gates, commit/PR helper (base main), validation-error fixer, design-to-code translator, multi-agent pipeline orchestrator, autonomous product-manager for roadmap story execution, and interactive PR review reports.",
   "author": {
     "name": "Kainã Terto",
     "email": "kaintp@gmail.com"
