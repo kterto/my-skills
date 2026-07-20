@@ -71,10 +71,15 @@ human stays in control of history, and every commit is atomic and reversible:
    restored with `git reset --hard $BEFORE_SHA`, so a failed item never lands partial
    work and never disturbs a prior committed item. One item = one commit = one revertible
    unit.
-4. **Protected-branch semantics.** `validation-fixer` **never auto-commits to a protected
-   branch** (`main` / `master` / `dev`): it STOPS and reports so the user branches/commits
-   deliberately. Autonomous mode does **not** override this — the standing approval covers
-   feature branches only.
+4. **Protected-branch semantics.** `validation-fixer` **never mutates a protected branch**
+   (`main` / `master` / `dev`). The guard is a **run-wide preflight** (`SKILL.md` Step 2,
+   bug-7), enforced **before any framework is invoked** — not merely at
+   validation-fixer's own commit step — because a framework such as `gsd` commits
+   atomically inside its own run and would otherwise advance `HEAD` on a protected branch
+   before a commit-time check could fire. On a protected branch (or detached HEAD) the run
+   STOPs and asks the user to create/switch to a feature branch. Autonomous mode does
+   **not** override this — the standing approval covers feature branches only. A cheap
+   re-assert at the commit step remains as defense-in-depth.
 
 `.orchestrator/PROJECT-CONTEXT.md` §Invariants is amended to name this exception inline and
 to reaffirm that **no other skill may commit**.
