@@ -187,14 +187,21 @@ For each item in the work list:
    Let that framework run its full course (each entry chains onward per its own
    rules). When control returns, continue.
 4. **Reconcile the fix into a commit — commit ownership.** Frameworks differ in who
-   commits, so "did HEAD advance" is not a reliable success signal: `gsd` commits
-   atomically (HEAD advances on its own), but the `orchestrator` **stops at
-   `READY_TO_COMMIT` and never commits** (its job ends there), and `superpowers` may
-   leave changes uncommitted. After the framework returns, `git rev-parse HEAD` →
-   `AFTER_SHA` and inspect the tree:
+   commits, so HEAD movement is **not** a success signal on its own — in two ways. *Who
+   commits* varies: `gsd` commits atomically (HEAD advances on its own), the `orchestrator`
+   **stops at `READY_TO_COMMIT` and never commits** (its job ends there), and `superpowers`
+   may leave changes uncommitted. *Whether the fix succeeded* is also independent of HEAD:
+   a framework can commit atomic **partial** work and then return `BLOCKED`/aborted/errored,
+   so a HEAD advance paired with a failure terminal is a **blocked item, not a fix**
+   (bug-12). So success is the framework's **terminal result**; HEAD/tree state only decides
+   *who commits* an already-successful fix. After the framework returns, capture its terminal
+   result, `git rev-parse HEAD` → `AFTER_SHA`, and inspect the tree:
 
-   - **HEAD advanced** (`BEFORE_SHA..AFTER_SHA` ≥ 1 commit) → the framework committed;
-     the fix is real, nothing to do.
+   - **Framework signaled success AND HEAD advanced** (terminal result is a normal/success
+     completion — `gsd` finished, a superpowers entry completed, *not* `BLOCKED`/aborted/
+     errored — and `BEFORE_SHA..AFTER_SHA` ≥ 1 commit) → the framework committed the fix;
+     it is real, nothing to commit. (A HEAD advance with a **failure** terminal falls to the
+     "did NOT signal success" branch below — bug-12.)
    - **HEAD unchanged, tree dirty, framework signaled success** (orchestrator returned
      `READY_TO_COMMIT` / `READY_WITH_WARNINGS`; a superpowers entry finished with real
      changes) → **validation-fixer owns the commit** as the pipeline's caller (the
@@ -239,11 +246,20 @@ For each item in the work list:
        `git rev-parse --abbrev-ref HEAD` is not protected before committing (the branch
        could have changed mid-run); if it somehow is, STOP and report rather than commit.
      - Re-read `git rev-parse HEAD` → `AFTER_SHA`.
-   - **HEAD unchanged, tree dirty, framework did NOT signal success** (orchestrator
-     `BLOCKED` / `BLOCKED_STALE`, or an errored run) → do not commit partial work.
-     Perform the **validation-file-preserving rollback (bug-11)** to `$BEFORE_SHA` to restore
-     the clean code precondition (keeping the backlog's bookkeeping), and record the item
-     `- [~]` (needs attention).
+   - **Framework did NOT signal success** (orchestrator `BLOCKED` / `BLOCKED_STALE`, a
+     `gsd`/superpowers run that aborted or blocked, or an errored run) — **whether HEAD
+     advanced or the tree is merely dirty** → never mark it fixed and never leave partial
+     work standing as a fix. The partial work may be *committed* (`BEFORE_SHA..AFTER_SHA`
+     ≥ 1 commit, e.g. `gsd` committed atomic steps then blocked) or just dirty:
+     - **autonomous mode:** perform the **validation-file-preserving rollback (bug-11)** to
+       `$BEFORE_SHA` — this discards partial *commits* in `BEFORE_SHA..AFTER_SHA` and any
+       dirty partial work alike, restoring the clean precondition for the next item — and
+       record `- [~]` (needs attention).
+     - **checkpoint mode:** STOP and surface the partial work — `git log --oneline
+       "$BEFORE_SHA".."$AFTER_SHA"` and `git status --porcelain`, plus the blocked/errored
+       signal — and let the user choose: **roll back** (validation-file-preserving rollback
+       to `$BEFORE_SHA`) or **keep** the partial commits for manual follow-up. Either way
+       record `- [~]`, never `- [x]`.
    - **HEAD unchanged, tree clean** → the framework did nothing → record `- [~]`.
 
    Then the SHA list: `git log --format=%h --reverse "$BEFORE_SHA".."$AFTER_SHA"`.
@@ -254,9 +270,12 @@ For each item in the work list:
 
 Edit the validation file in place (the file is the source of truth, resumable):
 
-- If `BEFORE_SHA..AFTER_SHA` contains **≥ 1 commit** → the item is fixed (the commit
-  came from the framework, or from validation-fixer's commit-ownership step in Step 3.4
-  for a framework that stops at `READY_TO_COMMIT`).
+- If **Step 3.4 resolved the item as a successful fix** — the framework signaled success
+  *and* a commit exists for it in `BEFORE_SHA..AFTER_SHA` (the framework's own commit, or
+  validation-fixer's commit-ownership commit for a `READY_TO_COMMIT` framework) → the item
+  is fixed. A commit count ≥ 1 is **not** sufficient on its own: a framework that committed
+  partial work and then blocked was rolled back (or kept for manual follow-up) in Step 3.4
+  and is `- [~]`, never `- [x]` (bug-12).
   Rewrite its bullet prefix to `- [x] ` (keep the original text) and append an
   indented italic status line directly beneath the bullet:
 
@@ -370,6 +389,10 @@ End by listing any `[~]` items so the user knows what still needs hands-on work.
 - Framework returns with no new commit **and** no committable success (clean tree, or
   `BLOCKED`) → `- [~]`, never `- [x]`. A framework that stops at `READY_TO_COMMIT` with
   real changes is committed by the commit-ownership step (Step 3.4) and records `- [x]`.
+- Framework committed but then **blocked/errored** (`BEFORE_SHA..AFTER_SHA` ≥ 1 commit yet
+  the terminal result is `BLOCKED`/aborted/errored) → `- [~]`, never `- [x]` — the partial
+  commits are rolled back (autonomous) or surfaced for the user's decision (checkpoint) per
+  Step 3.4. A commit alone never means fixed (bug-12).
 - Re-run after partial progress → `- [x]` skipped; `- [~]`, `- [ ]`, plain `-`
   re-attempted.
 - Multi-line item → the whole bullet block is the item; the status line goes
@@ -378,7 +401,9 @@ End by listing any `[~]` items so the user knows what still needs hands-on work.
 
 ## Notes
 
-- This skill never fabricates a fix: an item is `[x]` only when a real commit exists
-  for it — made by the framework, or by validation-fixer's commit-ownership step from a
-  framework's approved / `READY_TO_COMMIT` output. No real change → no commit → `[~]`.
+- This skill never fabricates a fix: an item is `[x]` only when the framework **signaled
+  success** *and* a real commit exists for it — made by the framework, or by
+  validation-fixer's commit-ownership step from a framework's approved / `READY_TO_COMMIT`
+  output. A commit produced by a run that then blocked/errored does **not** count (bug-12).
+  No real change → no commit → `[~]`; committed-then-blocked → `[~]`.
 - Framework choice is once per run; to switch frameworks, finish/stop and re-run.
