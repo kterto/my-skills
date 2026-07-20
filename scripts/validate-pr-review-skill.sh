@@ -39,13 +39,22 @@ check_skill_dir() {
 check_skill_dir "$MARKET_DIR" "marketplace"
 check_skill_dir "$OPENCODE_DIR" "opencode"
 
-# 4. opencode port template must stay byte-identical to the marketplace one
-#    (the seam and render JS are load-bearing; drift here silently breaks opencode).
-if [ -d "$OPENCODE_DIR" ] \
-   && [ -f "$MARKET_DIR/references/report-template.html" ] \
-   && [ -f "$OPENCODE_DIR/references/report-template.html" ] \
-   && ! cmp -s "$MARKET_DIR/references/report-template.html" "$OPENCODE_DIR/references/report-template.html"; then
-  echo "FAIL: opencode report-template.html out of parity with marketplace"; fail=1
+# 4. opencode port must stay byte-identical to the marketplace for EVERY shared
+#    normative reference — not just the template. These are load-bearing duplicated
+#    contracts (the seam + render JS, the review/data/state/findings schemas); silent
+#    drift breaks the port or lets the two copies specify different behavior.
+#    EXCLUDED (intentional host divergences, per the opencode-port-parity invariant):
+#      - SKILL.md          — opencode intro framing, `question` tool, cwd notes
+#      - memory-schema.md  — a "(common under opencode)" subdir note
+#    When adding a shared reference, add it here too, or it can drift unchecked (arch-7).
+PARITY_REFS="review-rubric.md review-data-schema.md review-state-schema.md findings-md-schema.md report-template.html report-template.demo.html"
+if [ -d "$OPENCODE_DIR" ]; then
+  for ref in $PARITY_REFS; do
+    m="$MARKET_DIR/references/$ref"; o="$OPENCODE_DIR/references/$ref"
+    if [ -f "$m" ] && [ -f "$o" ] && ! cmp -s "$m" "$o"; then
+      echo "FAIL: opencode references/$ref out of byte-parity with marketplace"; fail=1
+    fi
+  done
 fi
 
 # 5. if a sample report exists, it must be self-contained (no remotely-loaded
