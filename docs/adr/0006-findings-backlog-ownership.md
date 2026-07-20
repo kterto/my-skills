@@ -1,0 +1,99 @@
+# ADR-0006 — Findings-backlog ownership & regeneration semantics
+
+- **Status:** Accepted
+- **Date:** 2026-07-20
+- **Skills affected:** `pr-review-report` (both ports: `plugins/my-skills/`, `.opencode/`); `validation-fixer` (consumer contract, unchanged behavior)
+- **Source finding:** arch-2 — "Re-review overwrites the consumer-owned backlog" (`SKILL.md` Step 6b, `references/findings-md-schema.md`)
+
+## Context
+
+`pr-review-report` Step 6b emits a Markdown findings backlog at the **stable** path
+`docs/reviews/<branch>-<YYYY-MM-DD>.md` (same basename as the HTML report). That file
+is the hand-off to `validation-fixer`, which **edits it in place** as its resumable
+source of truth: it flips `- [ ]` → `- [x]` on a fixed item, writes `- [~]` for an
+attempted-no-commit item, and appends a `_fixed via <sha> · <date>_` /
+`_attempted via … needs attention_` status line (its `SKILL.md` — "record the outcome
+back in the same file so progress is resumable").
+
+The backlog was specified as **additive with no round-trip**: dispositions are tracked
+`.md`-natively and are deliberately **never** written back into
+`.pr-review/review-state.json`. That severance is the root of the defect. Two
+components write the same mutable path with unequal contracts:
+
+1. **The producer** (`pr-review-report` Step 6b) regenerates the whole file from
+   `REVIEW_DATA.findings`.
+2. **The consumer** (`validation-fixer`) mutates it in place.
+
+Because Step 6b was a **blind overwrite**, a second review of the same branch on the
+same day — or any re-run while `validation-fixer` is mid-progress — resolves to the
+same path and destroys the consumer's `[x]`/`[~]` marks, commit SHAs, dates, and
+attempt notes. `review-state.json` cannot rescue them: the no-round-trip rule means
+this file is their **only** home. Step-4 re-verification recovers at most `resolved`
+(the fix actually left the diff); it recovers neither the attempt narrative nor the
+commit evidence nor a mid-run resume position. The sharpest loss is a `[~]`
+attempted-no-commit item silently reverting to a bare `[ ]`, discarding the "already
+tried, needs hands-on" signal with no warning.
+
+## Decision
+
+**The backlog is a single shared artifact with split ownership; the producer merges
+into it rather than overwriting it.**
+
+1. **Split ownership.** The producer owns finding *identity and content*
+   (`title` / `Rationale` / `Fix` / severity / `file` / `line`) — taken fresh from
+   each run. The consumer owns each finding's *disposition* (the `[x]`/`[~]` prefix and
+   its single `_fixed via …_` / `_attempted via …_` status line).
+2. **Merge, never blind-overwrite.** If a backlog already exists at the path, Step 6b
+   parses it into `{ fingerprint → { prefix, statusLine } }`, then layers this run's
+   freshly-derived rows on top, carrying each recorded disposition forward by
+   `fingerprint` (the line-independent identity already on every row).
+3. **Re-verification wins, history preserved.** When this run's derived state and the
+   recorded disposition disagree on a fingerprint, the producer's diff-evidence
+   re-verification is authoritative for the **checkbox**, but the consumer's recorded
+   **evidence** is never discarded — a prior `[x]` whose concern reappears reopens as
+   `- [ ]` with a `_prior fix <sha> regressed <date>_` note; a `[~]` still open keeps
+   its attempt line. This mirrors `review-state.json`'s append-on-transition
+   `history[]` (ADR-0002): state may change, the trail may not be erased.
+4. **Read-only-future guard.** An optional header marker `<!-- backlog-schema: vN -->`
+   (absent = `v1`) lets a future producer detect a newer on-disk schema and skip the
+   write rather than downgrade it — the same forward-version protection Step 7b gives
+   `review-state.json` (bug-1).
+
+The full protocol lives in `references/findings-md-schema.md` §Regeneration & merge
+(single source of truth); `SKILL.md` Step 6b summarizes and links.
+
+## Alternatives considered
+
+- **(A) Immutable run-specific filenames** (e.g. append a timestamp). Rejected: breaks
+  the HTML-basename parity and the `/validation-fixer <path>` hand-off line, and
+  fragments the consumer's source of truth across N files — which one does
+  `validation-fixer` resume? It trades a clobber for an ambiguity.
+- **(B) Refuse to overwrite an existing backlog.** Rejected as the primary fix: a
+  re-review could then never fold in **new** findings, defeating the point of
+  re-reviewing, and it forces manual file juggling. Retained only as the spirit of the
+  read-only-future guard (a hard skip, but scoped to unknown-newer schemas).
+- **(C — chosen) Merge by fingerprint with split ownership.** Preserves the consumer's
+  progress, still surfaces new findings, keeps the stable path and HTML parity, and
+  reuses the exact discipline the JSON side already has (skill-side merge, never
+  clobber, forward-version guard — ADR-0002). Minimal, lowest-surface change: teach the
+  producer to read-then-merge instead of write-fresh.
+- **Conflict rule sub-decision — recorded disposition wins (sticky `[x]`).** Rejected:
+  a regressed fix would stay hidden as `[x]` until manually reopened, so the backlog
+  could assert "done" against live code that still exhibits the concern. Diff evidence
+  must be able to reopen an item.
+
+## Consequences
+
+- Step 6b gains a read-parse-merge path; the empty-file case is unchanged, so first
+  runs are unaffected.
+- `validation-fixer` is **unchanged** — its in-place edits are now respected instead of
+  clobbered. The producer adapts to the consumer, not the reverse.
+- The `.md` remains outside `review-state.json` (no round-trip), but is no longer a
+  lossy artifact: its own content is the durable store, and the merge makes that store
+  safe across regenerations.
+- Backward-compatible per the project invariant: the schema marker is optional
+  (absent = `v1`), legacy backlogs parse and merge unchanged, and no migration is
+  forced.
+- Both ports (`plugins/my-skills/` and `.opencode/`) change together; the
+  `findings-md-schema.md` is byte-identical across ports and the `SKILL.md` summary
+  edits mirror (opencode-port-parity invariant).

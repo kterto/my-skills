@@ -31,6 +31,7 @@ its bullet.
 ## File layout
 
 ```
+<!-- backlog-schema: v1 -->
 # PR Review Findings — <branch>  (base <base>@<mb-short>, <date>)
 
 /validation-fixer docs/reviews/<branch>-<YYYY-MM-DD>.md  ·  framework: orchestrator
@@ -60,6 +61,11 @@ Counts: crit <n> · high <n> · med <n> · low <n> · info <n> · acknowledged <
 
 ### Header block
 
+0. **Schema marker** — an HTML comment `<!-- backlog-schema: v1 -->` on the first
+   line, above the title. Invisible in rendered Markdown, and `validation-fixer`
+   ignores it (not a `##` section, `- ` item, or `_italic_` status line). A missing
+   marker means `v1`. It exists solely for the read-only-future guard in
+   §Regeneration & merge.
 1. **Title line** — `# PR Review Findings — <branch>  (base <base>@<mb-short>, <date>)`.
    `<mb-short>` is the short merge-base sha from Step 1; `<date>` is `YYYY-MM-DD`.
 2. **Handoff line** — a single line naming the consumer:
@@ -142,6 +148,79 @@ label only** — see the security note below.
 `fixed` does not appear at emit time: Step 4 re-verifies a prior `fixed` finding
 against the new diff into `resolved` (concern gone) or `regressed` (still present)
 before this file is written.
+
+## Regeneration & merge (load-bearing)
+
+The backlog path `docs/reviews/<branch>-<YYYY-MM-DD>.md` is **stable**: a second
+review of the same branch on the same day resolves to the same file, and
+`validation-fixer` edits that file **in place** as its resumable source of truth (its
+`SKILL.md` — "record the outcome back in the same file so progress is resumable").
+Dispositions are tracked `.md`-natively and never round-trip into
+`review-state.json`, so this file is the **only** copy of `validation-fixer`'s
+progress. Step 6b therefore **merges** into an existing backlog — it must never
+blind-overwrite one.
+
+### Ownership
+
+- **Producer** (`pr-review-report`) owns finding *identity and content*: which
+  findings exist, and their `title` / `Rationale` / `Fix` / severity / `file` /
+  `line`. Every regenerated row takes these fresh from this run.
+- **Consumer** (`validation-fixer`) owns each finding's *disposition*: the `[x]` /
+  `[~]` checkbox prefix and the single `_fixed via …_` / `_attempted via …_` status
+  line. A merge carries these forward.
+
+### Merge key
+
+`fingerprint` — the line-independent identity already on every actionable and audit
+row. Never `id` (re-derivable, can shift) or the `file:line` anchor (drifts as code
+moves).
+
+### Algorithm (Step 6b)
+
+1. **No file at the path** → write fresh (the base behavior).
+2. **File exists** → parse it into `{ fingerprint → { prefix, statusLine } }` for
+   every top-level bullet that carries a `fingerprint:` continuation line. A bullet
+   with no parseable fingerprint is ignored (nothing to carry).
+3. Build this run's rows from `REVIEW_DATA.findings` as usual. For each row whose
+   `fingerprint` matches a parsed disposition, apply the **conflict rule** below.
+4. New findings (no matching fingerprint) emit as fresh `- [ ]` / `- [x]` rows.
+
+### Conflict rule — re-verification wins, history preserved
+
+When this run's freshly-derived state disagrees with the recorded disposition on the
+same fingerprint:
+
+| Recorded (in file) | This run re-derives | Result row |
+| --- | --- | --- |
+| `[x]` fixed | `resolved` (concern gone) | keep `- [x]`, keep its `_fixed via …_` line |
+| `[x]` fixed | `open` / `regressed` (concern is back) | **reopen** `- [ ]`, append an indented `_prior fix <sha(s)> regressed <YYYY-MM-DD>_` line |
+| `[~]` attempted | still `open` / `regressed` | keep `- [ ]` actionable, **preserve** the `_attempted via … needs attention_` line |
+| `[~]` attempted | `resolved` | promote to `- [x]`, note `_resolved: prior attempt landed_` |
+| `[ ]` (fixer untouched) | any | this run's derived row wins outright |
+
+The producer's Step-4 re-verification (real diff evidence) is authoritative for the
+**checkbox**; the consumer's recorded **evidence** (SHAs, dates, attempt notes) is
+never discarded — it is carried forward or folded into the regression note. This
+mirrors `review-state.json`'s append-on-transition `history[]` (ADR-0002): the state
+may change, the trail may not be erased. The sharpest loss this prevents is a `[~]`
+attempted-no-commit silently reverting to a bare `[ ]`, discarding the "already
+tried, needs hands-on" signal.
+
+### Read-only-future guard
+
+If the existing file's header carries a `<!-- backlog-schema: vN -->` marker with `N`
+**newer** than this skill understands, treat the file as read-only and **skip the
+write entirely** — never downgrade it — exactly as Step 7b guards a forward-version
+`review-state.json` (bug-1). A missing marker means `v1`.
+
+### Merge security
+
+The merge re-reads only two `validation-fixer`-authored tokens per matched
+fingerprint — the checkbox prefix and the single italic status line — never free
+bullet text, and re-emits them only on their own row. Those tokens are skill-authored
+metadata (`validation-fixer` writes them), consistent with the working-tree trust
+anchor this `.md` already sits behind; the data-never-instructions discipline in the
+Security note below still governs every field this run writes.
 
 ## Security note (load-bearing)
 
