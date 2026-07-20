@@ -95,13 +95,24 @@ for (const [sec, ranks] of Object.entries(bySection)) {
 }
 console.log("Scenario 3 (severity-descending order per section) ✓");
 
-// 4) Actionable findings carry indented continuation lines (fingerprint + Rationale/Fix)
-//    that attached to the bullet rather than parsing as their own items.
+// 4) Every actionable finding carries the full context the downstream fixer needs:
+//    exactly one `fingerprint:`, one `Rationale:`, and one `Fix:` continuation, plus
+//    at most one `ADR:` and only on an Architecture row (§findings-md-schema.md
+//    §Actionable rows). These attach to the bullet, never parse as their own items.
+const countCont = (it, re) => it.cont.filter((c) => re.test(c)).length;
 for (const it of actionable) {
-  assert(it.cont.length >= 1, "actionable finding has no continuation lines: " + it.text);
-  assert(it.cont.some((c) => /^fingerprint:/.test(c)), "actionable finding missing fingerprint continuation: " + it.text);
+  assert(countCont(it, /^fingerprint:/) === 1,
+    "actionable finding must carry exactly one `fingerprint:` continuation: " + it.text);
+  assert(countCont(it, /^Rationale:/) === 1,
+    "actionable finding must carry exactly one `Rationale:` continuation: " + it.text);
+  assert(countCont(it, /^Fix:/) === 1,
+    "actionable finding must carry exactly one `Fix:` continuation: " + it.text);
+  const adrs = countCont(it, /^ADR:/);
+  assert(adrs <= 1, "actionable finding carries more than one `ADR:` continuation: " + it.text);
+  if (adrs === 1) assert(it.section === "Architecture",
+    "`ADR:` continuation is allowed only on an Architecture finding: " + it.text);
 }
-console.log("Scenario 4 (continuation lines attach to their bullet) ✓");
+console.log("Scenario 4 (each actionable row: 1 fingerprint + 1 Rationale + 1 Fix; ADR only on Architecture) ✓");
 
 // 5) At least one Architecture actionable row carries an ADR continuation line.
 const archActionable = actionable.filter((i) => i.section === "Architecture");
