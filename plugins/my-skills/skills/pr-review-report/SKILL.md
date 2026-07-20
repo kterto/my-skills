@@ -65,14 +65,22 @@ if [ -z "$base" ]; then
   echo "Could not auto-detect a base branch — ask the user which branch to diff against, then set base."
 else
   mb="$(git merge-base "$base" HEAD)"
-  git --no-pager log --oneline "$mb"..HEAD | wc -l   # commit count
-  git --no-pager diff --stat "$mb"..HEAD             # changed files / lines
+  # Reviewed-HEAD sha — the IMMUTABLE snapshot identifier (bug-9). The report is a
+  # point-in-time artifact: pin every range/count to THIS sha, never a moving `..HEAD`,
+  # so a committed report never silently misrepresents a later HEAD. Record the full sha
+  # as meta.reviewedHead and use the short sha in meta.commitRange.
+  reviewed_head="$(git rev-parse HEAD)"
+  reviewed_head_short="$(git rev-parse --short HEAD)"
+  git --no-pager log --oneline "$mb".."$reviewed_head" | wc -l   # commit count (at reviewed_head)
+  git --no-pager diff --stat "$mb".."$reviewed_head"             # changed files / lines (at reviewed_head)
 fi
 ```
 
-Tell the user: base branch, merge-base sha (short), commit count, changed-file count.
-Ask them to confirm or supply a different base before continuing. Re-run with the
-chosen base if overridden.
+Tell the user: base branch, merge-base sha (short), **reviewed-HEAD sha (short)**, commit
+count, changed-file count. Ask them to confirm or supply a different base before continuing.
+Re-run with the chosen base if overridden. The reviewed-HEAD sha is the report's immutable
+snapshot identifier — carry it into `REVIEW_DATA.meta` as `reviewedHead` (full sha) and
+pin `meta.commitRange` to `<mb-short>..<reviewed-head-short>` (never `..HEAD`, bug-9).
 
 ### 2. Load project context + review memory
 

@@ -20,9 +20,14 @@ consumed verbatim by the template — match them exactly.
     "branch": "feat/x",           // string; sets <title> and header
     "base": "main",               // string
     "mergeBase": "ab12cd3",       // short sha string
-    "commitRange": "ab12cd3..HEAD",
+    "reviewedHead": "9f8e7d6c5b4a3928...",  // full sha of HEAD at review time — the
+                                  // IMMUTABLE snapshot identifier (bug-9). The report is
+                                  // a point-in-time artifact; this pins it to one HEAD.
+    "commitRange": "ab12cd3..9f8e7d6",  // <mergeBase>..<reviewedHead-short> — PINNED.
+                                  // NEVER "ab12cd3..HEAD": a moving `..HEAD` label lets a
+                                  // committed report silently misrepresent a later HEAD.
     "generatedAt": "2026-07-13",  // YYYY-MM-DD
-    "commitCount": 7,             // integer
+    "commitCount": 7,             // integer; commits in mergeBase..reviewedHead
     "filesChanged": 4,            // integer; falls back to files.length if absent
     "stateVersion": 1,            // OPTIONAL int; version of the on-disk review-state
                                   // file this report was built from. Default 1.
