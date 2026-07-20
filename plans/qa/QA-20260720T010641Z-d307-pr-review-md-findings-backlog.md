@@ -16,7 +16,7 @@ type_errors: 0
 
 ## Summary
 
-QA validated the `pr-review-report` Markdown findings-backlog feature — a documentation/instructions skill whose only executable artifact is the plugins-host `__tests__/findings-md-format.test.cjs` conformance fixture guarding the `validation-fixer` parse contract. The sole executable gate passes (7/7 scenarios) and the full plugins `__tests__/` suite is 8/8 green; no build/lint/coverage/mutation tooling is configured for doc-skill authoring (PROJECT-CONTEXT), so per-stack gates (G1 coverage, G6 mutation, G2 complexity) are N/A here and G4/G5/G7 were assessed structurally. Verdict: READY_TO_COMMIT.
+QA validated the `pr-review-report` Markdown findings-backlog feature — a documentation/instructions skill whose only executable artifact is the plugins-host `__tests__/findings-md-format.test.cjs` conformance fixture guarding the `validation-fixer` parse contract. The sole executable gate passes (8/8 scenarios — incl. Scenario 8 for the title + `Counts:` line) and the full plugins `__tests__/` suite is green; no build/lint/coverage/mutation tooling is configured for doc-skill authoring (PROJECT-CONTEXT), so per-stack gates (G1 coverage, G6 mutation, G2 complexity) are N/A here and G4/G5/G7 were assessed structurally. Verdict: READY_TO_COMMIT.
 
 ## Test Results
 

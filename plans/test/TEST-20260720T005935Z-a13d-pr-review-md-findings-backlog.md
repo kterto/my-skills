@@ -57,7 +57,7 @@ The 70% line-coverage floor does not apply to prose instructions; per the orches
 brief, "the `__tests__` suite passes" is the pass criterion. That criterion is met.
 
 Test-execution evidence:
-- Target gate: `node __tests__/findings-md-format.test.cjs` → all 7 scenarios pass, exit 0.
+- Target gate: `node __tests__/findings-md-format.test.cjs` → all 8 scenarios pass, exit 0 (Scenario 8 asserts the title + `Counts:` line, FR4).
 - Full plugins suite: 6 `.cjs` + 2 `.sh` = **8/8 PASS**, no regressions.
 
 ## Test-Quality Audit

@@ -25,7 +25,7 @@ invariant both hold.
 | Tester | TEST-20260720T005935Z-a13d — PASS (suite 8/8) |
 | Reviewer | CR-20260720T010213Z-7c0e — APPROVED (SF-1 folded) |
 | QA | QA-20260720T010641Z-d307 — READY_TO_COMMIT |
-| Spec eval | EVAL-20260720T011254Z-dec5 — PASS, Final 0.93 (Spec-complete) |
+| Spec eval | EVAL-20260720T011254Z-dec5 — PASS, Final 1.00 (Spec-complete) |
 
 Review cycles used: 1 / 10 · QA cycles used: 1 / 5
 
@@ -36,7 +36,7 @@ Review cycles used: 1 / 10 · QA cycles used: 1 / 5
 - `plugins/my-skills/skills/pr-review-report/__tests__/findings-md-format.test.cjs` (new) + `fixtures/findings.md`
 
 ## Issues found
-- (minor, non-blocking) Fixture test does not assert the header/`Counts:` line (FR4) — the lone T gap; add a header-assertion scenario to reach 1.00.
+- (resolved 2026-07-20) The lone T gap — the fixture test not asserting the header/`Counts:` line (FR4) — is closed by Scenario 8; eval re-verified at Final 1.00.
 - (cosmetic) One indented inline comment in the test diverges from banner house style (QA G5 advisory).
 
 ## Related
