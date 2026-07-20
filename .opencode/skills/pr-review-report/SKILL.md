@@ -414,7 +414,14 @@ the spec here. In brief:
   `<cwd>/docs/reviews/`. This write **and** the merge-read of any existing backlog
   (§Regeneration & merge) go through the **output-path safety gate (sec-4)** defined in
   step 6: a symlinked `docs`, `docs/reviews`, or target `.md` is rejected — never read
-  or written through — and the file is persisted via a temp file + atomic rename.
+  or written through — and the file is persisted via a temp file + atomic rename. The
+  path gate authenticates the *path*, not the *content*: the merge-read must **also**
+  clear the **backlog provenance gate** (§Regeneration & merge, §Provenance & trust, sec-4).
+  A branch-added or branch-modified backlog is untrusted — its schema marker and
+  `validation-fixer` dispositions are ignored and the run regenerates fresh (as if no
+  prior backlog existed) unless the user explicitly approves importing them — so a
+  committed backlog can neither veto the reviewer's regeneration (a forged future-version
+  marker) nor forge fixed dispositions on real findings.
 - A header block, one `## ` section per lens (Architecture / Security / Bugs &
   Improvements), **actionable** findings (`state` ∈ {`open`, `regressed`}) as `- [ ]`
   rows, and **already-triaged** findings (`acknowledged` / `ignored` / `resolved` /
