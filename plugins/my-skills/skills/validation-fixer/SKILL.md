@@ -152,7 +152,12 @@ For each item in the work list:
      `READY_TO_COMMIT` / `READY_WITH_WARNINGS`; a superpowers entry finished with real
      changes) → **validation-fixer owns the commit** as the pipeline's caller (the
      orchestrator contract ends at `READY_TO_COMMIT` precisely so its caller commits).
-     Stage and commit the item's changes as one atomic commit:
+     This is the repo's **one documented exception** to the never-commit invariant —
+     `validation-fixer` is a per-item transaction manager, not the orchestrator pipeline,
+     and its per-item `_fixed via <sha>_` provenance / resumability / clean-tree-per-item
+     contract requires a real commit. The exception is authorized and bounded (per-commit
+     approval, atomic rollback, protected-branch STOP) by **ADR-0007**; no other skill may
+     commit. Stage and commit the item's changes as one atomic commit:
      - **checkpoint mode:** show the diff + intended message, get the user's approval,
        then commit. On rejection, `git reset --hard "$BEFORE_SHA"` (restore the clean
        tree — safe because step 1 guaranteed it was clean) and leave the item `- [ ]`.
