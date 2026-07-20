@@ -1,16 +1,16 @@
 ---
-name: commit-pr-dev
-description: Stage and commit the working tree, push the current branch, and open a pull request targeting the `dev` branch (or the supplied base). Use when user invokes `/commit-pr-dev`, says "ship to dev", "commit and PR to dev", or asks to push current work for review on the dev branch. Confirms before any remote-state mutation.
+name: commit-pr
+description: Stage and commit the working tree, push the current branch, and open a pull request targeting the `main` branch (or the supplied base). Use when user invokes `/commit-pr`, says "ship to main", "commit and PR to main", or asks to push current work for review. Confirms before any remote-state mutation.
 ---
 
-# commit-pr-dev
+# commit-pr
 
-Take the work in the current worktree from "diff in my editor" → "PR open against `dev`" in one flow. Always run from the repo root unless the user is already inside a sub-directory of a single repo.
+Take the work in the current worktree from "diff in my editor" → "PR open against `main`" in one flow. Always run from the repo root unless the user is already inside a sub-directory of a single repo.
 
 ## Inputs
 
-- Optional base branch via slash arg: `/commit-pr-dev main`, `/commit-pr-dev release/2026-q2`. Default base: `dev`.
-- Optional title hint via slash arg: `/commit-pr-dev dev "fix login regression"`. Otherwise infer.
+- Optional base branch via slash arg: `/commit-pr dev`, `/commit-pr release/2026-q2`. Default base: `main`.
+- Optional title hint via slash arg: `/commit-pr main "fix login regression"`. Otherwise infer.
 - Optional flags inferred from natural language:
   - "draft" / "as draft" → `--draft`
   - "no commit" / "PR only" → skip the commit step (assume already committed)
@@ -30,8 +30,8 @@ Run in parallel:
 
 Hard stops (report and exit, do not mutate):
 - Detached HEAD.
-- Current branch IS the base branch (e.g. on `dev` and asked to PR to `dev`). Suggest creating a feature branch first.
-- Current branch is `main` / `master` / `trunk`. Refuse without explicit "yes I really mean main → dev" from user.
+- Current branch IS the base branch (e.g. on `main` and asked to PR to `main`). Suggest creating a feature branch first.
+- Current branch is `main` / `master` / `trunk`. Refuse without explicit "yes I really mean to PR from `main`" from user.
 
 ### Step 1 — Inspect changes
 
@@ -149,7 +149,7 @@ Section rules when populating:
 After completion, print:
 
 ```
-commit-pr-dev — done
+commit-pr — done
 Branch: <branch>
 Base: <base>
 Commits pushed: <N>

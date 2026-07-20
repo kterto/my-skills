@@ -7,7 +7,7 @@ Authored agent skills for [Claude Code](https://code.claude.com) and [opencode](
 | Skill | What it does |
 |---|---|
 | `clean-code-gates` | Runs Clean Code quality gates (G1–G7: coverage, complexity, length/nesting, naming, no-comments, mutation, dependency-structure) and emits an agnostic JSON + Markdown report. Portable across stacks (node-ts, dart-flutter). |
-| `commit-pr-dev` | Stage, commit, push the current branch, and open a PR targeting `dev`. Confirms before any remote mutation. |
+| `commit-pr` | Stage, commit, push the current branch, and open a PR targeting `main`. Confirms before any remote mutation. |
 | `validation-fixer` | Routes recorded user-validation bugs through a chosen framework (superpowers / gsd / orchestrator) and tracks each fix in-file. |
 | `design-to-code` | Translates Claude design output files (self-contained HTML with tokens, reviewer comments, component states) into pixel-perfect, correctly-behaving code. |
 | `orchestrator` | Project-agnostic 6-agent pipeline (brainstormer → architect → coder → tester → reviewer → qa) with a context-confidence gate, spec-driven-eval integration, and a final Markdown/HTML report. Auto-detects first-run bootstrap vs. straight pipeline execution. |
@@ -217,7 +217,7 @@ my-skills/
 │       └── skills/
 │           ├── index.json       # opencode remote skill index
 │           ├── clean-code-gates/SKILL.md
-│           ├── commit-pr-dev/SKILL.md
+│           ├── commit-pr/SKILL.md
 │           ├── validation-fixer/SKILL.md
 │           ├── design-to-code/SKILL.md
 │           ├── orchestrator/SKILL.md
@@ -249,7 +249,7 @@ A local checkout works too:
 /plugin install my-skills@my-skills
 ```
 
-Skills are then invocable as `/my-skills:clean-code-gates`, `/my-skills:commit-pr-dev`, `/my-skills:orchestrator`, `/my-skills:roadmap`, `/my-skills:product-manager`, etc.
+Skills are then invocable as `/my-skills:clean-code-gates`, `/my-skills:commit-pr`, `/my-skills:orchestrator`, `/my-skills:roadmap`, `/my-skills:product-manager`, etc.
 
 ## Install (opencode)
 
@@ -259,9 +259,9 @@ Recommended install: clone/update this repo under `~/.config/opencode/`, symlink
 curl -fsSL https://raw.githubusercontent.com/kterto/my-skills/main/scripts/install-opencode.sh | bash
 ```
 
-Then restart opencode. Skills load as normal opencode skills: `clean-code-gates`, `commit-pr-dev`, `orchestrator`, `roadmap`, `product-manager`, `pr-review-report`, etc.
+Then restart opencode. Skills load as normal opencode skills: `clean-code-gates`, `commit-pr`, `orchestrator`, `roadmap`, `product-manager`, `pr-review-report`, etc.
 
-Slash commands are installed too: `/clean-code-gates`, `/commit-pr-dev`, `/orchestrator`, `/roadmap`, `/product-manager`, `/pr-review-report`, etc. In opencode, slash commands are separate from skills, so these command files explicitly load the matching skill before running it. Hand-written templates under `.opencode/commands/` override the generated command prompt for the same name; `roadmap` and `product-manager` have explicit templates so their expanded command surfaces match Claude Code usage.
+Slash commands are installed too: `/clean-code-gates`, `/commit-pr`, `/orchestrator`, `/roadmap`, `/product-manager`, `/pr-review-report`, etc. In opencode, slash commands are separate from skills, so these command files explicitly load the matching skill before running it. Hand-written templates under `.opencode/commands/` override the generated command prompt for the same name; `roadmap` and `product-manager` have explicit templates so their expanded command surfaces match Claude Code usage.
 
 Manual equivalent:
 

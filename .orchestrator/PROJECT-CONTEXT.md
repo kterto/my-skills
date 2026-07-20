@@ -5,7 +5,7 @@
 **my-skills** — a Claude Code plugin marketplace (`.claude-plugin/marketplace.json` → plugin at `./plugins/my-skills`) of **authoring skills**. Each skill is a markdown-driven procedure (a `SKILL.md` entry point + `references/` + optional `templates/`) that Claude executes inside a *target* project. This repo authors and maintains those skills; it is **documentation-and-template authoring, not runtime application code** — there is no compiled/executed program in scope for most changes.
 
 Skills currently in the marketplace (`plugins/my-skills/skills/`):
-`clean-code-gates`, `commit-pr-dev`, `design-to-code`, `orchestrator`, `pr-review-report`, `product-manager`, `roadmap`, `validation-fixer`. Plus `spec-driven-eval` (lives under `.claude/skills/` + `.opencode/skills/`).
+`clean-code-gates`, `commit-pr`, `design-to-code`, `orchestrator`, `pr-review-report`, `product-manager`, `roadmap`, `validation-fixer`. Plus `spec-driven-eval` (lives under `.claude/skills/` + `.opencode/skills/`).
 
 Exception to "no runtime code": **`clean-code-gates`** ships real JS with a test suite (vitest / `node --test`). That suite is scoped to that skill only — do NOT run it against other skills.
 

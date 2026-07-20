@@ -38,7 +38,7 @@
       ]
     },
     {
-      "name": "commit-pr-dev",
+      "name": "commit-pr",
       "files": [
         "SKILL.md"
       ]
