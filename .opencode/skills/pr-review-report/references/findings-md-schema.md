@@ -58,6 +58,7 @@ Counts: crit <n> · high <n> · med <n> · low <n> · info <n> · acknowledged <
 ## Bugs & Improvements
 
 - [x] [<ID>|<sev>] <title> (<file>:<line>)
+  fingerprint: <fingerprint>
   _acknowledged: MEM-2_
 ```
 
@@ -123,12 +124,16 @@ or `resolved`, or the finding is an `orphan` — renders as a `- [x]` bullet so
 
 ```
 - [x] [<ID>|<sev>] <title> (<file>:<line>)
+  fingerprint: <fingerprint>
   _<state>: <reason>_
 ```
 
-The single indented `_<state>: <reason>_` note records why it is closed. `<state>`
-is `acknowledged` / `ignored` / `resolved` / `orphan`. `<reason>` is a **short
-label only** — see the security note below.
+Like an actionable row, a triaged row carries the `fingerprint:` continuation
+(always present, line-independent identity) so the merge keys on it uniformly — every
+finding row, actionable or audit, carries exactly one `fingerprint:`. The single
+indented `_<state>: <reason>_` note records why it is closed. `<state>` is
+`acknowledged` / `ignored` / `resolved` / `orphan`. `<reason>` is a **short label
+only** — see the security note below.
 
 A **prior-only** audit row (§Regeneration & merge, step 5) is the one `- [x]` variant
 that keeps *two* italic lines: the consumer's original `_fixed via …_` / `_attempted

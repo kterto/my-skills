@@ -120,14 +120,19 @@ assert(archActionable.some((it) => it.cont.some((c) => /^ADR:/.test(c))),
   "expected an Architecture finding with an ADR continuation line");
 console.log("Scenario 5 (Architecture ADR continuation present) ✓");
 
-// 6) Every `- [x]` triaged row is skipped and carries exactly a `_<state>: <ref>_` note.
-//    (state labels may be hyphenated, e.g. `prior-only` — see Scenario 9.)
+// 6) Every `- [x]` triaged row is skipped, carries exactly a `_<state>: <ref>_` note
+//    (state labels may be hyphenated, e.g. `prior-only` — see Scenario 9), AND carries
+//    exactly one `fingerprint:` continuation — the merge keys uniformly on every row,
+//    actionable or audit (arch-3: Step 6b / merge-key say fingerprint is on every row,
+//    so the audit-row format, fixture, and this test must all supply it).
 assert(skipped.length >= 1, "fixture must contain at least one triaged `- [x]` audit row");
 for (const it of skipped) {
   assert(it.cont.some((c) => /^_[a-z][a-z-]*:.*_$/.test(c)),
     "triaged row missing `_<state>: <reason>_` note: " + it.text);
+  assert(countCont(it, /^fingerprint:/) === 1,
+    "triaged row must carry exactly one `fingerprint:` continuation (arch-3): " + it.text);
 }
-console.log("Scenario 6 (triaged `- [x]` rows skipped with state note) ✓");
+console.log("Scenario 6 (triaged `- [x]` rows skipped, with state note + fingerprint) ✓");
 
 // 7) No continuation line leaked into the work list as its own item.
 for (const it of items) {

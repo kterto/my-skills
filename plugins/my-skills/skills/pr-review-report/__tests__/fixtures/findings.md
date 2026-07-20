@@ -16,6 +16,7 @@ Counts: crit 1 · high 2 · med 2 · low 1 · info 0 · acknowledged 1
   Rationale: Lens order is hard-coded in the HTML template and again in the Markdown writer, so they can drift.
   Fix: Derive lens order from a single constant consumed by both writers.
 - [x] [arch-3|info] Prefer a value object for the counts summary (skills/report/counts.ts:7)
+  fingerprint: architecture|skills/report/counts.ts|counts-value-object
   _acknowledged: MEM-1_
 
 ## Security
@@ -29,6 +30,7 @@ Counts: crit 1 · high 2 · med 2 · low 1 · info 0 · acknowledged 1
   Rationale: The triaged reason label copies arbitrary comment text instead of a trusted memory-ref label.
   Fix: Limit the reason to a merge-base-trusted memory-ref label such as MEM-2.
 - [x] [sec-3|med] Legacy path traversal in a removed helper (skills/report/gone.ts:12)
+  fingerprint: security|skills/report/gone.ts|legacy-path-traversal
   _orphan: code left the diff_
 
 ## Bugs & Improvements
@@ -42,6 +44,7 @@ Counts: crit 1 · high 2 · med 2 · low 1 · info 0 · acknowledged 1
   Rationale: The template is read once per finding instead of once per run.
   Fix: Hoist the template read out of the finding loop.
 - [x] [bug-3|low] Trailing-whitespace nit in the counts line (skills/report/counts.ts:22)
+  fingerprint: bugs|skills/report/counts.ts|trailing-whitespace-counts
   _resolved: fix verified_
 - [x] [bug-4|med] Null deref when the config file is absent (skills/report/config.ts:40)
   fingerprint: bugs|skills/report/config.ts|null-deref-missing-config
