@@ -60,5 +60,83 @@ if [ -f "$SAMPLE" ]; then
   if ! grep -q 'id="diffline-' "$SAMPLE"; then echo "FAIL: sample has no diffline anchors"; fail=1; fi
 fi
 
+# 6. seam-injection safety (sec-1): raw thread text must not terminate the JSON
+#    seam. The template is parity-checked (#4), so testing the marketplace copy
+#    covers both ports. Requires node; skip with a notice if unavailable.
+SEAM_TEST="$MARKET_DIR/__tests__/seam-injection.test.cjs"
+if [ -f "$SEAM_TEST" ]; then
+  if command -v node >/dev/null 2>&1; then
+    if ! node "$SEAM_TEST"; then echo "FAIL: seam-injection safety test (sec-1)"; fail=1; fi
+  else
+    echo "SKIP: node not found — seam-injection test (sec-1) not run"
+  fi
+else
+  echo "FAIL: missing __tests__/seam-injection.test.cjs (sec-1 regression fixture)"; fail=1
+fi
+
+# 7. provenance gate (sec-2): tracked/branch-modified review-state must be untrusted.
+PROV_TEST="$MARKET_DIR/__tests__/provenance-gate.test.sh"
+if [ -f "$PROV_TEST" ]; then
+  if ! bash "$PROV_TEST" >/dev/null; then echo "FAIL: provenance gate test (sec-2)"; fail=1; fi
+else
+  echo "FAIL: missing __tests__/provenance-gate.test.sh (sec-2 regression fixture)"; fail=1
+fi
+
+# 8. symlink / path-escape guard (sec-3): symlinked state must not be read or written.
+SYM_TEST="$MARKET_DIR/__tests__/symlink-guard.test.sh"
+if [ -f "$SYM_TEST" ]; then
+  if ! bash "$SYM_TEST" >/dev/null; then echo "FAIL: symlink guard test (sec-3)"; fail=1; fi
+else
+  echo "FAIL: missing __tests__/symlink-guard.test.sh (sec-3 regression fixture)"; fail=1
+fi
+
+# 9. read-only signal (bug-1): future/unknown state version stays read-only, no downgrade.
+RO_TEST="$MARKET_DIR/__tests__/readonly-signal.test.cjs"
+if [ -f "$RO_TEST" ]; then
+  if command -v node >/dev/null 2>&1; then
+    if ! node "$RO_TEST" >/dev/null; then echo "FAIL: read-only signal test (bug-1)"; fail=1; fi
+  else
+    echo "SKIP: node not found — read-only signal test (bug-1) not run"
+  fi
+else
+  echo "FAIL: missing __tests__/readonly-signal.test.cjs (bug-1 regression fixture)"; fail=1
+fi
+
+# 10. orphan render (bug-2): a materialized prior-only finding routes + renders safely.
+ORPHAN_TEST="$MARKET_DIR/__tests__/orphan-render.test.cjs"
+if [ -f "$ORPHAN_TEST" ]; then
+  if command -v node >/dev/null 2>&1; then
+    if ! node "$ORPHAN_TEST" >/dev/null; then echo "FAIL: orphan render test (bug-2)"; fail=1; fi
+  else
+    echo "SKIP: node not found — orphan render test (bug-2) not run"
+  fi
+else
+  echo "FAIL: missing __tests__/orphan-render.test.cjs (bug-2 regression fixture)"; fail=1
+fi
+
+# 11. comment draft persistence (bug-3): unsent drafts survive a rerender.
+DRAFT_TEST="$MARKET_DIR/__tests__/comment-draft.test.cjs"
+if [ -f "$DRAFT_TEST" ]; then
+  if command -v node >/dev/null 2>&1; then
+    if ! node "$DRAFT_TEST" >/dev/null; then echo "FAIL: comment draft test (bug-3)"; fail=1; fi
+  else
+    echo "SKIP: node not found — comment draft test (bug-3) not run"
+  fi
+else
+  echo "FAIL: missing __tests__/comment-draft.test.cjs (bug-3 regression fixture)"; fail=1
+fi
+
+# 12. malformed state resilience (bug-4): bad cache/envelope shapes must not abort render.
+MALFORMED_TEST="$MARKET_DIR/__tests__/malformed-state.test.cjs"
+if [ -f "$MALFORMED_TEST" ]; then
+  if command -v node >/dev/null 2>&1; then
+    if ! node "$MALFORMED_TEST" >/dev/null; then echo "FAIL: malformed state test (bug-4)"; fail=1; fi
+  else
+    echo "SKIP: node not found — malformed state test (bug-4) not run"
+  fi
+else
+  echo "FAIL: missing __tests__/malformed-state.test.cjs (bug-4 regression fixture)"; fail=1
+fi
+
 [ "$fail" -eq 0 ] && echo "PASS: pr-review-report skill (marketplace + opencode)" || true
 exit "$fail"
