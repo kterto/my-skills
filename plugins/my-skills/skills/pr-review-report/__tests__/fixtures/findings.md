@@ -43,3 +43,7 @@ Counts: crit 1 · high 2 · med 2 · low 1 · info 0 · acknowledged 1
   Fix: Hoist the template read out of the finding loop.
 - [x] [bug-3|low] Trailing-whitespace nit in the counts line (skills/report/counts.ts:22)
   _resolved: fix verified_
+- [x] [bug-4|med] Null deref when the config file is absent (skills/report/config.ts:40)
+  fingerprint: bugs|skills/report/config.ts|null-deref-missing-config
+  _fixed via 9f3c1ad · 2026-07-19_
+  _prior-only: finding left this review's diff (2026-07-20)_

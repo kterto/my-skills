@@ -58,6 +58,25 @@ into it rather than overwriting it.**
    (absent = `v1`) lets a future producer detect a newer on-disk schema and skip the
    write rather than downgrade it — the same forward-version protection Step 7b gives
    `review-state.json` (bug-1).
+5. **Prior-only retention — unmatched consumer-owned rows survive (arch-2 re-fix).**
+   The matched-fingerprint merge (points 2–3) preserves a disposition **only while this
+   run reproduces its finding**. But a finding whose concern *leaves the diff* — exactly
+   what `validation-fixer` produces when it lands a fix — has no row in this run's
+   `REVIEW_DATA.findings`, so points 2–3 alone would drop it and take its sole commit/
+   attempt evidence with it. The no-round-trip severance makes this unrecoverable:
+   `review-state.json` is not the home of these dispositions. Therefore an **unmatched
+   consumer-owned row** (a `[x]` fixed / `[~]` attempted bullet, identified during the
+   merge parse) is **retained** — re-emitted verbatim as a closed **prior-only `[x]`
+   audit record** carrying its consumer status line plus a `_prior-only: finding left
+   this review's diff (<date>)_` note — and persists across regenerations until a user
+   **explicitly prunes** it. This is the `.md`-native analogue of Step 4's `review-state`
+   orphan pass (bug-2), but independent of it: because dispositions never round-trip, the
+   `.md` merge must preserve its own history even when no orphan is materialized (a lost,
+   reset, or other-branch `review-state.json`). A migrated fingerprint (an alias
+   re-attached to a reproduced finding in Step 2/4) is **excluded** from retention — its
+   disposition already rides the live row, and emitting a prior-only row too would be a
+   phantom duplicate, the same failure `review-state.json`'s bug-5 guard prevents.
+   A `[ ]` fixer-untouched unmatched row carries no consumer evidence and is dropped.
 
 The full protocol lives in `references/findings-md-schema.md` §Regeneration & merge
 (single source of truth); `SKILL.md` Step 6b summarizes and links.
@@ -90,7 +109,14 @@ The full protocol lives in `references/findings-md-schema.md` §Regeneration & m
   clobbered. The producer adapts to the consumer, not the reverse.
 - The `.md` remains outside `review-state.json` (no round-trip), but is no longer a
   lossy artifact: its own content is the durable store, and the merge makes that store
-  safe across regenerations.
+  safe across regenerations — including when a finding leaves the diff, since prior-only
+  retention (decision point 5) keeps its consumer evidence as an `[x]` audit record
+  instead of dropping it.
+- Prior-only rows accumulate as `[x]` audit history and are never auto-pruned; a stale
+  one is inert (skipped by `validation-fixer`) and removed only by explicit user action.
+  This is deliberate — silent pruning would reintroduce the exact evidence-loss arch-2
+  closes. The bug-5 alias exclusion keeps a migrated finding from spawning a phantom
+  prior-only twin.
 - Backward-compatible per the project invariant: the schema marker is optional
   (absent = `v1`), legacy backlogs parse and merge unchanged, and no migration is
   forced.

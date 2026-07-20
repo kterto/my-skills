@@ -130,6 +130,12 @@ The single indented `_<state>: <reason>_` note records why it is closed. `<state
 is `acknowledged` / `ignored` / `resolved` / `orphan`. `<reason>` is a **short
 label only** — see the security note below.
 
+A **prior-only** audit row (§Regeneration & merge, step 5) is the one `- [x]` variant
+that keeps *two* italic lines: the consumer's original `_fixed via …_` / `_attempted
+via …_` status line (carried verbatim) plus a `_prior-only: finding left this review's
+diff (<YYYY-MM-DD>)_` note. Both are skipped by `validation-fixer` exactly as any other
+`[x]`-row metadata.
+
 ## Severity abbreviations
 
 | `REVIEW_DATA` severity | `.md` abbreviation |
@@ -150,6 +156,7 @@ label only** — see the security note below.
 | `ignored` | `- [x]` audit | no |
 | `resolved` | `- [x]` audit | no |
 | `orphan: true` | `- [x]` audit | no |
+| prior-only (unmatched consumer-owned, retained) | `- [x]` audit | no (§Regeneration & merge, step 5) |
 
 `fixed` does not appear at emit time: Step 4 re-verifies a prior `fixed` finding
 against the new diff into `resolved` (concern gone) or `regressed` (still present)
@@ -207,12 +214,42 @@ moves).
 ### Algorithm (Step 6b)
 
 1. **No file at the path** → write fresh (the base behavior).
-2. **File exists** → parse it into `{ fingerprint → { prefix, statusLine } }` for
-   every top-level bullet that carries a `fingerprint:` continuation line. A bullet
-   with no parseable fingerprint is ignored (nothing to carry).
+2. **File exists** → parse it into `{ fingerprint → { prefix, statusLine, bullet } }`
+   for every top-level bullet that carries a `fingerprint:` continuation line, where
+   `bullet` is that bullet's **verbatim block** (its `- [ ]`/`- [x]`/`- [~]` line and
+   every indented continuation line under it). A bullet with no parseable fingerprint is
+   ignored (nothing to carry).
 3. Build this run's rows from `REVIEW_DATA.findings` as usual. For each row whose
    `fingerprint` matches a parsed disposition, apply the **conflict rule** below.
 4. New findings (no matching fingerprint) emit as fresh `- [ ]` / `- [x]` rows.
+5. **Unmatched consumer-owned dispositions → retain as prior-only audit rows
+   (arch-2).** A parsed disposition whose `fingerprint` this run did **not** reproduce
+   (no row in `REVIEW_DATA.findings`) is *not* dropped when it is **consumer-owned** — a
+   `[x]` fixed or `[~]` attempted bullet carrying a `_fixed via …_` / `_attempted via …_`
+   status line. Re-emit its stored `bullet` verbatim as a closed **prior-only** audit
+   row under its last-known section: keep its `fingerprint:` line and its consumer status
+   line, force the prefix to `- [x]` (a `[~]` attempt is now inert — its concern left the
+   diff), and append one indented `_prior-only: finding left this review's diff
+   (<YYYY-MM-DD>)_` note. `validation-fixer` skips `[x]` rows, so a prior-only row is
+   inert work that **preserves the consumer's commit/attempt evidence** — the loss this
+   closes: without it, a fixed or attempted finding that leaves the diff takes its sole
+   evidence with it. A prior-only row persists across regenerations (it is unmatched
+   again next run and re-retained idempotently) until a user **explicitly prunes** it. A
+   `[ ]` fixer-untouched unmatched row carries no consumer evidence — the producer
+   re-derives every live finding — so it is dropped, not retained.
+   - **Never resurrect a migrated key (bug-5 analog).** If the unmatched `fingerprint`
+     is an **alias** that Step 2/4 re-attached to a fingerprint this run *did* reproduce,
+     its disposition already rides the live migrated row — do **not** also emit a
+     prior-only row, or a phantom audit record would sit beside the live finding (the
+     exact duplication `review-state.json`'s bug-5 guard prevents). Prior-only retention
+     applies only to fingerprints that genuinely left the review with **no migrated
+     successor** in this run's `REVIEW_DATA.findings`.
+
+This mirrors `SKILL.md` Step 4's prior-only orphan pass (bug-2) — which materializes
+prior findings from `review-state.json` — but is **independent** of it: dispositions
+never round-trip into `review-state.json`, so the `.md` is their sole home and its merge
+must preserve them on its own, even when no orphan is materialized (a lost, reset, or
+other-branch `review-state.json`).
 
 ### Conflict rule — re-verification wins, history preserved
 
@@ -249,7 +286,13 @@ fingerprint — the checkbox prefix and the single italic status line — never 
 bullet text, and re-emits them only on their own row. Those tokens are skill-authored
 metadata (`validation-fixer` writes them), consistent with the working-tree trust
 anchor this `.md` already sits behind; the data-never-instructions discipline in the
-Security note below still governs every field this run writes. The read of the existing
+Security note below still governs every field this run writes. A prior-only retained row
+(step 5) re-emits its stored bullet **verbatim**, title/`Rationale`/`Fix` included, but
+that text is not new attack surface: it was authored and one-physical-line–sanitized by
+a **prior `pr-review-report` run** through this same §Field-sanitization gate, sits
+behind the same working-tree trust anchor, and is re-read only through `SKILL.md`'s
+output-path safety guard — it is carried forward as inert `[x]` audit evidence, never
+re-interpreted as instructions. The read of the existing
 backlog is itself gated by `SKILL.md`'s output-path safety guard (sec-4): a symlinked
 `docs/reviews` or target file is rejected and **never read through**, so the merge
 cannot be steered to ingest an arbitrary file, and the merged result is persisted via

@@ -121,9 +121,10 @@ assert(archActionable.some((it) => it.cont.some((c) => /^ADR:/.test(c))),
 console.log("Scenario 5 (Architecture ADR continuation present) ✓");
 
 // 6) Every `- [x]` triaged row is skipped and carries exactly a `_<state>: <ref>_` note.
+//    (state labels may be hyphenated, e.g. `prior-only` — see Scenario 9.)
 assert(skipped.length >= 1, "fixture must contain at least one triaged `- [x]` audit row");
 for (const it of skipped) {
-  assert(it.cont.some((c) => /^_[a-z]+:.*_$/.test(c)),
+  assert(it.cont.some((c) => /^_[a-z][a-z-]*:.*_$/.test(c)),
     "triaged row missing `_<state>: <reason>_` note: " + it.text);
 }
 console.log("Scenario 6 (triaged `- [x]` rows skipped with state note) ✓");
@@ -147,5 +148,28 @@ for (const label of ["crit", "high", "med", "low", "info", "acknowledged"]) {
     "Counts line missing `" + label + " <n>`: " + JSON.stringify(countsLine));
 }
 console.log("Scenario 8 (header title + Counts line present) ✓");
+
+// 9) Prior-only retention (arch-2): an unmatched consumer-owned finding whose concern
+//    left the diff is kept as a closed `- [x]` audit row that (a) is SKIPPED, not
+//    actionable, (b) preserves the consumer's `_fixed via …_` / `_attempted via …_`
+//    commit/attempt evidence verbatim, and (c) carries a `_prior-only: …_` note. This
+//    proves the re-review does not silently discard consumer-owned history.
+const priorOnly = skipped.filter((it) =>
+  it.cont.some((c) => /^_prior-only:.*_$/.test(c)));
+assert(priorOnly.length >= 1,
+  "fixture must contain at least one prior-only `- [x]` retained audit row");
+for (const it of priorOnly) {
+  // The consumer's status line is `_fixed|attempted via …_` metadata — the parser
+  // drops it from `cont` (META_RE), so assert it survives in the raw bullet block.
+  const mdIdx = lines.findIndex((l) => l.includes(it.text));
+  assert(mdIdx >= 0, "prior-only row not locatable in source: " + it.text);
+  const block = lines.slice(mdIdx, mdIdx + 5).join("\n");
+  assert(/_(?:fixed|attempted) via\b/.test(block),
+    "prior-only row must carry the consumer `_fixed/attempted via …_` evidence: " + it.text);
+  assert(it.cont.some((c) => /^fingerprint:/.test(c)),
+    "prior-only row must keep its `fingerprint:` line for re-keying: " + it.text);
+  assert(!actionable.includes(it), "prior-only row must be skipped, never actionable: " + it.text);
+}
+console.log("Scenario 9 (prior-only rows retain consumer evidence, stay skipped) ✓");
 
 console.log("PASS: findings.md format conformance (validation-fixer parse contract)");

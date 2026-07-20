@@ -443,10 +443,13 @@ This `.md` is **additive** to the HTML/JSON path (steps 2b / 4 / 7b unchanged), 
 Step 6b **never blind-overwrites** an existing backlog at the target path — it
 **merges** into it. Keyed by `fingerprint`, it preserves `validation-fixer`'s
 `[x]`/`[~]` marks and `_fixed via …_`/`_attempted via …_` status lines while layering
-this run's freshly-derived fields on top. See `references/findings-md-schema.md`
-§Regeneration & merge for the protocol (fingerprint keying, the re-verification-wins
-conflict rule with preserved regression history, and the read-only-future guard) and
-**ADR-0006** for the ownership decision.
+this run's freshly-derived fields on top — and, crucially, **retains unmatched
+consumer-owned rows as prior-only `[x]` audit records** (arch-2) so a fixed/attempted
+finding that leaves the diff does not silently take its sole commit/attempt evidence
+with it. See `references/findings-md-schema.md` §Regeneration & merge for the protocol
+(fingerprint keying, the re-verification-wins conflict rule with preserved regression
+history, prior-only retention with its bug-5 alias guard, and the read-only-future
+guard) and **ADR-0006** for the ownership decision.
 
 ### 7. Propose memory updates (propose-and-confirm)
 
