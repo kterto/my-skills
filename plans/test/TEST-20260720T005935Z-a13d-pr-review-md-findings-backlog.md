@@ -57,21 +57,24 @@ The 70% line-coverage floor does not apply to prose instructions; per the orches
 brief, "the `__tests__` suite passes" is the pass criterion. That criterion is met.
 
 Test-execution evidence:
-- Target gate: `node __tests__/findings-md-format.test.cjs` → all 8 scenarios pass, exit 0 (Scenario 8 asserts the title + `Counts:` line, FR4).
-- Full plugins suite: 6 `.cjs` + 2 `.sh` = **8/8 PASS**, no regressions.
+- Target gate: `node __tests__/findings-md-format.test.cjs` → all 9 scenarios pass, exit 0 (Scenario 8 asserts the title + `Counts:` line, FR4; Scenario 9 asserts prior-only-retention rows — both added during the review-fix cycle).
+- Full plugins suite: 6 `.cjs` + 2 `.sh` = **8/8 files PASS**, no regressions.
 
 ## Test-Quality Audit
 
-`__tests__/findings-md-format.test.cjs` — **strong.** Seven distinct, meaningful
-assertions, no empty asserts and no tautologies:
+`__tests__/findings-md-format.test.cjs` — **strong.** Nine distinct, meaningful
+assertions, no empty asserts and no tautologies (Scenarios 8–9 and the fingerprint
+clause of Scenario 6 were added during the review-fix cycle — FR4, arch-3, arch-2):
 
 - Scenario 1: three lens sections (`Architecture`/`Security`/`Bugs & Improvements`) detected as `## ` delimiters.
 - Scenario 2: every actionable `- [ ]` row matches `[ID|sev] title (file:line)`.
 - Scenario 3: actionable rows are severity-descending within each section (real ordering check via a rank map).
-- Scenario 4: continuation lines attach to their bullet and include a `fingerprint:` line.
+- Scenario 4: each actionable row carries exactly one `fingerprint:` + one `Rationale:` + one `Fix:`; `ADR:` only on Architecture.
 - Scenario 5: at least one Architecture row carries an `ADR:` continuation.
-- Scenario 6: every `- [x]` triaged row is skipped and carries a `_<state>: <reason>_` note.
+- Scenario 6: every `- [x]` triaged row is skipped and carries a `_<state>: <reason>_` note **and** exactly one `fingerprint:` (arch-3: fingerprint is on every row, actionable or audit).
 - Scenario 7: negative check — no continuation line (`fingerprint`/`Rationale`/`Fix`/`ADR`) leaked into the work list as its own item.
+- Scenario 8: header block — the `# PR Review Findings —` title and a `Counts:` line tallying all six totals (FR4).
+- Scenario 9: prior-only retention (arch-2) — an unmatched consumer-owned finding whose concern left the diff stays a skipped `- [x]` row that preserves its `_fixed/attempted via …_` evidence + `fingerprint`.
 
 The embedded parser is a faithful port of validation-fixer `SKILL.md` Step 1 (verified
 against the live source), so a green run genuinely proves the consumption contract rather

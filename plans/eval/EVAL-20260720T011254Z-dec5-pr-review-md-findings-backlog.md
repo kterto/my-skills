@@ -12,7 +12,7 @@ created_at: 2026-07-20T01:12:54Z
 **PRD/spec:** `plans/specs/SPEC-20260720T004023Z-1354-pr-review-md-findings-backlog.md` (15 functional requirements, single P0 feature story).
 **Judge ≠ author:** same session authored via subagents; borderline checks treated conservatively (bias flagged).
 
-> **Re-verified 2026-07-20.** Scenario 8 (the `# PR Review Findings —` title + `Counts:` line, FR4) was added to the fixture test after the initial pass — it was this eval's lone ranked gap. Re-run: `node __tests__/findings-md-format.test.cjs` → **8/8 green**. This eval is updated to 8 scenarios, FR4 T-check MET, and the corrected **Final = 1.00**.
+> **Re-verified 2026-07-20.** Scenario 8 (the `# PR Review Findings —` title + `Counts:` line, FR4) was added to the fixture test after the initial pass — it was this eval's lone ranked gap. Re-run: `node __tests__/findings-md-format.test.cjs` → green, FR4 T-check MET, corrected **Final = 1.00**. **Updated again during the review-fix cycle:** Scenario 9 (prior-only retention, arch-2) and the fingerprint clause of Scenario 6 (arch-3) were added; the fixture test is now **9/9 green** and this eval reads 9 scenarios throughout. Final stays **1.00**.
 
 ## Diff surface
 - `plugins/my-skills/skills/pr-review-report/SKILL.md` (M — Step 6b, frontmatter, Step 8, References)
@@ -42,7 +42,7 @@ Note: this is a **documentation/instructions skill** — most FRs are agent-pros
 | 12 | Step 8 prints both paths + validation-fixer handoff | MET | SKILL.md:472-478 |
 | 13 | New `references/findings-md-schema.md` + References entry | MET | SKILL.md:486; both schema files present |
 | 14 | Parity — both hosts, port divergences preserved | MET | `diff` byte-identical schemas; both SKILL.md edited |
-| 15 | Format-conformance fixture test | MET | findings-md-format.test.cjs + fixtures/findings.md, 8/8 green |
+| 15 | Format-conformance fixture test | MET | findings-md-format.test.cjs + fixtures/findings.md, 9/9 green |
 
 **I = 15/15 = 1.00**
 
@@ -76,7 +76,7 @@ Final = 1.00
 |------|---------|----------|
 | build | n/a | doc-skill; no build tooling configured (PROJECT-CONTEXT) |
 | lint | n/a | no lint tooling configured |
-| unit/contract | ✓ | `node __tests__/findings-md-format.test.cjs` 8/8; full `__tests__/` suite green |
+| unit/contract | ✓ | `node __tests__/findings-md-format.test.cjs` 9/9; full `__tests__/` suite green |
 | e2e | n/a | no e2e surface (agent-authored artifact) |
 
 No confirmed-red gate → **no Adjusted Final**. `Final = 1.00` stands.
@@ -86,7 +86,7 @@ Every built behavior traces to a PRD FR. No PRD-boundary violation (no review-st
 
 ## Robustness (R) / Distribution (D)
 - R: the fixture's Scenario 7 (negative: no continuation line leaks in as its own item) is defensive beyond the primary path — Medium (0.5).
-- D: 8 test scenarios — 6 Necessary (primary parse-contract paths, incl. the header/`Counts:` assertion), 1 Secondary (severity-order), 1 Nice-to-have (negative leak guard). Healthy shape for a single-contract test.
+- D: 9 test scenarios — 7 Necessary (primary parse-contract paths, incl. the header/`Counts:` assertion and the prior-only-retention guard), 1 Secondary (severity-order), 1 Nice-to-have (negative leak guard). Healthy shape for a single-contract test.
 
 ## Ranked gaps
 None — Final is 1.00. The prior lone T gap (the missing header/`Counts:` assertion for FR4) is closed by Scenario 8, which asserts the `# PR Review Findings —` title and a `Counts:` line with all six totals.

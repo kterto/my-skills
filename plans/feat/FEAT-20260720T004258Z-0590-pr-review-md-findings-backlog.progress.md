@@ -115,3 +115,5 @@ All checks pass. Safe to commit and open PR.
 | QA        | ARCHITECT | BLOCKED                    | `invoke /architect with QA report file path`                    |
 
 - **SIMPLIFY** (2026-07-20T00:59:25Z): removed dead section-reconciliation loop + always-true `startsWith` guard; single-sourced severity vocab (SEVS→SEV/ROW/RANK) in findings-md-format.test.cjs. Test 7/7 green. Skipped (noted): META_RE kept for validation-fixer parse fidelity; Step 6b prose summary + dual security note are house-style-consistent.
+
+- **REVIEW-FIX RECONCILIATION** (2026-07-20, bug-5): the scenario count above (7/7) is the truthful record of the build/simplify moment. During the PR-review-fix cycle the fixture test grew to **9 scenarios** — Scenario 8 (header + `Counts:` line, FR4), Scenario 9 (prior-only retention, arch-2), and a fingerprint clause folded into Scenario 6 (arch-3). Current gate: `node __tests__/findings-md-format.test.cjs` → **9/9 green**; full plugins `__tests__/` suite = 8/8 files green. The QA/TEST/EVAL/FINAL summary artifacts now read 9 scenarios throughout (file-suite "8/8" and Coder "8/8 tasks" are distinct counts, unchanged). Final eval stays 1.00.

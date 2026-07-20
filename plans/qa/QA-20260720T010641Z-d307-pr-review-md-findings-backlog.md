@@ -16,19 +16,19 @@ type_errors: 0
 
 ## Summary
 
-QA validated the `pr-review-report` Markdown findings-backlog feature — a documentation/instructions skill whose only executable artifact is the plugins-host `__tests__/findings-md-format.test.cjs` conformance fixture guarding the `validation-fixer` parse contract. The sole executable gate passes (8/8 scenarios — incl. Scenario 8 for the title + `Counts:` line) and the full plugins `__tests__/` suite is green; no build/lint/coverage/mutation tooling is configured for doc-skill authoring (PROJECT-CONTEXT), so per-stack gates (G1 coverage, G6 mutation, G2 complexity) are N/A here and G4/G5/G7 were assessed structurally. Verdict: READY_TO_COMMIT.
+QA validated the `pr-review-report` Markdown findings-backlog feature — a documentation/instructions skill whose only executable artifact is the plugins-host `__tests__/findings-md-format.test.cjs` conformance fixture guarding the `validation-fixer` parse contract. The sole executable gate passes (9/9 scenarios — incl. Scenario 8 for the title + `Counts:` line and Scenario 9 for prior-only retention) and the full plugins `__tests__/` suite is green; no build/lint/coverage/mutation tooling is configured for doc-skill authoring (PROJECT-CONTEXT), so per-stack gates (G1 coverage, G6 mutation, G2 complexity) are N/A here and G4/G5/G7 were assessed structurally. Verdict: READY_TO_COMMIT.
 
 ## Test Results
 
 | Suite | Total | Passed | Failed | Skipped | Status |
 |-------|-------|--------|--------|---------|--------|
-| findings-md-format.test.cjs (`node …`) | 7 | 7 | 0 | 0 | ✅ |
+| findings-md-format.test.cjs (`node …`) | 9 | 9 | 0 | 0 | ✅ |
 | Full plugins `__tests__/` suite (6×.cjs + 2×.sh) | 8 | 8 | 0 | 0 | ✅ |
 | Lint | — | — | — | — | N/A (none configured) |
 | Build / typecheck | — | — | — | — | N/A (no build step) |
 | Format check | — | — | — | — | N/A (none configured) |
 
-Note: "Total: 8" for the suite counts test files (each exits 0/1). The target conformance test contains 7 in-file scenarios, all passing.
+Note: "Total: 8" for the suite counts test files (each exits 0/1). The target conformance test contains 9 in-file scenarios, all passing (Scenarios 8–9 added during the review-fix cycle).
 
 ## Clean Code Gates
 
