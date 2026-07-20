@@ -1,6 +1,6 @@
 ---
 name: pr-review-report
-description: Review the current branch against an auto-detected base branch and author one self-contained interactive HTML PR-review report — architecture (with ADR recommendations), security, and bugs/improvements lenses, the rendered diff with inline margin annotations, findings color-coded by severity — plus a sibling Markdown findings backlog (docs/reviews/<branch>-<date>.md) shaped to feed straight into /validation-fixer. Reads project context and an evolving review memory so intentional decisions (e.g. deferred auth) stop being re-flagged. Use when the user invokes /pr-review-report, says "review this PR", "generate a code review report", "html review of my branch", or asks for a shareable review artifact of the current branch.
+description: Review the current branch against an auto-detected base branch and author one self-contained interactive HTML PR-review report — architecture (with ADR recommendations), security, and bugs/improvements lenses, the rendered diff with inline margin annotations, findings color-coded by severity — plus a sibling Markdown findings backlog (docs/reviews/<branch_slug>-<date>.md) shaped to feed straight into /validation-fixer. Reads project context and an evolving review memory so intentional decisions (e.g. deferred auth) stop being re-flagged. Use when the user invokes /pr-review-report, says "review this PR", "generate a code review report", "html review of my branch", or asks for a shareable review artifact of the current branch.
 ---
 
 # PR Review Report
@@ -44,6 +44,13 @@ if [ -z "$base" ]; then
   done
 fi
 branch="$(git branch --show-current)"
+# branch_slug — filesystem-safe form for artifact FILENAMES only. The raw branch may
+# contain `/` (e.g. feat/foo) or other path-unsafe chars, which would drop the report
+# into a non-existent intermediate dir (docs/reviews/feat/…, only docs/reviews is
+# created) and break the sec-4 output-path gate. Map every non-[A-Za-z0-9._-] run to
+# `-`, collapse repeats, trim leading/trailing `-`. Use $branch_slug for the
+# docs/reviews/*.{html,md} filenames; keep the raw $branch only in metadata/headings.
+branch_slug="$(printf '%s' "$branch" | sed -e 's#[^A-Za-z0-9._-]#-#g' -e 's#-\{2,\}#-#g' -e 's#^-*##' -e 's#-*$##')"
 if [ -z "$base" ]; then
   echo "Could not auto-detect a base branch — ask the user which branch to diff against, then set base."
 else
@@ -349,13 +356,13 @@ Inject the JSON into the template — do not author HTML:
    with the same element wrapping the **escaped** JSON text. Replace the whole
    element, not the bare `/*__REVIEW_DATA__*/` substring (it also appears in the
    template's JS guard). See `references/review-data-schema.md`.
-4. Write the rendered HTML to `$root/docs/reviews/<branch>-<YYYY-MM-DD>.html` — anchored
+4. Write the rendered HTML to `$root/docs/reviews/<branch_slug>-<YYYY-MM-DD>.html` — anchored
    to the git root (`$root` from step 1) so it lands in the repo even when the skill is
    invoked from a subdirectory, never in `<cwd>/docs/reviews/` — and **only through the
    output-path safety gate below** (never a direct write to the target).
 
 **Output-path safety gate (security, sec-4, load-bearing).** `$root/docs/reviews/` and
-the predictable `<branch>-<date>.{html,md}` names are attacker-reachable: the reviewed
+the predictable `<branch_slug>-<date>.{html,md}` names are attacker-reachable: the reviewed
 branch is untrusted, so a committed symlink at `docs`, `docs/reviews`, or either target
 file would redirect the reviewer's write to overwrite a file **outside the repo** with
 their own privileges — and would redirect step 6b's merge-read of an existing backlog to
@@ -376,7 +383,7 @@ rename (TOCTOU). Mirrors the sec-3 state-write guard.
       echo "REVIEWS-PATH-ESCAPE: docs/reviews does not resolve under the repo root — aborting."
     else
       # persist each artifact (HTML here, .md in step 6b) via temp regular file + atomic rename
-      for base in "<branch>-<YYYY-MM-DD>.html" "<branch>-<YYYY-MM-DD>.md"; do
+      for base in "<branch_slug>-<YYYY-MM-DD>.html" "<branch_slug>-<YYYY-MM-DD>.md"; do
         target="$out/$base"
         if [ -L "$target" ]; then echo "REVIEWS-SYMLINK-REJECTED ($base): target is a symlink — skipping."; continue; fi
         tmp="$(mktemp "$out/.review.XXXXXX")"          # temp regular file, same filesystem
@@ -401,7 +408,7 @@ the `validation-fixer` skill (framework `orchestrator`), one finding at a time.
 Follow `references/findings-md-schema.md` for the exact format — do not duplicate
 the spec here. In brief:
 
-- Write to `$root/docs/reviews/<branch>-<YYYY-MM-DD>.md` (same basename as the HTML
+- Write to `$root/docs/reviews/<branch_slug>-<YYYY-MM-DD>.md` (same basename as the HTML
   report, `.md` extension), anchored to the git root `$root` from step 1 so it lands
   in the repo even when the skill is invoked from a subdirectory — never in
   `<cwd>/docs/reviews/`. This write **and** the merge-read of any existing backlog
@@ -518,8 +525,8 @@ once and use it for both the on-disk write and the embed so they never diverge
 ### 8. Report
 
 Tell the user **both** artifact paths — the `.html` report
-(`$root/docs/reviews/<branch>-<YYYY-MM-DD>.html`) and the `.md` findings backlog
-(`$root/docs/reviews/<branch>-<YYYY-MM-DD>.md`) — and a one-line summary: counts per
+(`$root/docs/reviews/<branch_slug>-<YYYY-MM-DD>.html`) and the `.md` findings backlog
+(`$root/docs/reviews/<branch_slug>-<YYYY-MM-DD>.md`) — and a one-line summary: counts per
 severity plus the acknowledged count, and any memory entries added.
 
 Then explain the backlog handoff: the `.md` can be fed straight to

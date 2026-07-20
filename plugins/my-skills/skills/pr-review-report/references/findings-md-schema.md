@@ -1,7 +1,9 @@
 # Findings Markdown Backlog Schema
 
 The authoritative format for the sibling **Markdown findings backlog** emitted by
-`SKILL.md` Step 6b at `$root/docs/reviews/<branch>-<YYYY-MM-DD>.md`. It is built
+`SKILL.md` Step 6b at `$root/docs/reviews/<branch_slug>-<YYYY-MM-DD>.md` (`<branch_slug>`
+is the filesystem-safe branch name from `SKILL.md` Step 1 — the raw branch, which may
+contain `/`, appears only in the title heading, never in the path). It is built
 from the **same** `REVIEW_DATA.findings` set that feeds the HTML render, and is
 shaped to be consumed **unchanged** by the `validation-fixer` skill (framework
 `orchestrator`). The HTML report is the human artifact; this `.md` is the
@@ -34,7 +36,7 @@ its bullet.
 <!-- backlog-schema: v1 -->
 # PR Review Findings — <branch>  (base <base>@<mb-short>, <date>)
 
-/validation-fixer docs/reviews/<branch>-<YYYY-MM-DD>.md  ·  framework: orchestrator
+/validation-fixer docs/reviews/<branch_slug>-<YYYY-MM-DD>.md  ·  framework: orchestrator
 
 Counts: crit <n> · high <n> · med <n> · low <n> · info <n> · acknowledged <n>
 
@@ -178,7 +180,7 @@ never embedded at all (§Security note).
 
 ## Regeneration & merge (load-bearing)
 
-The backlog path `docs/reviews/<branch>-<YYYY-MM-DD>.md` is **stable**: a second
+The backlog path `docs/reviews/<branch_slug>-<YYYY-MM-DD>.md` is **stable**: a second
 review of the same branch on the same day resolves to the same file, and
 `validation-fixer` edits that file **in place** as its resumable source of truth (its
 `SKILL.md` — "record the outcome back in the same file so progress is resumable").

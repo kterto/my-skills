@@ -271,7 +271,7 @@ orphan into `findings[]`:
    `/*__REVIEW_DATA__*/` substring — that placeholder also appears in the template's
    JS guard (`raw === "/*__REVIEW_DATA__*/"`), so a bare-substring replace is
    order-dependent and must not be used. The full element occurs exactly once.
-4. Write the result to `docs/reviews/<branch>-<YYYY-MM-DD>.html`.
+4. Write the result to `docs/reviews/<branch_slug>-<YYYY-MM-DD>.html`.
 
 Validate the JSON parses before injecting. Loading the file offline must render a
 full report; if the seam is left as the placeholder the template shows an empty

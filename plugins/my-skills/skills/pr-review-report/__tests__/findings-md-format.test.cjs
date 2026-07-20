@@ -1,7 +1,7 @@
 // Format-conformance fixture for FEAT-20260720T004258Z-0590: the Markdown findings
 // backlog emitted by Step 6b must be consumable UNCHANGED by the validation-fixer
 // skill. This test mirrors validation-fixer SKILL.md Step 1 parse and asserts the
-// contract every `docs/reviews/<branch>-<date>.md` must satisfy:
+// contract every `docs/reviews/<branch_slug>-<date>.md` must satisfy:
 //   - `## ` lines are section delimiters (informational, kept — never items),
 //   - every `- [ ]` bullet is an ACTIONABLE work item (open / regressed finding),
 //   - every `- [x]` bullet is SKIPPED (already-triaged audit row),
