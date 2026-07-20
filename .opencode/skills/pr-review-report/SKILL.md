@@ -44,13 +44,25 @@ if [ -z "$base" ]; then
   done
 fi
 branch="$(git branch --show-current)"
-# branch_slug — filesystem-safe form for artifact FILENAMES only. The raw branch may
-# contain `/` (e.g. feat/foo) or other path-unsafe chars, which would drop the report
-# into a non-existent intermediate dir (docs/reviews/feat/…, only docs/reviews is
-# created) and break the sec-4 output-path gate. Map every non-[A-Za-z0-9._-] run to
-# `-`, collapse repeats, trim leading/trailing `-`. Use $branch_slug for the
-# docs/reviews/*.{html,md} filenames; keep the raw $branch only in metadata/headings.
-branch_slug="$(printf '%s' "$branch" | sed -e 's#[^A-Za-z0-9._-]#-#g' -e 's#-\{2,\}#-#g' -e 's#^-*##' -e 's#-*$##')"
+# branch_slug — filesystem-safe, INJECTIVE form for artifact FILENAMES only. The raw
+# branch may contain `/` (e.g. feat/foo) or other path-unsafe chars, which would drop the
+# report into a non-existent intermediate dir (docs/reviews/feat/…, only docs/reviews is
+# created) and break the sec-4 output-path gate. Two guards (bug-8):
+#   1. Sanitize: map every non-[A-Za-z0-9._-] run to `-`, collapse repeats, trim `-`.
+#      This alone is NOT injective — `feat/foo` and `feat-foo` both sanitize to
+#      `feat-foo`, Unicode-only names collapse together, and on a case-insensitive
+#      filesystem (default macOS) `Feat-foo`/`feat-foo` alias — so distinct branches
+#      could overwrite each other's HTML or merge against another branch's backlog.
+#   2. Disambiguate: append a 12-hex digest of the RAW branch (`git hash-object`,
+#      deterministic + stable per branch). Distinct raw branches → distinct digest →
+#      distinct filename even when the sanitized part collides or case-folds; the SAME
+#      branch on the same day → same digest → same file (re-review still resolves in place).
+# An all-stripped/empty sanitized part falls back to `branch`, so the slug is never empty.
+# Use $branch_slug for docs/reviews/*.{html,md} filenames; keep raw $branch in metadata/headings.
+branch_raw_slug="$(printf '%s' "$branch" | sed -e 's#[^A-Za-z0-9._-]#-#g' -e 's#-\{2,\}#-#g' -e 's#^-*##' -e 's#-*$##')"
+[ -z "$branch_raw_slug" ] && branch_raw_slug="branch"
+branch_digest="$(printf '%s' "$branch" | git hash-object --stdin | cut -c1-12)"
+branch_slug="${branch_raw_slug}-${branch_digest}"
 if [ -z "$base" ]; then
   echo "Could not auto-detect a base branch — ask the user which branch to diff against, then set base."
 else

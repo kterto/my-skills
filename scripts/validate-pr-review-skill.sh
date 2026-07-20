@@ -99,6 +99,14 @@ else
   echo "FAIL: missing __tests__/symlink-guard.test.sh (sec-3 regression fixture)"; fail=1
 fi
 
+# 8b. branch-slug injectivity (bug-8): distinct branches must not alias to one filename.
+SLUG_TEST="$MARKET_DIR/__tests__/branch-slug.test.sh"
+if [ -f "$SLUG_TEST" ]; then
+  if ! bash "$SLUG_TEST" >/dev/null; then echo "FAIL: branch-slug injectivity test (bug-8)"; fail=1; fi
+else
+  echo "FAIL: missing __tests__/branch-slug.test.sh (bug-8 regression fixture)"; fail=1
+fi
+
 # 9. read-only signal (bug-1): future/unknown state version stays read-only, no downgrade.
 RO_TEST="$MARKET_DIR/__tests__/readonly-signal.test.cjs"
 if [ -f "$RO_TEST" ]; then

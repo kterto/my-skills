@@ -9,8 +9,10 @@
 
 `pr-review-report` Step 6b emits a Markdown findings backlog at the **stable** path
 `docs/reviews/<branch_slug>-<YYYY-MM-DD>.md` (same basename as the HTML report;
-`<branch_slug>` is the filesystem-safe branch name — the raw branch, which may contain
-`/`, appears only in the title heading, never in the path — bug-2). That file
+`<branch_slug>` is the filesystem-safe, injective branch slug — a sanitized form plus a
+deterministic digest of the raw branch so two distinct branches never collide on one file
+(bug-2, bug-8); the raw branch, which may contain `/`, appears only in the title heading,
+never in the path). That file
 is the hand-off to `validation-fixer`, which **edits it in place** as its resumable
 source of truth: it flips `- [ ]` → `- [x]` on a fixed item, writes `- [~]` for an
 attempted-no-commit item, and appends a `_fixed via <sha> · <date>_` /

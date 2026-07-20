@@ -2,8 +2,10 @@
 
 The authoritative format for the sibling **Markdown findings backlog** emitted by
 `SKILL.md` Step 6b at `$root/docs/reviews/<branch_slug>-<YYYY-MM-DD>.md` (`<branch_slug>`
-is the filesystem-safe branch name from `SKILL.md` Step 1 — the raw branch, which may
-contain `/`, appears only in the title heading, never in the path). It is built
+is the filesystem-safe, **injective** branch slug from `SKILL.md` Step 1 — a sanitized
+form plus a deterministic digest of the raw branch so two distinct branches never resolve
+to the same file, bug-8; the raw branch, which may contain `/`, appears only in the title
+heading, never in the path). It is built
 from the **same** `REVIEW_DATA.findings` set that feeds the HTML render, and is
 shaped to be consumed **unchanged** by the `validation-fixer` skill (framework
 `orchestrator`). The HTML report is the human artifact; this `.md` is the
