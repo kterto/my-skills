@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readdirSync, statSync, writeFileSync } from "node:fs"
+import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
 import { dirname, join, relative, sep } from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -41,5 +41,22 @@ const skills = readdirSync(skillsDir, { withFileTypes: true })
     files: walk(join(skillsDir, name)).map((file) => toPosix(relative(join(skillsDir, name), file))),
   }))
 
-writeFileSync(indexPath, `${JSON.stringify({ skills }, null, 2)}\n`)
-console.log(`wrote ${toPosix(relative(repoRoot, indexPath))} with ${skills.length} skills`)
+const content = `${JSON.stringify({ skills }, null, 2)}\n`
+const rel = toPosix(relative(repoRoot, indexPath))
+
+// --check: fail (non-zero) if the on-disk index does not match a fresh generation,
+// so a reference/test/template added without regenerating is caught in CI/pre-commit
+// rather than shipping a skill that points at a file hosted installs never download.
+if (process.argv.includes("--check")) {
+  const current = statSync(indexPath, { throwIfNoEntry: false })?.isFile()
+    ? readFileSync(indexPath, "utf8")
+    : ""
+  if (current !== content) {
+    console.error(`${rel} is STALE — run: node scripts/generate-opencode-skill-index.mjs`)
+    process.exit(1)
+  }
+  console.log(`${rel} is up to date (${skills.length} skills)`)
+} else {
+  writeFileSync(indexPath, content)
+  console.log(`wrote ${rel} with ${skills.length} skills`)
+}

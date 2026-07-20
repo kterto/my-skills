@@ -24,7 +24,7 @@ check_skill_dir() {
 
   # 2. references exist
   local ref
-  for ref in review-rubric.md review-data-schema.md memory-schema.md report-template.html report-template.demo.html; do
+  for ref in review-rubric.md review-data-schema.md review-state-schema.md memory-schema.md findings-md-schema.md report-template.html report-template.demo.html; do
     if [ ! -f "$dir/references/$ref" ]; then echo "FAIL[$label]: missing references/$ref"; fail=1; fi
   done
   # retired reference must be gone
@@ -136,6 +136,30 @@ if [ -f "$MALFORMED_TEST" ]; then
   fi
 else
   echo "FAIL: missing __tests__/malformed-state.test.cjs (bug-4 regression fixture)"; fail=1
+fi
+
+# 13. findings-md backlog format contract: the emitted .md must parse under the
+#     validation-fixer parse rules (mirrors findings-md-schema.md).
+FMT_TEST="$MARKET_DIR/__tests__/findings-md-format.test.cjs"
+if [ -f "$FMT_TEST" ]; then
+  if command -v node >/dev/null 2>&1; then
+    if ! node "$FMT_TEST" >/dev/null; then echo "FAIL: findings-md backlog format contract"; fail=1; fi
+  else
+    echo "SKIP: node not found — findings-md format contract not run"
+  fi
+else
+  echo "FAIL: missing __tests__/findings-md-format.test.cjs (backlog format fixture)"; fail=1
+fi
+
+# 14. hosted skill-index freshness: a reference/test/template added without
+#     regenerating index.json would ship a skill pointing at a file that hosted /
+#     index-based installs never download. Catch it here rather than in the wild.
+if command -v node >/dev/null 2>&1; then
+  if ! node "$ROOT/scripts/generate-opencode-skill-index.mjs" --check >/dev/null; then
+    echo "FAIL: plugins/my-skills/skills/index.json is stale — run scripts/generate-opencode-skill-index.mjs"; fail=1
+  fi
+else
+  echo "SKIP: node not found — skill-index freshness not checked"
 fi
 
 [ "$fail" -eq 0 ] && echo "PASS: pr-review-report skill (marketplace + opencode)" || true
