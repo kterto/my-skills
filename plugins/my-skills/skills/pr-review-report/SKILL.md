@@ -59,6 +59,17 @@ branch="$(git branch --show-current)"
 # Use $branch_slug for docs/reviews/*.{html,md} filenames; keep raw $branch in metadata/headings.
 branch_raw_slug="$(printf '%s' "$branch" | sed -e 's#[^A-Za-z0-9._-]#-#g' -e 's#-\{2,\}#-#g' -e 's#^-*##' -e 's#-*$##')"
 [ -z "$branch_raw_slug" ] && branch_raw_slug="branch"
+# Bound the readable prefix by BYTES so the final filename component
+#   <raw_slug>-<digest>-<YYYY-MM-DD>.<ext>  stays under NAME_MAX (255 bytes). Git allows a
+# ref with many near-NAME_MAX path components; flattening the whole ref then appending the
+# digest+date+ext can exceed 255 and fail BOTH report writes (.html and .md) — bug-13. Cap
+# the readable part at 200 bytes, leaving >=55 for `-`+digest(12)+`-`+date(10)+`.html`(5)
+# plus slack. After sanitization the slug is ASCII, so a byte cut can't split a multibyte
+# char; re-trim a trailing `-` the cut may expose. Injectivity is UNAFFECTED (bug-8): the
+# digest hashes the RAW full branch, so two long branches sharing a truncated prefix still
+# get distinct digests → distinct filenames.
+branch_raw_slug="$(printf '%s' "$branch_raw_slug" | cut -b1-200 | sed 's#-*$##')"
+[ -z "$branch_raw_slug" ] && branch_raw_slug="branch"
 branch_digest="$(printf '%s' "$branch" | git hash-object --stdin | cut -c1-12)"
 branch_slug="${branch_raw_slug}-${branch_digest}"
 if [ -z "$base" ]; then
