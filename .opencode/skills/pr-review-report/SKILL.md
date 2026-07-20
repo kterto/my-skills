@@ -381,9 +381,13 @@ once and use it for both the on-disk write and the embed so they never diverge
   `meta.stateVersion: <that version>` in step 5 so the browser also stays read-only.
 - **Skill-side merge, never a wholesale overwrite.** Start from the prior read
   (step 2b) — which already reflects any browser-saved user triage — and layer
-  this run's derived changes on top: union of fingerprints (orphans retained as
-  candidate `resolved`, never dropped), user-set `state` never clobbered by a
-  re-derived `open`, threads appended in timestamp order.
+  this run's derived changes on top: union of fingerprints (true orphans retained as
+  candidate `resolved`, never dropped) **minus semantically-migrated old keys**
+  (bug-5) — a prior key re-attached to a new fingerprint in step 4 is an alias that
+  *moved*, not a prior-only orphan, so it is dropped, not retained (otherwise a
+  phantom orphan sits beside the migrated finding); user-set `state` never clobbered
+  by a re-derived `open`; threads appended in timestamp order. See
+  `references/review-state-schema.md` §Skill-side merge rules.
 - **`history[]` append-on-transition.** Append a `{ from, to, ts, by }` record
   only when a finding's `state` actually changed this run; `by` is `skill` for a
   verification, `user` for a user-driven change.

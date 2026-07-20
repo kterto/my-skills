@@ -278,8 +278,16 @@ inputs**, never a wholesale overwrite of the file on disk:
 
 Merge policy:
 
-- **Union of fingerprints.** The output `findings` map is the union of prior keys
-  and this-run keys. Orphans (prior-only) are retained (see Orphan handling).
+- **Union of fingerprints — minus migrated aliases (bug-5).** The output `findings`
+  map is the union of prior keys and this-run keys, with one exclusion: a prior key
+  that was **semantically re-attached to a new fingerprint** this run (Reconciliation
+  step 2) is an **alias — the same finding that moved keys — not a prior-only
+  orphan**, so it is **dropped from the union**, not retained. Retaining it would
+  leave a phantom orphan sitting beside the migrated finding (both carrying the same
+  triage). Only a prior key that this run did **not** reproduce *and* did not
+  re-attach is a true orphan, retained per Orphan handling. Concretely: the set of
+  retained prior-only orphans = prior keys − this-run keys − semantically-migrated
+  old keys.
 - **User-set state wins over a skill default.** A `state` the user set (`fixed`,
   `ignored`, `acknowledged`) is never overwritten by a re-derived `open`. The
   skill only *advances* state through verification (`fixed`→`resolved`/`regressed`)
