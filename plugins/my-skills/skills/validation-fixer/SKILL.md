@@ -238,7 +238,10 @@ For each work unit, in order:
    remainder to be empty. If any *other* path is dirty (leftover changes from a rejected
    item, or the user's own uncommitted edits), STOP and report — never start an item on top
    of uncommitted *code*, or a failed item silently compounds into the next. Then
-   `git rev-parse HEAD` → `BEFORE_SHA`. **Also record the current untracked set** (the `??`
+   `git rev-parse HEAD` → `BEFORE_SHA`. **Also record the current branch** `git rev-parse --abbrev-ref HEAD` →
+   `BEFORE_BRANCH` — the reference the Step-3.4 post-run acceptance gate compares against
+   (invariant A: the framework must not have switched, rewound, or detached the branch out
+   from under the run). **And record the current untracked set** (the `??`
    lines of that same `git status --porcelain`) as the **pre-run untracked baseline** — the
    rollback (bug-15) uses it to delete only files a failed framework *newly* created.
    - **The exemption is path-exact.** Ignore only the specific validation file(s) resolved
@@ -323,8 +326,64 @@ For each work unit, in order:
 
    - **Framework signaled success AND HEAD advanced** (terminal result is a normal/success
      completion — `gsd` finished, a superpowers entry completed, *not* `BLOCKED`/aborted/
-     errored — and `BEFORE_SHA..AFTER_SHA` ≥ 1 commit) → the framework committed the fix;
-     it is real, nothing to commit. (A HEAD advance with a **failure** terminal falls to the
+     errored — and `BEFORE_SHA..AFTER_SHA` ≥ 1 commit) → the framework *claims* it
+     committed the fix — but a bare HEAD advance is **not** proof. A `≥ 1 commit` count says
+     only that *some* commit exists between two SHAs, nothing about *how* it got there. Before
+     blessing a framework-owned commit as a real fix, it must pass a **post-run acceptance
+     gate** — four invariants, checked **structural (A/B) before content (C/D)**, because A/B
+     decide whether the destructive rollback is even safe to run against the current branch:
+
+     - **(A) Branch unchanged (structural).** `git rev-parse --abbrev-ref HEAD` equals the
+       Step-3.1 `BEFORE_BRANCH`, is **not** a detached HEAD (`HEAD`), and is **not** a protected
+       branch — using the **same protected set the Step-2 preflight uses** (`main`/`master`/`dev`
+       default, re-derived from the host repo when it documents one; do **not** fork a second
+       definition). A run that switched, created, or detached the branch out from under us fails A.
+     - **(B) Linear ancestry (structural).** `git merge-base --is-ancestor "$BEFORE_SHA"
+       "$AFTER_SHA"` succeeds — `BEFORE_SHA` is a true ancestor of `AFTER_SHA`. A naive
+       `≥ 1 commit` count is insufficient: a run that switched to another branch, or rewrote /
+       rewound history so `BEFORE_SHA` was **orphaned**, can still show ≥ 1 commit in the range
+       while `AFTER_SHA` does not descend from where the run started — that is not the
+       fast-forward "the framework added commits on top of our starting point" the count pretends
+       it is. Ancestry is what actually verifies that shape.
+     - **(C) Validation file(s) excluded from the delta (content).** The set of paths changed
+       across `BEFORE_SHA..AFTER_SHA` (`git diff --name-only "$BEFORE_SHA" "$AFTER_SHA"`) contains
+       **no** Step-1 validation file, matched **path-exact** with the **same repo-relative matcher
+       as the Step-3.1 exemption** — never a glob, never "any `.md`". (A backlog a human committed
+       *before* the run lives in `BEFORE_SHA`, not the delta, so it is unaffected; only a
+       validation file the framework itself dragged into its commit trips C.)
+     - **(D) Clean non-validation tree (content).** Post-commit `git status --porcelain`, with the
+       Step-1 validation file(s) **and** the Step-3.1 pre-run untracked baseline dropped — **exactly
+       as** the Step-3.1 clean-tree gate and the bug-15 baseline already drop them — is empty.
+       Left-behind uncommitted code or stray new untracked files mean the "fix" was not actually
+       all committed.
+
+     **All four hold → accept:** the framework committed the fix; it is real, nothing to commit.
+     The normal well-behaved case (same branch, fast-forward, code-only, clean tree) passes
+     unchanged, exactly as before this gate existed.
+
+     **Any invariant fails → not a fix.** Route to the **"Framework did NOT signal success"**
+     outcome below and record `- [~]` (needs attention), **never** `- [x]`, so it resurfaces on
+     re-run — the bug-12 principle (a commit that exists is not proof of a fix) extended to a
+     commit that exists but is **structurally unacceptable**. *How* it isolates depends on which
+     invariant failed — the **load-bearing split**:
+     - **Structural violation (A or B) → STOP and surface; NO reset.** A changed / detached /
+       protected branch, or broken ancestry, means the precondition of the
+       validation-file-preserving rollback — that `$BEFORE_SHA` is a valid ancestor on the
+       preflighted branch — **no longer holds**, so a `git reset --hard "$BEFORE_SHA"` against the
+       current, unrecognized branch could destroy unrelated work. **Do NOT reset.** STOP and
+       surface the observed state — current branch, `BEFORE_BRANCH`, `BEFORE_SHA`, `AFTER_SHA`,
+       `git status --porcelain`, and `git log --oneline "$BEFORE_SHA".."$AFTER_SHA"` — plus the
+       specific violated invariant, record `- [~]`, and let the operator reconcile. **This STOP
+       binds autonomous mode too** (analogous to the bug-7 protected-branch STOP: some states are
+       unsafe to auto-resolve regardless of mode).
+     - **Content violation (C or D), with A and B intact → reuse the existing rollback.** Branch
+       and ancestry are sound, so the safe-rollback precondition holds and this collapses onto the
+       existing "did NOT signal success" failure handling **verbatim, introducing no new
+       machinery**: **autonomous** → validation-file-preserving rollback (bug-11, bug-15) to
+       `$BEFORE_SHA`, record `- [~]`; **checkpoint** → STOP and surface the partial work for the
+       user's decision (roll back / keep), record `- [~]` either way.
+
+     (A HEAD advance with a **failure** terminal falls to the
      "did NOT signal success" branch below — bug-12.)
    - **HEAD unchanged, tree dirty, framework signaled success** (orchestrator returned
      `READY_TO_COMMIT` / `READY_WITH_WARNINGS`; a superpowers entry finished with real
@@ -632,6 +691,14 @@ End by listing any `[~]` items so the user knows what still needs hands-on work.
   the terminal result is `BLOCKED`/aborted/errored) → `- [~]`, never `- [x]` — the partial
   commits are rolled back (autonomous) or surfaced for the user's decision (checkpoint) per
   Step 3.4. A commit alone never means fixed (bug-12).
+- Framework signaled success and committed, but the commit **fails the Step-3.4 acceptance
+  gate** — A (branch changed / detached / protected), B (non-linear ancestry), C (a Step-1
+  validation file in the `BEFORE_SHA..AFTER_SHA` delta), or D (an unclean non-validation
+  tree) → `- [~]`, never `- [x]`. **Structural** failures (A/B) STOP and surface without
+  resetting the unrecognized branch (autonomous included); **content** failures (C/D) reuse
+  the validation-file-preserving rollback (autonomous) / surface-for-decision (checkpoint). A
+  well-behaved commit (same branch, fast-forward, code-only, clean tree) passes the gate and
+  records `- [x]` exactly as before the gate existed.
 - Re-run after partial progress → `- [x]` skipped; `- [~]`, `- [ ]`, plain `-`
   re-attempted.
 - Multi-line item → the whole bullet block is the item; the status line goes
@@ -646,5 +713,11 @@ End by listing any `[~]` items so the user knows what still needs hands-on work.
   framework, or by validation-fixer's commit-ownership step (from a framework's approved /
   `READY_TO_COMMIT` output, or from the main-agent lane's inline fix per the Step-3.4
   commit-ownership path). A commit produced by a run that then blocked/errored does **not**
-  count (bug-12). No real change → no commit → `[~]`; committed-then-blocked → `[~]`.
+  count (bug-12). No real change → no commit → `[~]`; committed-then-blocked → `[~]`. A
+  framework-*owned* commit additionally counts only when it passes the Step-3.4 **acceptance
+  gate** — same branch, linear ancestry, validation file(s) excluded from the delta, clean
+  non-validation tree; a commit that violates any of A–D is `[~]`, not `[x]`, even with a
+  success terminal (structural A/B STOP-and-surface, content C/D reuse the existing rollback).
+  This is additive verification only: legacy `_fixed via …_` provenance lines still parse and
+  render, and the normal well-behaved commit is accepted exactly as before.
 - Framework choice is once per run; to switch frameworks, finish/stop and re-run.
