@@ -134,6 +134,28 @@ So the branch is gated **once, up front, for the whole run**:
   Re-derive the protected set the same way the host repo does if it documents one;
   otherwise `main`/`master`/`dev` is the default protected set.
 
+### Preconditions — exclusive worktree; detect-and-surface, never destroy
+
+validation-fixer runs on the **shared working tree** and, on any failure path, discards the
+failing work unit's delta with `git reset --hard "$BEFORE_SHA"` plus an enumerated untracked
+removal (the Step-3.1 rollback recipe). That is only safe if **the run owns the worktree for its
+whole duration** — no concurrent user edit or parallel-agent write lands between `BEFORE_SHA` and
+the rollback. So it is a **precondition of the run**: from the Step-3.1 clean-tree gate through the
+last work unit, treat the worktree as **exclusively held** by this run.
+
+Because that precondition can be *violated* in practice (a human keeps editing during a long
+autonomous sweep), the rollback's posture is **detect-and-surface, never destroy**: when a change
+present in the tree **cannot be attributed to the failing work unit**, the skill **STOPs and
+surfaces** the state (recording `- [~]`) instead of `reset --hard`-ing over it — the pre-reset
+concurrency guard defined once in the Step-3.1 rollback recipe. This STOP **binds autonomous mode**,
+exactly like the bug-7 protected-branch STOP above: some states are unsafe to auto-resolve
+regardless of mode.
+
+Heavier **worktree isolation** — giving each work unit its own disposable worktree/clone so a
+rollback can never touch the user's tree at all (sec-2's proposed option) — is a deliberately
+**deferred Non-goal** here. This guard is the proportionate detect-and-surface safeguard for the
+shared-worktree model, not a replacement for it.
+
 ## Step 2.5 — Routing plan (orchestrator only)
 
 **This step runs only when the chosen framework is `orchestrator`.** For
@@ -266,18 +288,61 @@ For each work unit, in order:
        new source / test / generated file the failed framework created survives the rollback —
        partial work left behind that then trips the *next* item's Step-3.1 clean-tree gate.
 
-     So the rollback is a four-step sequence:
-     1. **Snapshot** each Step-1 validation file's current bytes.
-     2. `git reset --hard "$BEFORE_SHA"` — restores every **tracked** path (and discards any
+     So the rollback is a **guarded five-step sequence** — attribute first, then the four-step
+     validation-file-preserving discard:
+     1. **Attribute-or-STOP — the pre-reset concurrency guard (defined here once; every caller
+        below inherits it).** Before any destructive step, confirm every change about to be
+        discarded is attributable to **this work unit**. The run holds the worktree exclusively
+        (Preconditions), so the only changes present *should* be the failing unit's. Compute the
+        unit's **attributable committed delta** — `git diff --name-only "$BEFORE_SHA" "$AFTER_SHA"`
+        (for a **batch** work unit, `$BEFORE_SHA..$AFTER_SHA` already spans the **whole batch**, so
+        this is the whole batch's delta, per ADR-0008). Then read `git status --porcelain` and,
+        **dropping the Step-1 validation file(s) path-exact** (the same matcher as the Step-3.1
+        exemption) and the **pre-run untracked baseline**, inspect the **tracked** working-tree
+        modifications: **any tracked path modified in the working tree that is NOT in the
+        attributable committed delta cannot be attributed to this work unit** — a concurrent user
+        or parallel-agent edit — and **any architect-defined concurrency signal** the host repo
+        documents counts the same. On any such signal, **STOP: do NOT run `git reset --hard`, do
+        NOT delete any untracked path.** Record `- [~]` (never `- [x]`) and **surface** the state,
+        mirroring the sec-1 acceptance gate's **Structural violation (A or B)** STOP surface in
+        Step 3.4 — enumerate: the **current branch**,
+        `BEFORE_SHA`, `AFTER_SHA`, `git status --porcelain`,
+        `git log --oneline "$BEFORE_SHA".."$AFTER_SHA"`, the **enumerated untracked-removal set**
+        (step 4 below), and the **specific reason** (which change could not be attributed). **This
+        STOP binds autonomous mode** — like the bug-7 protected-branch and the structural-A/B
+        STOPs, some states are unsafe to auto-resolve regardless of mode. When the unit's work is
+        **uncommitted-only** (`AFTER_SHA == BEFORE_SHA`, no committed delta to compare), follow the
+        uncommitted-only posture below rather than STOPping on the empty delta. Only when every
+        present change is attributable does the discard proceed:
+     2. **Snapshot** each Step-1 validation file's current bytes.
+     3. `git reset --hard "$BEFORE_SHA"` — restores every **tracked** path (and discards any
         partial commits in `BEFORE_SHA..AFTER_SHA`).
-     3. **Delete the framework's newly-created untracked files.** The Step-3.1 gate guaranteed
-        the only pre-existing untracked paths were the validation files, so everything untracked
-        now is the framework's delta. Remove it against the **pre-run untracked baseline**
-        (Step 3.1): `rm` exactly the untracked paths that are *not* in that baseline — or,
-        equivalently, `git clean -fd` (it removes untracked-but-not-**ignored** files/dirs;
-        ignored build artifacts never dirty the gate, so leaving them is fine). Never `-x`.
-     4. **Rewrite** each Step-1 validation file from its snapshot (recreating its parent dir if
-        step 3 removed it).
+     4. **Delete the framework's newly-created untracked files — by explicit enumeration, not a
+        blanket sweep.** The Step-3.1 gate guaranteed the only pre-existing untracked paths were the
+        validation files, so everything untracked *now* that was **absent** from the **pre-run
+        untracked baseline** (Step 3.1) is the framework's delta. Compute that set and remove
+        **exactly** it — **never** a blanket untracked-file sweep of the worktree, which would erase
+        every untracked path regardless of who created it (precisely the concurrent-work blast
+        radius this guard exists to avoid). Enumerate the current untracked set NUL-safely
+        (`git status --porcelain -z`, take its `??` entries), subtract the baseline path-for-path,
+        and `rm` **only** the remaining paths, passed literally and NUL-delimited (`rm -- <path>`);
+        never reach ignored paths (the include-ignored `-x` behavior stays forbidden — ignored
+        build artifacts never dirtied the gate, so they are left untouched). This **enumerated
+        untracked-removal set** is exactly what the step-1 guard surfaces before any reset.
+     5. **Rewrite** each Step-1 validation file from its snapshot (recreating its parent dir if
+        step 4 removed it).
+
+     **Uncommitted-only failure posture.** When the failing unit produced **no commit**
+     (`AFTER_SHA == BEFORE_SHA` — e.g. the orchestrator returned `BLOCKED` before committing, or a
+     dirty tracked/untracked tree with no HEAD advance), there is **no committed delta** to
+     attribute against, so the guard cannot claim per-path attribution. The rollback then proceeds
+     **on the exclusive-worktree precondition**: the whole **non-baseline** dirty + untracked set is
+     treated as this unit's delta and discarded (reset for tracked, the enumerated `rm` of step 4
+     for untracked — the blast-radius reduction still applies, still **no** blanket sweep). The
+     **enumerated untracked-removal set is still surfaced**, and **no perfect-attribution claim is
+     made** — the honest limit of the shared-worktree model, which the deferred worktree-isolation
+     Non-goal is what would close. Any **computable tracked-side heuristic** (an architect-defined
+     concurrency signal) still fires the step-1 STOP; absent one, the precondition carries the run.
 
      The validation file is never part of a code fix, so restoring its post-Step-4 content is
      always correct; prior items' progress survives whether the backlog is tracked or untracked.
@@ -699,6 +764,16 @@ End by listing any `[~]` items so the user knows what still needs hands-on work.
   the validation-file-preserving rollback (autonomous) / surface-for-decision (checkpoint). A
   well-behaved commit (same branch, fast-forward, code-only, clean tree) passes the gate and
   records `- [x]` exactly as before the gate existed.
+- **Concurrent modification detected during a rollback** — a **tracked** path is modified in the
+  working tree that lies **outside** the failing work unit's attributable `BEFORE_SHA..AFTER_SHA`
+  delta (a user or parallel-agent edit that landed during the run), or an architect-defined
+  concurrency signal fires → the **pre-reset concurrency guard STOPs before any `git reset --hard`
+  or untracked removal**, records `- [~]` (never `- [x]`), and surfaces the current branch,
+  `BEFORE_SHA`, `AFTER_SHA`, `git status --porcelain`, `git log --oneline "$BEFORE_SHA".."$AFTER_SHA"`,
+  the enumerated untracked-removal set, and the unattributable change. **Binds autonomous mode**;
+  nothing is destroyed. For a **batch** work unit the attributable delta is the **whole batch's**
+  delta (ADR-0008). Removing the shared-worktree risk entirely (per-unit worktree isolation) is a
+  deferred Non-goal.
 - Re-run after partial progress → `- [x]` skipped; `- [~]`, `- [ ]`, plain `-`
   re-attempted.
 - Multi-line item → the whole bullet block is the item; the status line goes
@@ -720,4 +795,14 @@ End by listing any `[~]` items so the user knows what still needs hands-on work.
   success terminal (structural A/B STOP-and-surface, content C/D reuse the existing rollback).
   This is additive verification only: legacy `_fixed via …_` provenance lines still parse and
   render, and the normal well-behaved commit is accepted exactly as before.
+- The failure-path rollback is **guarded, not unconditional**: it attributes the discarded change
+  to the failing work unit first (the pre-reset concurrency STOP — detect-and-surface, never
+  destroy), then discards **tracked** state via `git reset --hard "$BEFORE_SHA"` and **untracked**
+  state via an **explicitly enumerated** `rm` of only non-baseline paths (**never** a blanket sweep).
+  For a **batch** work unit the attributable delta is the **whole batch's** `BEFORE_SHA..AFTER_SHA`
+  — ADR-0008 makes the approved batch the atomic revertible unit. When no concurrency is detected
+  (the normal exclusive-worktree case) the rollback behaves exactly as before, except the former
+  `git clean` equivalence is now the equivalent enumerated `rm`; every existing guarantee
+  (bug-11 tracked bookkeeping, bug-15 untracked removal, bug-12 committed-then-blocked, the
+  never-`git add`/commit-the-validation-file rule) is retained.
 - Framework choice is once per run; to switch frameworks, finish/stop and re-run.
