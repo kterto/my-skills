@@ -1,9 +1,11 @@
 # ADR-0007 — Commit ownership after READY_TO_COMMIT (validation-fixer exception)
 
-- **Status:** Accepted
+- **Status:** Superseded by [ADR-0008 — Work-unit commit ownership and batch atomicity](0008-work-unit-commit-ownership-and-batch-atomicity.md)
 - **Date:** 2026-07-20
 - **Skills affected:** `validation-fixer` (`SKILL.md` Step 3.4); the repo commit policy in `.orchestrator/PROJECT-CONTEXT.md` §Invariants
 - **Source finding:** arch-4 — "Validation-fixer takes commit ownership against trusted policy" (`SKILL.md` Step 3.4). Amends the never-commit invariant; interacts with bug-1 (`d721104`).
+
+> **Superseded.** [ADR-0008 — Work-unit commit ownership and batch atomicity](0008-work-unit-commit-ownership-and-batch-atomicity.md) supersedes this ADR. It redefines the revertible unit from a single item to a **work unit** (a single item OR an approved batch of ≥2 members) so the severity-routing batch lane's one shared commit is governed rather than contradicted. The single-item contract below is preserved as the historical record ADR-0008 revisits, and remains accurate for a work unit of size 1; its rejected "Batch-commit sub-decision" is the exact clause ADR-0008 re-decides with justification. For the governing contract, read ADR-0008.
 
 ## Context
 

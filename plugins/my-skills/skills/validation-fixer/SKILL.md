@@ -331,11 +331,14 @@ For each work unit, in order:
      changes) → **validation-fixer owns the commit** as the pipeline's caller (the
      orchestrator contract ends at `READY_TO_COMMIT` precisely so its caller commits).
      This is the repo's **one documented exception** to the never-commit invariant —
-     `validation-fixer` is a per-item transaction manager, not the orchestrator pipeline,
-     and its per-item `_fixed via <sha>_` provenance / resumability / clean-tree-per-item
+     `validation-fixer` is a work-unit transaction manager, not the orchestrator pipeline,
+     and its per-work-unit `_fixed via <sha>_` provenance / resumability / clean-tree-per-unit
      contract requires a real commit. The exception is authorized and bounded (per-commit
-     approval, atomic rollback, protected-branch STOP) by **ADR-0007**; no other skill may
-     commit. Stage and commit the item's changes as one atomic commit:
+     approval, atomic per-work-unit rollback, protected-branch STOP) by **ADR-0008** (which
+     supersedes ADR-0007, redefining the revertible unit as a **work unit** — a single item OR
+     an approved batch of ≥2); no other skill may commit. Stage and commit the work unit's
+     changes as one atomic commit (for the dedicated / main-agent single-item lanes this is one
+     item; the batch lane below combines its ≥2 members into this one commit):
      - **checkpoint mode:** show the diff + intended message, get the user's approval,
        then commit. On rejection, perform the **validation-file-preserving rollback (bug-11)**
        to `$BEFORE_SHA` (restore the clean code tree while keeping the backlog's bookkeeping)
@@ -402,8 +405,9 @@ the deliberate divergences are called out.
 
 Current per-item behavior, **unchanged**: one orchestrator run for the single item
 (3.3); the orchestrator stops at `READY_TO_COMMIT`, so validation-fixer owns the commit
-(3.4, ADR-0007) as one **per-item** code-only commit; Step 4 records `- [x]` with **its
-own** SHA(s). A **batch-of-one** (Q2) — a batch group that resolved to a single member —
+(3.4, ADR-0008) as one **per-item** code-only commit — a **work unit of size 1**; Step 4
+records `- [x]` with **its own** SHA(s). A **batch-of-one** (Q2) — a batch group that
+resolved to a single member —
 runs exactly here: single-item run, per-item commit, one `[x]`; the shared-commit
 machinery is never engaged.
 
@@ -422,9 +426,10 @@ per-work-unit bug-6 gate.
   "Run relevant tests" is **best-effort and target-project-dependent** — if the target
   project has no runnable suite for the touched code, that absence is **not** a failure
   (consistent with this repo's no-suite doc-skill posture).
-- **Commit via the Step-3.4 commit-ownership path (ADR-0007).** After the inline fix,
+- **Commit via the Step-3.4 commit-ownership path (ADR-0008).** After the inline fix,
   HEAD is unchanged and the tree is dirty — exactly the "HEAD unchanged, tree dirty,
-  success" branch of 3.4 — so **validation-fixer owns the commit** for the item, built
+  success" branch of 3.4 — so **validation-fixer owns the commit** for the item (a **work
+  unit of size 1**), built
   under the full sec-3 shell-safe construction and the defense-in-depth protected-branch
   re-assert **exactly as 3.4 specifies**. This lane adds **no** commit divergence — 3.4 is
   the single authoritative recipe; the only novelty is *who fixed it* (the main agent, not
@@ -439,8 +444,15 @@ per-work-unit bug-6 gate.
 
 #### Batch lane (med, grouped by `## ` lens section)
 
-A batch of **≥2** members (Q2: a single member collapses to the dedicated lane) is
-**one combined orchestrator run** that lands **one shared commit**.
+A batch of **≥2** members (Q2: a single member collapses to the dedicated lane) is a
+**work unit of size ≥2** (ADR-0008): **one combined orchestrator run** that lands **one
+shared commit**. ADR-0008 makes the **approved batch** — not the individual member — the
+atomic revertible unit, so the shared commit, shared-SHA provenance, whole-batch rollback,
+and joint resumability below are **authorized** by the same commit-ownership contract that
+authorizes the single-item lanes (each a work unit of size 1). The batch's membership is
+itself authorized by the Step-2.5 routing-plan approval (checkpoint = explicit approval of
+which items batch; autonomous = standing approval), and the shared commit by the Step-3.4
+diff approval — the two ADR-0008 authorization gates.
 
 - **Combined brief, trust never merged.** The grouped items' **verbatim**
   untrusted-evidence blocks are combined into a **multi-concern brief**, but **each
@@ -450,13 +462,16 @@ A batch of **≥2** members (Q2: a single member collapses to the dedicated lane
   trust** and never lets one block enlarge another's scope.
 - **One shared commit.** On the orchestrator's `READY_TO_COMMIT` /
   `READY_WITH_WARNINGS`, validation-fixer owns **one** commit for the whole batch (3.4,
-  ADR-0007), built under the full sec-3 shell-safe construction. The batch's **only**
+  ADR-0008), built under the full sec-3 shell-safe construction. The batch's **only**
   divergence from 3.4 is that the commit message is the **joined batch summary** spanning
   the ≥2 members (each member's summary field still collapsed to one physical line and
   never interpolated into a shell string, per sec-3) and that this **one** commit covers
   every member's code paths.
 - **Recording (Step 4).** **Every** member is marked `- [x]` carrying the **same shared
-  SHA(s)** in its `_fixed via …_` line.
+  SHA(s)** in its `_fixed via …_` line — the **intentional N-findings→1-commit mapping**
+  ADR-0008 defines: a shared SHA across members means those findings were fixed and
+  committed together as one atomic work unit, and reverting that one commit reverts them
+  all.
 - **Failure = whole-batch rollback.** If the batch run returns `BLOCKED` / errored —
   **even with partial commits** (bug-12) — the **validation-file-preserving rollback
   (bug-11, bug-15)** discards the **whole batch's** delta (tracked + untracked, partial
@@ -559,9 +574,12 @@ rollback (bug-11)** drops A's code but keeps the backlog intact (whether it is u
 tracked-and-committed on a re-run); A stays `- [ ]` and B still starts from a clean
 (exempt-adjusted) tree.
 
-Batch note: A and B above are each their own **dedicated** work unit; had they been one
-**batch** work unit instead, they would land **one shared commit** with both marked `- [x]`
-carrying that shared sha, and a batch failure would roll the **whole batch** back to `- [~]`.
+Batch note: A and B above are each their own **dedicated** work unit (each a **work unit of
+size 1**), so they land **two** separate code-only commits. Had they instead been one
+**batch** work unit (size ≥2, ADR-0008), they would land **one shared commit** with both
+marked `- [x]` carrying that shared sha (the intentional N-findings→1-commit mapping), and a
+batch failure would roll the **whole batch** back to `- [~]` — the batch, not the individual
+member, is the atomic revertible unit.
 
 ## Tracked-backlog rollback lifecycle (bug-11 regression scenario)
 
@@ -588,8 +606,10 @@ still open; item **B** will be rejected / `BLOCKED`.
 4. **End.** A stays fixed and recorded; only B's code was discarded. A raw `reset --hard` here
    would have silently reverted A's bookkeeping — the regression this scenario guards against.
 
-Batch note: A and B are separate work units here; a **batch** work unit rolls back as a
-**whole** — every constituent member records `- [~]`, never a partial `- [x]`.
+Batch note: A and B are separate work units here (two size-1 work units → two commits, two
+independent rollbacks); a **batch** work unit (size ≥2, ADR-0008) instead rolls back as a
+**whole** — every constituent member records `- [~]`, never a partial `- [x]`, because the
+approved batch is the single revertible unit.
 
 ## Step 6 — Final summary
 
