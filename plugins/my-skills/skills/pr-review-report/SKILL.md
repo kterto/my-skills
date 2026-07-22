@@ -42,19 +42,24 @@ if [ -z "$base" ]; then
   done
 fi
 branch="$(git branch --show-current)"
-# branch_slug — filesystem-safe, INJECTIVE form for artifact FILENAMES only. The raw
-# branch may contain `/` (e.g. feat/foo) or other path-unsafe chars, which would drop the
-# report into a non-existent intermediate dir (docs/reviews/feat/…, only docs/reviews is
-# created) and break the sec-4 output-path gate. Two guards (bug-8):
+# branch_slug — filesystem-safe, strongly COLLISION-RESISTANT form for artifact FILENAMES
+# only. The raw branch may contain `/` (e.g. feat/foo) or other path-unsafe chars, which
+# would drop the report into a non-existent intermediate dir (docs/reviews/feat/…, only
+# docs/reviews is created) and break the sec-4 output-path gate. Two guards (bug-8, sec-6):
 #   1. Sanitize: map every non-[A-Za-z0-9._-] run to `-`, collapse repeats, trim `-`.
-#      This alone is NOT injective — `feat/foo` and `feat-foo` both sanitize to
+#      This alone aliases distinct branches — `feat/foo` and `feat-foo` both sanitize to
 #      `feat-foo`, Unicode-only names collapse together, and on a case-insensitive
-#      filesystem (default macOS) `Feat-foo`/`feat-foo` alias — so distinct branches
+#      filesystem (default macOS) `Feat-foo`/`feat-foo` fold together — so distinct branches
 #      could overwrite each other's HTML or merge against another branch's backlog.
-#   2. Disambiguate: append a 12-hex digest of the RAW branch (`git hash-object`,
-#      deterministic + stable per branch). Distinct raw branches → distinct digest →
-#      distinct filename even when the sanitized part collides or case-folds; the SAME
-#      branch on the same day → same digest → same file (re-review still resolves in place).
+#   2. Disambiguate: append a 128-bit (32-hex) digest of the RAW branch (`git hash-object`,
+#      deterministic + stable per branch). A hash cannot mathematically guarantee unique
+#      outputs, but 128 bits makes an accidental same-day collision between two distinct
+#      branches vanishingly unlikely, so distinct raw branches get distinct digests → distinct
+#      filenames even when the sanitized part aliases or case-folds; the SAME branch on the
+#      same day → same digest → same file (re-review still resolves in place). Filename
+#      collisions are additionally caught downstream by the Step-6b backlog branch-owner gate
+#      (BACKLOG-BRANCH-MISMATCH), which refuses to merge one branch's dispositions into
+#      another's file even if a digest ever did collide.
 # An all-stripped/empty sanitized part falls back to `branch`, so the slug is never empty.
 # Use $branch_slug for docs/reviews/*.{html,md} filenames; keep raw $branch in metadata/headings.
 branch_raw_slug="$(printf '%s' "$branch" | sed -e 's#[^A-Za-z0-9._-]#-#g' -e 's#-\{2,\}#-#g' -e 's#^-*##' -e 's#-*$##')"
@@ -62,15 +67,16 @@ branch_raw_slug="$(printf '%s' "$branch" | sed -e 's#[^A-Za-z0-9._-]#-#g' -e 's#
 # Bound the readable prefix by BYTES so the final filename component
 #   <raw_slug>-<digest>-<YYYY-MM-DD>.<ext>  stays under NAME_MAX (255 bytes). Git allows a
 # ref with many near-NAME_MAX path components; flattening the whole ref then appending the
-# digest+date+ext can exceed 255 and fail BOTH report writes (.html and .md) — bug-13. Cap
-# the readable part at 200 bytes, leaving >=55 for `-`+digest(12)+`-`+date(10)+`.html`(5)
-# plus slack. After sanitization the slug is ASCII, so a byte cut can't split a multibyte
-# char; re-trim a trailing `-` the cut may expose. Injectivity is UNAFFECTED (bug-8): the
-# digest hashes the RAW full branch, so two long branches sharing a truncated prefix still
-# get distinct digests → distinct filenames.
-branch_raw_slug="$(printf '%s' "$branch_raw_slug" | cut -b1-200 | sed 's#-*$##')"
+# digest+date+ext can exceed 255 and fail BOTH report writes (.html and .md) — bug-13. The
+# fixed tail is `-`+digest(32)+`-`+date(10)+`.html`(5) = 1+32+1+10+5 = 49 bytes, so cap the
+# readable part at 180 bytes: 180 + 49 = 229 < 255, leaving ~26 B of NAME_MAX slack. After
+# sanitization the slug is ASCII, so a byte cut can't split a multibyte char; re-trim a
+# trailing `-` the cut may expose. Collision resistance is UNAFFECTED (bug-8): the digest
+# hashes the RAW full branch, so two long branches sharing a truncated prefix still get
+# distinct digests → distinct filenames.
+branch_raw_slug="$(printf '%s' "$branch_raw_slug" | cut -b1-180 | sed 's#-*$##')"
 [ -z "$branch_raw_slug" ] && branch_raw_slug="branch"
-branch_digest="$(printf '%s' "$branch" | git hash-object --stdin | cut -c1-12)"
+branch_digest="$(printf '%s' "$branch" | git hash-object --stdin | cut -c1-32)"
 branch_slug="${branch_raw_slug}-${branch_digest}"
 if [ -z "$base" ]; then
   echo "Could not auto-detect a base branch — ask the user which branch to diff against, then set base."
@@ -448,6 +454,23 @@ the spec here. In brief:
   prior backlog existed) unless the user explicitly approves importing them — so a
   committed backlog can neither veto the reviewer's regeneration (a forged future-version
   marker) nor forge fixed dispositions on real findings.
+- **Branch-owner gate before merging dispositions (sec-6).** The backlog stamps its owning
+  raw branch in an own-line `<!-- backlog-branch: <raw-branch> -->` header marker (mirroring
+  `<!-- backlog-schema: v1 -->`; any `>` in the raw branch is escaped `&gt;` so an embedded
+  `-->` cannot end the comment). Because the `<branch_slug>` path carries only a 128-bit
+  collision-resistant digest — not a mathematically unique key — a re-review of a *different*
+  branch could in principle resolve to the same file; before carrying any disposition forward
+  the merge therefore checks ownership, exactly as Step 7b's `STATE-BRANCH-MISMATCH` guards
+  `review-state.json` (ADR-0004). It reads the owner (marker → title-line `<branch>` fallback
+  → absent = current branch) and, on a `BACKLOG-BRANCH-MISMATCH` (the file belongs to another
+  branch), does **not** carry dispositions, does **not** overwrite, preserves the existing
+  file untouched, surfaces the owning branch, and requires explicit user approval before
+  importing or replacing it. The composed gate order for the `.md` merge is
+  **symlink/output-path (sec-4) → backlog provenance → backlog branch-owner (new) → merge
+  algorithm**, mirroring the documented `review-state.json` order. The marker format, the
+  `-->`-safe escaping, the owner-resolution precedence, and the full gate live in
+  `references/findings-md-schema.md` (§File layout header block, §Regeneration & merge,
+  §Branch-owner gate) — do not restate the algorithm here.
 - A header block, one `## ` section per lens (Architecture / Security / Bugs &
   Improvements), **actionable** findings (`state` ∈ {`open`, `regressed`}) as `- [ ]`
   rows, and **already-triaged** findings (`acknowledged` / `ignored` / `resolved` /

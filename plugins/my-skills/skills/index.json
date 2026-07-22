@@ -85,6 +85,7 @@
     {
       "name": "pr-review-report",
       "files": [
+        "__tests__/backlog-owner-gate.test.sh",
         "__tests__/branch-slug.test.sh",
         "__tests__/comment-draft.test.cjs",
         "__tests__/findings-md-format.test.cjs",

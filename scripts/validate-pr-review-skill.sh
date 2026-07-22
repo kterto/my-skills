@@ -107,6 +107,16 @@ else
   echo "FAIL: missing __tests__/branch-slug.test.sh (bug-8 regression fixture)"; fail=1
 fi
 
+# 8c. backlog branch-owner gate (sec-6): the backlog records its owning raw branch and
+#     refuses to merge another branch's dispositions (BACKLOG-BRANCH-MISMATCH), mirroring
+#     the review-state STATE-BRANCH-MISMATCH gate (ADR-0004).
+OWNER_TEST="$MARKET_DIR/__tests__/backlog-owner-gate.test.sh"
+if [ -f "$OWNER_TEST" ]; then
+  if ! bash "$OWNER_TEST" >/dev/null; then echo "FAIL: backlog branch-owner gate test (sec-6)"; fail=1; fi
+else
+  echo "FAIL: missing __tests__/backlog-owner-gate.test.sh (sec-6 regression fixture)"; fail=1
+fi
+
 # 9. read-only signal (bug-1): future/unknown state version stays read-only, no downgrade.
 RO_TEST="$MARKET_DIR/__tests__/readonly-signal.test.cjs"
 if [ -f "$RO_TEST" ]; then
