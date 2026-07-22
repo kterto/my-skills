@@ -428,3 +428,7 @@ claude --plugin-dir ./plugins/my-skills
 ## Repository
 
 <https://github.com/kterto/my-skills>
+
+## License
+
+[MIT](./LICENSE) © Kainã Terto
