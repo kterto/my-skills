@@ -157,6 +157,7 @@ exception stays narrow (still `validation-fixer` alone).
   trust never merged" guarantee (each member's evidence block individually wrapped, one
   backlog line = one concern) is intact. The joined batch commit message is still built from
   each member's one-physical-line summary, never interpolated into a shell string.
+- **The file boundary caps collapse-all:** even the user's "collapse everything" edit (Q3) is bounded to **one shared commit per file, never across files** (SKILL.md Q4), so this same-lens batch model reads consistently at the file-boundary edge — a work unit never spans validation files.
 - ADR-0007 is retained as the historical record this ADR revisits — Status flipped to
   "Superseded by ADR-0008" with a forward pointer, its reasoning and rejected sub-decision
   preserved unchanged.

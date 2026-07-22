@@ -306,13 +306,31 @@ are final on approval** (not provisional).
   to a **single member** is run as a dedicated single-item run — one orchestrator
   run, per-item commit, one `[x]`. The shared-commit machinery engages only at
   **≥2 members**.
-- **Q3 — User edits are unrestricted.** At the approval prompt the user may move
-  **any item to any lane**, across all three lanes, overriding the severity defaults.
-  In particular, **"collapse everything into a single batch"** pulls *every* open
-  item into one batch run with **one shared commit**, overriding all lane defaults.
-- **Q4 — Batches never span files.** The batch grouping key is `(file, section)` — in
-  single-file mode it reduces to the `## ` section; across a directory a recurring `## `
-  lens heading in *different* files forms **separate** batches. A batch never spans files.
+- **Q3 — User edits are unrestricted, within the Q4 file boundary.** At the approval
+  prompt the user may move **any item to any lane**, across all three lanes, overriding
+  the severity **lane defaults** (which items batch, and at what granularity). In
+  particular, **"collapse everything into a single batch"** pulls *every* open item into
+  the batch lane. Because a batch never spans files (Q4, the governing invariant), in
+  **directory mode** (a run over ≥2 files) "collapse everything" means **one collapsed
+  batch per file**: each file's open items → one batch → one combined orchestrator run →
+  **one shared commit scoped to that file**, so N collapse-all files yield **N batches and
+  N shared commits**. "Overriding all lane defaults" overrides the severity **lane
+  defaults** only (which items batch / at what granularity) — it **never** overrides the
+  Q4 file boundary. **Single-file mode is the degenerate case:** "one batch per file"
+  reduces to the existing single collapsed batch, so this wording is a **superset** of —
+  not a change to — current single-file behavior.
+- **Q4 — Batches never span files (the hard invariant that governs Q3).** The batch
+  grouping key is `(file, section)` — in single-file mode it reduces to the `## ` section;
+  across a directory a recurring `## ` lens heading in *different* files forms **separate**
+  batches. A batch never spans files, and **this boundary governs Q3**: no user edit —
+  including Q3's "collapse everything" — ever forms a batch spanning more than one
+  validation file.
+
+**Collapse-all preserves Q1 and Q2.** Collapsing changes only **grouping**, never
+**ordering** or the **batch-of-one** rule: work units still run severity-descending (Q1),
+preserving document / section and file order; and a per-file collapsed group that resolves
+to a **single member** still collapses to the dedicated single-item path (Q2 — the
+shared-commit machinery engages only at ≥2 members).
 
 ## Step 3 — Process each open item, in order
 
@@ -718,17 +736,29 @@ diff approval — the two ADR-0008 authorization gates.
   divergence from 3.4 is that the commit message is the **joined batch summary** spanning
   the ≥2 members (each member's summary field still collapsed to one physical line and
   never interpolated into a shell string, per sec-3) and that this **one** commit covers
-  every member's code paths.
+  every member's code paths. **Collapse-all (Q3) is the same machinery, per file:** in
+  directory mode each **per-file** collapsed batch lands **one shared commit covering only
+  that file's items' code paths** — **no commit spans two files** (Q4). The message is the
+  **joined batch summary for that file's members**, built under the identical sec-3
+  shell-safe construction (message construction **unchanged**); N collapse-all files
+  produce N such commits.
 - **Recording (Step 4).** **Every** member is marked `- [x]` carrying the **same shared
   SHA(s)** in its `_fixed via …_` line — the **intentional N-findings→1-commit mapping**
   ADR-0008 defines: a shared SHA across members means those findings were fixed and
   committed together as one atomic work unit, and reverting that one commit reverts them
-  all.
+  all. **For a collapse-all run**, every member of a per-file collapsed batch is marked
+  `- [x]` in **its own** validation file carrying **that file's** shared SHA(s) in its
+  `_fixed via orchestrator · <shared-sha(s)> · <date>_` line; **no shared SHA is written
+  across files** — each file records only its own batch's SHA(s).
 - **Failure = whole-batch rollback.** If the batch run returns `BLOCKED` / errored —
   **even with partial commits** (bug-12) — the **validation-file-preserving rollback
   (bug-11, bug-15)** discards the **whole batch's** delta (tracked + untracked, partial
   commits included) and records **every** constituent item `- [~]`, never `- [x]`. A
-  batch never lands a partial success.
+  batch never lands a partial success. **In collapse-all directory mode**, a
+  rejected/`BLOCKED`/errored **per-file** collapsed batch rolls back **whole** to its
+  `$BEFORE_SHA` the same way and marks every member `- [~]`; because batches never span
+  files (Q4), **one file's failure never rolls back another file's already-committed
+  batch** — each per-file collapsed batch is an **independent revertible unit**.
 
 ## Step 4 — Record the outcome in-file
 
@@ -863,12 +893,53 @@ independent rollbacks); a **batch** work unit (size ≥2, ADR-0008) instead roll
 **whole** — every constituent member records `- [~]`, never a partial `- [x]`, because the
 approved batch is the single revertible unit.
 
+## Collapse-all per-file batch lifecycle (directory-mode scenario)
+
+This trace pins the Q3/Q4 resolution: in directory mode "collapse everything" (Q3) means
+**one collapsed batch per file** (Q4 governs), so N collapse-all files land **N shared
+commits**, each an independent revertible unit. A change that lets a collapse-all batch span
+two files, or that rolls one file's failure back over another file's already-committed batch,
+will visibly violate this trace — keep it as the guard.
+
+Setup: `/validation-fixer <dir>` over a directory holding two validation files — **F1** with
+open items **A**, **B** and **F2** with open items **C**, **D**. Framework `orchestrator`,
+mode `autonomous`, on a feature branch. At the Step-2.5 routing prompt the user picks
+**"collapse everything into a single batch."** Per Q3/Q4 this resolves to **two** per-file
+collapsed batches: `{A, B}` in F1 and `{C, D}` in F2 (processed in file order, Q1). Neither
+batch spans files (Q4).
+
+1. **Start.** Clean-tree gate passes (both validation files exempt, bug-6). `BEFORE_SHA = HEAD`.
+2. **F1 batch `{A, B}`.** One combined orchestrator run → `READY_TO_COMMIT`. Step 3.4 stages
+   **only A's and B's code paths** and lands **one shared commit** `sha1` (message = the
+   joined batch summary for F1's members, sec-3). Step 4 marks **A** and **B** `- [x]` in
+   **F1**, each carrying `_fixed via orchestrator · sha1 · <date>_`. `BEFORE_SHA = HEAD` (now
+   `sha1`).
+3. **F2 batch `{C, D}`.** One combined run → `READY_TO_COMMIT`. Step 3.4 lands **one shared
+   commit** `sha2` covering **only F2's code paths** — `sha2` shares nothing with `sha1`. Step
+   4 marks **C** and **D** `- [x]` in **F2**, each carrying `_fixed via orchestrator · sha2 ·
+   <date>_`. No SHA is written across F1 and F2.
+4. **End.** **Two** shared commits (`sha1` for F1, `sha2` for F2); each file records only its
+   own batch's SHA. Step 6 summarizes **per file**: F1 → 2 `[x]` at `sha1`; F2 → 2 `[x]` at
+   `sha2` — no cross-file SHA aggregation.
+
+Independent-rollback variant: if F2's batch instead returns `BLOCKED` / errored, the
+**validation-file-preserving rollback (bug-11, bug-15)** discards **only F2's** delta back to
+its `$BEFORE_SHA` (= `sha1`) and marks **C**, **D** `- [~]` in F2 — while **F1's committed
+batch `sha1` stays intact** and A, B stay `- [x]`. Because batches never span files (Q4), each
+per-file collapsed batch is an independent revertible unit: one file's failure never unwinds
+another file's already-committed work.
+
 ## Step 6 — Final summary
 
 When the work list is exhausted, print a summary per file:
 - `[x]` fixed (count) with their SHAs,
 - `[~]` attempted-no-commit (count) — call these out as needing attention,
 - skipped (already `[x]`) count.
+
+The summary is **per file** in every mode. For a **collapse-all** run each file reports its
+own `[x]`/`[~]`/`[ ]` counts and its **own single shared SHA** across that file's collapsed
+batch members — there is **no cross-file aggregation of SHAs** (Q4: a shared SHA never spans
+files).
 
 End by listing any `[~]` items so the user knows what still needs hands-on work.
 
