@@ -698,7 +698,10 @@ For each work unit, in order:
      - **checkpoint mode:** show the diff + intended message, get the user's approval,
        then commit. On rejection, perform the **validation-file-preserving rollback (bug-11)**
        to `$BEFORE_SHA` (restore the clean code tree while keeping the backlog's bookkeeping)
-       and leave the item `- [ ]`.
+       and classify the work unit's outcome **rejected** — Step 4 records it **bare `- [ ]`**
+       (no status line). This is the taxonomy's checkpoint-only *rejected* outcome, distinct
+       from *attempted* (below); autonomous mode has no rejection path (opting in is standing
+       approval to commit).
      - **autonomous mode:** commit directly — opting into autonomous *is* the standing
        approval to commit each item. Message: `fix(validation): <one-line item summary>`,
        constructed shell-safely per the next bullet.
@@ -750,6 +753,26 @@ For each work unit, in order:
    - **HEAD unchanged, tree clean** → the framework did nothing → record `- [~]`.
 
    Then the SHA list: `git log --format=%h --reverse "$BEFORE_SHA".."$AFTER_SHA"`.
+
+   **Outcome taxonomy — the one classification Step 4 records from.** Every resolved work
+   unit leaves Step 3.4 tagged with **exactly one** of three explicit outcomes. Step 4 keys
+   on this outcome, **not** on a bare commit-presence test — so a checkpoint rejection (code
+   rolled back, item simply re-opened) is never conflated with a genuine failure:
+
+   | Outcome | When | Recorded state (Step 4) |
+   | --- | --- | --- |
+   | **fixed** | success terminal **and** an accepted owned/framework commit exists in `BEFORE_SHA..AFTER_SHA` (passes the acceptance gate A–D) | `- [x]` + `_fixed via <framework>[/<sp-skill>] · <sha(s)> · <date>_` |
+   | **rejected** | **checkpoint-mode only** — the user rejected the Step-3.4 commit diff, so validation-fixer rolled the code back (bug-11) and **kept no commit** | **bare `- [ ]`**, **no** status line (drop any prior one) |
+   | **attempted** | any **other** no-commit outcome — the framework blocked/errored/no-op'd, committed-then-blocked (bug-12), or the owned/framework commit failed the acceptance gate; **and every autonomous no-commit outcome** | `- [~]` + `_attempted via <framework> · no commit · <date> — needs attention_` |
+
+   The single-item lanes (dedicated, main-agent) and the batch lane below all resolve to
+   one of these three; they defer to this taxonomy rather than restating a recording rule.
+
+   **rejected is checkpoint-mode-only.** Opting into **autonomous** mode *is* the standing
+   approval to commit each work unit, so an autonomous run has **no** user-rejection path:
+   every autonomous no-commit outcome is **attempted → `- [~]`**, never *rejected*. A
+   *rejected → bare `- [ ]`* outcome can arise **only** from an explicit human rejection at a
+   checkpoint-mode Step-3.4 diff prompt.
 5. Record the outcome (Step 4 below).
 6. Honor the mode (Step 5 below) before moving to the next work unit.
 
@@ -829,9 +852,12 @@ finalized by the same verification below.
   **exactly like any dedicated-lane item** — `- [x]` with its **own per-item SHA** on the
   dedicated run's success, or `- [~]` on failure — via the ordinary Step-4 path. No new status
   token, record prefix, or provenance format is introduced for either path.
-- **Failure handling** matches a failed dedicated run: on rejection / error, the
-  **validation-file-preserving rollback (bug-11, bug-15)** to `$BEFORE_SHA` (tracked +
-  untracked, every validation file preserved) and record `- [~]`, never `- [x]`.
+- **Failure handling** matches a failed dedicated run and defers to the FR1 taxonomy for
+  *which* state to record. Either way the **validation-file-preserving rollback (bug-11,
+  bug-15)** to `$BEFORE_SHA` (tracked + untracked, every validation file preserved) runs, but
+  the outcome splits: a **checkpoint-mode user rejection** of the inline fix's Step-3.4 diff is
+  **rejected → bare `- [ ]`** (no status line); an **error / blocked / no-op** — including
+  every autonomous no-commit outcome — is **attempted → `- [~]`**. Never `- [x]`.
 
 #### Batch lane (med, grouped by `## ` lens section)
 
@@ -874,18 +900,28 @@ diff approval — the two ADR-0008 authorization gates.
 - **Failure = whole-batch rollback.** If the batch run returns `BLOCKED` / errored —
   **even with partial commits** (bug-12) — the **validation-file-preserving rollback
   (bug-11, bug-15)** discards the **whole batch's** delta (tracked + untracked, partial
-  commits included) and records **every** constituent item `- [~]`, never `- [x]`. A
-  batch never lands a partial success. **In collapse-all directory mode**, a
-  rejected/`BLOCKED`/errored **per-file** collapsed batch rolls back **whole** to its
-  `$BEFORE_SHA` the same way and marks every member `- [~]`; because batches never span
-  files (Q4), **one file's failure never rolls back another file's already-committed
-  batch** — each per-file collapsed batch is an **independent revertible unit**.
+  commits included) and records **every** constituent item **attempted → `- [~]`**, never
+  `- [x]`. A batch never lands a partial success. **A checkpoint-mode user rejection of the
+  batch's shared-commit diff** is the batch form of the Step-3.4 generic rejection: the same
+  whole-batch rollback runs, but the outcome is **rejected**, so **every** member is recorded
+  **bare `- [ ]`** (no status line), never `- [~]` — the whole batch simply re-opens and
+  re-attempts (rejected is checkpoint-only). **In collapse-all directory mode**, a
+  `BLOCKED`/errored **per-file** collapsed batch rolls back **whole** to its `$BEFORE_SHA` the
+  same way and marks every member `- [~]` (a checkpoint rejection of that per-file batch's
+  diff instead marks every member `- [ ]`); because batches never span files (Q4), **one
+  file's failure never rolls back another file's already-committed batch** — each per-file
+  collapsed batch is an **independent revertible unit**.
 
 ## Step 4 — Record the outcome in-file
 
-Edit the validation file in place (the file is the source of truth, resumable):
+Edit the validation file in place (the file is the source of truth, resumable).
 
-- If **Step 3.4 resolved the item as a successful fix** — the fix producer signaled success
+**Record from the Step-3.4 outcome, not from a commit count.** Step 3.4 tags each resolved
+work unit with exactly one of **fixed | rejected | attempted** (taxonomy above); Step 4 writes
+the state that outcome fixes — **fixed → `- [x]`**, **rejected → bare `- [ ]`**, **attempted →
+`- [~]`**. The branches below are those three outcomes in order:
+
+- If **Step 3.4 resolved the item as a successful fix** (outcome **fixed**) — the fix producer signaled success
   (a framework's normal completion / `READY_TO_COMMIT`, or the main-agent lane's completed
   inline fix) *and* a commit exists for it in `BEFORE_SHA..AFTER_SHA` (the framework's own
   commit, or validation-fixer's commit-ownership commit for a `READY_TO_COMMIT` framework or
@@ -915,17 +951,29 @@ Edit the validation file in place (the file is the source of truth, resumable):
   work unit**: a whole batch that blocked/errored (Step 3.4 whole-batch rollback) marks
   **every** constituent member `- [~]`.
 
-- If there are **no commits** → do NOT mark it fixed. Rewrite the prefix to
-  `- [~] ` and append:
+- If Step 3.4 classified the work unit **rejected** (checkpoint-mode user rejection of the
+  Step-3.4 commit diff; the code was rolled back with bug-11 and **no commit kept**) →
+  record it **bare `- [ ]`**: restore the plain open prefix and **drop any status line**
+  previously written under the bullet. A rejected item carries **no** `_attempted via …_`
+  provenance — it is simply open again and re-attempts on the next run (Step 1). This is
+  **checkpoint-only** (autonomous mode never rejects — its no-commit outcomes are all
+  *attempted*, below).
+
+- If Step 3.4 classified the work unit **attempted** — **any** no-commit outcome that is
+  **not** a checkpoint rejection (framework blocked/errored/no-op'd, committed-then-blocked
+  per bug-12, an owned/framework commit that failed the acceptance gate, **or any autonomous
+  no-commit outcome**) → do NOT mark it fixed. Rewrite the prefix to `- [~] ` and append:
 
   ```
   - [~] <original item text>
     _attempted via <framework> · no commit · <YYYY-MM-DD> — needs attention_
   ```
 
-When editing, replace only that bullet's prefix and insert the status line; never
-reorder or rewrite other items. If a status line from a previous run already
-exists under the bullet, replace it rather than stacking a second one.
+When editing, replace only that bullet's prefix and (for **fixed**/**attempted**) insert
+the status line; a **rejected** item gets the bare `- [ ]` prefix and **no** status line.
+Never reorder or rewrite other items. If a status line from a previous run already exists
+under the bullet, replace it (**fixed**/**attempted**) or drop it (**rejected**) rather than
+stacking a second one.
 
 This bookkeeping edit dirties **only** the validation file(s), which the Step-3.1
 clean-tree gate exempts (bug-6) — so in autonomous mode the run proceeds straight to the
@@ -938,9 +986,10 @@ code-only one from Step 3.4 (a single per-item commit, or the batch's one shared
 - **checkpoint:** after recording the outcome, STOP. Report: the item, the
   framework/skill used, the commit SHA(s), and the files touched. Ask the user to
   validate the fix and say continue. If the user reports the fix is wrong/partial,
-  leave the item open (revert its bullet to `- [ ]`, drop the status line),
-  optionally re-run it with the user's notes appended to the handoff prompt, and
-  only advance when they're satisfied. (When validation-fixer owned the commit in
+  leave the item open (revert its bullet to `- [ ]`, drop the status line) — this is the
+  **rejected** outcome of the Step-3.4 taxonomy, the same bare `- [ ]` a checkpoint
+  commit-diff rejection records — optionally re-run it with the user's notes appended to the
+  handoff prompt, and only advance when they're satisfied. (When validation-fixer owned the commit in
   Step 3.4 — including the **main-agent lane**, whose inline-fix diff approval is that
   item's validation gate, and a **batch**'s shared-commit diff approval — the diff
   approval there **is** this validation gate; don't prompt twice — just report the
@@ -977,8 +1026,12 @@ with two open items **A** and **B**. User runs `/validation-fixer <that file>`, 
 
 Rejection variant: if the user rejects A in checkpoint mode, the **validation-file-preserving
 rollback (bug-11)** drops A's code but keeps the backlog intact (whether it is untracked, or
-tracked-and-committed on a re-run); A stays `- [ ]` and B still starts from a clean
-(exempt-adjusted) tree.
+tracked-and-committed on a re-run); A is recorded **rejected → bare `- [ ]`** (no status line,
+per the Step-3.4 taxonomy) and B still starts from a clean (exempt-adjusted) tree. This is
+**distinct from *attempted*:** had A instead **blocked/errored** — a genuine failure, not a
+user rejection — it would be recorded **attempted → `- [~]`** with an `_attempted via …_`
+line, and rejection has no autonomous counterpart (autonomous opt-in is standing commit
+approval). Two different no-commit outcomes, two different recorded states.
 
 Batch note: A and B above are each their own **dedicated** work unit (each a **work unit of
 size 1**), so they land **two** separate code-only commits. Had they instead been one
@@ -1066,7 +1119,10 @@ own `[x]`/`[~]`/`[ ]` counts and its **own single shared SHA** across that file'
 batch members — there is **no cross-file aggregation of SHAs** (Q4: a shared SHA never spans
 files).
 
-End by listing any `[~]` items so the user knows what still needs hands-on work.
+End by listing any `[~]` items so the user knows what still needs hands-on work. The
+attention list stays **`[~]`-only**: a **rejected** item (bare `- [ ]`, no status line) is
+**not** in it — like any open item it simply re-attempts on the next run (Step 1, where both
+`[~]` and `[ ]` are OPEN). No summary bucket or token changes; the schema is unchanged.
 
 ## Edge cases
 
@@ -1074,8 +1130,12 @@ End by listing any `[~]` items so the user knows what still needs hands-on work.
 - Directory containing no `.md` → tell the user no validation files were found.
 - Item references a design file / code path → keep it verbatim in the handoff.
 - Framework returns with no new commit **and** no committable success (clean tree, or
-  `BLOCKED`) → `- [~]`, never `- [x]`. A framework that stops at `READY_TO_COMMIT` with
-  real changes is committed by the commit-ownership step (Step 3.4) and records `- [x]`.
+  `BLOCKED`) → `- [~]` (*attempted*), never `- [x]`. A framework that stops at
+  `READY_TO_COMMIT` with real changes is committed by the commit-ownership step (Step 3.4)
+  and records `- [x]`. **Carve-out:** a **checkpoint-mode user rejection** of an offered
+  commit diff is a **distinct** outcome — **rejected → bare `- [ ]`** (no status line), not
+  `[~]` — because the code was rolled back at the user's request, not because the fix failed
+  (Step-3.4 taxonomy; autonomous mode has no rejection path).
 - Framework committed but then **blocked/errored** (`BEFORE_SHA..AFTER_SHA` ≥ 1 commit yet
   the terminal result is `BLOCKED`/aborted/errored) → `- [~]`, never `- [x]` — the partial
   commits are rolled back (autonomous) or surfaced for the user's decision (checkpoint) per
@@ -1107,8 +1167,9 @@ End by listing any `[~]` items so the user knows what still needs hands-on work.
   commit occur**. The untrusted `[<ID>|<sev>]` token can never, on its own, buy entry into the
   reduced-review main-agent lane (Step-2.5 "Read each item's severity"; Step-1
   untrusted-evidence guard).
-- Re-run after partial progress → `- [x]` skipped; `- [~]`, `- [ ]`, plain `-`
-  re-attempted.
+- Re-run after partial progress → `- [x]` skipped; `- [~]` (attempted), `- [ ]` (open —
+  **including a rejected item**), plain `-` all re-attempted (both `[~]` and `[ ]` are OPEN
+  in Step 1).
 - Multi-line item → the whole bullet block is the item; the status line goes
   after the block.
 - Always run `git` commands from the target project's repo root.
@@ -1121,7 +1182,10 @@ End by listing any `[~]` items so the user knows what still needs hands-on work.
   framework, or by validation-fixer's commit-ownership step (from a framework's approved /
   `READY_TO_COMMIT` output, or from the main-agent lane's inline fix per the Step-3.4
   commit-ownership path). A commit produced by a run that then blocked/errored does **not**
-  count (bug-12). No real change → no commit → `[~]`; committed-then-blocked → `[~]`. A
+  count (bug-12). No real change → no commit → `[~]` (*attempted*); committed-then-blocked →
+  `[~]` — **except** a **checkpoint-mode user rejection** of the offered commit diff, which
+  is the *rejected* outcome: the code is rolled back and the item re-opens **bare `- [ ]`**
+  (no status line), not `[~]` (Step-3.4 / Step-4 taxonomy; rejected is checkpoint-only). A
   framework-*owned* commit additionally counts only when it passes the Step-3.4 **acceptance
   gate** — same branch, linear ancestry, validation file(s) excluded from the delta, clean
   non-validation tree; a commit that violates any of A–D is `[~]`, not `[x]`, even with a
