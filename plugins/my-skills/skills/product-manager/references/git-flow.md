@@ -81,6 +81,8 @@ After the orchestrator completes implementation and produces its proposed commit
 
    Sync stamps the story `done`, rolls up milestone/phase completion, and updates `roadmap.lock.json` + READMEs.
 
+   **2b. Timestamp-parity gate (html mode).** Sync re-renders roadmap `.html` pages, so before committing them run the timestamp-parity gate (see **Timestamp-parity gate** below). A red gate **halts the run** — do not commit the sync docs, push, or open the PR.
+
 3. **Commit the roadmap sync docs (lock + READMEs only).**
    The files modified by `/roadmap sync` (`roadmap.lock.json`, READMEs) are committed with a conventional message. Do **not** append a story trailer to this commit, and do **not** stage PM's own logs here — they need the PR URL, which does not exist yet (see step 6). Staging only the roadmap docs here keeps this commit part of the PR diff that reviewers see.
 
@@ -201,6 +203,23 @@ After `/roadmap sync` completes, verify that the story's status in `roadmap.lock
 
 ---
 
+## Timestamp-parity gate (html mode)
+
+Both re-render sites — `/roadmap sync` in the **Success-path sequence** (step 2b) and a mutation op in the **Planning-PR flow** (step 2b) — rewrite roadmap `.html` pages in place. Each page stamps its update time twice (machine-readable `data-updated-at` + the visible `updated:` value), so an in-place re-render that touches one and misses the other lets the two **silently drift**. PM runs the roadmap skill's parity gate on the freshly re-rendered pages **before committing them**, so drifted docs never reach a PR:
+
+```bash
+root="$(git rev-parse --show-toplevel)"
+if [ -f "$root/roadmap/check-timestamp-parity.cjs" ]; then
+  node "$root/roadmap/check-timestamp-parity.cjs"   # branch scope: the pages this branch touched
+fi
+```
+
+- **Guarded on existence — no-op in md mode.** The gate is materialized into `roadmap/` only by an html-mode roadmap build (roadmap `SKILL.md` → Materialize Step 5). In md mode (or before a roadmap exists) the file is absent and the check is skipped — `.md` pages carry the timestamp once (frontmatter), so nothing can diverge.
+- **Branch scope (default, no args).** The gate audits the pages this branch added or modified — including the just-re-rendered, still-**uncommitted** ones (the branch diff includes working-tree changes vs `HEAD`) — via the orchestrator's `.orchestrator/gate-scope.cjs`, present because PM runs the orchestrator. That is exactly the set of pages in the PR diff. (For a roadmap outside a PM/orchestrator context, `--all` runs the same check self-contained.)
+- **Red gate → halt** (same discipline as the **Trailer-mismatch guard**): the gate exits non-zero and lists the offending pages. PM **stops** — it does not commit the sync/planning docs, push, or open the PR. The fix is to re-render the flagged pages through the `roadmap` skill so both timestamps agree, then re-run PM for the story.
+
+---
+
 ## PM never merges PRs
 
 PM opens PRs and stops. Merging is a human action, performed after code review and any CI gates pass.
@@ -235,6 +254,7 @@ git checkout -b pm/roadmap-<verb>-<slug> <starting-branch>
 
 1. **Cut** `pm/roadmap-<verb>-<slug>` off the starting branch.
 2. **Invoke the roadmap op** (`set-release` / `ingest-spec` / `reorder` / `revise` / `release`). The op stages a diff, gates on approval (`--yes` skips the gate), writes the `/roadmap/` files, and prints a proposed commit message. PM writes nothing itself.
+   - **2b. Timestamp-parity gate (html mode).** When the op re-renders roadmap `.html` pages (any op that changes a readiness input), run the timestamp-parity gate (see **Timestamp-parity gate** below) before committing. A red gate **halts** — do not commit, push, or open the planning PR; re-render the flagged pages through the roadmap skill and re-run.
 3. **Commit** the roadmap files the op wrote with a `docs(roadmap):` message using the op's proposed text:
 
    ```bash

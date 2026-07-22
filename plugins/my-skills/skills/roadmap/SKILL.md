@@ -112,7 +112,8 @@ On approval:
    In md: `- [<id> — <title>](<target>) <status>`. In html: wrap the row label in `<a href="<target>">…</a>`, keeping the status pill and (phase user-story rows) the `<input type="checkbox" disabled>` outside the link. `<NNN-slug>` etc. is the same slug used to name the child's directory/file.
 3. Write `/roadmap/roadmap.lock.json` with version, `last_synced_sha: null`, and one entry per item.
 4. **Render the readiness views** (see Release readiness → Rendering): **always** render the embedded matrix in `/roadmap/README.<ext>` — a freshly-built untagged roadmap collapses it to a single `(untagged)` column, never omitted; **additionally** materialize the standalone dashboard `/roadmap/release-matrix.<ext>` (from `templates/release-matrix.template.<ext>`) only when the roadmap has ≥1 declared system OR ≥1 tagged story.
-5. Print a summary of all written paths (including `release-matrix.<ext>` when rendered).
+5. **Materialize the timestamp-parity gate — html mode only.** When `output_format = html`, copy `scripts/check-timestamp-parity.cjs` into `/roadmap/check-timestamp-parity.cjs` (a zero-dependency Node asset; re-copy on every build so it tracks the installed skill version). It is a shipped **gate asset**, not something this skill runs — see Timestamp-parity gate below. Skip in md mode (md pages carry no dual timestamp).
+6. Print a summary of all written paths (including `release-matrix.<ext>` and — in html mode — `check-timestamp-parity.cjs` when rendered).
 
 Item file schema (frontmatter keys, body sections, audit log format) is defined in `references/item-schema.md`. Every user-story file has exactly three body sections: `## Brief`, `## Acceptance`, `## Audit log`.
 
@@ -203,6 +204,26 @@ The `product-manager` skill exposes the same derivation read-only via its `relea
 
 ---
 
+## Timestamp-parity gate (html mode)
+
+Every rendered `.html` page carries its update timestamp **twice** — machine-readable `data-updated-at="{{updated_at}}"` on the root `<main>` and the visible `updated:` metadata value — both filled from one `{{updated_at}}` at render time. They can silently **diverge** afterward, because every re-render site (Materialize, Sync, Re-eval, the mutation-ops apply contract) rewrites pages in place and an edit can touch one occurrence and miss the other. Automated readers then trust one history while humans read another.
+
+`scripts/check-timestamp-parity.cjs` is a **fail-closed** gate that guards against this. It is materialized into `/roadmap/check-timestamp-parity.cjs` in html mode (build Step 5) as a shipped asset. **This skill is doc-only — it writes the gate but never runs it.** The gate is run by CI, by the orchestrator's gating, or by the user:
+
+```
+node roadmap/check-timestamp-parity.cjs            # branch scope: added/modified roadmap/**.html vs merge-base
+node roadmap/check-timestamp-parity.cjs --all      # audit every roadmap page (self-contained)
+node roadmap/check-timestamp-parity.cjs -- a.html  # audit explicit pages only (self-contained)
+```
+
+- **Fails closed on either half missing**, not only on a value mismatch: a page missing `data-updated-at` *or* the visible `updated:` value fails, so a half-rendered page can't slip through as a false OK. An index/aggregate page carrying **neither** timestamp is skipped (passes).
+- **Branch scope** (the default) reuses the orchestrator's shared `.orchestrator/gate-scope.cjs` — present whenever the orchestrator/PM stack is bootstrapped alongside the roadmap. The `--all` and explicit `--` modes are **self-contained** (no `.orchestrator/` needed), so a standalone roadmap can still audit its pages.
+- Regression harness: `scripts/check-timestamp-parity.test.cjs` (five fixtures proving fail-closed; run `node scripts/check-timestamp-parity.test.cjs`).
+
+Applies to **html mode only** — the `.md` variants carry `updated_at` once (frontmatter), so there is nothing to diverge and no gate is shipped.
+
+---
+
 ## References
 
 All normative details live in these files (relative to `plugins/my-skills/skills/roadmap/`):
@@ -214,6 +235,8 @@ All normative details live in these files (relative to `plugins/my-skills/skills
 | `references/config.md` | Config keys (incl. `systems: [{name, path?}]`), precedence chain, typo-guard rationale, `system`-op integrity lifecycle + orphan handling, `roadmap.config.json` schema |
 | `references/sync-and-reeval.md` | Rollup rules, Sync procedure (git command + steps), Re-eval procedure (incl. band preservation for `release` + `system` + `ingest-spec`) |
 | `references/mutation-ops.md` | Mutation ops (`set-release`, `set-system`, `ingest-spec`, `reorder`, `revise`, `release`, `system`, `add-item`) + `migrate-systems`, staged-diff markers (incl. `⊞ system`), cascade + `[mixed]`/`[cross-cutting]` badges, structural immutability, orphan handling |
+| `scripts/check-timestamp-parity.cjs` | Fail-closed html-mode gate: a page's machine-readable `data-updated-at` must equal its visible `updated:` value (see Timestamp-parity gate). Materialized into `/roadmap/` in html mode; run by CI/orchestrator/user, never by this skill. |
+| `scripts/check-timestamp-parity.test.cjs` | Standalone regression harness for the gate (five fixtures proving fail-closed). |
 
 Templates (rendered per `output_format`):
 
