@@ -13,7 +13,7 @@ A plan ID (e.g. `FEAT-001`, `FIX-003`) or a direct path to a plan `.md` file.
 
 Search `plans/feat/`, `plans/code-review/`, and `plans/qa/` for the plan's **`.md`** file matching the ID (e.g. `FEAT-003-*.md`). The `.md` is always the canonical source of truth — read it fully, even if an `.html` view sits beside it. Also read the paired `.progress.md`.
 
-> **html note:** if `output_format=html`, a `<ID>-<slug>.html` rendered view exists alongside the `.md`. The `.md` is always the source of truth — mutate it first. When (and only when) `output_format=html` AND the `<ID>-<slug>.html` file exists beside the `.md`, you ALSO keep its task state in sync as you go: mirror each `[ ] → [x]` into the matching plan-html checkbox, refresh the progress overview, and stamp `data-updated-at`. See Step 4b-html. All other artifacts' `.html` views remain read-only (regenerated downstream); this sync applies to the plan (`FEAT`/`FIX`/`QAF`) html view you are executing, nothing else. `.progress.md` stays markdown-only.
+> **html note:** if `output_format=html`, a `<ID>-<slug>.html` rendered view exists alongside the `.md`. The `.md` is always the source of truth — mutate it first, then regenerate the view. When (and only when) `output_format=html` AND the `<ID>-<slug>.html` file exists beside the `.md`, you keep its task state in sync as you go by re-running `node .orchestrator/render-artifact.cjs <plan.md>` after each checkbox flip (see Step 4b-html) — never hand-edit the html. All other artifacts' `.html` views are likewise renders of their `.md`; this live re-render applies to the plan (`FEAT`/`FIX`/`QAF`) html view you are executing, nothing else. `.progress.md` stays markdown-only.
 
 **If status is not `PLANNED`**: check current status. If `IN_PROGRESS`, continue from the first unchecked `[ ]` task. If `DONE`, inform the user — nothing to implement.
 
@@ -57,7 +57,7 @@ Session started. Plan status → IN_PROGRESS.
 
 Update the `**Status**` field in `.progress.md` to `IN_PROGRESS`.
 
-**html sync (html mode + plan `.html` exists only):** set the plan html's `<main data-status="in_progress">` and `data-updated-at` to match. See Step 4b-html for the sync rules.
+**html sync (html mode + plan `.html` exists only):** after writing `status: IN_PROGRESS` and the new `updated_at` to the plan `.md`, regenerate the view by re-running the renderer (see Step 4b-html) so the html reflects it.
 
 ## Step 4 — Implement tasks in strict TDD order
 
@@ -89,17 +89,17 @@ Parse the task description. Identify:
 3. If other previously-passing tests break, fix the implementation (not the tests).
 4. Mark the task `[x]` in the plan file.
 
-### 4b-html — Mirror completion into the plan html view (html mode only)
+### 4b-html — Regenerate the plan html view (html mode only)
 
-Run this immediately after marking a task `[x]` in the `.md`, and ONLY when both are true: `output_format=html` AND the `<ID>-<slug>.html` file exists beside the plan `.md`. Otherwise skip this sub-step entirely.
+Run this immediately after marking a task `[x]` (and updating `updated_at`) in the plan `.md`, and ONLY when both are true: `output_format=html` AND the `<ID>-<slug>.html` file exists beside the plan `.md`. Otherwise skip this sub-step entirely.
 
-For the task you just checked off:
+The `.md` is authoritative; do NOT hand-edit the `.html`. Regenerate it from the current `.md` by re-running the renderer:
 
-1. Find its `<li>` in the plan html — match by the task's `task__id` (e.g. `T-03`) or, failing that, by the task description text — and change its `<input type="checkbox" disabled>` to `<input type="checkbox" disabled checked>`.
-2. Refresh the progress overview to the new counts: update the `.progress__label` text (`{done} / {total} ({pct}%)`), the `.progress__fill` `data-pct` and inline `style="width: {pct}%;"`, and the `role="progressbar"` `aria-valuenow`. `{pct}` = round(done / total × 100).
-3. Set the root `<main>` `data-updated-at` to the same ISO 8601 datetime you wrote to the `.md`.
+```bash
+node .orchestrator/render-artifact.cjs plans/<dir>/<ID>-<slug>.md
+```
 
-Edit only these attributes/nodes — do not restyle or restructure the file. If the `.md` and `.html` ever disagree, the `.md` wins; correct the `.html` to match it.
+The renderer re-derives the checkbox states, the progress overview counts, and the `<main data-*>` shell (including `data-updated-at`) from the `.md`, so the rendered plan tracks reality. It exits non-zero without writing if the plan structure is non-conformant — if that happens, fix the `.md`, not the `.html`. Re-running it is idempotent and cheap; run it once per checked-off task (or once at the end of the session — a single final render also satisfies the pairing gate).
 
 ### 4c — Log each completed task
 
@@ -172,7 +172,7 @@ Total tasks completed this session: {N}
 ```
 
 4. Update `**Status**` in `.progress.md` to `DONE`.
-5. **html sync (html mode + plan `.html` exists only):** set the plan html's `<main data-status="done">` and `data-updated-at`. All task checkboxes should already read `checked` and the progress overview should show `{N} / {N} (100%)` from Step 4b-html; verify and correct if any lag.
+5. **html sync (html mode + plan `.html` exists only):** after writing `status: DONE` and the final `updated_at` to the plan `.md`, run a final `node .orchestrator/render-artifact.cjs plans/<dir>/<ID>-<slug>.md` so the view reflects DONE with all checkboxes `checked` and the progress overview at `{N} / {N} (100%)`. This one render also satisfies the pairing gate for the plan.
 
 ## Code style
 
