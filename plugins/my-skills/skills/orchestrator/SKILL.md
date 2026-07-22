@@ -47,15 +47,16 @@ Record availability in memory for the current run. Do **not** block bootstrap on
 
 1. **Render agent templates**: materialize each of the six files `templates/{role}.md` (roles: brainstormer, architect, coder, tester, reviewer, qa) for the current host. In Claude Code, copy each template verbatim into `target/.claude/agents/{role}.md`. In opencode, write each role to `target/.opencode/agent/{role}.md` with opencode-compatible frontmatter (`description` copied from the template, `mode: subagent`, omit Claude-only shorthand model values like `model: opus` unless the user provided a valid `provider/model`), then copy the template body unchanged. The templates are project-agnostic and read `.orchestrator/PROJECT-CONTEXT.md` at runtime.
 
-2. **Materialize artifact rules + html scaffolds (load-bearing).** Subagents cannot read the skill's own `references/` or `templates/html/` directories — those paths do not exist in the target project. Copy them into `.orchestrator/` so every role can read them:
+2. **Materialize artifact rules + html scaffolds + render scripts (load-bearing).** Subagents cannot read the skill's own `references/`, `templates/html/`, or `scripts/` directories — those paths do not exist in the target project. Copy them into `.orchestrator/` so every role can read and run them:
    - `references/artifact-format.md` → `.orchestrator/artifact-format.md`
    - `templates/html/*.template.html` → `.orchestrator/html-templates/` (all seven: spec, plan, test-report, code-review, qa-report, final-report, progress-timeline)
+   - `scripts/render-artifact.cjs`, `scripts/check-artifact-pairing.cjs`, `scripts/check-artifact-links.cjs`, `scripts/gate-scope.cjs` → `.orchestrator/` (the four runtime `.cjs`; do NOT copy the `*.test.cjs` files or `scripts/README.md`). These are zero-dependency Node scripts — no `npm install` needed. The renderer resolves the scaffolds from the sibling `.orchestrator/html-templates/`, so copy step-2 scaffolds and these scripts together.
 
-   Re-copy these on every bootstrap (including `--setup` re-runs) so they stay in sync with the installed skill version. If this step is skipped, `output_format=html` silently degrades to md because agents cannot find the scaffolds.
+   Re-copy all three on every bootstrap (including `--setup` re-runs) so they stay in sync with the installed skill version. If the scaffolds/scripts are missing, `output_format=html` silently degrades to md because roles cannot render the `.html`.
 
 3. **Write config**: merge `templates/config.template.json` with any CLI overrides (precedence: CLI arg > `.orchestrator/config.json` > default) and write the result to `.orchestrator/config.json`.
 
-4. **Print bootstrap summary**: list all created/updated paths (including `.orchestrator/artifact-format.md` and `.orchestrator/html-templates/`) and the achieved context confidence.
+4. **Print bootstrap summary**: list all created/updated paths (including `.orchestrator/artifact-format.md`, `.orchestrator/html-templates/`, and the four `.orchestrator/*.cjs` render/gate scripts) and the achieved context confidence.
 
 ## Pipeline
 
@@ -105,14 +106,14 @@ ORCHESTRATOR CONTEXT (authoritative — do not recompute):
 output_format={resolved output_format}
 automation_level={resolved automation_level}   ← brainstormer acts on this; other roles ignore it
 Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
-HTML scaffolds: .orchestrator/html-templates/<artifact>.template.html  (only used when output_format=html)
+HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
 ID to use: {PREFIX}-{ID-TOKEN}      ← producing roles ONLY; use verbatim, do not compute your own
 ```
 
 - `output_format` is resolved once per run (CLI arg > `.orchestrator/config.json` > default `md`).
 - `automation_level` is resolved once per run (CLI `--mode` > `.orchestrator/config.json` > default `manual`). Only the brainstormer changes behavior on it: `manual` interviews the user; `autonomous` resolves open questions with the brainstormer's own defaults and produces a READY spec without prompting. Include it in every preamble for consistency, but the other five roles ignore it.
 - `ID to use:` is included for the roles that create a numbered artifact (brainstormer→SPEC, architect→FEAT/FIX/QAF, tester→TEST, reviewer→CR, qa→QA). The coder creates no new artifact, so it gets the preamble WITHOUT an `ID to use:` line.
-- Always emit the `.md` artifact; when `output_format=html`, ALSO emit the `.html` rendered view (per `artifact-format.md`).
+- Always emit the `.md` artifact; when `output_format=html`, the producing role ALSO renders the paired `.html` by running `node .orchestrator/render-artifact.cjs <artifact.md>` (per `artifact-format.md`) — HTML is never hand-authored.
 
 #### Generating `{PREFIX}-{ID-TOKEN}` before each producing spawn
 
@@ -244,7 +245,7 @@ output_format={resolved output_format}
 automation_level={resolved automation_level}
 clarity_threshold={resolved clarity_threshold}   ← manual-mode interview target; keep asking until self-rated clarity ≥ this
 Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
-HTML scaffolds: .orchestrator/html-templates/<artifact>.template.html  (only used when output_format=html)
+HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
 ID to use: {computed SPEC-<id>}
 
 {user input}
@@ -286,7 +287,7 @@ Prompt to send:
 ORCHESTRATOR CONTEXT (authoritative — do not recompute):
 output_format={resolved output_format}
 Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
-HTML scaffolds: .orchestrator/html-templates/<artifact>.template.html  (only used when output_format=html)
+HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
 ID to use: {computed FEAT-<id>}
 
 Source spec: {spec_path}
@@ -313,7 +314,7 @@ Invoke the **coder** subagent with the role-prompt preamble (no `ID to use:` lin
 ORCHESTRATOR CONTEXT (authoritative — do not recompute):
 output_format={resolved output_format}
 Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
-HTML scaffolds: .orchestrator/html-templates/<artifact>.template.html  (only used when output_format=html)
+HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
 
 Implement plan {plan_id}.
 Follow your full coder workflow and print the structured session summary.
@@ -339,7 +340,7 @@ Prompt to send:
 ORCHESTRATOR CONTEXT (authoritative — do not recompute):
 output_format={resolved output_format}
 Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
-HTML scaffolds: .orchestrator/html-templates/<artifact>.template.html  (only used when output_format=html)
+HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
 ID to use: {computed TEST-<id>}
 
 Run tests for plan {plan_id}.
@@ -389,7 +390,7 @@ Compute the CR ID: `newid CR` (unless `MAESTRO_CR_TARGET_PATH` is set — then u
 ORCHESTRATOR CONTEXT (authoritative — do not recompute):
 output_format={resolved output_format}
 Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
-HTML scaffolds: .orchestrator/html-templates/<artifact>.template.html  (only used when output_format=html)
+HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
 ID to use: {computed CR-<id>}
 
 Review plan {plan_id}. The plan is in DONE status.
@@ -430,7 +431,7 @@ Compute the fix-plan ID: `newid FIX`. Invoke **architect** with the role-prompt 
 ORCHESTRATOR CONTEXT (authoritative — do not recompute):
 output_format={resolved output_format}
 Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
-HTML scaffolds: .orchestrator/html-templates/<artifact>.template.html  (only used when output_format=html)
+HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
 ID to use: {computed FIX-<id>}
 
 Fix plan for code review. Input type: fix.
@@ -447,7 +448,7 @@ Invoke **coder** with the role-prompt preamble (no `ID to use:` line):
 ORCHESTRATOR CONTEXT (authoritative — do not recompute):
 output_format={resolved output_format}
 Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
-HTML scaffolds: .orchestrator/html-templates/<artifact>.template.html  (only used when output_format=html)
+HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
 
 Implement plan {fix_plan_id}.
 Follow your full coder workflow and print the structured session summary.
@@ -469,7 +470,7 @@ When re-running tester, compute a fresh report ID (`newid TEST`) and use the sam
 ORCHESTRATOR CONTEXT (authoritative — do not recompute):
 output_format={resolved output_format}
 Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
-HTML scaffolds: .orchestrator/html-templates/<artifact>.template.html  (only used when output_format=html)
+HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
 ID to use: {computed TEST-<id>}
 
 Run tests for plan {fix_plan_id}.
@@ -490,7 +491,7 @@ Compute the QA report ID: `newid QA`. Invoke the **qa** subagent with the role-p
 ORCHESTRATOR CONTEXT (authoritative — do not recompute):
 output_format={resolved output_format}
 Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
-HTML scaffolds: .orchestrator/html-templates/<artifact>.template.html  (only used when output_format=html)
+HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
 ID to use: {computed QA-<id>}
 
 Run the QA suite for plan {plan_id}. The plan is DONE and has an APPROVED CR.
@@ -561,7 +562,7 @@ Compute the QAF plan ID: `newid QAF`. Invoke **architect** with the role-prompt 
 ORCHESTRATOR CONTEXT (authoritative — do not recompute):
 output_format={resolved output_format}
 Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
-HTML scaffolds: .orchestrator/html-templates/<artifact>.template.html  (only used when output_format=html)
+HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
 ID to use: {computed QAF-<id>}
 
 QA remediation plan. Input type: qa.
@@ -578,7 +579,7 @@ Invoke **coder** with the role-prompt preamble (no `ID to use:` line):
 ORCHESTRATOR CONTEXT (authoritative — do not recompute):
 output_format={resolved output_format}
 Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
-HTML scaffolds: .orchestrator/html-templates/<artifact>.template.html  (only used when output_format=html)
+HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
 
 Implement plan {qaf_plan_id}.
 Follow your full coder workflow and print the structured session summary.
@@ -593,7 +594,7 @@ Compute the CR ID: `newid CR`. Invoke **reviewer** with the role-prompt preamble
 ORCHESTRATOR CONTEXT (authoritative — do not recompute):
 output_format={resolved output_format}
 Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
-HTML scaffolds: .orchestrator/html-templates/<artifact>.template.html  (only used when output_format=html)
+HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
 ID to use: {computed CR-<id>}
 
 Review plan {qaf_plan_id}. The plan is in DONE status.
@@ -649,11 +650,13 @@ On READY_TO_COMMIT (or READY_WITH_WARNINGS):
    Functional requirements section as the criteria.
 3. **Persist the eval artifact** to the canonical `plans/eval/` directory (allow-listed in
    `artifact-format.md`). Compute the ID with `newid EVAL`, derive the slug from the
-   plan title, and write `plans/eval/EVAL-{NNN}-{slug}.md` (canonical, with frontmatter
-   `id`, `status: PASS | ISSUES | SKIPPED`, `plan`, `created_at`). When `output_format=html`,
-   ALSO render `plans/eval/EVAL-{NNN}-{slug}.html` from
-   `.orchestrator/html-templates/qa-report.template.html` (closest scaffold) following
-   `artifact-format.md`. Never create any directory other than `plans/eval/` for eval output.
+   plan title, and write `plans/eval/EVAL-{NNN}-{slug}.md` (canonical). Its frontmatter MUST
+   carry the five keys the renderer and the pairing gate require —
+   `id`, `status: PASS | ISSUES | SKIPPED`, `created_at`, `updated_at`, `cycle` — plus `plan`.
+   When `output_format=html`, render the view with
+   `node .orchestrator/render-artifact.cjs plans/eval/EVAL-{NNN}-{slug}.md` (the renderer
+   auto-selects the qa-report scaffold for `plans/eval/` sources). Never create any directory
+   other than `plans/eval/` for eval output.
 
 ### Step 7b — Final report composer
 
@@ -661,12 +664,13 @@ If `output_format=html`, run Step 7c (progress timeline render).
 
 **Persist the final report** to the canonical `plans/final/` directory (allow-listed in
 `artifact-format.md`). Compute the ID with `newid FINAL`, derive the slug from the
-plan title, and ALWAYS write `plans/final/FINAL-{NNN}-{slug}.md` (canonical). When
-`output_format=html`, ALSO render `plans/final/FINAL-{NNN}-{slug}.html` from
-`.orchestrator/html-templates/final-report.template.html`, filling its Related region with
-relative links to the spec, plan, test report, code review, and qa report (per
-`artifact-format.md` → Related navigation). Never create any directory other than `plans/final/`
-for the final report.
+plan title, and ALWAYS write `plans/final/FINAL-{NNN}-{slug}.md` (canonical). Its frontmatter
+MUST carry the five required keys (`id`, `status`, `created_at`, `updated_at`, `cycle`), and its
+body MUST include the **Related** region linking to the spec, plan, test report, code review, and
+qa report as relative paths (per `artifact-format.md` → Related navigation) — the renderer carries
+those links into the `.html`. When `output_format=html`, render the view with
+`node .orchestrator/render-artifact.cjs plans/final/FINAL-{NNN}-{slug}.md`. Never create any
+directory other than `plans/final/` for the final report.
 
 **File verification (mandatory before printing the banner):**
 
@@ -676,6 +680,10 @@ after the retry, stop and report — do **NOT** print the `pipeline complete` ba
 the contract downstream consumers rely on (the `product-manager` skill treats it as proof the
 FINAL artifact exists and moves straight to commit/PR); printing it without the persisted file on
 disk is the silent-drop failure mode this step guards against.
+
+Then, when `output_format=html`, run **Step 7d (artifact validation gates)** and confirm both
+gates are green. A red gate blocks the banner exactly as a missing FINAL file does — resolve it
+(re-render or fix frontmatter) before proceeding.
 
 In addition, PRINT the report below to stdout (the printed summary is the same regardless of
 mode). If READY_WITH_WARNINGS arrived from QA, carry the G8 warning into the Issues found list.
@@ -708,10 +716,26 @@ Output only — review the diff, then commit and open the PR yourself.
 
 ### Step 7c — Progress timeline (html mode)
 
-When `output_format=html`, after the pipeline reaches a terminal state, render a progress timeline for the active plan:
+When `output_format=html`, after the pipeline reaches a terminal state, render a progress timeline for the active plan by running the renderer on its `.progress.md` append-log:
 
-1. Read the plan's `.progress.md` log entries (each entry is a role/action with a status word and an ISO-8601 timestamp).
-2. Fill `.orchestrator/html-templates/progress-timeline.template.html`: emit one timeline row per log entry (role → action/status → timestamp), mapping each status word to its pill class via the standard mapping (`success | active | warning | danger | muted` — done/PASS/APPROVED/READY_TO_COMMIT→success; in_progress/DRAFT→active; BELOW_FLOOR/READY_WITH_WARNINGS→warning; BLOCKED/BLOCKED_STALE/REQUEST_CHANGES/STALLED→danger; todo/superseded→muted). Fill the `<main data-*>` shell and the Related link to the plan.
-3. Write the result to `<plan-path-without-.md>.progress.html` (e.g. `plans/feat/FEAT-003-slug.progress.html`).
+```bash
+node .orchestrator/render-artifact.cjs plans/<dir>/<ID>-<slug>.progress.md
+```
+
+The renderer auto-selects the `progress-timeline` scaffold for a `*.progress.md` source, emits one timeline row per log entry (role → action/status → timestamp) with the status→pill mapping, fills the `<main data-*>` shell and the Related link to the plan, and writes `<plan-path-without-.md>.progress.html`. `.progress.md` stays the markdown source-of-truth log; the `.html` is a regenerated read-only view.
 
 This step ALSO runs at the STALLED/BLOCKED stop points (review-cycle limit, qa-cycle limit, tester BLOCKED, qa BLOCKED_STALE) so a halted run still produces a timeline. In `md` mode this step is skipped — `.progress.md` is the only progress artifact.
+
+### Step 7d — Artifact validation gates (html mode — blocking)
+
+When `output_format=html`, after Step 7b persists the final report and BEFORE printing the `pipeline complete` banner, run both artifact gates over the branch's artifacts. They are shell-free and fail closed, so a green verdict is trustworthy:
+
+```bash
+node .orchestrator/check-artifact-pairing.cjs   # branch-added plans/**.md each have a .html sibling + the 5 required frontmatter keys
+node .orchestrator/check-artifact-links.cjs     # every local link in a branch-added plans/**.html resolves on disk
+```
+
+- If both print `<gate>: OK` and exit 0 → proceed to the banner.
+- If either exits non-zero → it lists the offending artifacts. This almost always means a `.md` was written without its renderer pass (missing `.html` sibling), a `.md` is missing a required frontmatter key, or a report links to an artifact that was never rendered. **Re-render the named artifacts** (`node .orchestrator/render-artifact.cjs <artifact.md>`) or fix the frontmatter, then re-run the failing gate. Do **NOT** print the `pipeline complete` banner while a gate is red — a red gate is the html-mode analogue of the file-verification guard in Step 7b.
+
+If the pipeline halts at a STALLED/BLOCKED stop point (so no final report is produced), the gates are skipped — there is no completion banner to guard. In `md` mode this step is skipped entirely (no `.html` artifacts exist to pair or link-check).

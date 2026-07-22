@@ -46,7 +46,7 @@ printf 'TEST-%s-%s\n' "$ts" "$rnd"
 
 Derive the slug from the plan title.
 
-**Always write the `.md`** at `plans/test/TEST-{NNN}-{slug}.md` (canonical, frontmatter below). When `output_format=html`, ALSO render `plans/test/TEST-{NNN}-{slug}.html` from `.orchestrator/html-templates/test-report.template.html`, preserving the `<main data-*>` shell.
+**Always write the `.md`** at `plans/test/TEST-{NNN}-{slug}.md` (canonical, frontmatter below). Include the **Related** region in the `.md` body — a relative link to the plan, per `.orchestrator/artifact-format.md` → Related navigation. When `output_format=html`, render the paired view by running `node .orchestrator/render-artifact.cjs plans/test/TEST-{NNN}-{slug}.md` (it carries the Related links into the `.html`) — do NOT hand-write HTML.
 
 Frontmatter example (`md`):
 
@@ -57,6 +57,7 @@ plan: {PLAN-ID}
 title: Test Report — {Plan Title}
 status: PASS | BELOW_FLOOR | BLOCKED
 created_at: {ISO 8601 datetime}
+updated_at: {ISO 8601 datetime}
 cycle: 0
 ---
 ```

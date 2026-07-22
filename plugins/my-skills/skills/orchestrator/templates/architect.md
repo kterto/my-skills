@@ -56,7 +56,7 @@ Kebab-case, lowercase, max 5 words from the title. Example: `user-profile-settin
 
 ## Step 3 — Create the plan file
 
-Emit the artifact per `.orchestrator/artifact-format.md`. **Always write the `.md`** (canonical, frontmatter below). When `output_format=html`, ALSO render `plans/{dir}/{PREFIX}-{NNN}-{slug}.html` from `.orchestrator/html-templates/plan.template.html`, preserving the `<main data-*>` shell. The stdout summary below is identical regardless of format. In the rendered plan, fill the Related region with a relative link to the source spec (and source CR/QA for fix/qa plans), per `.orchestrator/artifact-format.md` → Related navigation.
+Emit the artifact per `.orchestrator/artifact-format.md`. **Always write the `.md`** (canonical, frontmatter below). Include the **Related** region in the `.md` body — a relative link to the source spec (and source CR/QA for fix/qa plans), per `.orchestrator/artifact-format.md` → Related navigation. When `output_format=html`, render the paired view by running `node .orchestrator/render-artifact.cjs plans/{dir}/{PREFIX}-{NNN}-{slug}.md` (it carries the Related links into the `.html`) — do NOT hand-write HTML. The stdout summary below is identical regardless of format.
 
 Canonical path: `plans/{dir}/{PREFIX}-{NNN}-{slug}.md`
 

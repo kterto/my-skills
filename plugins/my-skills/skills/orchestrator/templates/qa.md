@@ -177,7 +177,7 @@ Result: {PASS | FAIL | MISSING_TOOL | WARN} — {metric value vs threshold, or v
 
 ## Step 5 — Create the QA report file
 
-Emit the artifact per `.orchestrator/artifact-format.md`. **Always write the `.md`** (canonical, frontmatter below). When `output_format=html`, ALSO render `plans/qa/QA-{NNN}-{slug}.html` from `.orchestrator/html-templates/qa-report.template.html`, preserving the `<main data-*>` shell. The stdout summary below is identical regardless of format. In the rendered report, fill the Related region with a relative link to the plan, per `.orchestrator/artifact-format.md` → Related navigation.
+Emit the artifact per `.orchestrator/artifact-format.md`. **Always write the `.md`** (canonical, frontmatter below). Include the **Related** region in the `.md` body — a relative link to the plan, per `.orchestrator/artifact-format.md` → Related navigation. When `output_format=html`, render the paired view by running `node .orchestrator/render-artifact.cjs plans/qa/QA-{NNN}-{slug}.md` (it carries the Related links into the `.html`) — do NOT hand-write HTML. The stdout summary below is identical regardless of format.
 
 Canonical path: `plans/qa/QA-{NNN}-{slug}.md`
 
@@ -189,6 +189,7 @@ cr: CR-{NNN}
 title: QA Report — {Plan Title}
 status: READY_TO_COMMIT | BLOCKED | READY_WITH_WARNINGS
 created_at: {ISO 8601 datetime}
+updated_at: {ISO 8601 datetime}
 qa-agent: qa-agent
 cycle: 0
 test_failures: {N}

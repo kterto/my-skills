@@ -127,7 +127,7 @@ Kebab-case, lowercase, max 5 words from the title. Example: `user-profile-settin
 
 ## Step 6 — Write the spec file
 
-Emit the artifact per `.orchestrator/artifact-format.md`. **Always write the `.md`** (canonical, frontmatter below). When `output_format=html`, ALSO render `plans/specs/SPEC-{NNN}-{slug}.html` from `.orchestrator/html-templates/spec.template.html`, preserving the `<main data-*>` shell. The stdout summary below is identical regardless of format.
+Emit the artifact per `.orchestrator/artifact-format.md`. **Always write the `.md`** (canonical, frontmatter below). When `output_format=html`, render the paired view by running `node .orchestrator/render-artifact.cjs plans/specs/SPEC-{NNN}-{slug}.md` — do NOT hand-write HTML. The stdout summary below is identical regardless of format.
 
 Canonical path: `plans/specs/SPEC-{NNN}-{slug}.md`
 
