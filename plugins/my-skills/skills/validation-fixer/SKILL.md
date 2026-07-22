@@ -306,9 +306,14 @@ are final on approval** (not provisional).
   to a **single member** is run as a dedicated single-item run — one orchestrator
   run, per-item commit, one `[x]`. The shared-commit machinery engages only at
   **≥2 members**.
-- **Q3 — User edits are unrestricted, within the Q4 file boundary.** At the approval
+- **Q3 — User edits are unrestricted among the batch and dedicated lanes, within the Q4
+  file boundary; a move into the main-agent lane is provisional.** At the approval
   prompt the user may move **any item to any lane**, across all three lanes, overriding
-  the severity **lane defaults** (which items batch, and at what granularity). In
+  the severity **lane defaults** (which items batch, and at what granularity). **Moves
+  among the batch and dedicated lanes are unrestricted and final on approval** — both run
+  the full pipeline, so a re-lane there changes only commit granularity, never review
+  rigor; the **main-agent lane is the only lane whose entry a user edit cannot finalize**
+  (see the main-agent-lane carve-out below). In
   particular, **"collapse everything into a single batch"** pulls *every* open item into
   the batch lane. Because a batch never spans files (Q4, the governing invariant), in
   **directory mode** (a run over ≥2 files) "collapse everything" means **one collapsed
@@ -316,7 +321,16 @@ are final on approval** (not provisional).
   **one shared commit scoped to that file**, so N collapse-all files yield **N batches and
   N shared commits**. "Overriding all lane defaults" overrides the severity **lane
   defaults** only (which items batch / at what granularity) — it **never** overrides the
-  Q4 file boundary. **Single-file mode is the degenerate case:** "one batch per file"
+  Q4 file boundary. **Main-agent-lane carve-out (mirrors the Q4 file-boundary carve-out).**
+  A user edit may **propose** moving *any* item into the reduced-review main-agent lane, but
+  that placement is **provisional only** — a user edit **never finalizes** main-agent (inline)
+  entry, just as it never overrides the Q4 file boundary. A user-moved main-agent placement is
+  finalized by **exactly the same authority as a default main-agent placement**: the
+  code-grounded severity verification performed at lane-execution time (the Phase-2 gate in
+  "Main-agent lane (low / info)"), and nothing else. If that verification does **not**
+  corroborate genuine `low`/`info`, the item is reclassified `unknown` and escalated to the
+  **dedicated lane** via the existing `unknown → dedicated` treatment — with **no inline fix
+  and no inline commit** on that path. **Single-file mode is the degenerate case:** "one batch per file"
   reduces to the existing single collapsed batch, so this wording is a **superset** of —
   not a change to — current single-file behavior.
 - **Q4 — Batches never span files (the hard invariant that governs Q3).** The batch
@@ -659,7 +673,10 @@ fixed **inline by the host's own main agent**, with **no framework spawned**. Bo
 **`low`/`info`** severity, governed by the Step-2 preflight (bug-7) and the
 per-work-unit bug-6 gate. The severity that *proposed* this lane is an untrusted
 provisional hint (Step-2.5, "Read each item's severity"), so entry is **not** yet final
-— the lane's **first action** is to verify it against the code.
+— the lane's **first action** is to verify it against the code. This holds identically
+whether the placement came from the default severity mapping **or** from a user edit that
+moved the item here (Step-2.5 Q3 main-agent-lane carve-out): both are provisional and
+finalized by the same verification below.
 
 - **Code-grounded severity verification — the lane's FIRST action (both modes).** Before
   reading for a fix, the **main agent**, working **inside the Step-3.2 untrusted-evidence
