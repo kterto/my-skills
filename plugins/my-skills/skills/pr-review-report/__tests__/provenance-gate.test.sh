@@ -8,10 +8,12 @@
 set -euo pipefail
 
 # Detection condition, identical to step 2b. Prints "untrusted" or "trusted".
+# The diff guard's right side is pinned to the captured reviewed_head sha (the Step-1
+# snapshot), NOT a bare HEAD — so the gate judges the exact tree the report advertises.
 provenance() {
-  local root="$1" mb="$2"
+  local root="$1" mb="$2" reviewed_head="$3"
   if git -C "$root" ls-files --error-unmatch ".pr-review/review-state.json" >/dev/null 2>&1 \
-     || { [ -n "$mb" ] && ! git -C "$root" diff --quiet "$mb"...HEAD -- ".pr-review/review-state.json" 2>/dev/null; }; then
+     || { [ -n "$mb" ] && ! git -C "$root" diff --quiet "$mb"..."$reviewed_head" -- ".pr-review/review-state.json" 2>/dev/null; }; then
     echo untrusted
   else
     echo trusted
@@ -40,7 +42,8 @@ check() { # desc expected actual
 A="$(mkrepo)"; git -C "$A" checkout -q -b feat
 writestate "$A"
 mbA="$(git -C "$A" merge-base master HEAD 2>/dev/null || git -C "$A" merge-base main HEAD 2>/dev/null || echo "")"
-check "untracked file is trusted" trusted "$(provenance "$A" "$mbA")"
+rhA="$(git -C "$A" rev-parse HEAD)"   # reviewed_head captured at review time (== HEAD here)
+check "untracked file is trusted" trusted "$(provenance "$A" "$mbA" "$rhA")"
 
 # Case B: branch commits/tracks the file -> untrusted (forgeable).
 B="$(mkrepo)"; base_b="$(git -C "$B" branch --show-current)"; git -C "$B" checkout -q -b feat
@@ -48,7 +51,8 @@ writestate "$B"
 git -C "$B" add -f .pr-review/review-state.json
 git -C "$B" commit -qm "forge review state"
 mbB="$(git -C "$B" merge-base "$base_b" HEAD)"
-check "branch-committed file is untrusted" untrusted "$(provenance "$B" "$mbB")"
+rhB="$(git -C "$B" rev-parse HEAD)"   # reviewed_head captured at review time (== HEAD here)
+check "branch-committed file is untrusted" untrusted "$(provenance "$B" "$mbB" "$rhB")"
 
 # Case D: file tracked at merge-base, unchanged on branch -> untrusted (reject tracked by default).
 D="$(mkrepo)"; base_d="$(git -C "$D" branch --show-current)"
@@ -56,7 +60,8 @@ writestate "$D"; git -C "$D" add -f .pr-review/review-state.json; git -C "$D" co
 git -C "$D" checkout -q -b feat
 printf 'more\n' >> "$D/README.md"; git -C "$D" add README.md; git -C "$D" commit -qm work
 mbD="$(git -C "$D" merge-base "$base_d" HEAD)"
-check "tracked-at-base unchanged file is untrusted" untrusted "$(provenance "$D" "$mbD")"
+rhD="$(git -C "$D" rev-parse HEAD)"   # reviewed_head captured at review time (== HEAD here)
+check "tracked-at-base unchanged file is untrusted" untrusted "$(provenance "$D" "$mbD" "$rhD")"
 
 rm -rf "$A" "$B" "$D"
 [ "$fail" -eq 0 ] && echo "PASS: provenance gate (sec-2)" || echo "FAIL: provenance gate (sec-2)"

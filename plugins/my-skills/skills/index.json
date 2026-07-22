@@ -88,6 +88,7 @@
         "__tests__/backlog-owner-gate.test.sh",
         "__tests__/branch-slug.test.sh",
         "__tests__/comment-draft.test.cjs",
+        "__tests__/drift-warning.test.sh",
         "__tests__/findings-md-format.test.cjs",
         "__tests__/fixtures/findings.md",
         "__tests__/malformed-state.test.cjs",
