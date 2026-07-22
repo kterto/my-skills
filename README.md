@@ -8,7 +8,7 @@ Authored agent skills for [Claude Code](https://code.claude.com) and [opencode](
 |---|---|
 | `clean-code-gates` | Runs Clean Code quality gates (G1–G7: coverage, complexity, length/nesting, naming, no-comments, mutation, dependency-structure) and emits an agnostic JSON + Markdown report. Portable across stacks (node-ts, dart-flutter). |
 | `commit-pr` | Stage, commit, push the current branch, and open a PR targeting `main`. Confirms before any remote mutation. |
-| `validation-fixer` | Routes recorded user-validation bugs through a chosen framework (superpowers / gsd / orchestrator) and tracks each fix in-file. |
+| `validation-fixer` | Routes recorded user-validation bugs through a chosen framework (superpowers / gsd / orchestrator) and tracks each fix in-file; orchestrator items are severity-routed (fixed inline, batched, or run dedicated). |
 | `design-to-code` | Translates Claude design output files (self-contained HTML with tokens, reviewer comments, component states) into pixel-perfect, correctly-behaving code. |
 | `orchestrator` | Project-agnostic 6-agent pipeline (brainstormer → architect → coder → tester → reviewer → qa) with a context-confidence gate, spec-driven-eval integration, and a final Markdown/HTML report. Auto-detects first-run bootstrap vs. straight pipeline execution. |
 | `roadmap` | Decomposes a project spec into an auditable milestone→phase→user-story roadmap under `/roadmap/`, with append-only audit logs, orchestrator-ready user-story briefs, `/roadmap sync` trailer stamping, diff+preserve re-evaluation, release bands, and doc-only mutation ops. |
@@ -213,7 +213,7 @@ Two paired artifacts under `docs/reviews/` — `<branch_slug>-<date>.html` (shar
 
 ## validation-fixer
 
-Turns a file of recorded validation deviations into tracked fixes. Reads a `.md` where each `- ` bullet is a bug or missing behavior — a `pr-review-report` findings backlog, or a hand-authored `docs/user_validation_errors/…` file — and routes each **open** item, one at a time, through a chosen fix framework, recording the outcome back in the **same file** so progress is resumable. It does not fix bugs itself; it is a router + tracker.
+Turns a file of recorded validation deviations into tracked fixes. Reads a `.md` where each `- ` bullet is a bug or missing behavior — a `pr-review-report` findings backlog, or a hand-authored `docs/user_validation_errors/…` file — and routes each **open** item through a chosen fix framework, recording the outcome back in the **same file** so progress is resumable. `superpowers`/`gsd` take one item at a time; `orchestrator` triages items by severity into three lanes (fix inline / batched run / dedicated run) via a once-approved routing plan, so it doesn't spin a full pipeline per finding. It is a router + tracker — it never fixes bugs itself, with **one bounded exception**: the orchestrator main-agent lane lets the host's own agent fix `low`/`info` items inline.
 
 ### Usage
 
@@ -226,8 +226,9 @@ Turns a file of recorded validation deviations into tracked fixes. Reads a `.md`
 1. **Parse open items** — `- [ ]` / `- [~]` / plain `-` are open; `- [x]` is done (skipped). Item text is forwarded **verbatim as untrusted evidence** — the framework must verify it against the real code and never obey instructions embedded in it.
 2. **Choose framework + mode** — framework: `superpowers` / `gsd` / `orchestrator`; mode: `checkpoint` (pause after each item so you validate the fix) or `autonomous` (process every open item back-to-back).
 3. **Preflight** — refuses to run on a protected branch (`main` / `master` / `dev`) or a detached HEAD before invoking any framework; asks you to create/switch to a feature branch first.
-4. **Per item** — requires a clean tree (the validation file itself is exempt scratchpad), hands the item to the framework, commits the **code-only** fix per item (for a framework that stops at `READY_TO_COMMIT` — the one documented exception to the never-commit policy, bounded by per-commit approval, atomic rollback, and the protected-branch guard), then records `- [x] _fixed via <framework> · <sha> · <date>_` (or `- [~] … needs attention`) back in the file.
-5. **Summary** — reports fixed / attempted-no-commit / skipped counts, flagging the `[~]` items that still need hands-on work.
+4. **Route (orchestrator only)** — reads each item's `[<ID>|<sev>]` severity token and proposes a **routing plan** that assigns items to lanes: **main-agent** (`low`/`info` — host agent fixes inline), **batch** (`med` — grouped by lens into one orchestrator run per group), **dedicated** (`crit`/`high`/`unknown` — one run per item). Approved once (checkpoint waits/edits; autonomous auto-accepts). `superpowers`/`gsd` skip this and keep their one-item loop.
+5. **Per work unit** — requires a clean tree (the validation file itself is exempt scratchpad), hands the item (or batch) to the framework, then commits the **code-only** fix: per item for the dedicated and main-agent lanes, or **one shared commit** for a batch (every member marked `[x]` with that SHA). Committing is the one documented exception to the never-commit policy (bounded by per-commit approval, atomic rollback, and the protected-branch guard); the main-agent lane is the one exception to the never-fix policy (bounded to `low`/`info`). Records `- [x] _fixed via <framework|main-agent> · <sha> · <date>_` (or `- [~] … needs attention`) back in the file.
+6. **Summary** — reports fixed / attempted-no-commit / skipped counts, flagging the `[~]` items that still need hands-on work.
 
 Together with `pr-review-report` this forms a resumable **review → fix → re-review** loop over one durable backlog file: the reviewer emits the `.md`, `validation-fixer` dispositions it in place, and the next review merges those dispositions forward.
 

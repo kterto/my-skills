@@ -26,6 +26,10 @@ consumed verbatim by the template — match them exactly.
     "commitRange": "ab12cd3..9f8e7d6",  // <mergeBase>..<reviewedHead-short> — PINNED.
                                   // NEVER "ab12cd3..HEAD": a moving `..HEAD` label lets a
                                   // committed report silently misrepresent a later HEAD.
+                                  // The SKILL's underlying review ranges are pinned the same
+                                  // way — the merge-base is computed against reviewedHead, and
+                                  // every diff/`--stat`/provenance guard pins its right side to
+                                  // reviewedHead, never a re-read HEAD (SKILL.md steps 1/2/2b/3).
     "generatedAt": "2026-07-13",  // YYYY-MM-DD
     "commitCount": 7,             // integer; commits in mergeBase..reviewedHead
     "filesChanged": 4,            // integer; falls back to files.length if absent

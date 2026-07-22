@@ -1,1 +1,1 @@
-{ "context_threshold": 0.95, "clarity_threshold": 0.99, "output_format": "md", "automation_level": "manual", "max_review_cycles": 10, "max_qa_cycles": 5 }
+{ "context_threshold": 0.95, "clarity_threshold": 0.99, "output_format": "md", "automation_level": "autonomous", "max_review_cycles": 10, "max_qa_cycles": 5 }
