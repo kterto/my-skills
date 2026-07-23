@@ -39,6 +39,7 @@
  * Returns: string[] of absolute, existing file paths. On a fatal condition it
  * prints a diagnostic to stderr and calls process.exit(1).
  */
+const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
 
@@ -121,6 +122,41 @@ function branchScope(options) {
   return [...out].filter((f) => f.endsWith(ext)).map((f) => path.join(root, f));
 }
 
+const MAX_GATE_BYTES = 5 * 1024 * 1024;
+/**
+ * Shared fail-closed target guard (sec-1). `branchScope` deliberately SURFACES
+ * missing / type-changed / symlinked paths (it no longer `existsSync`-drops them),
+ * so every consumer MUST reject an unsafe target before reading it — otherwise a
+ * branch that type-changes an audited artifact to a symlink makes the gate read
+ * outside the repo or exhaust the runner. Returns a human-readable reason string
+ * when `file` is unsafe to read, or `null` when it is safe. `lstat` never follows
+ * the link, so a symlink (dangling or not) is rejected here, before any read.
+ *
+ * `enforceContainment` is true for auto/branch scope (an attacker-planted path is
+ * discovered automatically) and false for an explicit `-- <file>` audit list (a
+ * deliberate target set — e.g. the regression harnesses' tmp fixtures); either way
+ * the symlink / non-regular / missing / ext / size guards always apply.
+ */
+function targetProblem(file, { root, auditPath, ext, enforceContainment }) {
+  let st;
+  try {
+    st = fs.lstatSync(file);
+  } catch (e) {
+    return e && e.code === 'ENOENT' ? 'missing target (does not exist)' : 'cannot stat target';
+  }
+  if (st.isSymbolicLink() || !st.isFile()) return 'not a regular file (symlink / non-file rejected)';
+  if (ext && !file.endsWith(ext)) return `not a ${ext} file`;
+  if (st.size > MAX_GATE_BYTES) return `exceeds ${MAX_GATE_BYTES}-byte size cap (${st.size})`;
+  if (enforceContainment) {
+    let real;
+    let baseReal;
+    try { real = fs.realpathSync(file); } catch { return 'unresolvable path'; }
+    try { baseReal = fs.realpathSync(path.join(root, auditPath)); } catch { return `unresolvable ${auditPath}/`; }
+    if (real !== baseReal && !real.startsWith(baseReal + path.sep)) return `escapes ${auditPath}/`;
+  }
+  return null;
+}
+
 // Scope-API version — bumped whenever `branchScope`'s discovery contract changes
 // in a way a consumer must not silently run against. A consumer materialized on a
 // DIFFERENT cadence than this helper (the roadmap timestamp-parity gate lives in a
@@ -131,4 +167,4 @@ function branchScope(options) {
 // --no-renames, no existsSync drop (the sec-1 hardening).
 const SCOPE_API_VERSION = 1;
 
-module.exports = { branchScope, SCOPE_API_VERSION };
+module.exports = { branchScope, SCOPE_API_VERSION, targetProblem };

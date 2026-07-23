@@ -15,7 +15,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
-const { branchScope } = require('./gate-scope.cjs');
+const { branchScope, targetProblem } = require('./gate-scope.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
 const PLANS = path.join(ROOT, 'plans');
@@ -39,13 +39,20 @@ const flags = dashDash >= 0 ? argv.slice(0, dashDash) : argv;
 const explicit = dashDash >= 0 ? argv.slice(dashDash + 1) : [];
 const allowEmpty = flags.includes('--allow-empty');
 const baseRef = flags.find((a) => !a.startsWith('--'));
-const targets = explicit.length
-  ? explicit.map((f) => path.resolve(ROOT, f)).filter((f) => fs.existsSync(f))
+const explicitMode = explicit.length > 0;
+// Do not existsSync-filter explicit paths (that follows symlinks and silently drops
+// a typo'd path); resolve them all and let the shared guard fail closed (sec-1).
+const targets = explicitMode
+  ? explicit.map((f) => path.resolve(ROOT, f))
   : branchScope({ root: ROOT, auditPath: 'plans', ext: '.md', baseRef, label: 'artifact-pairing', allowEmpty });
 
 const problems = [];
 for (const md of targets) {
   const rel = path.relative(ROOT, md);
+  // Fail closed on a symlink / non-regular / missing / oversized / escaping target
+  // BEFORE reading it — branchScope surfaces such paths (sec-1).
+  const bad = targetProblem(md, { root: ROOT, auditPath: 'plans', ext: '.md', enforceContainment: !explicitMode });
+  if (bad) { problems.push(`${rel}: ${bad}`); continue; }
   const html = md.replace(/\.md$/, '.html');
   if (!fs.existsSync(html)) problems.push(`missing html sibling: ${rel}`);
   // Progress logs are append-logs, not frontmatter artifacts — pairing only.
