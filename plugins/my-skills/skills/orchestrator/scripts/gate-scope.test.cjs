@@ -100,7 +100,18 @@ const GATES = [
     all: true,
     benign: (tmp) => {
       const html = path.join(tmp, 'benign.html');
-      fs.writeFileSync(html, '<!doctype html><p>no timestamps here</p>\n');
+      // A normal item page with EQUAL machine-readable + visible timestamps → the
+      // parity gate reports OK. (Previously a marker-free page relied on the gate
+      // skipping "neither marker present"; that now fails closed for item pages,
+      // so the benign fixture must carry both matching markers — bug-5.)
+      fs.writeFileSync(
+        html,
+        '<!doctype html><html><head></head><body>\n' +
+        '<main data-kind="milestone" data-updated-at="2026-07-22">\n' +
+        '  <div class="meta"><span class="meta__key">updated:</span> ' +
+        '<span class="meta__val">2026-07-22</span></div>\n' +
+        '</main>\n</body></html>\n'
+      );
       return html;
     },
   },
