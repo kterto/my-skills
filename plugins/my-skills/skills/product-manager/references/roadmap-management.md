@@ -43,7 +43,7 @@ Every mutating verb runs this sequence (mirrors the `complete` machinery's base-
 1. **Resolve selection** → an exact id set (see **Selection resolution**).
 2. **Cut a planning branch** `pm/roadmap-<verb>-<slug>` off the PM starting branch (existing base resolution).
 3. **Invoke the roadmap op**, which **stages a diff** listing the exact resolved id set and the `+ ~ ! ±` changes, then **gates** (see **Confirmation gate**).
-4. **On approval** → the op writes files and prints a proposed commit message; PM commits `docs(roadmap): <verb> …`, pushes, and opens a planning PR (`templates/pr-body.template.md` planning variant).
+4. **On approval** → the op writes files and prints a proposed commit message. **Then, in html mode, run the timestamp-parity gate** (see `git-flow.md` → **Timestamp-parity gate**) over any roadmap `.html` page the op re-rendered — **regardless of readiness-input classification**: `reorder`, an ordinary `revise`, and structural additions re-render pages (re-ordered child lists, bumped `updated:` stamps) without changing a readiness input, yet each can drift the dual timestamp, so the gate runs after **every** HTML-writing mutation, not only readiness-input ops (bug-2). A red gate **halts before the commit**. Otherwise PM commits `docs(roadmap): <verb> …`, pushes, and opens a planning PR (`templates/pr-body.template.md` planning variant).
 5. **On reject** → PM discards the empty branch and returns to the starting branch (see **Reject-and-discard**).
 
 `release list`, `system list`, and `release-status` are read-only: they print and exit with no branch, gate, or PR.

@@ -307,7 +307,7 @@ git checkout -b pm/roadmap-<verb>-<slug> "$base"
 
 1. **Cut** `pm/roadmap-<verb>-<slug>` off the starting branch.
 2. **Invoke the roadmap op** (`set-release` / `ingest-spec` / `reorder` / `revise` / `release`). The op stages a diff, gates on approval (`--yes` skips the gate), writes the `/roadmap/` files, and prints a proposed commit message. PM writes nothing itself.
-   - **2b. Timestamp-parity gate (html mode).** When the op re-renders roadmap `.html` pages (any op that changes a readiness input), run the timestamp-parity gate (see **Timestamp-parity gate** below) before committing. A red gate **halts** — do not commit, push, or open the planning PR; re-render the flagged pages through the roadmap skill and re-run.
+   - **2b. Timestamp-parity gate (html mode).** Run the timestamp-parity gate (see **Timestamp-parity gate** below) before committing whenever the op wrote **any** roadmap `.html` page — **not only** ops that change a readiness input. `reorder`, an ordinary `revise`, and structural additions re-render pages (re-ordered child lists, bumped `updated:` stamps) **without** touching a readiness input, and each in-place re-render can still drift the dual timestamp; gating only readiness-input ops would leave those rewrites unaudited (bug-2). A red gate **halts** — do not commit, push, or open the planning PR; re-render the flagged pages through the roadmap skill and re-run.
 3. **Commit** the roadmap files the op wrote with a `docs(roadmap):` message using the op's proposed text:
 
    ```bash
