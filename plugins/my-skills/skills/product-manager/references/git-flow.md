@@ -229,13 +229,25 @@ if [ -f "$root/roadmap/README.html" ]; then
     echo "  re-materializes roadmap/check-timestamp-parity.cjs), then re-run PM." >&2
     exit 1
   fi
-  node "$gate"   # branch scope: the pages this branch touched
+  # Audit the pages THIS PR changes. Pass PM's already-resolved base ($base — the
+  # same value handed to `gh pr create --base`, which may be a configured non-main
+  # base or, for a stacked PR, the predecessor branch), so branch scope diffs
+  # against the real merge-base instead of gate-scope's main/origin/main guess
+  # (bug-3). Branch scope needs the orchestrator's shared gate-scope helper; a
+  # standalone planning flow (e.g. an add-* verb without orchestrator bootstrap)
+  # falls back to the self-contained --all mode rather than crashing on the
+  # missing module.
+  if [ -f "$root/.orchestrator/gate-scope.cjs" ]; then
+    node "$gate" "$base"   # branch scope vs PM's resolved base
+  else
+    node "$gate" --all     # self-contained: audit every roadmap page
+  fi
 fi
 # md mode (no roadmap/README.html): nothing to check — .md pages carry the timestamp once.
 ```
 
 - **Keyed on html mode, fail-closed on a missing asset — no-op in md mode.** Html mode is detected by the always-materialized `roadmap/README.html` index. When it exists, the gate is **mandatory**: a missing `roadmap/check-timestamp-parity.cjs` **halts the run** (an upgraded roadmap that predates the gate, or a write pass that failed to refresh it, must not slip through un-audited — bug-3). The roadmap skill's html-mode write passes (Materialize / Sync / Re-eval / mutation ops) re-materialize the asset, so under normal PM flow it is present by the time this runs; the halt is defense-in-depth. In md mode (no `roadmap/README.html`) the check is skipped — `.md` pages carry the timestamp once (frontmatter), so nothing can diverge.
-- **Branch scope (default, no args).** The gate audits the pages this branch added or modified — including the just-re-rendered, still-**uncommitted** ones (the branch diff includes working-tree changes vs `HEAD`) — via the orchestrator's `.orchestrator/gate-scope.cjs`, present because PM runs the orchestrator. That is exactly the set of pages in the PR diff. (For a roadmap outside a PM/orchestrator context, `--all` runs the same check self-contained.)
+- **Branch scope against PM's resolved base.** The gate audits the pages this branch added or modified — including the just-re-rendered, still-**uncommitted** ones (the branch diff includes working-tree changes vs `HEAD`) — via the orchestrator's `.orchestrator/gate-scope.cjs`. **PM passes its already-resolved base** (`$base`, the same value it hands `gh pr create --base`) as the gate's base-ref argument, so the audit set matches the PR diff even when the base is a configured non-`main` branch or a stacked PR's predecessor — never gate-scope's `main`/`origin/main` guess (bug-3). **Standalone fallback:** the shared `gate-scope.cjs` is present only when the orchestrator is bootstrapped; a planning flow that runs without it (e.g. an `add-*` verb) invokes the **self-contained `--all`** mode instead of branch scope, so the gate never fails to load its scope module.
 - **Red gate → halt** (same discipline as the **Trailer-mismatch guard**): the gate exits non-zero and lists the offending pages. PM **stops** — it does not commit the sync/planning docs, push, or open the PR. The fix is to re-render the flagged pages through the `roadmap` skill so both timestamps agree, then re-run PM for the story.
 
 ---
