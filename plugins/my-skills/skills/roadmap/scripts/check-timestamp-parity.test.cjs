@@ -23,6 +23,9 @@
  *                       marker → OK / skip (the one legitimately untimestamped page)
  * Plus a read-safety assertion (sec-2): a symlinked target pointing at an otherwise
  * valid page is rejected (not followed), so only its symlink-ness trips the guard.
+ * Plus decoy-marker assertions (bug-3): a comment carrying a data-updated-at that
+ * matches the visible value cannot mask the root <main>'s divergent timestamp, and
+ * two divergent visible markers fail closed instead of first-match-wins.
  *
  * Watched-to-fail: against the pre-bug-2 gate the missing-both-item fixture
  * prints `roadmap-timestamp-parity: OK` / exit 0 — the skip was keyed on "neither
@@ -136,6 +139,36 @@ const spoof =
 const spoofFile = path.join(tmp, 'spoofed-index-comment.html');
 fs.writeFileSync(spoofFile, spoof);
 assertFail('spoofed-index-comment', spoofFile, /missing both timestamp markers/i);
+
+// bug-3: a leading comment carrying a data-updated-at that MATCHES the visible value
+// must NOT mask the real root <main>'s divergent timestamp. Root main = 2026-07-20,
+// visible = 2026-07-22, decoy comment = 2026-07-22 → an old first-match read the decoy
+// and printed OK; the gate must compare the ROOT timestamp and fail on the mismatch.
+const decoyData =
+  '<!doctype html><html><head></head><body>\n' +
+  '<!-- data-updated-at="2026-07-22" decoy matching the visible value -->\n' +
+  '<main data-kind="milestone" data-updated-at="2026-07-20">\n' +
+  '  <div class="meta"><span class="meta__key">updated:</span> ' +
+  '<span class="meta__val">2026-07-22</span></div>\n' +
+  '</main>\n</body></html>\n';
+const decoyDataFile = path.join(tmp, 'decoy-comment-data.html');
+fs.writeFileSync(decoyDataFile, decoyData);
+assertFail('decoy-comment-data', decoyDataFile, /but visible updated=/i);
+
+// bug-3: two divergent visible markers (a nested/duplicate decoy) must fail closed
+// rather than first-match-wins — the root data matches only the first, and a nested
+// element carries a second, divergent visible value.
+const decoyVisible =
+  '<!doctype html><html><head></head><body>\n' +
+  '<main data-kind="milestone" data-updated-at="2026-07-22">\n' +
+  '  <div class="meta"><span class="meta__key">updated:</span> ' +
+  '<span class="meta__val">2026-07-22</span></div>\n' +
+  '  <aside><span class="meta__key">updated:</span> ' +
+  '<span class="meta__val">1999-01-01</span></aside>\n' +
+  '</main>\n</body></html>\n';
+const decoyVisibleFile = path.join(tmp, 'decoy-nested-visible.html');
+fs.writeFileSync(decoyVisibleFile, decoyVisible);
+assertFail('decoy-nested-visible', decoyVisibleFile, /multiple divergent visible/i);
 
 // bug-2: an explicit target that does not exist must FAIL closed, not be silently
 // dropped into a zero-file OK (the old existsSync filter removed missing paths).

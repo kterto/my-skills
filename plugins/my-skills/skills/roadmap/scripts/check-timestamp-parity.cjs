@@ -99,13 +99,30 @@ for (const file of targets) {
     }
   }
   const s = fs.readFileSync(file, 'utf8');
-  const data = (s.match(/data-updated-at="([^"]*)"/) || [])[1];
-  const visible = (s.match(/updated:<\/span>\s*<span class="meta__val">([^<]*)</) || [])[1];
-  // Read data-kind from the ROOT <main> opening tag only — NOT from anywhere in
-  // the document — so a stray data-kind="roadmap-index" in a comment, script, or
-  // nested element on an item page cannot spoof the index exemption (bug-4).
-  const rootMain = (s.match(/<main\b[^>]*>/i) || [])[0] || '';
+  // Work on a copy with HTML comments and inert <script>/<style> blocks removed, so
+  // a decoy marker hidden in a comment/script/style cannot be read as a real
+  // timestamp (bug-3: first-match regexes over the whole document let a leading
+  // comment mask a missing or divergent ROOT timestamp and print OK).
+  const clean = s
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '');
+  // The machine-readable timestamp and the kind live ONLY on the root <main>
+  // opening tag — read them from that tag, never from a stray occurrence elsewhere
+  // in the document (bug-3 / bug-4).
+  const rootMain = (clean.match(/<main\b[^>]*>/i) || [])[0] || '';
+  const data = (rootMain.match(/data-updated-at="([^"]*)"/) || [])[1];
   const kind = (rootMain.match(/data-kind="([^"]*)"/) || [])[1];
+  // Visible timestamp: collect EVERY metadata-marker occurrence in the cleaned
+  // document and require them to agree — a duplicate/nested decoy carrying a
+  // divergent value fails closed rather than first-match-wins (bug-3).
+  const visibleAll = [...clean.matchAll(/updated:<\/span>\s*<span class="meta__val">([^<]*)</g)].map((m) => m[1]);
+  const visibleValues = new Set(visibleAll);
+  if (visibleValues.size > 1) {
+    problems.push(`${rel}: multiple divergent visible updated values (${[...visibleValues].join(', ')})`);
+    continue;
+  }
+  const visible = visibleAll.length ? visibleAll[0] : undefined;
   if (data == null && visible == null) {
     // Only the top-level roadmap index legitimately carries neither timestamp —
     // it is a derived aggregate view and self-identifies with a root
