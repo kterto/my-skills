@@ -30,9 +30,12 @@
  * Plus decoy-marker assertions (bug-3): a comment carrying a data-updated-at that
  * matches the visible value cannot mask the root <main>'s divergent timestamp, and
  * two divergent visible markers fail closed instead of first-match-wins.
- * Plus root-<main> selection assertions (bug-2): a decoy <main> hidden in an inert
- * <template>/<textarea> before the real body > main is not read as the root, and a
- * duplicate-root or no-<main> (malformed) page fails closed (exactly-one-main rule).
+ * Plus root-<main> selection assertions (bug-2/bug-1): a tag-aware parse selects the
+ * single body > main. A decoy <main> hidden in an inert <template> (incl. NESTED),
+ * <textarea>, or an iframe `srcdoc` attribute is not read as the root; duplicate-root
+ * or no-<main> fails closed; the visible marker is read only from the main's .meta
+ * block, so a misplaced <aside> marker cannot mask a missing one, and an identical or
+ * divergent duplicate inside the block fails the exactly-one rule.
  *
  * Watched-to-fail: against the pre-bug-2 gate the missing-both-item fixture
  * prints `roadmap-timestamp-parity: OK` / exit 0 — the skip was keyed on "neither
@@ -233,20 +236,71 @@ const decoyDataFile = path.join(tmp, 'decoy-comment-data.html');
 fs.writeFileSync(decoyDataFile, decoyData);
 assertFail('decoy-comment-data', decoyDataFile, /but visible updated=/i);
 
-// bug-3: two divergent visible markers (a nested/duplicate decoy) must fail closed
-// rather than first-match-wins — the root data matches only the first, and a nested
-// element carries a second, divergent visible value.
+// bug-3/bug-1: two visible markers INSIDE the expected .meta block (divergent here)
+// fail closed rather than first-match-wins — exactly one marker is required in the
+// metadata element.
 const decoyVisible =
   '<!doctype html><html><head></head><body>\n' +
   '<main data-kind="milestone" data-updated-at="2026-07-22">\n' +
-  '  <div class="meta"><span class="meta__key">updated:</span> ' +
-  '<span class="meta__val">2026-07-22</span></div>\n' +
-  '  <aside><span class="meta__key">updated:</span> ' +
-  '<span class="meta__val">1999-01-01</span></aside>\n' +
-  '</main>\n</body></html>\n';
+  '  <div class="meta">\n' +
+  '    <span class="meta__key">updated:</span> <span class="meta__val">2026-07-22</span>\n' +
+  '    <span class="meta__key">updated:</span> <span class="meta__val">1999-01-01</span>\n' +
+  '  </div>\n</main>\n</body></html>\n';
 const decoyVisibleFile = path.join(tmp, 'decoy-nested-visible.html');
 fs.writeFileSync(decoyVisibleFile, decoyVisible);
-assertFail('decoy-nested-visible', decoyVisibleFile, /multiple divergent visible/i);
+assertFail('decoy-nested-visible', decoyVisibleFile, /exactly one visible updated marker/i);
+
+// bug-1: a decoy <main> hidden in an iframe srcdoc attribute (quoted markup) must
+// not be read as the root. Real milestone main is divergent (2026-07-20); the
+// srcdoc decoy matches the visible (2026-07-22).
+const iframeDecoy =
+  '<!doctype html><html><head></head><body>\n' +
+  '<iframe srcdoc="<main data-kind=&quot;roadmap-index&quot; data-updated-at=&quot;2026-07-22&quot;></main>"></iframe>\n' +
+  '<main data-kind="milestone" data-updated-at="2026-07-20">\n' +
+  '  <div class="meta"><span class="meta__key">updated:</span> ' +
+  '<span class="meta__val">2026-07-22</span></div>\n</main>\n</body></html>\n';
+const iframeDecoyFile = path.join(tmp, 'iframe-srcdoc-decoy.html');
+fs.writeFileSync(iframeDecoyFile, iframeDecoy);
+assertFail('iframe-srcdoc-decoy', iframeDecoyFile, /but visible updated=/i);
+
+// bug-1: a decoy <main> inside NESTED <template>s must not be read as the root.
+const nestedTemplateDecoy =
+  '<!doctype html><html><head></head><body>\n' +
+  '<template><template><main data-kind="roadmap-index" data-updated-at="2026-07-22"></main></template></template>\n' +
+  '<main data-kind="milestone" data-updated-at="2026-07-20">\n' +
+  '  <div class="meta"><span class="meta__key">updated:</span> ' +
+  '<span class="meta__val">2026-07-22</span></div>\n</main>\n</body></html>\n';
+const nestedTemplateFile = path.join(tmp, 'nested-template-decoy.html');
+fs.writeFileSync(nestedTemplateFile, nestedTemplateDecoy);
+assertFail('nested-template-decoy', nestedTemplateFile, /but visible updated=/i);
+
+// bug-1: a marker MISPLACED in an <aside> must not mask a marker MISSING from the
+// expected .meta block — the .meta block here has no updated marker, so the page
+// fails "missing visible" despite the aside carrying one.
+const misplacedMarker =
+  '<!doctype html><html><head></head><body>\n' +
+  '<main data-kind="milestone" data-updated-at="2026-07-22">\n' +
+  '  <div class="meta"><span class="meta__key">created:</span> ' +
+  '<span class="meta__val">2026-07-01</span></div>\n' +
+  '  <aside><span class="meta__key">updated:</span> ' +
+  '<span class="meta__val">2026-07-22</span></aside>\n' +
+  '</main>\n</body></html>\n';
+const misplacedFile = path.join(tmp, 'misplaced-marker.html');
+fs.writeFileSync(misplacedFile, misplacedMarker);
+assertFail('misplaced-marker', misplacedFile, /missing visible updated value/i);
+
+// bug-1: two IDENTICAL markers in the .meta block also fail the exactly-one rule
+// (deduping would have hidden the duplication).
+const identicalDup =
+  '<!doctype html><html><head></head><body>\n' +
+  '<main data-kind="milestone" data-updated-at="2026-07-22">\n' +
+  '  <div class="meta">\n' +
+  '    <span class="meta__key">updated:</span> <span class="meta__val">2026-07-22</span>\n' +
+  '    <span class="meta__key">updated:</span> <span class="meta__val">2026-07-22</span>\n' +
+  '  </div>\n</main>\n</body></html>\n';
+const identicalDupFile = path.join(tmp, 'identical-duplicate.html');
+fs.writeFileSync(identicalDupFile, identicalDup);
+assertFail('identical-duplicate', identicalDupFile, /exactly one visible updated marker.*found 2/i);
 
 // bug-2: a decoy <main> inside an inert <template> before the real body > main must
 // NOT be read as the root. The template main carries a data-updated-at MATCHING the

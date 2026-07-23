@@ -35,6 +35,129 @@ function walk(dir, acc) {
   return acc;
 }
 
+// --- Tag-aware HTML scan (bug-1) --------------------------------------------
+// A regex over the raw document can be fooled by markup a real HTML parser treats
+// as inert or as text: a <main>/marker inside a comment, inside a raw-text element
+// (script/style/textarea/title/iframe/noscript), inside a <template> (possibly
+// nested), or inside a quoted attribute value (an iframe `srcdoc="<main …>"`). This
+// scan consumes those contexts the way a parser would — skipping their contents and
+// never mis-reading markup inside a quoted attribute — then locates the single
+// body-level <main> and the single `updated:` marker inside its `.meta` block.
+const VOID_ELEMENTS = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img',
+  'input', 'link', 'meta', 'param', 'source', 'track', 'wbr']);
+const RAWTEXT_ELEMENTS = new Set(['script', 'style', 'textarea', 'title', 'iframe', 'noscript']);
+
+// End index (just past '>') of the start tag beginning at `lt`, honoring quoted
+// attribute values so markup inside an attribute is never read as a tag.
+function endOfStartTag(html, lt) {
+  const n = html.length;
+  let j = lt;
+  let q = null;
+  while (j < n) {
+    const c = html[j];
+    if (q) { if (c === q) q = null; }
+    else if (c === '"' || c === "'") q = c;
+    else if (c === '>') return j + 1;
+    j++;
+  }
+  return n;
+}
+
+// Tokenize to real start/end tags, skipping comments, declarations, and the entire
+// contents of raw-text and <template> elements (template nests). Each token:
+// { name, kind:'start'|'end', tag, start, end, selfClosed }.
+function scanTags(html) {
+  const out = [];
+  const n = html.length;
+  let i = 0;
+  while (i < n) {
+    const lt = html.indexOf('<', i);
+    if (lt < 0) break;
+    if (html.startsWith('<!--', lt)) { const e = html.indexOf('-->', lt + 4); i = e < 0 ? n : e + 3; continue; }
+    if (html.startsWith('<!', lt) || html.startsWith('<?', lt)) { const e = html.indexOf('>', lt + 1); i = e < 0 ? n : e + 1; continue; }
+    if (html.startsWith('</', lt)) {
+      const m = /^<\/([a-zA-Z][a-zA-Z0-9-]*)/.exec(html.slice(lt, lt + 64));
+      const e = html.indexOf('>', lt);
+      const end = e < 0 ? n : e + 1;
+      if (m) out.push({ name: m[1].toLowerCase(), kind: 'end', tag: html.slice(lt, end), start: lt, end });
+      i = end;
+      continue;
+    }
+    const m = /^<([a-zA-Z][a-zA-Z0-9-]*)/.exec(html.slice(lt, lt + 64));
+    if (!m) { i = lt + 1; continue; }
+    const name = m[1].toLowerCase();
+    const end = endOfStartTag(html, lt);
+    const selfClosed = html[end - 2] === '/';
+    out.push({ name, kind: 'start', tag: html.slice(lt, end), start: lt, end, selfClosed });
+    i = end;
+    if (!selfClosed && (RAWTEXT_ELEMENTS.has(name) || name === 'template')) {
+      // Skip the element's content to its matching close (template nests).
+      let depth = 1;
+      while (depth > 0 && i < n) {
+        const lower = html.toLowerCase();
+        const nextClose = lower.indexOf('</' + name, i);
+        if (nextClose < 0) { i = n; break; }
+        if (name === 'template') {
+          const nextOpen = lower.indexOf('<' + name, i);
+          if (nextOpen >= 0 && nextOpen < nextClose) { depth++; i = endOfStartTag(html, nextOpen); continue; }
+        }
+        depth--;
+        const e = html.indexOf('>', nextClose);
+        i = e < 0 ? n : e + 1;
+      }
+      out.push({ name, kind: 'end', tag: '', start: i, end: i });
+    }
+  }
+  return out;
+}
+
+// Locate the single body-level <main>; return { mainTag, inner } or { error }.
+function extractMain(html) {
+  const toks = scanTags(html);
+  const stack = [];
+  const mains = [];
+  for (let t = 0; t < toks.length; t++) {
+    const tk = toks[t];
+    if (tk.kind === 'start') {
+      if (tk.name === 'main') mains.push({ t, tk, parent: stack[stack.length - 1] });
+      if (!tk.selfClosed && !VOID_ELEMENTS.has(tk.name)) stack.push(tk.name);
+    } else {
+      const idx = stack.lastIndexOf(tk.name);
+      if (idx >= 0) stack.length = idx;
+    }
+  }
+  if (mains.length !== 1) return { error: `expected exactly one root <main>, found ${mains.length}` };
+  const only = mains[0];
+  if (only.parent !== 'body') return { error: 'the <main> is not a direct child of <body>' };
+  const endTok = toks.find((x, idx) => idx > only.t && x.name === 'main' && x.kind === 'end');
+  const inner = html.slice(only.tk.end, endTok ? endTok.start : html.length);
+  return { mainTag: only.tk.tag, inner };
+}
+
+// Extract the content of the element carrying the `meta` class inside a main's
+// inner HTML (word-boundaried, so `meta__key`/`meta__val` never match), by tag
+// depth. Returns the block's inner string, or null when there is no `.meta` block.
+function metaBlock(inner) {
+  const toks = scanTags(inner);
+  let mi = -1;
+  for (let t = 0; t < toks.length; t++) {
+    const tk = toks[t];
+    if (tk.kind !== 'start') continue;
+    const cls = (tk.tag.match(/class="([^"]*)"/) || [])[1] || '';
+    if (/\bmeta\b/.test(cls)) { mi = t; break; }
+  }
+  if (mi < 0) return null;
+  const openName = toks[mi].name;
+  let depth = 1;
+  let endStart = inner.length;
+  for (let t = mi + 1; t < toks.length; t++) {
+    const tk = toks[t];
+    if (tk.kind === 'start' && tk.name === openName && !tk.selfClosed && !VOID_ELEMENTS.has(tk.name)) depth++;
+    else if (tk.kind === 'end' && tk.name === openName) { depth--; if (depth === 0) { endStart = tk.start; break; } }
+  }
+  return inner.slice(toks[mi].end, endStart);
+}
+
 const argv = process.argv.slice(2);
 const dashDash = argv.indexOf('--');
 const flags = (dashDash >= 0 ? argv.slice(0, dashDash) : argv);
@@ -133,43 +256,30 @@ for (const file of targets) {
     }
   }
   const s = fs.readFileSync(file, 'utf8');
-  // Work on a copy with HTML comments and inert / raw-text containers removed, so a
-  // decoy marker hidden in one cannot be read as a real timestamp (bug-3/bug-2):
-  //   - comments, <script>, <style>: a stray marker string;
-  //   - <template>, <textarea>: their contents are inert / raw text, so a whole
-  //     decoy `<main …>` element can hide there before the real body > main and be
-  //     picked up as "the root main" (bug-2).
-  const clean = s
-    .replace(/<!--[\s\S]*?-->/g, '')
-    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
-    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '')
-    .replace(/<template\b[^>]*>[\s\S]*?<\/template>/gi, '')
-    .replace(/<textarea\b[^>]*>[\s\S]*?<\/textarea>/gi, '');
-  // Require EXACTLY ONE <main> in the cleaned document — the real body > main.
-  // A decoy <main> hidden in an inert container was stripped above; a genuine
-  // second top-level <main> is malformed. Zero or two+ fails closed rather than
-  // trusting a first-match against an inert/duplicate decoy (bug-2).
-  const mainTags = clean.match(/<main\b[^>]*>/gi) || [];
-  if (mainTags.length !== 1) {
-    problems.push(`${rel}: expected exactly one root <main>, found ${mainTags.length}`);
-    continue;
-  }
+  // Locate the single body-level <main> with a tag-aware scan (bug-1/bug-2): a
+  // decoy <main> in a comment / raw-text element / <template> / quoted attribute is
+  // not a real body > main; zero or two+ real mains fails closed.
+  const parsed = extractMain(s);
+  if (parsed.error) { problems.push(`${rel}: ${parsed.error}`); continue; }
   // The machine-readable timestamp and the kind live ONLY on that root <main>
-  // opening tag — read them from it, never from a stray occurrence elsewhere
-  // (bug-3 / bug-4 / bug-2).
-  const rootMain = mainTags[0];
+  // opening tag (bug-3 / bug-4).
+  const rootMain = parsed.mainTag;
   const data = (rootMain.match(/data-updated-at="([^"]*)"/) || [])[1];
   const kind = (rootMain.match(/data-kind="([^"]*)"/) || [])[1];
-  // Visible timestamp: collect EVERY metadata-marker occurrence in the cleaned
-  // document and require them to agree — a duplicate/nested decoy carrying a
-  // divergent value fails closed rather than first-match-wins (bug-3).
-  const visibleAll = [...clean.matchAll(/updated:<\/span>\s*<span class="meta__val">([^<]*)</g)].map((m) => m[1]);
-  const visibleValues = new Set(visibleAll);
-  if (visibleValues.size > 1) {
-    problems.push(`${rel}: multiple divergent visible updated values (${[...visibleValues].join(', ')})`);
+  // Visible timestamp: read markers ONLY from the main's `.meta` block, so a
+  // misplaced marker (e.g. in an <aside>) neither counts nor masks a marker that is
+  // MISSING from the expected block, and require EXACTLY ONE — an identical or
+  // divergent duplicate inside the block fails closed rather than first-match-wins
+  // (bug-1/bug-3).
+  const meta = metaBlock(parsed.inner);
+  const markers = meta == null
+    ? []
+    : [...meta.matchAll(/updated:<\/span>\s*<span class="meta__val">([^<]*)</g)].map((m) => m[1]);
+  if (markers.length > 1) {
+    problems.push(`${rel}: expected exactly one visible updated marker in the metadata block, found ${markers.length} (${markers.join(', ')})`);
     continue;
   }
-  const visible = visibleAll.length ? visibleAll[0] : undefined;
+  const visible = markers.length ? markers[0] : undefined;
   if (data == null && visible == null) {
     // Only the top-level roadmap index legitimately carries neither timestamp —
     // it is a derived aggregate view and self-identifies with a root
