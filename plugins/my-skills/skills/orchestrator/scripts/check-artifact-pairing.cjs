@@ -15,7 +15,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
-const { branchScope } = require('./gate-scope.cjs');
+const { branchScope, targetProblem } = require('./gate-scope.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
 const PLANS = path.join(ROOT, 'plans');
@@ -31,21 +31,39 @@ function frontmatterKeys(src) {
   );
 }
 
-if (!fs.existsSync(PLANS)) process.exit(0);
-
 const argv = process.argv.slice(2);
 const dashDash = argv.indexOf('--');
 const flags = dashDash >= 0 ? argv.slice(0, dashDash) : argv;
 const explicit = dashDash >= 0 ? argv.slice(dashDash + 1) : [];
 const allowEmpty = flags.includes('--allow-empty');
 const baseRef = flags.find((a) => !a.startsWith('--'));
-const targets = explicit.length
-  ? explicit.map((f) => path.resolve(ROOT, f)).filter((f) => fs.existsSync(f))
+// Explicit mode is the PRESENCE of `--`, not a non-empty list (bug-3): a bare `--`
+// (empty audit list) must be rejected, not silently fall through to branch scope.
+const explicitMode = dashDash >= 0;
+if (explicitMode && explicit.length === 0) {
+  console.error('artifact-pairing: no targets after `--` (empty explicit audit list). Pass one or more files, or omit `--` for branch scope.');
+  process.exit(1);
+}
+
+// The no-plans shortcut applies ONLY to automatic branch scope: a project without
+// plans/ has no branch artifacts to audit, so exit OK. It must NOT short-circuit an
+// EXPLICIT audit list — a `-- missing.md` / symlink target must still fail closed
+// even when plans/ is absent (bug-2: the check ran before argv parsing / the guard).
+if (!explicitMode && !fs.existsSync(PLANS)) process.exit(0);
+
+// Do not existsSync-filter explicit paths (that follows symlinks and silently drops
+// a typo'd path); resolve them all and let the shared guard fail closed (sec-1).
+const targets = explicitMode
+  ? explicit.map((f) => path.resolve(ROOT, f))
   : branchScope({ root: ROOT, auditPath: 'plans', ext: '.md', baseRef, label: 'artifact-pairing', allowEmpty });
 
 const problems = [];
 for (const md of targets) {
   const rel = path.relative(ROOT, md);
+  // Fail closed on a symlink / non-regular / missing / oversized / escaping target
+  // BEFORE reading it — branchScope surfaces such paths (sec-1).
+  const bad = targetProblem(md, { root: ROOT, auditPath: 'plans', ext: '.md', enforceContainment: !explicitMode });
+  if (bad) { problems.push(`${rel}: ${bad}`); continue; }
   const html = md.replace(/\.md$/, '.html');
   if (!fs.existsSync(html)) problems.push(`missing html sibling: ${rel}`);
   // Progress logs are append-logs, not frontmatter artifacts — pairing only.

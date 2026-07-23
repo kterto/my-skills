@@ -53,9 +53,18 @@ function benignTarget(tmp, gate) {
     fs.writeFileSync(html, '<a href="https://example.com">ext</a>\n');
     return html;
   }
-  // roadmap-timestamp-parity: neither timestamp marker present -> skipped -> OK.
+  // roadmap-timestamp-parity: a normal item page with EQUAL machine-readable +
+  // visible timestamps -> parity holds -> OK. (A marker-free page now fails closed
+  // for item pages, so it can no longer stand in as the benign fixture — bug-5.)
   const html = path.join(tmp, 'benign.html');
-  fs.writeFileSync(html, '<!doctype html><p>no timestamps here</p>\n');
+  fs.writeFileSync(
+    html,
+    '<!doctype html><html><head></head><body>\n' +
+    '<main data-kind="milestone" data-updated-at="2026-07-22">\n' +
+    '  <div class="meta"><span class="meta__key">updated:</span> ' +
+    '<span class="meta__val">2026-07-22</span></div>\n' +
+    '</main>\n</body></html>\n'
+  );
   return html;
 }
 

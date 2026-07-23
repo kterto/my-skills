@@ -13,6 +13,10 @@ This document is the single source of truth for the `/roadmap/` directory struct
   CONTEXT.md             # roadmap context (own gate) OR roadmap addendum (orchestrator base exists)
   roadmap.lock.json      # machine state: IDs, statuses, content hashes, last-synced sha
   roadmap.config.json    # optional: roadmap-specific config overrides
+  check-timestamp-parity.cjs  # html mode ONLY: shipped fail-closed gate asset (zero-dep
+                         #   Node script, materialized + refreshed on every html-mode write
+                         #   pass; run by CI / orchestrator / PM, never by the skill). Absent
+                         #   in md mode. See SKILL.md → Timestamp-parity gate.
   001-bootstrap/
     README.md            # milestone overview + rollup status + audit log + ordered phase list
     001.1-scaffold/
@@ -42,6 +46,8 @@ A directory number, once assigned, is **never renumbered**. It is identity, not 
 ## Artifact format
 
 `output_format` controls all generated `.md`/`.html` artifacts (every README, item file, and the `release-matrix` dashboard). `release-matrix.<ext>` is a **pure derived view** — recomputed from `roadmap.lock.json` + `config.systems` on every render, storing no new state (see `SKILL.md` → Release readiness). `roadmap.lock.json` is always JSON and is machine state, not a deliverable.
+
+**`check-timestamp-parity.cjs` (html mode only).** When `output_format = html` the skill also materializes a supported **gate asset** at the roadmap root — a zero-dependency Node script that fails closed when a page's machine-readable `data-updated-at` and visible `updated:` value diverge. It is **not a rendered artifact** (`output_format` does not vary it) and is **absent by design in md mode** (`.md` pages carry the timestamp once, so nothing can diverge). It is materialized on the first html-mode build and re-copied on every subsequent html-mode write pass (symlink-safe atomic write), so consumers can distinguish this expected asset from an unexpected file. See `SKILL.md` → Timestamp-parity gate (incl. the Asset refresh rule).
 
 ### Navigation link targets
 

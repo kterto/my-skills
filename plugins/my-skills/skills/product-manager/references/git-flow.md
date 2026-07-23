@@ -29,7 +29,7 @@ Before cutting a branch, PM determines the correct base commit using the followi
 | Story has one or more `depends_on` ids that are all within the current run's scope | `pm/<dep-id>-<slug>` of the **latest-ordered** dependency (the last dep in topological order). This produces a stacked branch. |
 | Story has no in-scope dependencies (independent story, or all deps are already `done`) | The **run base**: `--base` flag if provided, else `pm.config.json.base_branch` if set, else the branch PM started on. |
 
-The run base is captured once at PM startup and held constant for the entire run.
+The run base is captured once at PM startup and held constant for the entire run. Per story, PM binds the resolved base (stacked predecessor or run base) to a concrete non-empty **`base`** variable (see **Cutting the branch**) and reuses that exact value for the checkout, the timestamp-parity gate, and `gh pr create --base` — the three must never diverge, and an empty `base` aborts rather than defaulting to `main` (bug-1).
 
 > A dependency that is already `done` has its work in the base branch — its `pm/` branch may be gone — so dependents of it stack on the run base, not a stale predecessor branch.
 
@@ -41,8 +41,21 @@ If dependency resolution would produce a cycle, PM stops before cutting any bran
 
 ## Cutting the branch
 
+Bind the resolved base (see **Base resolution**, above) to a **concrete, validated
+`base` shell variable** and hold it for the whole story sequence — the checkout,
+the timestamp-parity gate, and `gh pr create` all use this **same non-empty value**.
+An unset/empty `base` must **abort here**, never fall through to gate-scope's
+`main`/`origin/main` guess, so a configured non-`main` base or a stacked-PR
+predecessor is audited against its real base (bug-1):
+
 ```bash
-git checkout -b pm/<id>-<slug> <base>
+# base := predecessor `pm/<dep-id>-<slug>` (stacked) OR the run base (--base flag,
+#         else pm.config.json.base_branch, else the branch PM started on).
+base="<resolved base ref>"
+[ -n "$base" ] || { echo "PM: base resolution produced no base ref — aborting" >&2; exit 1; }
+git rev-parse --verify --quiet "$base^{commit}" >/dev/null \
+  || { echo "PM: base ref '$base' is not a commit — aborting" >&2; exit 1; }
+git checkout -b pm/<id>-<slug> "$base"
 ```
 
 This yields a clean, non-protected branch. The branch PM cuts here is the branch the orchestrator must commit onto.
@@ -81,15 +94,23 @@ After the orchestrator completes implementation and produces its proposed commit
 
    Sync stamps the story `done`, rolls up milestone/phase completion, and updates `roadmap.lock.json` + READMEs.
 
+   **2b. Timestamp-parity gate (html mode).** Sync re-renders roadmap `.html` pages, so before committing them run the timestamp-parity gate (see **Timestamp-parity gate** below). A red gate **halts the run** — do not commit the sync docs, push, or open the PR.
+
 3. **Commit the roadmap sync docs (lock + READMEs only).**
    The files modified by `/roadmap sync` (`roadmap.lock.json`, READMEs) are committed with a conventional message. Do **not** append a story trailer to this commit, and do **not** stage PM's own logs here — they need the PR URL, which does not exist yet (see step 6). Staging only the roadmap docs here keeps this commit part of the PR diff that reviewers see.
 
    ```bash
-   git -C "$(git rev-parse --show-toplevel)" add roadmap/roadmap.lock.json roadmap/**/README.* roadmap/README.*
+   root="$(git rev-parse --show-toplevel)"
+   git -C "$root" add roadmap/roadmap.lock.json roadmap/**/README.* roadmap/README.*
+   # html mode only: stage the gate asset **conditionally** — it exists only after an
+   # html-mode build/refresh. Passing it unconditionally to `git add` is a fatal
+   # missing-pathspec in md mode, where it never exists, and would abort the sync
+   # commit (bug-1). `git add` of an unchanged asset is a no-op.
+   [ -f "$root/roadmap/check-timestamp-parity.cjs" ] && git -C "$root" add roadmap/check-timestamp-parity.cjs
    git commit -m "docs(roadmap): sync <id>"
    ```
 
-   (Globs assume `globstar`; if it is off, stage the specific README paths the sync touched.)
+   (Globs assume `globstar`; if it is off, stage the specific README paths the sync touched. Staging the gate asset conditionally ships a refreshed/newly-materialized copy in the same sync-docs commit in html mode, while md-mode sync — where the asset is absent by design — commits cleanly.)
 
 4. **Push the branch.**
 
@@ -114,12 +135,12 @@ After the orchestrator completes implementation and produces its proposed commit
 
    ```bash
    root="$(git rev-parse --show-toplevel)"
-   PR_URL=$(gh pr create --base <base> --head pm/<id>-<slug> \
+   PR_URL=$(gh pr create --base "$base" --head pm/<id>-<slug> \
               --body-file "$root/.orchestrator/tmp/pm-pr-body-<id>.md")
    rm -f "$root/.orchestrator/tmp/pm-pr-body-<id>.md"
    ```
 
-   where `<base>` is:
+   `"$base"` is the same variable bound in **Cutting the branch** — never re-derived here, so the PR targets exactly the branch the gate audited against. Its value is:
    - The **predecessor branch** (`pm/<dep-id>-<slug>` of the latest-ordered dependency) for stories that have in-scope dependencies — this is a stacked PR that targets another feature branch, not the run base.
    - The **run base** (`--base` flag, else `pm.config.json.base_branch`, else the branch PM started on) for independent stories.
 
@@ -147,7 +168,11 @@ Concrete trace for story `001.2.1` (slug `setup-ci`, title `Set up CI`, no in-sc
 
 ```bash
 # Base resolution: no in-scope deps -> run base = main
-git checkout -b pm/001.2.1-setup-ci main          # cut branch
+base=main                                         # bound once, reused for gate + PR
+[ -n "$base" ] && git rev-parse --verify --quiet "$base^{commit}" >/dev/null || exit 1
+git checkout -b pm/001.2.1-setup-ci "$base"       # cut branch
+#   (stacked-story variant: base=pm/<dep-id>-<slug>; configured variant: base from
+#    --base / pm.config.json.base_branch — same $base flows to the gate and the PR.)
 
 # (PM invokes orchestrator with the story's ## Brief; answers Step 0 -> "use this branch")
 # Orchestrator prints: ORCHESTRATOR — pipeline complete ... QA: READY_TO_COMMIT
@@ -166,7 +191,10 @@ EOF
 # -> stamps 001.2.1 done, rolls up 001.2 / 001, updates lock + READMEs
 
 # 3. Commit the sync docs only (in the PR diff; no logs, no trailer)
-git -C "$(git rev-parse --show-toplevel)" add roadmap/roadmap.lock.json roadmap/**/README.* roadmap/README.*
+root="$(git rev-parse --show-toplevel)"
+git -C "$root" add roadmap/roadmap.lock.json roadmap/**/README.* roadmap/README.*
+# html mode only: stage the gate asset conditionally (md mode never creates it — bug-1)
+[ -f "$root/roadmap/check-timestamp-parity.cjs" ] && git -C "$root" add roadmap/check-timestamp-parity.cjs
 git commit -m "docs(roadmap): sync 001.2.1"
 
 # 4. Push
@@ -176,7 +204,7 @@ git push -u origin pm/001.2.1-setup-ci
 root="$(git rev-parse --show-toplevel)"   # opencode cwd may be a repo subdir
 mkdir -p "$root/.orchestrator/tmp"
 # (render templates/pr-body.template.md -> $root/.orchestrator/tmp/pm-pr-body-001.2.1.md)
-PR_URL=$(gh pr create --base main --head pm/001.2.1-setup-ci \
+PR_URL=$(gh pr create --base "$base" --head pm/001.2.1-setup-ci \
            --body-file "$root/.orchestrator/tmp/pm-pr-body-001.2.1.md")
 rm -f "$root/.orchestrator/tmp/pm-pr-body-001.2.1.md"
 # -> PR_URL=https://github.com/acme/app/pull/42
@@ -198,6 +226,46 @@ If this story had been `flagged: acceptance` in **conservative** mode, every ste
 ## Trailer-mismatch guard
 
 After `/roadmap sync` completes, verify that the story's status in `roadmap.lock.json` is now `done`. If the trailer commit exists in `git log` but sync did not stamp the story `done`, **warn and stop** — proceeding would allow `roadmap.lock.json` to drift from git truth. Investigate the trailer value for typos before continuing.
+
+---
+
+## Timestamp-parity gate (html mode)
+
+Both re-render sites — `/roadmap sync` in the **Success-path sequence** (step 2b) and a mutation op in the **Planning-PR flow** (step 2b) — rewrite roadmap `.html` pages in place. Each page stamps its update time twice (machine-readable `data-updated-at` + the visible `updated:` value), so an in-place re-render that touches one and misses the other lets the two **silently drift**. PM runs the roadmap skill's parity gate on the freshly re-rendered pages **before committing them**, so drifted docs never reach a PR:
+
+```bash
+root="$(git rev-parse --show-toplevel)"
+gate="$root/roadmap/check-timestamp-parity.cjs"
+if [ -f "$root/roadmap/README.html" ]; then
+  # html-mode roadmap (the index is always materialized as README.html): the parity
+  # gate is MANDATORY. If the asset is missing, the roadmap predates the gate or a
+  # write pass failed to refresh it — fail closed, never silently skip (bug-3).
+  if [ ! -f "$gate" ]; then
+    echo "roadmap-timestamp-parity: gate asset missing on an html-mode roadmap — halt" >&2
+    echo "  re-render the roadmap through the roadmap skill (its html-mode write pass" >&2
+    echo "  re-materializes roadmap/check-timestamp-parity.cjs), then re-run PM." >&2
+    exit 1
+  fi
+  # Audit the pages THIS PR changes. Pass PM's already-resolved base ($base — the
+  # same value handed to `gh pr create --base`, which may be a configured non-main
+  # base or, for a stacked PR, the predecessor branch), so branch scope diffs
+  # against the real merge-base instead of gate-scope's main/origin/main guess
+  # (bug-3). Branch scope needs the orchestrator's shared gate-scope helper; a
+  # standalone planning flow (e.g. an add-* verb without orchestrator bootstrap)
+  # falls back to the self-contained --all mode rather than crashing on the
+  # missing module.
+  if [ -f "$root/.orchestrator/gate-scope.cjs" ]; then
+    node "$gate" "$base"   # branch scope vs PM's resolved base
+  else
+    node "$gate" --all     # self-contained: audit every roadmap page
+  fi
+fi
+# md mode (no roadmap/README.html): nothing to check — .md pages carry the timestamp once.
+```
+
+- **Keyed on html mode, fail-closed on a missing asset — no-op in md mode.** Html mode is detected by the always-materialized `roadmap/README.html` index. When it exists, the gate is **mandatory**: a missing `roadmap/check-timestamp-parity.cjs` **halts the run** (an upgraded roadmap that predates the gate, or a write pass that failed to refresh it, must not slip through un-audited — bug-3). The roadmap skill's html-mode write passes (Materialize / Sync / Re-eval / mutation ops) re-materialize the asset, so under normal PM flow it is present by the time this runs; the halt is defense-in-depth. In md mode (no `roadmap/README.html`) the check is skipped — `.md` pages carry the timestamp once (frontmatter), so nothing can diverge.
+- **Branch scope against PM's resolved base.** The gate audits the pages this branch added or modified — including the just-re-rendered, still-**uncommitted** ones (the branch diff includes working-tree changes vs `HEAD`) — via the orchestrator's `.orchestrator/gate-scope.cjs`. **PM passes its already-resolved base** (`$base`, the same value it hands `gh pr create --base`) as the gate's base-ref argument, so the audit set matches the PR diff even when the base is a configured non-`main` branch or a stacked PR's predecessor — never gate-scope's `main`/`origin/main` guess (bug-3). **Standalone fallback:** the shared `gate-scope.cjs` is present only when the orchestrator is bootstrapped; a planning flow that runs without it (e.g. an `add-*` verb) invokes the **self-contained `--all`** mode instead of branch scope, so the gate never fails to load its scope module.
+- **Red gate → halt** (same discipline as the **Trailer-mismatch guard**): the gate exits non-zero and lists the offending pages. PM **stops** — it does not commit the sync/planning docs, push, or open the PR. The fix is to re-render the flagged pages through the `roadmap` skill so both timestamps agree, then re-run PM for the story.
 
 ---
 
@@ -225,16 +293,21 @@ pm/roadmap-<verb>-<slug>
 
 where `<verb>` is the management verb (`assign`, `park`, `unpark`, `add-spec`, `reorder`, `revise`, `release`) and `<slug>` is a short kebab-case slug of the change (e.g. the target band, or the primary resolved id). Example: `pm/roadmap-assign-mvp`, `pm/roadmap-park-002-1`.
 
-The base is the **PM starting branch** (existing **Base resolution**: `--base` flag > `pm.config.json.base_branch` > the branch PM was invoked on). A planning branch never stacks — it always cuts off the starting branch:
+The base is the **PM starting branch** (existing **Base resolution**: `--base` flag > `pm.config.json.base_branch` > the branch PM was invoked on). A planning branch never stacks — it always cuts off the starting branch. Bind that resolved value to the same concrete `base` variable (non-empty, validated) the success path uses, so the checkout, the parity gate, and `gh pr create --base` all agree (bug-1):
 
 ```bash
-git checkout -b pm/roadmap-<verb>-<slug> <starting-branch>
+base="<starting-branch>"
+[ -n "$base" ] || { echo "PM: no starting branch for planning PR — aborting" >&2; exit 1; }
+git rev-parse --verify --quiet "$base^{commit}" >/dev/null \
+  || { echo "PM: base ref '$base' is not a commit — aborting" >&2; exit 1; }
+git checkout -b pm/roadmap-<verb>-<slug> "$base"
 ```
 
 ### Sequence
 
 1. **Cut** `pm/roadmap-<verb>-<slug>` off the starting branch.
 2. **Invoke the roadmap op** (`set-release` / `ingest-spec` / `reorder` / `revise` / `release`). The op stages a diff, gates on approval (`--yes` skips the gate), writes the `/roadmap/` files, and prints a proposed commit message. PM writes nothing itself.
+   - **2b. Timestamp-parity gate (html mode).** Run the timestamp-parity gate (see **Timestamp-parity gate** below) before committing whenever the op wrote **any** roadmap `.html` page — **not only** ops that change a readiness input. `reorder`, an ordinary `revise`, and structural additions re-render pages (re-ordered child lists, bumped `updated:` stamps) **without** touching a readiness input, and each in-place re-render can still drift the dual timestamp; gating only readiness-input ops would leave those rewrites unaudited (bug-2). A red gate **halts** — do not commit, push, or open the planning PR; re-render the flagged pages through the roadmap skill and re-run.
 3. **Commit** the roadmap files the op wrote with a `docs(roadmap):` message using the op's proposed text:
 
    ```bash
@@ -257,7 +330,7 @@ git checkout -b pm/roadmap-<verb>-<slug> <starting-branch>
    mkdir -p "$root/.orchestrator/tmp"
    # -> render templates/pr-body.template.md into
    #    "$root/.orchestrator/tmp/pm-roadmap-pr-body-<verb>.md"
-   PR_URL=$(gh pr create --base <starting-branch> --head pm/roadmap-<verb>-<slug> \
+   PR_URL=$(gh pr create --base "$base" --head pm/roadmap-<verb>-<slug> \
               --body-file "$root/.orchestrator/tmp/pm-roadmap-pr-body-<verb>.md")
    rm -f "$root/.orchestrator/tmp/pm-roadmap-pr-body-<verb>.md"
    ```
