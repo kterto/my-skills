@@ -52,13 +52,49 @@ const targets = explicit.length
       root: ROOT, auditPath: 'roadmap', ext: '.html', baseRef, label: 'roadmap-timestamp-parity', allowEmpty,
     });
 
+// Safe-target guards (sec-2): an untrusted branch can add a `roadmap/*.html`
+// symlink pointing at an external or unbounded file; `readFileSync` would follow
+// it, reading outside the repo, leaking matching text in diagnostics, or
+// exhausting the runner. So before every read: reject non-regular files
+// (symlinks included — `lstat` never follows), require an `.html` suffix, and
+// cap the accepted size. Canonical containment (the file's realpath stays under
+// the roadmap dir) is additionally enforced for the **auto-discovery** modes
+// (`--all` walk / branch scope), where an attacker-planted path is picked up
+// automatically. Explicit `-- file.html` targets are a deliberate audit list
+// (the regression harness audits tmp fixtures) so they skip only the
+// under-roadmap path restriction — they still get the symlink/regular/.html/size
+// guards.
+const MAX_HTML_BYTES = 5 * 1024 * 1024;
+const realOrNull = (p) => { try { return fs.realpathSync(p); } catch { return null; } };
+const enforceContainment = explicit.length === 0;
+const roadmapReal = enforceContainment ? realOrNull(ROADMAP) : null;
+
 const problems = [];
 for (const file of targets) {
+  const rel = path.relative(ROOT, file);
+  let st;
+  try { st = fs.lstatSync(file); } catch { problems.push(`${rel}: cannot stat target`); continue; }
+  if (st.isSymbolicLink() || !st.isFile()) {
+    problems.push(`${rel}: not a regular file (symlink / non-file rejected)`);
+    continue;
+  }
+  if (!file.endsWith('.html')) { problems.push(`${rel}: not an .html file`); continue; }
+  if (st.size > MAX_HTML_BYTES) {
+    problems.push(`${rel}: exceeds ${MAX_HTML_BYTES}-byte size cap (${st.size})`);
+    continue;
+  }
+  if (enforceContainment) {
+    const fileReal = realOrNull(file);
+    if (roadmapReal == null || fileReal == null ||
+        (fileReal !== roadmapReal && !fileReal.startsWith(roadmapReal + path.sep))) {
+      problems.push(`${rel}: escapes the roadmap directory`);
+      continue;
+    }
+  }
   const s = fs.readFileSync(file, 'utf8');
   const data = (s.match(/data-updated-at="([^"]*)"/) || [])[1];
   const visible = (s.match(/updated:<\/span>\s*<span class="meta__val">([^<]*)</) || [])[1];
   const kind = (s.match(/data-kind="([^"]*)"/) || [])[1];
-  const rel = path.relative(ROOT, file);
   if (data == null && visible == null) {
     // Only the top-level roadmap index legitimately carries neither timestamp —
     // it is a derived aggregate view and self-identifies with

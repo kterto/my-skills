@@ -21,6 +21,8 @@
  *                       neither marker → fail closed (bug-2: was skipped fail-open)
  *   recognized-index  — the roadmap index (data-kind="roadmap-index") with neither
  *                       marker → OK / skip (the one legitimately untimestamped page)
+ * Plus a read-safety assertion (sec-2): a symlinked target pointing at an otherwise
+ * valid page is rejected (not followed), so only its symlink-ness trips the guard.
  *
  * Watched-to-fail: against the pre-bug-2 gate the missing-both-item fixture
  * prints `roadmap-timestamp-parity: OK` / exit 0 — the skip was keyed on "neither
@@ -105,6 +107,21 @@ assertFail('mismatch', writeFixture(tmp, 'mismatch'), /but visible updated=/i);
 assertOk('valid', writeFixture(tmp, 'valid'));
 assertFail('missing-both-item', writeFixture(tmp, 'missing-both-item'), /missing both timestamp markers/i);
 assertOk('recognized-index', writeFixture(tmp, 'recognized-index'));
+
+// sec-2: a symlinked target must be REJECTED (not followed), even when it points at
+// a perfectly valid page — so only its symlink-ness, not its content, trips the
+// guard. This is the read-safety defense against a branch planting a roadmap/*.html
+// symlink to an external/unbounded file.
+const linkReal = path.join(tmp, 'symlink-real-target.html');
+fs.writeFileSync(linkReal, FIXTURES['valid']);
+const linkPath = path.join(tmp, 'symlink-evil.html');
+try {
+  fs.symlinkSync(linkReal, linkPath);
+  assertFail('symlink-target', linkPath, /not a regular file/i);
+} catch (e) {
+  if (e && (e.code === 'EPERM' || e.code === 'ENOSYS')) pass('symlink-target: skipped (symlink unsupported here)');
+  else throw e;
+}
 
 if (failures) {
   console.error(`\ncheck-timestamp-parity: ${failures} failure(s)`);
