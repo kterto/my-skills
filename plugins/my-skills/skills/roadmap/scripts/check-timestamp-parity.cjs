@@ -101,16 +101,26 @@ for (const file of targets) {
   const s = fs.readFileSync(file, 'utf8');
   const data = (s.match(/data-updated-at="([^"]*)"/) || [])[1];
   const visible = (s.match(/updated:<\/span>\s*<span class="meta__val">([^<]*)</) || [])[1];
-  const kind = (s.match(/data-kind="([^"]*)"/) || [])[1];
+  // Read data-kind from the ROOT <main> opening tag only — NOT from anywhere in
+  // the document — so a stray data-kind="roadmap-index" in a comment, script, or
+  // nested element on an item page cannot spoof the index exemption (bug-4).
+  const rootMain = (s.match(/<main\b[^>]*>/i) || [])[0] || '';
+  const kind = (rootMain.match(/data-kind="([^"]*)"/) || [])[1];
   if (data == null && visible == null) {
     // Only the top-level roadmap index legitimately carries neither timestamp —
-    // it is a derived aggregate view and self-identifies with
-    // data-kind="roadmap-index". Every other roadmap page (milestone / phase /
-    // story / release-matrix, incl. nested README.html) is an item page that
-    // MUST carry both markers, so dropping both is a fail-closed error, not a
-    // silent skip (bug-2: keying the skip on "neither marker present" let any
-    // page — including a real item page — fail open).
-    if (kind === 'roadmap-index') continue;
+    // it is a derived aggregate view and self-identifies with a root
+    // <main data-kind="roadmap-index">. Every other roadmap page (milestone /
+    // phase / story / release-matrix, incl. nested README.html) is an item page
+    // that MUST carry both markers, so dropping both is a fail-closed error, not
+    // a silent skip (bug-2: keying the skip on "neither marker present" let any
+    // page fail open). In the real roadmap tree the index is exactly
+    // roadmap/README.html, so containment modes ALSO require that canonical path
+    // — an item page whose root main was hand-forged to roadmap-index still fails
+    // unless it is literally the index file (bug-4).
+    const resolved = path.resolve(ROOT, file);
+    const isCanonicalIndex =
+      path.basename(resolved) === 'README.html' && path.dirname(resolved) === ROADMAP;
+    if (kind === 'roadmap-index' && (!enforceContainment || isCanonicalIndex)) continue;
     problems.push(`${rel}: missing both timestamp markers (data-updated-at + visible updated:)`);
     continue;
   }

@@ -123,6 +123,20 @@ try {
   else throw e;
 }
 
+// bug-4: an item page must NOT be exempted by a stray data-kind="roadmap-index"
+// that sits OUTSIDE its root <main> (here, a decoy in an HTML comment). The root
+// main is a milestone and both timestamps are dropped → must fail closed.
+const spoof =
+  '<!doctype html><html><head></head><body>\n' +
+  '<!-- data-kind="roadmap-index" (decoy in a comment) -->\n' +
+  '<main data-kind="milestone">\n' +
+  '  <div class="meta"><span class="meta__key">updated:</span> ' +
+  '<span class="meta__val_typo">2026-07-22</span></div>\n' +
+  '</main>\n</body></html>\n';
+const spoofFile = path.join(tmp, 'spoofed-index-comment.html');
+fs.writeFileSync(spoofFile, spoof);
+assertFail('spoofed-index-comment', spoofFile, /missing both timestamp markers/i);
+
 // bug-2: an explicit target that does not exist must FAIL closed, not be silently
 // dropped into a zero-file OK (the old existsSync filter removed missing paths).
 assertFail('missing-explicit-target', path.join(tmp, 'does-not-exist.html'), /missing target/i);
