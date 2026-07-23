@@ -4,7 +4,9 @@
  * (check-artifact-pairing, check-artifact-links, roadmap/check-timestamp-parity).
  *
  * `branchScope(options)` resolves the set of files a branch adds or edits under
- * an audited path, returning absolute paths that exist on disk. It fails closed:
+ * an audited path, returning absolute paths **as reported by git** — existence and
+ * file type are validated by each gate over its own targets, so a dangling symlink
+ * is surfaced (not silently dropped). It fails closed:
  *
  *   - a single shell-free `git rev-parse --git-dir` usability probe runs first;
  *     its failure is fatal (Git unusable → exit non-zero, no gate verdict);
@@ -37,7 +39,6 @@
  * Returns: string[] of absolute, existing file paths. On a fatal condition it
  * prints a diagnostic to stderr and calls process.exit(1).
  */
-const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
 
@@ -99,15 +100,25 @@ function branchScope(options) {
   }
 
   const out = new Set();
-  const add = (raw) => (raw || '').split('\n').map((s) => s.trim()).filter(Boolean).forEach((f) => out.add(f));
-  add(git.fatal(['diff', '--name-only', '--diff-filter=AM', `${base}...HEAD`, '--', auditPath]));
-  add(git.fatal(['diff', '--name-only', '--diff-filter=AM', 'HEAD', '--', auditPath]));
-  add(git.fatal(['ls-files', '--others', '--exclude-standard', '--', auditPath]));
+  // NUL-delimited output (-z): git emits raw, un-quoted paths separated by NUL, so
+  // a path containing spaces / newlines / quotes cannot corrupt parsing (sec-1).
+  // Never split on '\n' or trim — a NUL split preserves the exact path bytes.
+  const add = (raw) => (raw || '').split('\0').filter(Boolean).forEach((f) => out.add(f));
+  // --diff-filter=AMT + --no-renames: capture Added / Modified / **Type-changed**
+  // paths (e.g. a tracked page swapped to a symlink is a type change), and disable
+  // rename detection so a rename surfaces as a plain Add of the new path (no
+  // rename-pair parsing). Omitting T previously let a page turned into a (dangling)
+  // symlink escape the scope entirely, yielding a false OK (sec-1).
+  add(git.fatal(['diff', '-z', '--name-only', '--no-renames', '--diff-filter=AMT', `${base}...HEAD`, '--', auditPath]));
+  add(git.fatal(['diff', '-z', '--name-only', '--no-renames', '--diff-filter=AMT', 'HEAD', '--', auditPath]));
+  add(git.fatal(['ls-files', '-z', '--others', '--exclude-standard', '--', auditPath]));
 
-  return [...out]
-    .filter((f) => f.endsWith(ext))
-    .map((f) => path.join(root, f))
-    .filter((f) => fs.existsSync(f));
+  // Return git-reported paths WITHOUT an existsSync filter (sec-1): existsSync
+  // FOLLOWS symlinks, so a dangling symlink named by the diff was silently dropped
+  // before any gate could inspect it. Hand every candidate the branch touched to
+  // the gate, which validates existence/type of its own targets (the parity gate
+  // lstat-rejects missing / symlinked / non-regular targets).
+  return [...out].filter((f) => f.endsWith(ext)).map((f) => path.join(root, f));
 }
 
 module.exports = { branchScope };
