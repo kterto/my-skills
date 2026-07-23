@@ -156,6 +156,39 @@ const indexPage = page('data-kind="roadmap-index"', '<span class="meta__val_typo
   }
 }
 
+// arch-1: branch scope version-gates the orchestrator's gate-scope helper against a
+// CLOSED supported range [MIN, MAX] (both 1). An absent, older, or unknown-NEWER
+// helper version must fail closed; the compatible version proceeds. Runs a copy of
+// the gate in branch mode against a stub .orchestrator/gate-scope.cjs.
+function runBranchWithHelper(helperBody) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-parity-ver-'));
+  fs.mkdirSync(path.join(root, 'roadmap'));
+  fs.mkdirSync(path.join(root, '.orchestrator'));
+  fs.copyFileSync(GATE, path.join(root, 'roadmap', 'check-timestamp-parity.cjs'));
+  fs.writeFileSync(path.join(root, '.orchestrator', 'gate-scope.cjs'), helperBody);
+  return spawnSync(NODE, [path.join(root, 'roadmap', 'check-timestamp-parity.cjs')], {
+    cwd: root, encoding: 'utf8', env: process.env,
+  });
+}
+{
+  const r = runBranchWithHelper('module.exports = { SCOPE_API_VERSION: 2, branchScope: () => [] };');
+  const out = (r.stdout || '') + (r.stderr || '');
+  if (r.status !== 0 && /newer than this gate/i.test(out)) pass('scope-api-newer: fail-closed');
+  else fail(`scope-api-newer: expected fail-closed + "newer" diagnostic, got status=${r.status} out=${JSON.stringify(out.trim())}`);
+}
+{
+  const r = runBranchWithHelper('module.exports = { branchScope: () => [] };');
+  const out = (r.stdout || '') + (r.stderr || '');
+  if (r.status !== 0 && /SCOPE_API_VERSION absent/i.test(out)) pass('scope-api-absent: fail-closed');
+  else fail(`scope-api-absent: expected fail-closed + "absent" diagnostic, got status=${r.status} out=${JSON.stringify(out.trim())}`);
+}
+{
+  const r = runBranchWithHelper('module.exports = { SCOPE_API_VERSION: 1, branchScope: () => [] };');
+  const out = (r.stdout || '') + (r.stderr || '');
+  if (r.status === 0 && out.includes(OK)) pass('scope-api-compatible: OK (empty scope)');
+  else fail(`scope-api-compatible: expected exit 0 + "${OK}", got status=${r.status} out=${JSON.stringify(out.trim())}`);
+}
+
 // sec-2: a symlinked target must be REJECTED (not followed), even when it points at
 // a perfectly valid page — so only its symlink-ness, not its content, trips the
 // guard. This is the read-safety defense against a branch planting a roadmap/*.html

@@ -51,15 +51,27 @@ const allowEmpty = flags.includes('--allow-empty');
 // pre-versioning) helper and fail closed, rather than silently auditing a stale
 // scope (arch-1, ADR-0010). The self-contained --all / explicit -- modes need no
 // helper and are unaffected.
-const REQUIRED_SCOPE_API = 1;
+// The gate accepts only the helper versions it was written against — a CLOSED
+// range [MIN, MAX], NOT an open ">= MIN". Per ADR-0010 a SCOPE_API_VERSION bump
+// marks a discovery-contract change consumers must not run against, so an
+// unknown-NEWER helper (v > MAX) is as incompatible as a stale one (v < MIN): an
+// old materialized gate must fail closed against a future v2 helper too, not
+// silently accept it (arch-1). Widen MAX only when a new helper version is verified
+// compatible with this gate.
+const MIN_SCOPE_API = 1;
+const MAX_SCOPE_API = 1;
 function branchScopeVersioned() {
   const scope = require('../.orchestrator/gate-scope.cjs');
   const v = scope.SCOPE_API_VERSION;
-  if (typeof v !== 'number' || v < REQUIRED_SCOPE_API) {
+  const supported = MIN_SCOPE_API === MAX_SCOPE_API ? `${MIN_SCOPE_API}` : `${MIN_SCOPE_API}..${MAX_SCOPE_API}`;
+  if (typeof v !== 'number' || v < MIN_SCOPE_API || v > MAX_SCOPE_API) {
+    const newer = typeof v === 'number' && v > MAX_SCOPE_API;
     console.error(
       `roadmap-timestamp-parity: incompatible .orchestrator/gate-scope.cjs ` +
-      `(SCOPE_API_VERSION ${v == null ? 'absent' : v}; need >= ${REQUIRED_SCOPE_API}). ` +
-      `Re-run orchestrator setup to refresh the helper, or audit with --all.`
+      `(SCOPE_API_VERSION ${v == null ? 'absent' : v}; this gate supports ${supported}). ` +
+      (newer
+        ? 'The helper is newer than this gate — re-materialize the roadmap gate (or audit with --all).'
+        : 'Re-run orchestrator setup to refresh the helper, or audit with --all.')
     );
     process.exit(1);
   }

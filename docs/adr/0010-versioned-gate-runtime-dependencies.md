@@ -42,18 +42,45 @@ across a skill boundary onto a helper with an independent refresh cadence.)
   at `1`), bumped whenever `branchScope`'s discovery contract changes in a way a consumer
   must not silently run against. `v1` denotes the sec-1-hardened contract (NUL output,
   `AMT` + `--no-renames`, no `existsSync` drop).
-- The roadmap gate bakes in a **`REQUIRED_SCOPE_API`** minimum. In branch-scope mode it
-  loads the helper, reads `SCOPE_API_VERSION`, and — if the field is **absent**
-  (a pre-versioning helper, i.e. exactly the stale pre-sec-1 build) or **lower** than
-  required — **exits non-zero** with a diagnostic telling the user to re-run orchestrator
-  setup or to audit with the self-contained `--all` mode. It never runs `branchScope` on an
-  incompatible helper.
+- The roadmap gate bakes in a supported **closed range `[MIN_SCOPE_API, MAX_SCOPE_API]`**
+  (both `1` today). In branch-scope mode it loads the helper, reads `SCOPE_API_VERSION`, and
+  — if the field is **absent** (a pre-versioning helper, i.e. exactly the stale pre-sec-1
+  build), **below `MIN`**, or **above `MAX`** (an unknown-newer / future-breaking helper) —
+  **exits non-zero** with a diagnostic (re-run orchestrator setup, re-materialize the gate,
+  or audit with the self-contained `--all` mode). It never runs `branchScope` on an
+  out-of-range helper. See **Forward-compatibility rule** below.
 - The gate's **`--all`** and explicit **`-- <file>`** modes are self-contained (no helper),
   so a standalone roadmap and the regression harness are unaffected — the version gate binds
   only the branch-scope path.
 
 This makes the cross-skill dependency **safe by failing closed**: a version skew degrades to
 a loud refusal (fix your setup), never a silent false OK.
+
+### Forward-compatibility rule (arch-1 amendment)
+
+A consumer accepts only the helper versions it was **written against** — a **closed range
+`[MIN_SCOPE_API, MAX_SCOPE_API]`**, not an open `>= MIN`. Because every `SCOPE_API_VERSION`
+bump marks a discovery-contract change a consumer *must not run against* (the whole point of
+the version), an **unknown-newer** helper (`v > MAX`) is exactly as incompatible as a stale
+one (`v < MIN`) and is **rejected the same way**. This closes the direction the initial
+minimum-only check (`v >= MIN`) left open: after orchestrator setup refreshes the helper to a
+future breaking `v2`, an **old materialized gate** (built for `v1`) would otherwise silently
+accept and execute against `v2`.
+
+The rule therefore is:
+
+- **Breaking discovery change → bump `SCOPE_API_VERSION`.** Old consumers (whose `MAX` is
+  below the new version) fail closed against it, and are fixed by re-materializing the
+  consumer so its `[MIN, MAX]` includes the new version.
+- **Backward-compatible / additive helper change is NOT a `SCOPE_API_VERSION` bump.** If a
+  future change is genuinely additive (a consumer written for the old contract still runs
+  correctly), it must be surfaced through a **separate capability flag**, not by bumping the
+  breaking-version integer — otherwise it would needlessly fail every existing consumer.
+- **Widening a consumer's `MAX`** is a deliberate edit made only after the new helper version
+  is verified compatible with that consumer.
+
+A consumer that pins `MIN === MAX` (as the roadmap gate does at `1`) accepts exactly one
+version; a range is used only once a consumer is verified against several.
 
 ## Alternatives considered
 
