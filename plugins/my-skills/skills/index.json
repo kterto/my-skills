@@ -136,6 +136,8 @@
         "references/item-schema.md",
         "references/mutation-ops.md",
         "references/sync-and-reeval.md",
+        "scripts/check-timestamp-parity.cjs",
+        "scripts/check-timestamp-parity.test.cjs",
         "SKILL.md",
         "templates/milestone-readme.template.html",
         "templates/milestone-readme.template.md",
