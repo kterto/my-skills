@@ -55,5 +55,14 @@ try {
   else throw e;
 }
 
+// bug-3: a bare `--` (empty explicit audit list) is rejected, not silently fallen
+// through to branch scope (which would need git and mis-audit).
+{
+  const r = run(['--']);
+  const out = (r.stdout || '') + (r.stderr || '');
+  if (r.status !== 0 && /empty explicit audit list/i.test(out)) pass('no-plans empty-explicit: fail-closed');
+  else fail(`no-plans empty-explicit: expected fail-closed, got status=${r.status} out=${JSON.stringify(out.trim())}`);
+}
+
 if (failures) { console.error(`\ncheck-artifact-pairing: ${failures} failure(s)`); process.exit(1); }
 console.log('\ncheck-artifact-pairing: OK');

@@ -203,7 +203,14 @@ function branchScopeVersioned() {
   });
 }
 
-const targets = explicit.length
+// Explicit mode is the PRESENCE of `--`, not a non-empty list (bug-3): a bare `--`
+// (an empty audit list) must be rejected, not silently fall through to branch scope.
+const explicitMode = dashDash >= 0;
+if (explicitMode && explicit.length === 0) {
+  console.error('roadmap-timestamp-parity: no targets after `--` (empty explicit audit list). Pass one or more files, or omit `--` for branch/--all scope.');
+  process.exit(1);
+}
+const targets = explicitMode
   // Do NOT filter out non-existent explicit paths (bug-2): silently dropping a
   // typo'd `-- roadmap/missing.html` left zero targets and printed OK / exit 0,
   // defeating the fail-closed contract. Resolve them all; the per-target guard
@@ -227,7 +234,7 @@ const targets = explicit.length
 // guards.
 const MAX_HTML_BYTES = 5 * 1024 * 1024;
 const realOrNull = (p) => { try { return fs.realpathSync(p); } catch { return null; } };
-const enforceContainment = explicit.length === 0;
+const enforceContainment = !explicitMode;
 const roadmapReal = enforceContainment ? realOrNull(ROADMAP) : null;
 
 const problems = [];

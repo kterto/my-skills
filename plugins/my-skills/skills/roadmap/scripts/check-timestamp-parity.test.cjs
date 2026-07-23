@@ -192,6 +192,15 @@ function runBranchWithHelper(helperBody) {
   else fail(`scope-api-compatible: expected exit 0 + "${OK}", got status=${r.status} out=${JSON.stringify(out.trim())}`);
 }
 
+// bug-3: a bare `--` (empty explicit audit list) is rejected, not silently fallen
+// through to branch scope.
+{
+  const r = spawnSync(NODE, [GATE, '--'], { cwd: __dirname, encoding: 'utf8', env: process.env });
+  const out = (r.stdout || '') + (r.stderr || '');
+  if (r.status !== 0 && /empty explicit audit list/i.test(out)) pass('empty-explicit-dashdash: fail-closed');
+  else fail(`empty-explicit-dashdash: expected fail-closed, got status=${r.status} out=${JSON.stringify(out.trim())}`);
+}
+
 // sec-2: a symlinked target must be REJECTED (not followed), even when it points at
 // a perfectly valid page — so only its symlink-ness, not its content, trips the
 // guard. This is the read-safety defense against a branch planting a roadmap/*.html

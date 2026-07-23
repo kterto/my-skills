@@ -37,7 +37,13 @@ const flags = dashDash >= 0 ? argv.slice(0, dashDash) : argv;
 const explicit = dashDash >= 0 ? argv.slice(dashDash + 1) : [];
 const allowEmpty = flags.includes('--allow-empty');
 const baseRef = flags.find((a) => !a.startsWith('--'));
-const explicitMode = explicit.length > 0;
+// Explicit mode is the PRESENCE of `--`, not a non-empty list (bug-3): a bare `--`
+// (empty audit list) must be rejected, not silently fall through to branch scope.
+const explicitMode = dashDash >= 0;
+if (explicitMode && explicit.length === 0) {
+  console.error('artifact-pairing: no targets after `--` (empty explicit audit list). Pass one or more files, or omit `--` for branch scope.');
+  process.exit(1);
+}
 
 // The no-plans shortcut applies ONLY to automatic branch scope: a project without
 // plans/ has no branch artifacts to audit, so exit OK. It must NOT short-circuit an

@@ -37,7 +37,13 @@ const flags = dashDash >= 0 ? argv.slice(0, dashDash) : argv;
 const explicit = dashDash >= 0 ? argv.slice(dashDash + 1) : [];
 const allowEmpty = flags.includes('--allow-empty');
 const baseRef = flags.find((a) => !a.startsWith('--'));
-const explicitMode = explicit.length > 0;
+// Explicit mode is the PRESENCE of `--`, not a non-empty list (bug-3): a bare `--`
+// (empty audit list) must be rejected, not silently fall through to branch scope.
+const explicitMode = dashDash >= 0;
+if (explicitMode && explicit.length === 0) {
+  console.error('artifact-links: no targets after `--` (empty explicit audit list). Pass one or more files, or omit `--` for branch scope.');
+  process.exit(1);
+}
 // Do not existsSync-filter explicit paths (that follows symlinks and silently drops
 // a typo'd path); resolve them all and let the shared guard fail closed (sec-1).
 const targets = explicitMode
