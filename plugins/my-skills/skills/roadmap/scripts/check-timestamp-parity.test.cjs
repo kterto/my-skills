@@ -123,6 +123,24 @@ try {
   else throw e;
 }
 
+// bug-2: an explicit target that does not exist must FAIL closed, not be silently
+// dropped into a zero-file OK (the old existsSync filter removed missing paths).
+assertFail('missing-explicit-target', path.join(tmp, 'does-not-exist.html'), /missing target/i);
+
+// bug-2: a mixed list (one valid page + one missing) must still fail on the missing
+// member rather than pass because the surviving file is OK.
+{
+  const validFile = writeFixture(tmp, 'valid');
+  const missingFile = path.join(tmp, 'also-missing.html');
+  const r = spawnSync(NODE, [GATE, '--', validFile, missingFile], { cwd: __dirname, encoding: 'utf8', env: process.env });
+  const out = (r.stdout || '') + (r.stderr || '');
+  if (r.status !== 0 && !out.includes(OK) && /missing target/i.test(out)) {
+    pass(`mixed-existing-missing: fail-closed (exit=${r.status})`);
+  } else {
+    fail(`mixed-existing-missing: expected non-zero + missing-target diagnostic, got status=${r.status} out=${JSON.stringify(out.trim())}`);
+  }
+}
+
 if (failures) {
   console.error(`\ncheck-timestamp-parity: ${failures} failure(s)`);
   process.exit(1);

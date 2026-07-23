@@ -44,7 +44,11 @@ const all = flags.includes('--all');
 const allowEmpty = flags.includes('--allow-empty');
 
 const targets = explicit.length
-  ? explicit.map((f) => path.resolve(ROOT, f)).filter((f) => fs.existsSync(f))
+  // Do NOT filter out non-existent explicit paths (bug-2): silently dropping a
+  // typo'd `-- roadmap/missing.html` left zero targets and printed OK / exit 0,
+  // defeating the fail-closed contract. Resolve them all; the per-target guard
+  // below fails closed on a missing / non-regular / non-.html target.
+  ? explicit.map((f) => path.resolve(ROOT, f))
   : all ? walk(ROADMAP, [])
   // Branch scope only: lazy-require the orchestrator's shared gate-scope so the
   // self-contained modes above never depend on `.orchestrator/` being present.
@@ -73,7 +77,10 @@ const problems = [];
 for (const file of targets) {
   const rel = path.relative(ROOT, file);
   let st;
-  try { st = fs.lstatSync(file); } catch { problems.push(`${rel}: cannot stat target`); continue; }
+  try { st = fs.lstatSync(file); } catch (e) {
+    problems.push(`${rel}: ${e && e.code === 'ENOENT' ? 'missing target (does not exist)' : 'cannot stat target'}`);
+    continue;
+  }
   if (st.isSymbolicLink() || !st.isFile()) {
     problems.push(`${rel}: not a regular file (symlink / non-file rejected)`);
     continue;
