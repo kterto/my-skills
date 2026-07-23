@@ -66,6 +66,7 @@
         "references/context-schema.md",
         "scripts/check-artifact-links.cjs",
         "scripts/check-artifact-pairing.cjs",
+        "scripts/check-artifact-pairing.test.cjs",
         "scripts/gate-scope.cjs",
         "scripts/gate-scope.test.cjs",
         "scripts/gate-shell-injection.test.cjs",

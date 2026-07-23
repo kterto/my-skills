@@ -31,8 +31,6 @@ function frontmatterKeys(src) {
   );
 }
 
-if (!fs.existsSync(PLANS)) process.exit(0);
-
 const argv = process.argv.slice(2);
 const dashDash = argv.indexOf('--');
 const flags = dashDash >= 0 ? argv.slice(0, dashDash) : argv;
@@ -40,6 +38,13 @@ const explicit = dashDash >= 0 ? argv.slice(dashDash + 1) : [];
 const allowEmpty = flags.includes('--allow-empty');
 const baseRef = flags.find((a) => !a.startsWith('--'));
 const explicitMode = explicit.length > 0;
+
+// The no-plans shortcut applies ONLY to automatic branch scope: a project without
+// plans/ has no branch artifacts to audit, so exit OK. It must NOT short-circuit an
+// EXPLICIT audit list — a `-- missing.md` / symlink target must still fail closed
+// even when plans/ is absent (bug-2: the check ran before argv parsing / the guard).
+if (!explicitMode && !fs.existsSync(PLANS)) process.exit(0);
+
 // Do not existsSync-filter explicit paths (that follows symlinks and silently drops
 // a typo'd path); resolve them all and let the shared guard fail closed (sec-1).
 const targets = explicitMode
