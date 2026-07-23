@@ -87,11 +87,11 @@ After the orchestrator completes implementation and produces its proposed commit
    The files modified by `/roadmap sync` (`roadmap.lock.json`, READMEs) are committed with a conventional message. Do **not** append a story trailer to this commit, and do **not** stage PM's own logs here — they need the PR URL, which does not exist yet (see step 6). Staging only the roadmap docs here keeps this commit part of the PR diff that reviewers see.
 
    ```bash
-   git -C "$(git rev-parse --show-toplevel)" add roadmap/roadmap.lock.json roadmap/**/README.* roadmap/README.*
+   git -C "$(git rev-parse --show-toplevel)" add roadmap/roadmap.lock.json roadmap/**/README.* roadmap/README.* roadmap/check-timestamp-parity.cjs
    git commit -m "docs(roadmap): sync <id>"
    ```
 
-   (Globs assume `globstar`; if it is off, stage the specific README paths the sync touched.)
+   (Globs assume `globstar`; if it is off, stage the specific README paths the sync touched. `roadmap/check-timestamp-parity.cjs` is staged so a refreshed/newly-materialized gate asset ships in the same sync-docs commit — html mode only; the path is simply absent in md mode. `git add` of an unchanged asset is a no-op.)
 
 4. **Push the branch.**
 
@@ -168,7 +168,7 @@ EOF
 # -> stamps 001.2.1 done, rolls up 001.2 / 001, updates lock + READMEs
 
 # 3. Commit the sync docs only (in the PR diff; no logs, no trailer)
-git -C "$(git rev-parse --show-toplevel)" add roadmap/roadmap.lock.json roadmap/**/README.* roadmap/README.*
+git -C "$(git rev-parse --show-toplevel)" add roadmap/roadmap.lock.json roadmap/**/README.* roadmap/README.* roadmap/check-timestamp-parity.cjs
 git commit -m "docs(roadmap): sync 001.2.1"
 
 # 4. Push
@@ -209,12 +209,23 @@ Both re-render sites — `/roadmap sync` in the **Success-path sequence** (step 
 
 ```bash
 root="$(git rev-parse --show-toplevel)"
-if [ -f "$root/roadmap/check-timestamp-parity.cjs" ]; then
-  node "$root/roadmap/check-timestamp-parity.cjs"   # branch scope: the pages this branch touched
+gate="$root/roadmap/check-timestamp-parity.cjs"
+if [ -f "$root/roadmap/README.html" ]; then
+  # html-mode roadmap (the index is always materialized as README.html): the parity
+  # gate is MANDATORY. If the asset is missing, the roadmap predates the gate or a
+  # write pass failed to refresh it — fail closed, never silently skip (bug-3).
+  if [ ! -f "$gate" ]; then
+    echo "roadmap-timestamp-parity: gate asset missing on an html-mode roadmap — halt" >&2
+    echo "  re-render the roadmap through the roadmap skill (its html-mode write pass" >&2
+    echo "  re-materializes roadmap/check-timestamp-parity.cjs), then re-run PM." >&2
+    exit 1
+  fi
+  node "$gate"   # branch scope: the pages this branch touched
 fi
+# md mode (no roadmap/README.html): nothing to check — .md pages carry the timestamp once.
 ```
 
-- **Guarded on existence — no-op in md mode.** The gate is materialized into `roadmap/` only by an html-mode roadmap build (roadmap `SKILL.md` → Materialize Step 5). In md mode (or before a roadmap exists) the file is absent and the check is skipped — `.md` pages carry the timestamp once (frontmatter), so nothing can diverge.
+- **Keyed on html mode, fail-closed on a missing asset — no-op in md mode.** Html mode is detected by the always-materialized `roadmap/README.html` index. When it exists, the gate is **mandatory**: a missing `roadmap/check-timestamp-parity.cjs` **halts the run** (an upgraded roadmap that predates the gate, or a write pass that failed to refresh it, must not slip through un-audited — bug-3). The roadmap skill's html-mode write passes (Materialize / Sync / Re-eval / mutation ops) re-materialize the asset, so under normal PM flow it is present by the time this runs; the halt is defense-in-depth. In md mode (no `roadmap/README.html`) the check is skipped — `.md` pages carry the timestamp once (frontmatter), so nothing can diverge.
 - **Branch scope (default, no args).** The gate audits the pages this branch added or modified — including the just-re-rendered, still-**uncommitted** ones (the branch diff includes working-tree changes vs `HEAD`) — via the orchestrator's `.orchestrator/gate-scope.cjs`, present because PM runs the orchestrator. That is exactly the set of pages in the PR diff. (For a roadmap outside a PM/orchestrator context, `--all` runs the same check self-contained.)
 - **Red gate → halt** (same discipline as the **Trailer-mismatch guard**): the gate exits non-zero and lists the offending pages. PM **stops** — it does not commit the sync/planning docs, push, or open the PR. The fix is to re-render the flagged pages through the `roadmap` skill so both timestamps agree, then re-run PM for the story.
 
