@@ -87,11 +87,17 @@ After the orchestrator completes implementation and produces its proposed commit
    The files modified by `/roadmap sync` (`roadmap.lock.json`, READMEs) are committed with a conventional message. Do **not** append a story trailer to this commit, and do **not** stage PM's own logs here — they need the PR URL, which does not exist yet (see step 6). Staging only the roadmap docs here keeps this commit part of the PR diff that reviewers see.
 
    ```bash
-   git -C "$(git rev-parse --show-toplevel)" add roadmap/roadmap.lock.json roadmap/**/README.* roadmap/README.* roadmap/check-timestamp-parity.cjs
+   root="$(git rev-parse --show-toplevel)"
+   git -C "$root" add roadmap/roadmap.lock.json roadmap/**/README.* roadmap/README.*
+   # html mode only: stage the gate asset **conditionally** — it exists only after an
+   # html-mode build/refresh. Passing it unconditionally to `git add` is a fatal
+   # missing-pathspec in md mode, where it never exists, and would abort the sync
+   # commit (bug-1). `git add` of an unchanged asset is a no-op.
+   [ -f "$root/roadmap/check-timestamp-parity.cjs" ] && git -C "$root" add roadmap/check-timestamp-parity.cjs
    git commit -m "docs(roadmap): sync <id>"
    ```
 
-   (Globs assume `globstar`; if it is off, stage the specific README paths the sync touched. `roadmap/check-timestamp-parity.cjs` is staged so a refreshed/newly-materialized gate asset ships in the same sync-docs commit — html mode only; the path is simply absent in md mode. `git add` of an unchanged asset is a no-op.)
+   (Globs assume `globstar`; if it is off, stage the specific README paths the sync touched. Staging the gate asset conditionally ships a refreshed/newly-materialized copy in the same sync-docs commit in html mode, while md-mode sync — where the asset is absent by design — commits cleanly.)
 
 4. **Push the branch.**
 
@@ -168,7 +174,10 @@ EOF
 # -> stamps 001.2.1 done, rolls up 001.2 / 001, updates lock + READMEs
 
 # 3. Commit the sync docs only (in the PR diff; no logs, no trailer)
-git -C "$(git rev-parse --show-toplevel)" add roadmap/roadmap.lock.json roadmap/**/README.* roadmap/README.* roadmap/check-timestamp-parity.cjs
+root="$(git rev-parse --show-toplevel)"
+git -C "$root" add roadmap/roadmap.lock.json roadmap/**/README.* roadmap/README.*
+# html mode only: stage the gate asset conditionally (md mode never creates it — bug-1)
+[ -f "$root/roadmap/check-timestamp-parity.cjs" ] && git -C "$root" add roadmap/check-timestamp-parity.cjs
 git commit -m "docs(roadmap): sync 001.2.1"
 
 # 4. Push
