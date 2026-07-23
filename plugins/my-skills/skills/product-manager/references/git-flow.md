@@ -29,7 +29,7 @@ Before cutting a branch, PM determines the correct base commit using the followi
 | Story has one or more `depends_on` ids that are all within the current run's scope | `pm/<dep-id>-<slug>` of the **latest-ordered** dependency (the last dep in topological order). This produces a stacked branch. |
 | Story has no in-scope dependencies (independent story, or all deps are already `done`) | The **run base**: `--base` flag if provided, else `pm.config.json.base_branch` if set, else the branch PM started on. |
 
-The run base is captured once at PM startup and held constant for the entire run.
+The run base is captured once at PM startup and held constant for the entire run. Per story, PM binds the resolved base (stacked predecessor or run base) to a concrete non-empty **`base`** variable (see **Cutting the branch**) and reuses that exact value for the checkout, the timestamp-parity gate, and `gh pr create --base` — the three must never diverge, and an empty `base` aborts rather than defaulting to `main` (bug-1).
 
 > A dependency that is already `done` has its work in the base branch — its `pm/` branch may be gone — so dependents of it stack on the run base, not a stale predecessor branch.
 
@@ -41,8 +41,21 @@ If dependency resolution would produce a cycle, PM stops before cutting any bran
 
 ## Cutting the branch
 
+Bind the resolved base (see **Base resolution**, above) to a **concrete, validated
+`base` shell variable** and hold it for the whole story sequence — the checkout,
+the timestamp-parity gate, and `gh pr create` all use this **same non-empty value**.
+An unset/empty `base` must **abort here**, never fall through to gate-scope's
+`main`/`origin/main` guess, so a configured non-`main` base or a stacked-PR
+predecessor is audited against its real base (bug-1):
+
 ```bash
-git checkout -b pm/<id>-<slug> <base>
+# base := predecessor `pm/<dep-id>-<slug>` (stacked) OR the run base (--base flag,
+#         else pm.config.json.base_branch, else the branch PM started on).
+base="<resolved base ref>"
+[ -n "$base" ] || { echo "PM: base resolution produced no base ref — aborting" >&2; exit 1; }
+git rev-parse --verify --quiet "$base^{commit}" >/dev/null \
+  || { echo "PM: base ref '$base' is not a commit — aborting" >&2; exit 1; }
+git checkout -b pm/<id>-<slug> "$base"
 ```
 
 This yields a clean, non-protected branch. The branch PM cuts here is the branch the orchestrator must commit onto.
@@ -122,12 +135,12 @@ After the orchestrator completes implementation and produces its proposed commit
 
    ```bash
    root="$(git rev-parse --show-toplevel)"
-   PR_URL=$(gh pr create --base <base> --head pm/<id>-<slug> \
+   PR_URL=$(gh pr create --base "$base" --head pm/<id>-<slug> \
               --body-file "$root/.orchestrator/tmp/pm-pr-body-<id>.md")
    rm -f "$root/.orchestrator/tmp/pm-pr-body-<id>.md"
    ```
 
-   where `<base>` is:
+   `"$base"` is the same variable bound in **Cutting the branch** — never re-derived here, so the PR targets exactly the branch the gate audited against. Its value is:
    - The **predecessor branch** (`pm/<dep-id>-<slug>` of the latest-ordered dependency) for stories that have in-scope dependencies — this is a stacked PR that targets another feature branch, not the run base.
    - The **run base** (`--base` flag, else `pm.config.json.base_branch`, else the branch PM started on) for independent stories.
 
@@ -155,7 +168,11 @@ Concrete trace for story `001.2.1` (slug `setup-ci`, title `Set up CI`, no in-sc
 
 ```bash
 # Base resolution: no in-scope deps -> run base = main
-git checkout -b pm/001.2.1-setup-ci main          # cut branch
+base=main                                         # bound once, reused for gate + PR
+[ -n "$base" ] && git rev-parse --verify --quiet "$base^{commit}" >/dev/null || exit 1
+git checkout -b pm/001.2.1-setup-ci "$base"       # cut branch
+#   (stacked-story variant: base=pm/<dep-id>-<slug>; configured variant: base from
+#    --base / pm.config.json.base_branch — same $base flows to the gate and the PR.)
 
 # (PM invokes orchestrator with the story's ## Brief; answers Step 0 -> "use this branch")
 # Orchestrator prints: ORCHESTRATOR — pipeline complete ... QA: READY_TO_COMMIT
@@ -187,7 +204,7 @@ git push -u origin pm/001.2.1-setup-ci
 root="$(git rev-parse --show-toplevel)"   # opencode cwd may be a repo subdir
 mkdir -p "$root/.orchestrator/tmp"
 # (render templates/pr-body.template.md -> $root/.orchestrator/tmp/pm-pr-body-001.2.1.md)
-PR_URL=$(gh pr create --base main --head pm/001.2.1-setup-ci \
+PR_URL=$(gh pr create --base "$base" --head pm/001.2.1-setup-ci \
            --body-file "$root/.orchestrator/tmp/pm-pr-body-001.2.1.md")
 rm -f "$root/.orchestrator/tmp/pm-pr-body-001.2.1.md"
 # -> PR_URL=https://github.com/acme/app/pull/42
@@ -276,10 +293,14 @@ pm/roadmap-<verb>-<slug>
 
 where `<verb>` is the management verb (`assign`, `park`, `unpark`, `add-spec`, `reorder`, `revise`, `release`) and `<slug>` is a short kebab-case slug of the change (e.g. the target band, or the primary resolved id). Example: `pm/roadmap-assign-mvp`, `pm/roadmap-park-002-1`.
 
-The base is the **PM starting branch** (existing **Base resolution**: `--base` flag > `pm.config.json.base_branch` > the branch PM was invoked on). A planning branch never stacks — it always cuts off the starting branch:
+The base is the **PM starting branch** (existing **Base resolution**: `--base` flag > `pm.config.json.base_branch` > the branch PM was invoked on). A planning branch never stacks — it always cuts off the starting branch. Bind that resolved value to the same concrete `base` variable (non-empty, validated) the success path uses, so the checkout, the parity gate, and `gh pr create --base` all agree (bug-1):
 
 ```bash
-git checkout -b pm/roadmap-<verb>-<slug> <starting-branch>
+base="<starting-branch>"
+[ -n "$base" ] || { echo "PM: no starting branch for planning PR — aborting" >&2; exit 1; }
+git rev-parse --verify --quiet "$base^{commit}" >/dev/null \
+  || { echo "PM: base ref '$base' is not a commit — aborting" >&2; exit 1; }
+git checkout -b pm/roadmap-<verb>-<slug> "$base"
 ```
 
 ### Sequence
@@ -309,7 +330,7 @@ git checkout -b pm/roadmap-<verb>-<slug> <starting-branch>
    mkdir -p "$root/.orchestrator/tmp"
    # -> render templates/pr-body.template.md into
    #    "$root/.orchestrator/tmp/pm-roadmap-pr-body-<verb>.md"
-   PR_URL=$(gh pr create --base <starting-branch> --head pm/roadmap-<verb>-<slug> \
+   PR_URL=$(gh pr create --base "$base" --head pm/roadmap-<verb>-<slug> \
               --body-file "$root/.orchestrator/tmp/pm-roadmap-pr-body-<verb>.md")
    rm -f "$root/.orchestrator/tmp/pm-roadmap-pr-body-<verb>.md"
    ```
