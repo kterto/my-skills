@@ -43,6 +43,31 @@ const baseRef = flags.find((a) => !a.startsWith('--'));
 const all = flags.includes('--all');
 const allowEmpty = flags.includes('--allow-empty');
 
+// This gate is refreshed on every html write, but its branch-scope runtime
+// dependency `.orchestrator/gate-scope.cjs` is refreshed only when orchestrator
+// setup reruns — so an upgraded project can pair this hardened gate with an OLDER
+// helper that still omits type changes / dangling symlinks. Version-gate the
+// dependency: refuse branch scope against an incompatible (or unversioned =
+// pre-versioning) helper and fail closed, rather than silently auditing a stale
+// scope (arch-1, ADR-0010). The self-contained --all / explicit -- modes need no
+// helper and are unaffected.
+const REQUIRED_SCOPE_API = 1;
+function branchScopeVersioned() {
+  const scope = require('../.orchestrator/gate-scope.cjs');
+  const v = scope.SCOPE_API_VERSION;
+  if (typeof v !== 'number' || v < REQUIRED_SCOPE_API) {
+    console.error(
+      `roadmap-timestamp-parity: incompatible .orchestrator/gate-scope.cjs ` +
+      `(SCOPE_API_VERSION ${v == null ? 'absent' : v}; need >= ${REQUIRED_SCOPE_API}). ` +
+      `Re-run orchestrator setup to refresh the helper, or audit with --all.`
+    );
+    process.exit(1);
+  }
+  return scope.branchScope({
+    root: ROOT, auditPath: 'roadmap', ext: '.html', baseRef, label: 'roadmap-timestamp-parity', allowEmpty,
+  });
+}
+
 const targets = explicit.length
   // Do NOT filter out non-existent explicit paths (bug-2): silently dropping a
   // typo'd `-- roadmap/missing.html` left zero targets and printed OK / exit 0,
@@ -50,11 +75,8 @@ const targets = explicit.length
   // below fails closed on a missing / non-regular / non-.html target.
   ? explicit.map((f) => path.resolve(ROOT, f))
   : all ? walk(ROADMAP, [])
-  // Branch scope only: lazy-require the orchestrator's shared gate-scope so the
-  // self-contained modes above never depend on `.orchestrator/` being present.
-  : require('../.orchestrator/gate-scope.cjs').branchScope({
-      root: ROOT, auditPath: 'roadmap', ext: '.html', baseRef, label: 'roadmap-timestamp-parity', allowEmpty,
-    });
+  // Branch scope: version-gated lazy-require of the orchestrator's shared helper.
+  : branchScopeVersioned();
 
 // Safe-target guards (sec-2): an untrusted branch can add a `roadmap/*.html`
 // symlink pointing at an external or unbounded file; `readFileSync` would follow

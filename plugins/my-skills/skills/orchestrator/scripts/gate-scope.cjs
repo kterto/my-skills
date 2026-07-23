@@ -121,4 +121,14 @@ function branchScope(options) {
   return [...out].filter((f) => f.endsWith(ext)).map((f) => path.join(root, f));
 }
 
-module.exports = { branchScope };
+// Scope-API version — bumped whenever `branchScope`'s discovery contract changes
+// in a way a consumer must not silently run against. A consumer materialized on a
+// DIFFERENT cadence than this helper (the roadmap timestamp-parity gate lives in a
+// separate skill and is refreshed on every html write, while this helper is
+// refreshed only when orchestrator setup reruns) version-gates on it and fails
+// closed against an older/absent version, rather than executing hardened logic on a
+// stale helper (arch-1, ADR-0010). v1 = NUL-delimited output, --diff-filter=AMT +
+// --no-renames, no existsSync drop (the sec-1 hardening).
+const SCOPE_API_VERSION = 1;
+
+module.exports = { branchScope, SCOPE_API_VERSION };
