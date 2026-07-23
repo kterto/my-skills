@@ -121,18 +121,31 @@ for (const file of targets) {
     }
   }
   const s = fs.readFileSync(file, 'utf8');
-  // Work on a copy with HTML comments and inert <script>/<style> blocks removed, so
-  // a decoy marker hidden in a comment/script/style cannot be read as a real
-  // timestamp (bug-3: first-match regexes over the whole document let a leading
-  // comment mask a missing or divergent ROOT timestamp and print OK).
+  // Work on a copy with HTML comments and inert / raw-text containers removed, so a
+  // decoy marker hidden in one cannot be read as a real timestamp (bug-3/bug-2):
+  //   - comments, <script>, <style>: a stray marker string;
+  //   - <template>, <textarea>: their contents are inert / raw text, so a whole
+  //     decoy `<main …>` element can hide there before the real body > main and be
+  //     picked up as "the root main" (bug-2).
   const clean = s
     .replace(/<!--[\s\S]*?-->/g, '')
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
-    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '');
-  // The machine-readable timestamp and the kind live ONLY on the root <main>
-  // opening tag — read them from that tag, never from a stray occurrence elsewhere
-  // in the document (bug-3 / bug-4).
-  const rootMain = (clean.match(/<main\b[^>]*>/i) || [])[0] || '';
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<template\b[^>]*>[\s\S]*?<\/template>/gi, '')
+    .replace(/<textarea\b[^>]*>[\s\S]*?<\/textarea>/gi, '');
+  // Require EXACTLY ONE <main> in the cleaned document — the real body > main.
+  // A decoy <main> hidden in an inert container was stripped above; a genuine
+  // second top-level <main> is malformed. Zero or two+ fails closed rather than
+  // trusting a first-match against an inert/duplicate decoy (bug-2).
+  const mainTags = clean.match(/<main\b[^>]*>/gi) || [];
+  if (mainTags.length !== 1) {
+    problems.push(`${rel}: expected exactly one root <main>, found ${mainTags.length}`);
+    continue;
+  }
+  // The machine-readable timestamp and the kind live ONLY on that root <main>
+  // opening tag — read them from it, never from a stray occurrence elsewhere
+  // (bug-3 / bug-4 / bug-2).
+  const rootMain = mainTags[0];
   const data = (rootMain.match(/data-updated-at="([^"]*)"/) || [])[1];
   const kind = (rootMain.match(/data-kind="([^"]*)"/) || [])[1];
   // Visible timestamp: collect EVERY metadata-marker occurrence in the cleaned

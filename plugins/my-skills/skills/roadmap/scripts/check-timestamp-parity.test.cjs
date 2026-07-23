@@ -26,6 +26,9 @@
  * Plus decoy-marker assertions (bug-3): a comment carrying a data-updated-at that
  * matches the visible value cannot mask the root <main>'s divergent timestamp, and
  * two divergent visible markers fail closed instead of first-match-wins.
+ * Plus root-<main> selection assertions (bug-2): a decoy <main> hidden in an inert
+ * <template>/<textarea> before the real body > main is not read as the root, and a
+ * duplicate-root or no-<main> (malformed) page fails closed (exactly-one-main rule).
  *
  * Watched-to-fail: against the pre-bug-2 gate the missing-both-item fixture
  * prints `roadmap-timestamp-parity: OK` / exit 0 — the skip was keyed on "neither
@@ -169,6 +172,58 @@ const decoyVisible =
 const decoyVisibleFile = path.join(tmp, 'decoy-nested-visible.html');
 fs.writeFileSync(decoyVisibleFile, decoyVisible);
 assertFail('decoy-nested-visible', decoyVisibleFile, /multiple divergent visible/i);
+
+// bug-2: a decoy <main> inside an inert <template> before the real body > main must
+// NOT be read as the root. The template main carries a data-updated-at MATCHING the
+// visible value; the real milestone main is divergent (2026-07-20). Old first-main
+// selection read the template decoy and printed OK; the gate must read the real main.
+const templateDecoy =
+  '<!doctype html><html><head></head><body>\n' +
+  '<template><main data-kind="roadmap-index" data-updated-at="2026-07-22"></main></template>\n' +
+  '<main data-kind="milestone" data-updated-at="2026-07-20">\n' +
+  '  <div class="meta"><span class="meta__key">updated:</span> ' +
+  '<span class="meta__val">2026-07-22</span></div>\n' +
+  '</main>\n</body></html>\n';
+const templateDecoyFile = path.join(tmp, 'template-decoy-main.html');
+fs.writeFileSync(templateDecoyFile, templateDecoy);
+assertFail('template-decoy-main', templateDecoyFile, /but visible updated=/i);
+
+// bug-2: same, but the decoy <main> hides in a raw-text <textarea>.
+const textareaDecoy =
+  '<!doctype html><html><head></head><body>\n' +
+  '<textarea><main data-kind="roadmap-index" data-updated-at="2026-07-22"></main></textarea>\n' +
+  '<main data-kind="milestone" data-updated-at="2026-07-20">\n' +
+  '  <div class="meta"><span class="meta__key">updated:</span> ' +
+  '<span class="meta__val">2026-07-22</span></div>\n' +
+  '</main>\n</body></html>\n';
+const textareaDecoyFile = path.join(tmp, 'textarea-decoy-main.html');
+fs.writeFileSync(textareaDecoyFile, textareaDecoy);
+assertFail('textarea-decoy-main', textareaDecoyFile, /but visible updated=/i);
+
+// bug-2: two genuine top-level <main> elements (malformed / duplicate root) fail closed.
+const duplicateRoot =
+  '<!doctype html><html><head></head><body>\n' +
+  '<main data-kind="milestone" data-updated-at="2026-07-22">\n' +
+  '  <div class="meta"><span class="meta__key">updated:</span> ' +
+  '<span class="meta__val">2026-07-22</span></div>\n</main>\n' +
+  '<main data-kind="milestone" data-updated-at="2026-07-20">\n' +
+  '  <div class="meta"><span class="meta__key">updated:</span> ' +
+  '<span class="meta__val">2026-07-20</span></div>\n</main>\n' +
+  '</body></html>\n';
+const duplicateRootFile = path.join(tmp, 'duplicate-root-main.html');
+fs.writeFileSync(duplicateRootFile, duplicateRoot);
+assertFail('duplicate-root-main', duplicateRootFile, /exactly one root <main>, found 2/i);
+
+// bug-2: a malformed page with NO <main> but carrying timestamps fails closed
+// (found 0) rather than reading stray markers.
+const noMain =
+  '<!doctype html><html><head></head><body>\n' +
+  '<div data-updated-at="2026-07-22">\n' +
+  '  <span class="meta__key">updated:</span> <span class="meta__val">2026-07-22</span>\n' +
+  '</div>\n</body></html>\n';
+const noMainFile = path.join(tmp, 'no-main.html');
+fs.writeFileSync(noMainFile, noMain);
+assertFail('no-main', noMainFile, /exactly one root <main>, found 0/i);
 
 // bug-2: an explicit target that does not exist must FAIL closed, not be silently
 // dropped into a zero-file OK (the old existsSync filter removed missing paths).
