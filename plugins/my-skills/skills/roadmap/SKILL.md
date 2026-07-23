@@ -216,9 +216,9 @@ node roadmap/check-timestamp-parity.cjs --all      # audit every roadmap page (s
 node roadmap/check-timestamp-parity.cjs -- a.html  # audit explicit pages only (self-contained)
 ```
 
-- **Fails closed on either half missing**, not only on a value mismatch: a page missing `data-updated-at` *or* the visible `updated:` value fails, so a half-rendered page can't slip through as a false OK. An index/aggregate page carrying **neither** timestamp is skipped (passes).
+- **Fails closed on either half missing**, not only on a value mismatch: a page missing `data-updated-at` *or* the visible `updated:` value fails, so a half-rendered page can't slip through as a false OK. Only the **top-level roadmap index** — which self-identifies with `data-kind="roadmap-index"` — is allowed to carry **neither** timestamp and is skipped; every other roadmap page (milestone / phase / story / release-matrix, including nested `README.html`) that drops **both** markers fails closed (bug-2: keying the skip on "neither marker present" let a real item page fail open).
 - **Branch scope** (the default) reuses the orchestrator's shared `.orchestrator/gate-scope.cjs` — present whenever the orchestrator/PM stack is bootstrapped alongside the roadmap. The `--all` and explicit `--` modes are **self-contained** (no `.orchestrator/` needed), so a standalone roadmap can still audit its pages.
-- Regression harness: `scripts/check-timestamp-parity.test.cjs` (five fixtures proving fail-closed; run `node scripts/check-timestamp-parity.test.cjs`).
+- Regression harness: `scripts/check-timestamp-parity.test.cjs` (six fixtures proving fail-closed; run `node scripts/check-timestamp-parity.test.cjs`).
 
 Applies to **html mode only** — the `.md` variants carry `updated_at` once (frontmatter), so there is nothing to diverge and no gate is shipped.
 
@@ -236,7 +236,7 @@ All normative details live in these files (relative to `plugins/my-skills/skills
 | `references/sync-and-reeval.md` | Rollup rules, Sync procedure (git command + steps), Re-eval procedure (incl. band preservation for `release` + `system` + `ingest-spec`) |
 | `references/mutation-ops.md` | Mutation ops (`set-release`, `set-system`, `ingest-spec`, `reorder`, `revise`, `release`, `system`, `add-item`) + `migrate-systems`, staged-diff markers (incl. `⊞ system`), cascade + `[mixed]`/`[cross-cutting]` badges, structural immutability, orphan handling |
 | `scripts/check-timestamp-parity.cjs` | Fail-closed html-mode gate: a page's machine-readable `data-updated-at` must equal its visible `updated:` value (see Timestamp-parity gate). Materialized into `/roadmap/` in html mode; run by CI/orchestrator/user, never by this skill. |
-| `scripts/check-timestamp-parity.test.cjs` | Standalone regression harness for the gate (five fixtures proving fail-closed). |
+| `scripts/check-timestamp-parity.test.cjs` | Standalone regression harness for the gate (six fixtures proving fail-closed). |
 
 Templates (rendered per `output_format`):
 

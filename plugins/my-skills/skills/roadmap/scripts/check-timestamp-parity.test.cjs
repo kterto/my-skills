@@ -12,16 +12,20 @@
  * orchestrator's `gate-scope.cjs` here — the harness runs from the skill's own
  * `scripts/` directory with no `.orchestrator/` present.
  *
- * Five fixtures:
- *   missing-data    — visible value present, `data-updated-at` attribute absent → fail
- *   missing-visible — `data-updated-at` present, visible `updated:` span absent → fail
- *   mismatch        — both present, differing values → fail (existing behaviour)
- *   valid           — both present, equal values → OK / exit 0
- *   missing-both    — neither timestamp present (index/aggregate page) → OK / skip
+ * Six fixtures:
+ *   missing-data      — visible value present, `data-updated-at` attribute absent → fail
+ *   missing-visible   — `data-updated-at` present, visible `updated:` span absent → fail
+ *   mismatch          — both present, differing values → fail (existing behaviour)
+ *   valid             — both present, equal values → OK / exit 0
+ *   missing-both-item — an item page (data-kind other than roadmap-index) with
+ *                       neither marker → fail closed (bug-2: was skipped fail-open)
+ *   recognized-index  — the roadmap index (data-kind="roadmap-index") with neither
+ *                       marker → OK / skip (the one legitimately untimestamped page)
  *
- * Watched-to-fail: against the UNPATCHED gate the missing-data and
- * missing-visible fixtures print `roadmap-timestamp-parity: OK` / exit 0, so
- * those assertions are red first.
+ * Watched-to-fail: against the pre-bug-2 gate the missing-both-item fixture
+ * prints `roadmap-timestamp-parity: OK` / exit 0 — the skip was keyed on "neither
+ * marker present", so any page (even a real item page) fell through — so that
+ * assertion is red first.
  *
  *   node scripts/check-timestamp-parity.test.cjs
  */
@@ -57,7 +61,10 @@ const FIXTURES = {
   'missing-visible': page(withData('2026-07-22'), '<span class="meta__val_typo">2026-07-22</span>'),
   'mismatch': page(withData('2026-07-22'), withVisible('2026-07-20')),
   'valid': page(withData('2026-07-22'), withVisible('2026-07-22')),
-  'missing-both': page('id="p"', '<span class="meta__val_typo">2026-07-22</span>'),
+  // item page (a milestone) that dropped BOTH markers → must fail closed (bug-2)
+  'missing-both-item': page('data-kind="milestone"', '<span class="meta__val_typo">2026-07-22</span>'),
+  // the intentionally untimestamped roadmap index self-identifies → OK / skip
+  'recognized-index': page('data-kind="roadmap-index"', '<span class="meta__val_typo">2026-07-22</span>'),
 };
 
 function writeFixture(dir, name) {
@@ -96,7 +103,8 @@ assertFail('missing-data', writeFixture(tmp, 'missing-data'), /missing data-upda
 assertFail('missing-visible', writeFixture(tmp, 'missing-visible'), /missing visible updated value/i);
 assertFail('mismatch', writeFixture(tmp, 'mismatch'), /but visible updated=/i);
 assertOk('valid', writeFixture(tmp, 'valid'));
-assertOk('missing-both', writeFixture(tmp, 'missing-both'));
+assertFail('missing-both-item', writeFixture(tmp, 'missing-both-item'), /missing both timestamp markers/i);
+assertOk('recognized-index', writeFixture(tmp, 'recognized-index'));
 
 if (failures) {
   console.error(`\ncheck-timestamp-parity: ${failures} failure(s)`);

@@ -57,8 +57,18 @@ for (const file of targets) {
   const s = fs.readFileSync(file, 'utf8');
   const data = (s.match(/data-updated-at="([^"]*)"/) || [])[1];
   const visible = (s.match(/updated:<\/span>\s*<span class="meta__val">([^<]*)</) || [])[1];
+  const kind = (s.match(/data-kind="([^"]*)"/) || [])[1];
   const rel = path.relative(ROOT, file);
   if (data == null && visible == null) {
+    // Only the top-level roadmap index legitimately carries neither timestamp —
+    // it is a derived aggregate view and self-identifies with
+    // data-kind="roadmap-index". Every other roadmap page (milestone / phase /
+    // story / release-matrix, incl. nested README.html) is an item page that
+    // MUST carry both markers, so dropping both is a fail-closed error, not a
+    // silent skip (bug-2: keying the skip on "neither marker present" let any
+    // page — including a real item page — fail open).
+    if (kind === 'roadmap-index') continue;
+    problems.push(`${rel}: missing both timestamp markers (data-updated-at + visible updated:)`);
     continue;
   }
   if (data == null) {
