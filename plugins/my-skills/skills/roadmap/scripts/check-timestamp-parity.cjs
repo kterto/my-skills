@@ -165,14 +165,15 @@ for (const file of targets) {
     // phase / story / release-matrix, incl. nested README.html) is an item page
     // that MUST carry both markers, so dropping both is a fail-closed error, not
     // a silent skip (bug-2: keying the skip on "neither marker present" let any
-    // page fail open). In the real roadmap tree the index is exactly
-    // roadmap/README.html, so containment modes ALSO require that canonical path
-    // — an item page whose root main was hand-forged to roadmap-index still fails
-    // unless it is literally the index file (bug-4).
+    // page fail open). The index is exactly `roadmap/README.html`, so the
+    // exemption requires that **canonical path in EVERY mode** — a hand-forged
+    // roadmap-index kind on any other page (including an explicitly-audited nested
+    // item) still fails; explicit mode no longer bypasses the path check (bug-3,
+    // hardening bug-4 which only enforced the path under containment).
     const resolved = path.resolve(ROOT, file);
     const isCanonicalIndex =
       path.basename(resolved) === 'README.html' && path.dirname(resolved) === ROADMAP;
-    if (kind === 'roadmap-index' && (!enforceContainment || isCanonicalIndex)) continue;
+    if (kind === 'roadmap-index' && isCanonicalIndex) continue;
     problems.push(`${rel}: missing both timestamp markers (data-updated-at + visible updated:)`);
     continue;
   }

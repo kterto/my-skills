@@ -19,8 +19,12 @@
  *   valid             — both present, equal values → OK / exit 0
  *   missing-both-item — an item page (data-kind other than roadmap-index) with
  *                       neither marker → fail closed (bug-2: was skipped fail-open)
- *   recognized-index  — the roadmap index (data-kind="roadmap-index") with neither
- *                       marker → OK / skip (the one legitimately untimestamped page)
+ *   noncanonical-index — a NON-README.html page self-declaring data-kind=
+ *                       "roadmap-index" with neither marker → fail closed; the
+ *                       exemption requires the canonical roadmap/README.html path
+ *                       in every mode (bug-3). The positive index case is exercised
+ *                       in a real temp canonical layout (canonical-index /
+ *                       nested-index-rejected below), not by an arbitrary tmp file.
  * Plus a read-safety assertion (sec-2): a symlinked target pointing at an otherwise
  * valid page is rejected (not followed), so only its symlink-ness trips the guard.
  * Plus decoy-marker assertions (bug-3): a comment carrying a data-updated-at that
@@ -71,8 +75,11 @@ const FIXTURES = {
   'valid': page(withData('2026-07-22'), withVisible('2026-07-22')),
   // item page (a milestone) that dropped BOTH markers → must fail closed (bug-2)
   'missing-both-item': page('data-kind="milestone"', '<span class="meta__val_typo">2026-07-22</span>'),
-  // the intentionally untimestamped roadmap index self-identifies → OK / skip
-  'recognized-index': page('data-kind="roadmap-index"', '<span class="meta__val_typo">2026-07-22</span>'),
+  // a NON-canonical page declaring data-kind="roadmap-index" with neither timestamp
+  // must NOT be exempted in explicit mode — the exemption now requires the canonical
+  // roadmap/README.html path in every mode (bug-3). Audited as a plain tmp file
+  // (basename != README.html), so it fails closed.
+  'noncanonical-index': page('data-kind="roadmap-index"', '<span class="meta__val_typo">2026-07-22</span>'),
 };
 
 function writeFixture(dir, name) {
@@ -112,7 +119,42 @@ assertFail('missing-visible', writeFixture(tmp, 'missing-visible'), /missing vis
 assertFail('mismatch', writeFixture(tmp, 'mismatch'), /but visible updated=/i);
 assertOk('valid', writeFixture(tmp, 'valid'));
 assertFail('missing-both-item', writeFixture(tmp, 'missing-both-item'), /missing both timestamp markers/i);
-assertOk('recognized-index', writeFixture(tmp, 'recognized-index'));
+assertFail('noncanonical-index', writeFixture(tmp, 'noncanonical-index'), /missing both timestamp markers/i);
+
+// bug-3: the index exemption is granted ONLY to the canonical roadmap/README.html
+// path, in every mode. These cases run a COPY of the gate inside a real temporary
+// canonical roadmap layout (rather than weakening production validation to let an
+// arbitrary tmp file self-declare as the index):
+//   - a canonical roadmap/README.html with data-kind="roadmap-index" and neither
+//     timestamp → exempt → OK;
+//   - a NESTED roadmap/<m>/README.html with the same content → NOT the canonical
+//     index → fails closed.
+function runInCanonicalLayout(subpath, html, args) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-parity-canon-'));
+  const target = path.join(root, 'roadmap', subpath);
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, html);
+  fs.copyFileSync(GATE, path.join(root, 'roadmap', 'check-timestamp-parity.cjs'));
+  return spawnSync(NODE, [path.join(root, 'roadmap', 'check-timestamp-parity.cjs'), ...args], {
+    cwd: root, encoding: 'utf8', env: process.env,
+  });
+}
+const indexPage = page('data-kind="roadmap-index"', '<span class="meta__val_typo">x</span>');
+{
+  const r = runInCanonicalLayout('README.html', indexPage, ['--all']);
+  const out = (r.stdout || '') + (r.stderr || '');
+  if (r.status === 0 && out.includes(OK)) pass('canonical-index: OK (exempt)');
+  else fail(`canonical-index: expected exit 0 + "${OK}", got status=${r.status} out=${JSON.stringify(out.trim())}`);
+}
+{
+  const r = runInCanonicalLayout(path.join('001-m', 'README.html'), indexPage, ['--all']);
+  const out = (r.stdout || '') + (r.stderr || '');
+  if (r.status !== 0 && !out.includes(OK) && /missing both timestamp markers/i.test(out)) {
+    pass('nested-index-rejected: fail-closed (exit=' + r.status + ')');
+  } else {
+    fail(`nested-index-rejected: expected non-zero + missing-both diagnostic, got status=${r.status} out=${JSON.stringify(out.trim())}`);
+  }
+}
 
 // sec-2: a symlinked target must be REJECTED (not followed), even when it points at
 // a perfectly valid page — so only its symlink-ness, not its content, trips the
