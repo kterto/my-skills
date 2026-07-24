@@ -57,22 +57,38 @@ literal `whole system`.
   before analyzing — `AskUserQuestion` (Claude) / `question` (opencode). Never analyze a
   guessed scope without confirmation.
 
+**Resolve the scope to a concrete repo-relative path FIRST (bug-1).** The public contract
+accepts the literal `whole system` and semantic module/service names, but the containment
+gate below operates on a **path**. Resolve the semantic form to a real path *before*
+validation, or the primary advertised modes exit before analysis:
+
+- **`whole system` / `whole-system`** → the repo root, i.e. `scope_path="."`.
+- **An existing path** (file or dir under `$root`) → use it verbatim as `scope_path`.
+- **A module/service name** that is not itself a path → resolve it to the matching directory
+  (a top-level dir of that name, a package/workspace whose manifest `name` matches, or a
+  service root). If it maps to **exactly one** directory, use it. If it is **ambiguous**
+  (several matches) or **unresolved** (none), **ask the user to confirm** which path —
+  `AskUserQuestion` (Claude) / `question` (opencode) — never guess.
+
+Everything below operates on the resolved `scope_path`.
+
 **Containment gate (security, load-bearing).** A scope drives `Glob`, `Read`, and subagent
 access, so an unchecked path could ingest host files outside the repo (absolute paths,
 `..` traversal, or tracked symlinks that point elsewhere) and embed their contents — including
 secrets — in a **shareable** report. Before any read of scope contents, and again for every
 candidate file:
 
-- **Reject the scope up front** if it is absolute (starts with `/`), contains a `..`
-  segment, or is empty. The scope is always **repo-root-relative**.
-- **Canonicalize and re-verify containment.** Resolve the scope to a physical path and
+- **Reject `scope_path` up front** if it is absolute (starts with `/`), contains a `..`
+  segment, or is empty. The resolved scope path is always **repo-root-relative** (`.` for the
+  whole system).
+- **Canonicalize and re-verify containment.** Resolve `scope_path` to a physical path and
   require it stays under `$root`:
   ```bash
-  scope_abs="$(cd "$root" && cd "$scope" 2>/dev/null && pwd -P)" || { echo "scope does not resolve under repo"; exit 1; }
+  scope_abs="$(cd "$root" && cd "$scope_path" 2>/dev/null && pwd -P)" || { echo "scope does not resolve under repo"; exit 1; }
   case "$scope_abs/" in "$root"/*) : ;; *) echo "scope escapes the repository — refusing"; exit 1 ;; esac
   ```
 - **Build the read allowlist from tracked, regular files only.** Enumerate candidates with
-  `git -C "$root" ls-files -s -- "$scope"` and **drop every mode `120000` (symlink) entry**;
+  `git -C "$root" ls-files -s -- "$scope_path"` and **drop every mode `120000` (symlink) entry**;
   a symlink is never followed. For each surviving path, canonicalize it and re-assert it is
   a **regular file physically under `$root`** (`[ -f ]` and the same `pwd -P` prefix check on
   its parent), so a symlinked directory component cannot redirect a read outside the repo.
@@ -94,9 +110,9 @@ drift before rendering:
 ```bash
 COMMIT_SHA="$(git -C "$root" rev-parse HEAD)"
 # Dirty status over the ANALYZED allowlist only, excluding host-runtime dirs.
-DIRTY="$(git -C "$root" status --porcelain -- "$scope" ':(exclude).opencode' ':(exclude).claude')"
+DIRTY="$(git -C "$root" status --porcelain -- "$scope_path" ':(exclude).opencode' ':(exclude).claude')"
 # Freeze a content manifest of the allowlist (blob hash per path) BEFORE any subagent reads.
-git -C "$root" ls-files -s -- "$scope" | awk '$1!="120000"{print $2, $4}' > "$snap_manifest"  # <mode-filtered> sha path
+git -C "$root" ls-files -s -- "$scope_path" | awk '$1!="120000"{print $2, $4}' > "$snap_manifest"  # <mode-filtered> sha path
 ```
 
 - **Snapshot identity is honest.** Render provenance as `COMMIT_SHA` **plus a dirty flag**:
