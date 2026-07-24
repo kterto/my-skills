@@ -87,7 +87,8 @@ this exact contract, which `__tests__/placeholder-fill.test.cjs` and
   - `stackBadge` → `label`, `anchor`
   - `entity` → `name`, `fields`, `invariants`, `anchor`
   - `rule` → `name`, `what`, `why`, `domain`, `anchor`
-  - `flowEdge` → `from`, `to`, `kind`, `anchor`
+  - `flowEdge` → `from`, `to`, `kind`, `anchor`, `crossModule` (`yes`/`no`, synthesized when
+    `fromId`/`toId` resolve to different module ids — drives distinct highlighting, bug-4)
   - `useCase` → `actor`, `goal`, `trigger`, `steps`, `dataTouched`, `anchor`, `mermaid`
   - `dependency` → `name`, `kind`, `anchor`
   - `metric` → `label`, `value`, `max`

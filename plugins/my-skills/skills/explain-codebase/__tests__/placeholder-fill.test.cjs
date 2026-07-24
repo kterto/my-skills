@@ -37,7 +37,7 @@ const BLOCKS = {
   stackBadge: ["label", "anchor"],
   entity: ["name", "fields", "invariants", "anchor"],
   rule: ["name", "what", "why", "domain", "anchor"],
-  flowEdge: ["from", "to", "kind", "anchor"],
+  flowEdge: ["from", "to", "kind", "anchor", "crossModule"],
   useCase: ["actor", "goal", "trigger", "steps", "dataTouched", "anchor", "mermaid"],
   dependency: ["name", "kind", "anchor"],
   metric: ["label", "value", "max"],
@@ -132,4 +132,14 @@ test("demo is fully expanded — no leftover placeholders or REPEAT markers", ()
 
 test("demo renders file:line anchors (universal-anchor rule holds in sample data)", () => {
   assert.ok(/[\w./-]+:\d+/.test(demo), "demo must contain at least one file:line source anchor");
+});
+
+test("cross-module edges get a highlight hook and distinct styling (bug-4)", () => {
+  // Template: the flowEdge row carries the crossModule fill token + data attribute, and the
+  // CSS distinctly styles a cross-module edge (keyed on data-cross-module="yes").
+  assert.ok(tpl.includes('data-cross-module="{{flowEdge.crossModule}}"'), "flowEdge row must carry data-cross-module");
+  assert.match(tpl, /\.edge\[data-cross-module="yes"\]/, "template must style cross-module edges distinctly");
+  // Demo shows BOTH a cross-module edge (yes + chip) and ordinary local edges.
+  assert.ok(demo.includes('data-cross-module="yes"'), "demo must include a cross-module edge");
+  assert.match(demo, /data-kind="ingress"(?![^>]*data-cross-module="yes")/, "demo must include an ordinary (local) edge too");
 });

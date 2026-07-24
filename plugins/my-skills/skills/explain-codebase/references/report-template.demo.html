@@ -444,6 +444,24 @@ pre.mermaid > svg { white-space: normal; }
 .edge[data-kind="transform"] .kind-chip { background: var(--flow-transform); }
 .edge[data-kind="store"]     .kind-chip { background: var(--flow-store); }
 .edge[data-kind="egress"]    .kind-chip { background: var(--flow-egress); }
+/* Cross-module edges get distinct highlighting; the chip shows only when flagged. */
+.xm-chip { display: none; }
+.edge[data-cross-module="yes"] {
+  border-left-style: double;
+  border-left-width: 5px;
+  box-shadow: inset 0 0 0 1px var(--accent-subtle);
+}
+.edge[data-cross-module="yes"] .xm-chip {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  padding: 1px 7px;
+  border-radius: 999px;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
 
 /* --- User stories filter + collapsibles --- */
 .filterbar { margin-bottom: var(--sp-5); }
@@ -854,7 +872,7 @@ details.usecase { padding: 0; overflow: hidden; }
     </figure>
     <div class="cards">
       
-      <article class="card edge" data-kind="ingress">
+      <article class="card edge" data-kind="ingress" data-cross-module="yes">
         <div class="edge__flow">
           <span class="edge__node mono">POST /invoices</span>
           <span class="edge__arrow">&rarr;</span>
@@ -862,6 +880,7 @@ details.usecase { padding: 0; overflow: hidden; }
         </div>
         <div class="edge__foot">
           <span class="kind-chip">ingress</span>
+          <span class="xm-chip">cross-module</span>
           <span class="anchor mono">src/api/routes.ts:24</span>
         </div>
       </article>
