@@ -85,9 +85,14 @@ Do not restate the schema here — `analysis-schema.md` is its single source of 
 Merge the subagent JSON returns, working from the **map + structured returns only, never
 the full source**:
 
-- Dedupe `entities` by name; union fields/invariants.
-- Stitch `dataFlowEdges` across modules (an edge whose `to` in one module matches a `from`
-  in another becomes a **cross-module** edge, highlighted in the report).
+- Merge `entities` by their stable `id` (default `<module>:<name>`), **never by display
+  `name`** — so two unrelated same-named types in different modules stay distinct and a
+  shared type (same `id`) merges. On merge, union `fields`, `invariants`, **and
+  `relations`**, and keep **every** contributing `file:line` anchor.
+- Stitch `dataFlowEdges` across modules by explicit node ids: an edge whose `toId` matches
+  another's `fromId` (both default `<module>:<label>`) becomes a **cross-module** edge,
+  highlighted in the report — matched on stable ids, **never** on free-form `from`/`to`
+  labels.
 - Cluster per-module `useCases` into **system-wide user stories**.
 - Collapse `dependencies`; resolve conflicts.
 

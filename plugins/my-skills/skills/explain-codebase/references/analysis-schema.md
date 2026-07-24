@@ -78,13 +78,14 @@ violation.
 
 ### `entities[]` — the data model
 
-| field        | type       | required | notes                                             |
-| ------------ | ---------- | -------- | ------------------------------------------------- |
-| `name`       | string     | yes      | entity / table / type name                        |
-| `fields`     | string[]   | no       | field or column names                             |
-| `invariants` | string[]   | no       | validation rules / constraints on the entity      |
-| `relations`  | string[]   | no       | relationships to other entities (for the ER edge) |
-| `anchor`     | `file:line`| **yes**  | where the entity is defined                       |
+| field        | type       | required | notes                                                        |
+| ------------ | ---------- | -------- | ------------------------------------------------------------ |
+| `id`         | string     | no       | **stable identity** for cross-module merge, separate from the display `name`. Default when absent: `<module>:<name>`. A shared/imported type reused across modules should be given the **same** `id` in each return so it merges; two unrelated same-named types get distinct ids and stay separate. |
+| `name`       | string     | yes      | entity / table / type name (**display label only**, never the merge key) |
+| `fields`     | string[]   | no       | field or column names                                        |
+| `invariants` | string[]   | no       | validation rules / constraints on the entity                 |
+| `relations`  | string[]   | no       | relationships to other entities (for the ER edge). **Preserved (unioned) on merge — never dropped.** |
+| `anchor`     | `file:line`| **yes**  | where the entity is defined (all contributing anchors are kept on merge) |
 
 ### `businessRules[]` — policies / decisions
 
@@ -100,8 +101,10 @@ violation.
 
 | field    | type        | required | notes                                                       |
 | -------- | ----------- | -------- | ----------------------------------------------------------- |
-| `from`   | string      | yes      | source node (endpoint, function, store, external system)    |
-| `to`     | string      | yes      | destination node                                            |
+| `from`   | string      | yes      | source node **display label** (endpoint, function, store, external system) |
+| `to`     | string      | yes      | destination node **display label**                          |
+| `fromId` | string      | no       | **stable node identity** of the source, used for cross-module stitching. Default when absent: `<module>:<from>`. A node crossing a module boundary must be given the **same** id on both sides (e.g. the callee's own `<module>:<name>`). |
+| `toId`   | string      | no       | **stable node identity** of the destination (default `<module>:<to>`). Cross-module stitching matches `toId` ≡ `fromId`, **never** free-form label equality. |
 | `kind`   | string      | no       | one of `ingress` / `transform` / `store` / `egress`         |
 | `anchor` | `file:line` | **yes**  | where the edge is realized in code                          |
 
@@ -126,9 +129,19 @@ violation.
 
 ## Phase-3 synthesis contract (informative)
 
-The main agent merges the per-subagent returns above — dedupe `entities` by `name`,
-stitch `dataFlowEdges` across modules (an edge whose `to` in one module matches a `from`
-in another becomes a cross-module edge), cluster `useCases` into system-wide user
-stories, and collapse `dependencies` — working ONLY from these structured returns plus
-the Phase-1 map, never re-reading full source. Every synthesized item keeps at least one
-originating `file:line` anchor so the report's universal-anchor rule holds end to end.
+The main agent merges the per-subagent returns above, working ONLY from these structured
+returns plus the Phase-1 map, never re-reading full source:
+
+- **Merge `entities` by stable `id`, never by display `name`.** The merge key is `id`
+  (default `<module>:<name>`), so two unrelated types that happen to share a `name` across
+  modules stay **separate**, and a genuinely shared type (same `id`) merges. On merge,
+  union `fields`, `invariants`, **and `relations`** (relations are never dropped), and keep
+  **all** contributing `file:line` anchors.
+- **Stitch `dataFlowEdges` across modules by explicit node ids.** An edge whose `toId` in
+  one module equals a `fromId` in another becomes a cross-module edge — matched on the
+  stable ids (`<module>:<label>` by default), **never** on free-form `from`/`to` label
+  equality, which cannot distinguish two different nodes that share a label.
+- Cluster `useCases` into system-wide user stories, and collapse `dependencies`.
+
+Every synthesized item keeps at least one originating `file:line` anchor so the report's
+universal-anchor rule holds end to end.
