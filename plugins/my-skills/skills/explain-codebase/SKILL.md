@@ -20,6 +20,17 @@ Resolve all `references/...` paths relative to **this skill directory**, not the
 being explained. The explained project only receives the generated `docs/explain/...`
 output.
 
+**`$skill_dir` — where this skill's own files live (bug-3).** The runtime helpers
+(`references/validate-subagent-return.cjs`, `references/scan-secrets.cjs`) are invoked as
+`node "$skill_dir/references/<file>"`, where **`$skill_dir` is the absolute path of the
+directory containing THIS `SKILL.md`** (the host exposes it as the skill's base directory —
+a plugin-cache path, **not** inside the analyzed repo). A bare `node references/…` would
+resolve against the *target* repo, where the file does not exist, so every valid return would
+fail and needlessly retry. Set `skill_dir` once from the host's skill base directory before
+Phase 2. The skill stays **read-only on the target**: any JSON handed to these helpers is
+passed on **stdin** or via a temp file in a scratch dir (`$(mktemp -d)`), **never** written
+into the analyzed repo.
+
 **Dual-host.** This single `SKILL.md` serves both Claude Code and opencode via the
 in-place dual-host pattern — there is **no** `.opencode/skills/explain-codebase/` override
 port (a read-only, host-agnostic skill needs none). Where a host construct differs, both
@@ -174,9 +185,11 @@ Dispatch **one subagent per fan-out unit** — `Agent` (Claude, `subagent_type: 
 - **Validate every return against its allowlist, retry once.** Gate each subagent's JSON
   through the runtime validator, **passing this unit's allowlist slice** so anchors are bound
   to reviewed content (sec-3):
-  `node "$skill_dir/references/validate-subagent-return.cjs" <return.json> <allowlist.json>`,
-  where `<allowlist.json>` is `{ "allow": [<unit's slice paths>], "lines": { <path>: <lineCount> } }`
-  built from the frozen snapshot manifest (arch-1). Beyond envelope/required-field/enum
+  `node "$skill_dir/references/validate-subagent-return.cjs" "$scratch/return.json" "$scratch/allow.json"`,
+  where `$scratch="$(mktemp -d)"` (a scratch dir **outside** the read-only target), `return.json`
+  is the subagent's JSON, and `allow.json` is
+  `{ "allow": [<unit's slice paths>], "lines": { <path>: <lineCount> } }` built from the frozen
+  snapshot manifest (arch-1). Beyond envelope/required-field/enum
   checks, the validator **rejects** any `anchor` or `files[].path` that is absolute,
   parent-traversing, **outside the assigned allowlist**, or whose line is out of range — a
   malformed or prompt-injected return citing external/nonexistent/unreviewed locations is not
