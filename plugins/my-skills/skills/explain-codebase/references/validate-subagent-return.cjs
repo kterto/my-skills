@@ -68,20 +68,17 @@ function parseAnchor(anchor) {
 }
 const isUnsafePath = (p) => typeof p !== "string" || p.startsWith("/") || p.split("/").includes("..");
 
-// Bind an anchor/path to the assigned allowlist slice (sec-3). `ctx` is optional; when absent
-// the validator does shape-only checks (back-compat). When provided:
+// Bind a `files[].path` to the assigned allowlist slice (sec-3). `ctx` is optional; when
+// absent, only the absolute/parent-traversal shape check applies (back-compat). When present:
 //   ctx.allow  — Set of repo-relative paths in this unit's slice (the reviewed allowlist)
-//   ctx.lines  — optional Map/obj of path -> line count, for line-bounds enforcement
-// A path outside the allowlist, absolute, parent-traversing, or a line out of range is a
-// prompt-injection / drift signal Phase 3 must NOT trust as provenance.
+// A path outside the allowlist, absolute, or parent-traversing is a prompt-injection / drift
+// signal Phase 3 must NOT trust as provenance. (Anchor line-bounds are enforced separately, at
+// the anchor call site via parseAnchor + ctx.lines — a file record carries no line to bound.)
 function checkPathBinding(pathValue, ctx, label, errs) {
   if (isUnsafePath(pathValue)) { errs.push(`${label} path is absolute or parent-traversing: ${pathValue}`); return; }
   if (!ctx) return;
   const allow = ctx.allow instanceof Set ? ctx.allow : new Set(ctx.allow || []);
-  if (!allow.has(pathValue)) { errs.push(`${label} path not in the assigned allowlist: ${pathValue}`); return; }
-  const lines = ctx.lines instanceof Map ? Object.fromEntries(ctx.lines) : (ctx.lines || {});
-  if (label.endsWith("anchor")) return; // line bound applied by caller via parseAnchor
-  void lines;
+  if (!allow.has(pathValue)) errs.push(`${label} path not in the assigned allowlist: ${pathValue}`);
 }
 
 function validateSubagentReturn(obj, ctx) {
