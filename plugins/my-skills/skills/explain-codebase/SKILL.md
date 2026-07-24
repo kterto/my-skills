@@ -100,9 +100,12 @@ candidate file:
   ```
 - **Build the read allowlist from tracked, regular files only.** Enumerate candidates with
   `git -C "$root" ls-files -s -- "$scope_path"` and **drop every mode `120000` (symlink) entry**;
-  a symlink is never followed. For each surviving path, canonicalize it and re-assert it is
-  a **regular file physically under `$root`** (`[ -f ]` and the same `pwd -P` prefix check on
-  its parent), so a symlinked directory component cannot redirect a read outside the repo.
+  a symlink is never followed. **Parse `-s` output on the TAB** (`<mode> <sha> <stage>\t<path>`),
+  or use `git ls-files -z` with NUL-safe reads — **never a bare whitespace split**, which
+  truncates any path containing a space and silently drops it from the allowlist and manifest.
+  For each surviving path, canonicalize it and re-assert it is a **regular file physically under
+  `$root`** (`[ -f ]` and the same `pwd -P` prefix check on its parent), so a symlinked
+  directory component cannot redirect a read outside the repo.
 - **Exclude known secret files from the allowlist entirely** (see "Secret-redaction
   boundary" below): `.env` and `.env.*`, `*.pem`, `*.key`, `id_rsa*`/`id_ed25519*`, `*.p12`,
   `*.pfx`, `*.keystore`/`*.jks`, `*.der`, `.netrc`, `.npmrc`, `.pypirc`, `.pgpass`,
@@ -127,7 +130,11 @@ COMMIT_SHA="$(git -C "$root" rev-parse HEAD)"
 # Dirty status over the ANALYZED allowlist only, excluding host-runtime dirs.
 DIRTY="$(git -C "$root" status --porcelain -- "$scope_path" ':(exclude).opencode' ':(exclude).claude')"
 # Freeze a content manifest of the allowlist (blob hash per path) BEFORE any subagent reads.
-git -C "$root" ls-files -s -- "$scope_path" | awk '$1!="120000"{print $2, $4}' > "$snap_manifest"  # <mode-filtered> sha path
+# `ls-files -s` is `<mode> <sha> <stage>\t<path>` — split on the TAB so a path containing
+# spaces survives intact (a naive `$2/$4` whitespace split truncates it). Emit a TAB-delimited
+# `<sha>\t<path>` manifest (path last, so it stays whole for the drift check + allowlist build).
+git -C "$root" ls-files -s -- "$scope_path" \
+  | awk -F'\t' '{ n=split($1, m, " "); if (m[1] != "120000") printf "%s\t%s\n", m[2], $2 }' > "$snap_manifest"
 ```
 
 - **Snapshot identity is honest.** Render provenance as `COMMIT_SHA` **plus a dirty flag**:
