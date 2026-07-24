@@ -227,11 +227,14 @@ Fill the committed template — **never author HTML per run**:
    is not `$`-interpreted) — the minified runtime contains `$&`/`` $` ``/`$'` sequences
    that a naive string-replace would expand and corrupt. Escape any `</script` in the
    runtime to `<\/script` first (there are none in the vendored build, but stay safe). The
-   marker must not survive into the output. The template ships the marker only (lean,
-   reviewable); the runtime is inlined at render time. `report-template.demo.html` shows
-   the fully-inlined result.
-7. `references/report-template.demo.html` is a filled reference for what the output
-   should look like. If the template is somehow missing, fall back to authoring HTML
+   marker must not survive into the output. **Both the template and the shipped
+   `report-template.demo.html` carry the marker only (lean, reviewable); the runtime lives in
+   exactly one place, `references/vendor/mermaid.min.js`, and is inlined at render time.** To
+   eyeball the fully-inlined demo, generate it with
+   `node scripts/build-explain-inlined-demo.mjs` — a git-ignored `build/` artifact, never
+   committed (bug-6: no duplicated 3.3 MB runtime in git).
+7. `references/report-template.demo.html` is a filled reference (sample data) for what the
+   output should look like. If the template is somehow missing, fall back to authoring HTML
    directly against `design-prompt.md`'s region + contract spec so the skill stays
    functional.
 

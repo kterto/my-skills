@@ -15,3 +15,6 @@
 # the report artifacts under docs/reviews/, not here. Only .pr-review/memory.md is
 # meant to be tracked.
 /.pr-review/review-state.json
+
+# Generated, non-shipped build artifacts (e.g. inlined explain-codebase demo, bug-6)
+/build/

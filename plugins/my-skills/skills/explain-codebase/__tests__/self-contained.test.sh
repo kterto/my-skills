@@ -11,8 +11,9 @@
 #     (<script id="mermaid-runtime">…</script>) is STRIPPED before this scan — its
 #     minified source legitimately contains xmlns URLs like http://www.w3.org/2000/svg
 #     (identifiers, not network loads), so scanning it would false-positive;
-#   - mermaid fill-state: the TEMPLATE carries the <!-- MERMAID_RUNTIME --> marker and
-#     no inlined runtime; the DEMO has the runtime inlined and no marker;
+#   - mermaid fill-state: BOTH the TEMPLATE and the shipped DEMO carry the
+#     <!-- MERMAID_RUNTIME --> marker and DO NOT inline the runtime (it lives only in
+#     references/vendor; the fully-inlined demo is a generated, non-shipped review artifact);
 #   - placeholder fill-state: the TEMPLATE carries {{placeholders}} + <!-- REPEAT -->
 #     markers, while the DEMO is fully expanded (none remain).
 # Region parity (all 7 ids in both files) is owned by placeholder-fill.test.cjs.
@@ -56,8 +57,8 @@ done
 # --- Mermaid runtime fill-state: template = marker only, demo = inlined runtime -----
 if grep -q '<!-- MERMAID_RUNTIME -->' "$tpl"; then ok "template carries the MERMAID_RUNTIME marker"; else bad "template missing <!-- MERMAID_RUNTIME --> marker"; fi
 if grep -q 'id="mermaid-runtime"' "$tpl"; then bad "template must not inline the runtime (marker only)"; else ok "template does not inline the runtime"; fi
-if grep -q 'id="mermaid-runtime"' "$demo"; then ok "demo inlines the mermaid runtime"; else bad "demo missing inlined mermaid runtime"; fi
-if grep -q '<!-- MERMAID_RUNTIME -->' "$demo"; then bad "demo still has the unfilled MERMAID_RUNTIME marker"; else ok "demo has no leftover MERMAID_RUNTIME marker"; fi
+if grep -q 'id="mermaid-runtime"' "$demo"; then bad "shipped demo must NOT inline the runtime (keep it only in references/vendor; generate the inlined demo as a non-shipped artifact)"; else ok "shipped demo does not inline the runtime"; fi
+if grep -q '<!-- MERMAID_RUNTIME -->' "$demo"; then ok "shipped demo carries the MERMAID_RUNTIME marker (lean)"; else bad "shipped demo missing MERMAID_RUNTIME marker"; fi
 
 # --- Placeholder fill-state: template has markers, demo (runtime stripped) has none -
 demo_body="$(strip_runtime "$demo")"

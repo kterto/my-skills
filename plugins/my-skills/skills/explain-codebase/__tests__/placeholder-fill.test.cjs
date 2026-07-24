@@ -69,10 +69,11 @@ const CONTRACT_TOKENS = new Set([
 assert.ok(fs.existsSync(TEMPLATE), "references/report-template.html must exist");
 assert.ok(fs.existsSync(DEMO), "references/report-template.demo.html must exist");
 const tpl = fs.readFileSync(TEMPLATE, "utf8");
-// The demo inlines the vetted mermaid runtime (minified JS that legitimately contains
-// `{{...}}`-shaped substrings). It is not part of the fill contract, so strip it before
-// scanning the demo for leftover placeholders / markers. The template carries only the
-// `<!-- MERMAID_RUNTIME -->` marker (the skill inlines the runtime at render time).
+// The shipped demo carries the `<!-- MERMAID_RUNTIME -->` marker (like the template) and
+// does NOT inline the runtime — that lives only in references/vendor, and the fully-inlined
+// demo is a generated, non-shipped artifact (bug-6). This strip is kept as a no-op guard so
+// that IF an inlined runtime is ever present (its minified JS contains `{{...}}`-shaped
+// substrings), it is not mistaken for an unfilled placeholder.
 const RUNTIME_RE = /<script id="mermaid-runtime">[\s\S]*?<\/script>/i;
 const demo = fs.readFileSync(DEMO, "utf8").replace(RUNTIME_RE, "");
 
