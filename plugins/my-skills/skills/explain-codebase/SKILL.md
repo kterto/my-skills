@@ -216,10 +216,41 @@ hand-off to make, so a paired `.md` would be YAGNI. The general `.md`/`.html`
 template-parity convention governs *paired* artifact templates; this skill deliberately
 ships an HTML-only report and no paired `.md`.
 
+**Symlink-safe atomic write (security, load-bearing).** The output path is predictable, so
+a target repository could pre-plant a symlink at `docs`, `docs/explain`, or the report file
+itself to redirect the write **outside** the repo (e.g. overwrite a host file). Reject
+symlinked components, verify canonical containment, constrain the slug, and replace the
+target atomically:
+
+- **Constrain the slug** to `[a-z0-9-]+` (kebab-case; collapse anything else to `-`, trim
+  leading/trailing `-`) so it can never introduce `/`, `..`, or a leading `-`. The date is
+  `YYYY-MM-DD`.
+- **Reject a symlinked `docs`, `docs/explain`, or existing target.** If any of those exists
+  and is a symlink (`-L`), **stop and report** — never write through it, never `mkdir -p`
+  over it. Create `docs/explain` only as a real directory.
+- **Verify canonical containment of the parent.** Resolve `docs/explain` with `pwd -P` and
+  require it is under `$root` (the same prefix check as step 1) before writing.
+- **Write atomically.** Write to a **same-directory** temporary regular file, then re-check
+  the final path is not a symlink and `mv -f` (atomic same-filesystem rename) into place —
+  so a partial or redirected write can never land.
+
 ```bash
-root="$(git rev-parse --show-toplevel 2>/dev/null)"; out="$root/docs/explain"
-mkdir -p "$out"   # real dir; writes stay under the repo root
-# ... write the rendered HTML to "$out/<scope-slug>-<YYYY-MM-DD>.html" (Write tool) ...
+root="$(cd "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null && pwd -P)"
+docs="$root/docs"; out="$docs/explain"
+# Refuse to write through a symlinked component.
+for p in "$docs" "$out"; do
+  [ -L "$p" ] && { echo "refusing: $p is a symlink"; exit 1; }
+done
+mkdir -p "$out"                                   # real dir only (guarded above)
+outreal="$(cd "$out" && pwd -P)"                  # canonical parent
+case "$outreal/" in "$root"/*) : ;; *) echo "refusing: docs/explain escapes repo"; exit 1 ;; esac
+slug="whole-system"                               # constrained: [a-z0-9-]+ only
+dest="$outreal/$slug-$(date +%F).html"
+[ -L "$dest" ] && { echo "refusing: target is a symlink"; exit 1; }
+tmp="$outreal/.$slug-$(date +%F).html.tmp"        # same-dir temp for atomic rename
+# ... write the rendered HTML to "$tmp" (Write tool) ...
+[ -L "$dest" ] && { echo "refusing: target became a symlink"; exit 1; }
+mv -f "$tmp" "$dest"                              # atomic replace
 ```
 
 ### 7. Report to the user
