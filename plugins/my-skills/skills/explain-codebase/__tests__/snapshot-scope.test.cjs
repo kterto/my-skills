@@ -37,6 +37,17 @@ test("a symlink is refused at copy time (no-follow)", () => {
   assert.ok(!fs.existsSync(path.join(dest, "src/evil.ts")), "no snapshot file for a symlink");
 });
 
+test("a symlinked PARENT directory is refused, not followed (sec-1)", () => {
+  const { root, dest } = tmpTree();
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), "snap-outside-"));
+  fs.writeFileSync(path.join(outside, "secret.ts"), "OUTSIDE SECRET");
+  fs.symlinkSync(outside, path.join(root, "linkdir")); // symlinked ancestor
+  const res = materializeSnapshot(root, ["linkdir/secret.ts"], dest);
+  assert.deepStrictEqual(res.copied, [], "must not read through a symlinked parent");
+  assert.ok(res.skipped.some((s) => s.path === "linkdir/secret.ts"));
+  assert.ok(!fs.existsSync(path.join(dest, "linkdir/secret.ts")));
+});
+
 test("absolute / parent-traversal paths are refused", () => {
   const { root, dest } = tmpTree();
   const res = materializeSnapshot(root, ["/etc/passwd", "../outside.ts"], dest);
