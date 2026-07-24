@@ -433,13 +433,14 @@ target atomically:
   over it. Create `docs/explain` only as a real directory.
 - **Verify canonical containment of the parent.** Resolve `docs/explain` with `pwd -P` and
   require it is under `$root` (the same prefix check as step 1) before writing.
-- **Write atomically to an unpredictable, exclusively-created temp (sec-1).** A *predictable*
-  temp path (`.<slug>-<date>.html.tmp`) can itself be pre-planted as a symlink that the Write
-  tool follows. So create the temp with **`mktemp`** in the same directory — a random name,
-  created with `O_EXCL` (fails if the path already exists, symlink included), mode 600 —
-  verify it is a **regular file** (not a symlink), write into it, then re-check the final
-  destination is not a symlink and `mv -f` (atomic same-filesystem rename) into place. A
-  partial or redirected write can never land.
+- **Write through the TOCTOU-safe writer, never the host Write tool (sec-2).** Splitting the
+  write into "create+close a checked temp" then "reopen that pathname and write" (mktemp + the
+  Write tool) leaves a window where an attacker who can mutate `docs/explain` swaps the checked
+  temp for a symlink before the reopen and redirects the HTML. So the report is published by
+  **`references/write-report.cjs`**, which in **one process** opens an exclusive `O_NOFOLLOW`
+  temp in the output dir, writes+fsyncs+fstats through **that same descriptor** (never a
+  reopen-by-name), and atomically renames it over the destination after a final symlink
+  re-check. Tests in `__tests__/write-report.test.cjs`.
 
 ```bash
 root="$(cd "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null && pwd -P)"
@@ -453,28 +454,19 @@ outreal="$(cd "$out" && pwd -P)"                  # canonical parent
 case "$outreal/" in "$root"/*) : ;; *) echo "refusing: docs/explain escapes repo"; exit 1 ;; esac
 slug="$slug"                                      # injective + byte-bounded, built above (bug-2)
 dest="$outreal/$slug-$(date +%F).html"
-[ -L "$dest" ] && { echo "refusing: target is a symlink"; exit 1; }
-# Unpredictable, exclusively-created same-dir temp — mktemp uses O_EXCL, so a pre-planted
-# symlink at this name cannot be followed (creation fails instead). The `X`s MUST be
-# **trailing**: BSD/macOS mktemp only substitutes a trailing run of `X`s (a mid-template
-# `.explain-XXXX.html.tmp` is left LITERAL — a constant, predictable path), and GNU mktemp
-# rejects a non-trailing-`X` template outright (the report write would always fail on Linux).
-# So the template ends in `X`s and carries no extension; the `.html` name is only the final
-# rename target. Assert the `X`s were actually substituted, else abort as non-random.
-tmp="$(mktemp "$outreal/.explain-report-XXXXXXXX")" || { echo "refusing: cannot create temp"; exit 1; }
-case "$(basename "$tmp")" in *XXXXXXXX*) rm -f "$tmp"; echo "refusing: mktemp left the template literal — non-random temp, aborting"; exit 1 ;; esac
-[ -L "$tmp" ] && { echo "refusing: temp is a symlink"; rm -f "$tmp"; exit 1; }
-[ -f "$tmp" ] || { echo "refusing: temp is not a regular file"; rm -f "$tmp"; exit 1; }
-# ... write the rendered HTML to "$tmp" (Write tool) ...
-# Final secret scan (see "Secret-redaction boundary") BEFORE the file is published. Use the
-# deterministic scanner in THIS skill dir (resolve it the same way as the validator, bug-3),
-# never an inline grep — it covers token families, credential-key assignments, connection
-# strings, and hex/base64 entropy with portable JS regex, and strips the inlined runtime.
-if ! node "$skill_dir/references/scan-secrets.cjs" "$tmp"; then
-  rm -f "$tmp"; exit 1     # scanner printed the hits + refusal; redact and re-render
-fi
-[ -L "$dest" ] && { echo "refusing: target became a symlink"; exit 1; }
-mv -f "$tmp" "$dest"                              # atomic replace
+# Render to a SCRATCH file outside the repo (render-report.cjs — the arch-3 boundary):
+node "$skill_dir/references/render-report.cjs" "$skill_dir/references/report-template.html" \
+     "$scratch/model.json" "$skill_dir/references/vendor/mermaid.min.js" > "$scratch/report.html"
+# Final secret scan (Secret-redaction boundary) on the rendered bytes BEFORE publishing —
+# type + byte offset only, never the matched material (sec-2).
+node "$skill_dir/references/scan-secrets.cjs" "$scratch/report.html" \
+  || { echo "secret pattern in rendered report — redact and re-render"; exit 1; }
+# Publish atomically through the TOCTOU-safe writer (sec-2): one process opens an exclusive
+# no-follow temp in "$outreal", writes+fsyncs+fstats through THAT descriptor, then renames over
+# "$dest" after a final symlink re-check. It never reopens a checked path by name, so the host
+# Write tool's reopen window (which a symlink-swap could redirect) is eliminated.
+node "$skill_dir/references/write-report.cjs" "$dest" --content "$scratch/report.html" \
+  || { echo "refusing: report write blocked (symlink / not a real dir)"; exit 1; }
 ```
 
 ### 7. Report to the user
@@ -543,6 +535,9 @@ redact; it only prevents markup breakage. Three layers keep secrets out of the r
   boundary (escaping, Mermaid sanitization + synthetic ids, template fill, runtime inlining);
   invoked by Phase 4 and imported by `__tests__/render-report.test.cjs` +
   `__tests__/mermaid-safety.test.cjs` (arch-3).
+- [`references/write-report.cjs`](references/write-report.cjs) — the TOCTOU-safe single-process
+  report writer (exclusive `O_NOFOLLOW` open → write/fsync/fstat → atomic rename); tests in
+  `__tests__/write-report.test.cjs` (sec-2).
 - [`references/report-template.html`](references/report-template.html) — the committed,
   self-contained, theme-aware template (fixed chrome + inline JS) with the
   `{{PLACEHOLDER}}` + `<!-- REPEAT:block -->` fill markers.
