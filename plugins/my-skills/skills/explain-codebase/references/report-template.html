@@ -1062,7 +1062,8 @@ details.usecase { padding: 0; overflow: hidden; }
     if (!host || host.getAttribute("data-grouped") === "1") return;
     var cards = $$(".card.rule", host);
     if (!cards.length) return;
-    var order = [], byDomain = {};
+    var order = [], byDomain = Object.create(null);   // null proto: domains like
+    // "constructor"/"toString"/"__proto__" are plain keys, not inherited members (bug-5).
     cards.forEach(function (c) {
       var d = (c.getAttribute("data-domain") || "").trim() || "General";
       if (!byDomain[d]) { byDomain[d] = []; order.push(d); }

@@ -146,6 +146,29 @@ test("business-rule cards are grouped by domain (bug-7)", () => {
   assert.ok(/class="card rule" data-domain="[^"]+"/.test(demo), "demo rule cards must carry a data-domain value");
 });
 
+test("domain grouping is prototype-key safe (bug-5)", () => {
+  // Both files must build the domain map with a null prototype (or Map), never a bare {}.
+  for (const [name, src] of [["template", tpl], ["demo", demo]]) {
+    assert.ok(/byDomain\s*=\s*Object\.create\(null\)/.test(src), `${name} must use Object.create(null) for the domain map`);
+    assert.ok(!/byDomain\s*=\s*\{\}/.test(src), `${name} must not use a bare object literal for the domain map`);
+  }
+  // Fixture: the grouping keying pattern is safe under prototype-name domains only with a
+  // null-proto map. A bare object's inherited "constructor" makes `if (!m[d])` false → no array
+  // → the subsequent .push throws; a null-proto object behaves correctly.
+  const group = (make) => {
+    const m = make();
+    for (const d of ["billing", "constructor", "__proto__", "toString"]) {
+      if (!m[d]) m[d] = [];
+      m[d].push(d);
+    }
+    return m;
+  };
+  assert.throws(() => group(() => ({})), "bare object must break on a prototype-key domain");
+  const safe = group(() => Object.create(null));
+  assert.deepStrictEqual(safe.constructor, ["constructor"]);
+  assert.deepStrictEqual(safe.toString, ["toString"]);
+});
+
 test("demo values conform to the analysis contract (bug-6)", () => {
   // Dependency kinds must be the documented enum (internal|external) — never runtime/dev.
   const depTags = [...demo.matchAll(/<article class="card dep">[\s\S]*?<span class="tag">([^<]+)<\/span>/g)].map((m) => m[1].trim());
