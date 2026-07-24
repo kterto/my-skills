@@ -181,9 +181,17 @@ test("demo provenance counts are self-consistent (bug-5)", () => {
   const subagents = +(demo.match(/subagents<\/dt><dd[^>]*>(\d+)/) || [])[1];
   const modulesTile = +(demo.match(/tile__n">(\d+)<\/span><span class="tile__l">modules/) || [])[1];
 
+  // The Modules METRIC bar must also agree (bug-5 round 7: the tile was fixed but the metric wasn't).
+  const modulesMetric = (() => {
+    const m = demo.match(/<div class="metric"[^>]*>\s*<div class="metric__head">\s*<span class="metric__label">Modules<\/span>\s*<span class="metric__value mono">(\d+)<\/span>/);
+    return m ? +m[1] : null;
+  })();
+
   assert.strictEqual(unitFiles, fileIndexRows, `unit file totals (${unitFiles}) must equal fileIndex rows (${fileIndexRows})`);
   assert.strictEqual(subagents, units.length, `subagents (${subagents}) must equal the unit count (${units.length})`);
   assert.strictEqual(modulesTile, unitModules, `modules tile (${modulesTile}) must equal summed unit modules (${unitModules})`);
+  assert.strictEqual(modulesMetric, unitModules, `Modules metric (${modulesMetric}) must equal summed unit modules (${unitModules})`);
+  assert.strictEqual(modulesMetric, modulesTile, `Modules metric (${modulesMetric}) must equal the overview tile (${modulesTile})`);
 });
 
 test("demo values conform to the analysis contract (bug-6)", () => {
