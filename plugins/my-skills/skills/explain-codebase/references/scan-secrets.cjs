@@ -18,6 +18,19 @@ function stripRuntime(text) {
   return text.replace(/<script id="mermaid-runtime">[\s\S]*?<\/script>/i, "");
 }
 
+// The scan runs on the RENDERED report, where every value was HTML-escaped — so a safely
+// redacted `password: "«redacted»"` appears as `&quot;«redacted»&quot;` and the raw-placeholder
+// check would miss it, falsely refusing the report (bug-1). Decode the handful of entities the
+// renderer emits BEFORE classification, so the scanner sees the true underlying text (a genuine
+// secret still decodes to itself and still matches).
+function decodeEntities(text) {
+  return text
+    .replace(/&quot;/g, '"').replace(/&#0*34;/g, '"')
+    .replace(/&apos;/g, "'").replace(/&#0*39;/g, "'")
+    .replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&"); // amp LAST so it can't double-decode
+}
+
 // A value that is an EXPLICIT redaction / example marker is NOT a leaked secret. Note this
 // intentionally does NOT exempt all-digit values (sec-3): a numeric password/token
 // (`password=1234`) is a real leaked credential, not a placeholder.
@@ -63,7 +76,7 @@ const CRED_KEY = /\b[A-Za-z0-9_]*?(pass(?:word|wd)?|secret|token|api[_-]?key|acc
 // byte `index` (for locating it in the source) are retained.
 function scanSecrets(text) {
   if (typeof text !== "string") return [];
-  const body = stripRuntime(text);
+  const body = decodeEntities(stripRuntime(text));
   const hits = [];
   for (const [type, re] of DETECTORS) {
     re.lastIndex = 0;
@@ -78,7 +91,7 @@ function scanSecrets(text) {
   return hits;
 }
 
-module.exports = { scanSecrets, stripRuntime };
+module.exports = { scanSecrets, stripRuntime, decodeEntities };
 
 // --- CLI ------------------------------------------------------------------------------
 if (require.main === module) {

@@ -76,6 +76,14 @@ test("the inlined mermaid runtime block is stripped before scanning", () => {
   assert.deepStrictEqual(scanSecrets(report), [], "runtime block must not trip the scan");
 });
 
+test("an entity-escaped redacted assignment in rendered HTML is NOT refused (bug-1)", () => {
+  // As the renderer emits it: value HTML-escaped, quotes → &quot;.
+  const rendered = `<div class="kv">password: &quot;«redacted»&quot;</div>`;
+  assert.deepStrictEqual(scanSecrets(rendered), [], "escaped redaction must not falsely refuse");
+  // A genuine secret escaped the same way is still caught (decoding reveals it).
+  assert.ok(scanSecrets(`api_key = &quot;AKIA1234567890ABCDEF&quot;`).length > 0, "real secret still caught after decode");
+});
+
 test("hits never carry the matched credential material (sec-2)", () => {
   const secret = "AKIA1234567890ABCDEF";
   const hits = scanSecrets(`aws_key = ${secret}`);
