@@ -106,11 +106,13 @@ pre-register, it emits the reserved `new:<module-id>:<name>` form; Phase-3 synth
 or reconciles those. **Synthesis rejects any id that is neither a catalog id nor a `new:` id**
 (a malformed or injected return citing an unknown identity is dropped, not trusted).
 
-**Enforced at the schema boundary (arch-2), not by informal Phase-3 code.** The runtime
-validator (`validate-subagent-return.cjs`) takes the catalog in its `ctx`
-(`{ catalog: { entityIds, nodeIds } }`) and rejects any `entities[].id`, relation target, or
-`dataFlowEdges[].fromId`/`toId` that is not a catalog id (or a `new:` id) — so entity
-membership, relation targets, and flow-node ownership are checked in the same executable
+**Enforced at the schema boundary, not by informal Phase-3 code.** The runtime validator
+(`validate-subagent-return.cjs`) takes the catalog in its `ctx`
+(`{ catalog: { entityIds, nodeIds, moduleIds } }`) and rejects any `entities[].id`, relation
+target, or `dataFlowEdges[].fromId`/`toId` that is not a catalog id (or a `new:` id). With
+`moduleIds` (the modules the unit is assigned to **own**) it additionally **binds `obj.module`
+and every `new:<module-id>:<name>` to an owned module** — a subagent cannot invent an identity
+for a module it was not assigned. Membership + ownership are checked in the same executable
 contract as every other field, before merging.
 
 ## Array item shapes

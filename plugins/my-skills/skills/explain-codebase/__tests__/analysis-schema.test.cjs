@@ -245,6 +245,35 @@ test("a reserved new: id is accepted without catalog membership", () => {
   assert.deepStrictEqual(validateSubagentReturn(good, withCatalog()), []);
 });
 
+// --- arch-2: new: ids + obj.module bound to the assigned unit's owned modules -----------
+const withOwnership = () => ({
+  ...CTX, allow: [...SLICE], lines: CTX.lines,
+  catalog: { ...CATALOG, moduleIds: ["src/billing", "m:src/billing"] },
+});
+
+test("a new: id naming an OWNED module is accepted", () => {
+  const good = validReturn();
+  good.files[0].path = "src/billing/invoice.ts"; good.files[0].anchor = "src/billing/invoice.ts:1";
+  good.entities[0].id = "new:m:src/billing:LocalThing";
+  good.entities[0].relations = [];
+  assert.deepStrictEqual(validateSubagentReturn(good, withOwnership()), []);
+});
+
+test("a new: id naming a FOREIGN module is rejected (arch-2)", () => {
+  const bad = validReturn();
+  bad.files[0].path = "src/billing/invoice.ts"; bad.files[0].anchor = "src/billing/invoice.ts:1";
+  bad.entities[0].id = "new:m:src/other:Sneaky";
+  bad.entities[0].relations = [];
+  assert.ok(validateSubagentReturn(bad, withOwnership()).some((e) => e.includes("entities[0] id not in the identity catalog: new:m:src/other:Sneaky")));
+});
+
+test("obj.module outside the assigned unit modules is rejected (arch-2)", () => {
+  const bad = validReturn();
+  bad.files[0].path = "src/billing/invoice.ts"; bad.files[0].anchor = "src/billing/invoice.ts:1";
+  bad.module = "src/evil";
+  assert.ok(validateSubagentReturn(bad, withOwnership()).some((e) => e.includes("module src/evil is not an assigned unit module")));
+});
+
 test("references/analysis-schema.md exists and is the source of truth", () => {
   assert.ok(fs.existsSync(SCHEMA_MD), "references/analysis-schema.md must exist");
   const md = fs.readFileSync(SCHEMA_MD, "utf8");

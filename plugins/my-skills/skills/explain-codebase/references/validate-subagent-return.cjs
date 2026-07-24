@@ -30,10 +30,25 @@ const isOptNonNegNum = (v) => v === undefined || (typeof v === "number" && Numbe
 // Canonical identity (arch-2): a catalog id, or the reserved `new:<module-id>:<name>` form for
 // a genuinely module-local item Phase 3 reconciles. Membership is enforced only when the caller
 // passes a catalog (ctx.catalog); without one the validator does format-only checks (back-compat).
-const NEW_ID_RE = /^new:[^:]+:.+$/;
 function asSet(v) { return v instanceof Set ? v : new Set(v || []); }
-function isCatalogId(id, allowedSet) {
-  return typeof id === "string" && id.length > 0 && (NEW_ID_RE.test(id) || allowedSet.has(id));
+// A canonical id is either a catalog member, or a reserved `new:<module-id>:<name>`. The
+// module-id may itself contain colons (e.g. `m:src/billing`), so ownership is matched by
+// prefix, not a single-colon split. The `new:` form is bound to a module the UNIT OWNS
+// (arch-2): otherwise a subagent could invent `new:<foreign-module>:<x>` and attribute an
+// identity to a module it was not assigned. With `ownedModules`, a `new:` id whose module is
+// not owned (or which carries no name after the module) is rejected.
+function isCatalogId(id, allowedSet, ownedModules) {
+  if (typeof id !== "string" || id.length === 0) return false;
+  if (id.startsWith("new:")) {
+    const rest = id.slice(4);
+    if (!rest.includes(":")) return false;                 // must be new:<module>:<name>
+    if (!ownedModules) return true;                        // shape-only (no ownership context)
+    for (const mod of ownedModules) {
+      if (rest.startsWith(mod + ":") && rest.length > mod.length + 1) return true; // owned + named
+    }
+    return false;
+  }
+  return allowedSet.has(id);
 }
 
 // Per-array item contract, mirroring the tables in analysis-schema.md. `required` fields
@@ -104,6 +119,12 @@ function validateSubagentReturn(obj, ctx) {
   const catalog = ctx && ctx.catalog ? ctx.catalog : null;
   const entityIds = catalog ? asSet(catalog.entityIds) : null;
   const nodeIds = catalog ? asSet(catalog.nodeIds) : null;
+  // Module ids this unit is assigned to OWN (arch-2). When provided, obj.module must be one of
+  // them and every `new:` id must name an owned module.
+  const ownedModules = catalog && catalog.moduleIds ? asSet(catalog.moduleIds) : null;
+  if (ownedModules && typeof obj.module === "string" && !ownedModules.has(obj.module)) {
+    errs.push(`module ${obj.module} is not an assigned unit module`);
+  }
 
   for (const key of REQUIRED_ARRAYS) {
     if (!(key in obj)) { errs.push(`missing required array: ${key}`); continue; }
@@ -152,17 +173,17 @@ function validateSubagentReturn(obj, ctx) {
       // Canonical-identity catalog enforcement (arch-2), only when a catalog was provided.
       if (catalog) {
         if (key === "entities") {
-          if (typeof item.id === "string" && !isCatalogId(item.id, entityIds)) {
+          if (typeof item.id === "string" && !isCatalogId(item.id, entityIds, ownedModules)) {
             errs.push(`entities[${i}] id not in the identity catalog: ${item.id}`);
           }
           if (Array.isArray(item.relations)) {
             item.relations.forEach((r, j) => {
-              if (!isCatalogId(r, entityIds)) errs.push(`entities[${i}].relations[${j}] target not in the identity catalog: ${r}`);
+              if (!isCatalogId(r, entityIds, ownedModules)) errs.push(`entities[${i}].relations[${j}] target not in the identity catalog: ${r}`);
             });
           }
         } else if (key === "dataFlowEdges") {
           for (const f of ["fromId", "toId"]) {
-            if (typeof item[f] === "string" && !isCatalogId(item[f], nodeIds)) {
+            if (typeof item[f] === "string" && !isCatalogId(item[f], nodeIds, ownedModules)) {
               errs.push(`dataFlowEdges[${i}] ${f} not in the flow-node catalog: ${item[f]}`);
             }
           }
