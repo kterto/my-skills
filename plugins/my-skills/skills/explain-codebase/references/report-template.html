@@ -2,6 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<!-- Network-denying CSP: default-src 'none' blocks ALL network egress (no fetch/XHR/WS,
+     no remote script/style/img/font/frame). Inline styles + the inlined interaction JS and
+     vendored Mermaid runtime are the only things permitted (unsafe-inline; unsafe-eval for
+     the runtime's parser), and data: images/fonts for self-contained assets. This is what
+     "self-contained + offline" means enforceably — it is NOT a strict CSP (inline is
+     allowed), and it is the outer guard against a Mermaid directive that slipped label
+     sanitization trying to load remote CSS/resources. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'; img-src data:; font-src data:; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Explain Codebase</title>
 <style>

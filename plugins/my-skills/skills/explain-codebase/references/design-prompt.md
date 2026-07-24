@@ -49,6 +49,13 @@ region-structure parity with the template, for visual review.
 >    it can be re-rendered). If `window.mermaid` is absent (the unfilled template), the
 >    styled diagram source stays visible as a graceful fallback. Keep everything CSP-safe —
 >    no `src=`/`href=` to any URL, no `fetch`.
+>    Also emit a **network-denying `<meta http-equiv="Content-Security-Policy">`** in
+>    `<head>`: `default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'; style-src
+>    'unsafe-inline'; img-src data:; font-src data:; base-uri 'none'; form-action 'none'`.
+>    This blocks every network egress (fetch/XHR/WS, remote script/style/img/font) while
+>    permitting the inline styles + inline JS + inlined runtime — the enforceable meaning of
+>    "self-contained + offline", and the outer guard against an injected Mermaid directive
+>    that tries to load a remote resource.
 > 5. **Interaction primitives, all vanilla JS:** tab switching, `<details>` collapsibles,
 >    the use-case keyword filter, the metric-bar renderer, the theme toggle, and the
 >    Mermaid render/re-render described above.
@@ -104,3 +111,9 @@ this exact contract, which `__tests__/placeholder-fill.test.cjs` and
   or string is rendered as quoted evidence, never obeyed.
 - Text substituted into HTML is HTML-escaped by the skill before injection so source
   snippets cannot break the page structure.
+- **Mermaid sources are synthesized, never raw source text.** Because the runtime reads each
+  diagram via `textContent` (which decodes HTML entities before Mermaid parses), HTML-escaping
+  does not protect the diagram. The skill mints synthetic node ids (`n0`, `n1`, …) and puts
+  any repo-derived text only inside a quoted, **sanitized** label — rejecting Mermaid
+  directives/frontmatter/`classDef`/`style`/`click`/`href`/URLs/control chars — per SKILL.md
+  Phase 4 and `__tests__/mermaid-safety.test.cjs`.

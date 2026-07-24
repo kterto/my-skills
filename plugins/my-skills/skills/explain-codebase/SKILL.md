@@ -174,13 +174,35 @@ Fill the committed template — **never author HTML per run**:
    `{{GENERATED_DATE}}`, the counts, the three region Mermaid sources) and the
    `<!-- REPEAT:block -->` rows (`entity`, `rule`, `flowEdge`, `useCase`, `dependency`,
    `metric`, `glossaryTerm`, `fileIndex`, `stackBadge`).
-3. **HTML-escape every substituted value** before injection (source text is untrusted):
+3. **Synthesize each Mermaid source from synthetic IDs + sanitized labels — never raw
+   source text (security, load-bearing).** The runtime reads each diagram back via
+   `pre.mermaid`'s `textContent`, which **decodes** HTML entities *before* Mermaid parses
+   it, so HTML-escaping (step 4) does **not** protect the diagram: repo-derived text placed
+   raw into a diagram can inject Mermaid **directives** (`%%{init: …}%%`), **frontmatter**
+   (a leading `---` block), `classDef` / `style` / `linkStyle`, `click` / `call` callbacks,
+   `href` links, URLs, or remote-loading CSS — active even under `securityLevel: "strict"`.
+   So build the four Mermaid sources (`DATA_MODEL_MERMAID`, `BUSINESS_LOGIC_MERMAID`,
+   `DATA_FLOW_MERMAID`, and each `useCase.mermaid`) structurally:
+   - **Nodes get synthetic ids** the skill mints (`n0`, `n1`, …) — never a repo-derived
+     string as a node id.
+   - **Any repo-derived text goes only inside a quoted node/edge label** (`n0["<label>"]`),
+     and only after the **label sanitizer**: reject/strip Mermaid directive & frontmatter
+     markers (`%%`, `%%{`, a leading `---`), the keywords `classDef`/`style`/`linkStyle`/
+     `click`/`call`/`class`/`href`, any URL scheme (`http:`/`https:`/`javascript:`/`data:`),
+     the structural metacharacters `"`,`[`,`]`,`{`,`}`,`(`,`)`,`<`,`>`,`;`,`#`, and all
+     control characters; then collapse to one line. A label that can't be safely represented
+     becomes a placeholder (`"(label omitted)"`) while its row keeps its `file:line` anchor.
+   The executable contract + adversarial payloads are in
+   [`__tests__/mermaid-safety.test.cjs`](__tests__/mermaid-safety.test.cjs); the
+   network-denying CSP in the template (`default-src 'none'`) is the outer guard if anything
+   slips through.
+4. **HTML-escape every substituted value** before injection (source text is untrusted):
    `&`→`&amp;`, `<`→`&lt;`, `>`→`&gt;`, `"`→`&quot;`. List/multi-value fields
    (`fields`, `steps`, `dataTouched`) are pre-joined to a string first.
-4. Substitute: expand each REPEAT block once per row (resolving its inner
+5. Substitute: expand each REPEAT block once per row (resolving its inner
    `{{block.field}}` tokens), then replace the scalar `{{PLACEHOLDER}}` tokens. No
    `{{…}}` or `REPEAT` markers may survive into the output.
-5. **Inline the Mermaid runtime** so diagrams render in a plain browser, offline. Replace
+6. **Inline the Mermaid runtime** so diagrams render in a plain browser, offline. Replace
    the `<!-- MERMAID_RUNTIME -->` marker with
    `<script id="mermaid-runtime">` + the verbatim contents of
    [`references/vendor/mermaid.min.js`](references/vendor/mermaid.min.js) + `</script>`.
@@ -191,7 +213,7 @@ Fill the committed template — **never author HTML per run**:
    marker must not survive into the output. The template ships the marker only (lean,
    reviewable); the runtime is inlined at render time. `report-template.demo.html` shows
    the fully-inlined result.
-6. `references/report-template.demo.html` is a filled reference for what the output
+7. `references/report-template.demo.html` is a filled reference for what the output
    should look like. If the template is somehow missing, fall back to authoring HTML
    directly against `design-prompt.md`'s region + contract spec so the skill stays
    functional.
