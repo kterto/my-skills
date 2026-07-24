@@ -41,7 +41,9 @@ Anchor every path to the git root so the skill works when invoked from a subdire
 (an opencode cwd may be a subdir; bare paths and writes are cwd-relative):
 
 ```bash
-root="$(git rev-parse --show-toplevel 2>/dev/null)"
+# Canonicalize the git root to its PHYSICAL path (resolves any symlinked component),
+# so every later containment check compares real paths, not symlink aliases.
+root="$(cd "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null && pwd -P)"
 [ -n "$root" ] || echo "Not inside a git repository — ask the user for the project root before continuing."
 # Orient cheaply: what is at the top level? (do NOT read every file here)
 git -C "$root" ls-files | sed 's#/.*##' | sort -u | head -50
@@ -54,6 +56,29 @@ literal `whole system`.
 - **No scope** → map the repo top-level (above), **propose** a scope, and **confirm**
   before analyzing — `AskUserQuestion` (Claude) / `question` (opencode). Never analyze a
   guessed scope without confirmation.
+
+**Containment gate (security, load-bearing).** A scope drives `Glob`, `Read`, and subagent
+access, so an unchecked path could ingest host files outside the repo (absolute paths,
+`..` traversal, or tracked symlinks that point elsewhere) and embed their contents — including
+secrets — in a **shareable** report. Before any read of scope contents, and again for every
+candidate file:
+
+- **Reject the scope up front** if it is absolute (starts with `/`), contains a `..`
+  segment, or is empty. The scope is always **repo-root-relative**.
+- **Canonicalize and re-verify containment.** Resolve the scope to a physical path and
+  require it stays under `$root`:
+  ```bash
+  scope_abs="$(cd "$root" && cd "$scope" 2>/dev/null && pwd -P)" || { echo "scope does not resolve under repo"; exit 1; }
+  case "$scope_abs/" in "$root"/*) : ;; *) echo "scope escapes the repository — refusing"; exit 1 ;; esac
+  ```
+- **Build the read allowlist from tracked, regular files only.** Enumerate candidates with
+  `git -C "$root" ls-files -s -- "$scope"` and **drop every mode `120000` (symlink) entry**;
+  a symlink is never followed. For each surviving path, canonicalize it and re-assert it is
+  a **regular file physically under `$root`** (`[ -f ]` and the same `pwd -P` prefix check on
+  its parent), so a symlinked directory component cannot redirect a read outside the repo.
+- **Dispatch only that explicit allowlist** to Phase 2 subagents — never a bare directory a
+  subagent would re-glob (which would re-introduce symlinks). A file that fails any check is
+  excluded and, if it was expected in scope, noted as skipped in the report provenance.
 
 ### 2. Phase 1 — Scope & map (main agent)
 
@@ -91,8 +116,9 @@ Dispatch **one subagent per fan-out unit** — `Agent` (Claude, `subagent_type: 
 
 Each subagent:
 
-- Reads **only its slice** of the tree (keeps each context small; scales module →
-  whole-system).
+- Reads **only its slice** of the step-1 **allowlist** — the vetted, contained,
+  symlink-free file set — never re-globbing a bare directory (which would re-introduce
+  symlinks or escape the repo). Keeps each context small; scales module → whole-system.
 - Returns a **structured JSON** conforming to
   [`references/analysis-schema.md`](references/analysis-schema.md): `entities`,
   `businessRules`, `dataFlowEdges`, `dependencies`, `useCases`.
