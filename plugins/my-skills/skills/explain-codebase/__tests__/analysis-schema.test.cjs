@@ -276,11 +276,42 @@ test("a new: id naming a FOREIGN module is rejected (arch-2)", () => {
   assert.ok(validateSubagentReturn(bad, withOwnership()).some((e) => e.includes("entities[0] id not in the identity catalog: new:m:src/other:Sneaky")));
 });
 
-test("obj.module outside the assigned unit modules is rejected (arch-2)", () => {
+// --- arch-2: catalog OWNERSHIP — declare only owned ids, reference any known id ----------
+// entityOwner/nodeOwner map each id to its owning module. The unit owns m:src/billing.
+const withOwners = () => ({
+  ...CTX, allow: [...SLICE], lines: CTX.lines,
+  catalog: {
+    entityOwner: { "e:Invoice": "m:src/billing", "e:Customer": "m:src/billing", "e:AuthUser": "m:src/auth" },
+    nodeOwner: { "f:http:POST /charge": "m:src/billing", "f:m:src/billing:ChargeService": "m:src/billing", "f:auth:login": "m:src/auth" },
+    moduleIds: ["m:src/billing"],
+  },
+});
+
+test("a unit may DECLARE only an entity it owns; a foreign-owned id is rejected (arch-2)", () => {
   const bad = validReturn();
   bad.files[0].path = "src/billing/invoice.ts"; bad.files[0].anchor = "src/billing/invoice.ts:1";
-  bad.module = "src/evil";
-  assert.ok(validateSubagentReturn(bad, withOwnership()).some((e) => e.includes("module src/evil is not an assigned unit module")));
+  bad.entities[0].id = "e:AuthUser"; // owned by m:src/auth, not this unit
+  bad.entities[0].relations = [];
+  assert.ok(validateSubagentReturn(bad, withOwners()).some((e) => e.includes("entities[0] id not in the identity catalog: e:AuthUser")));
+});
+
+test("a relation MAY target a foreign entity (cross-module link) (arch-2)", () => {
+  const good = validReturn();
+  good.files[0].path = "src/billing/invoice.ts"; good.files[0].anchor = "src/billing/invoice.ts:1";
+  good.entities[0].id = "e:Invoice";               // owned
+  good.entities[0].relations = ["e:AuthUser"];     // foreign target — allowed reference
+  good.dataFlowEdges[0].fromId = "f:http:POST /charge"; // owned
+  good.dataFlowEdges[0].toId = "f:auth:login";     // foreign target — allowed
+  assert.deepStrictEqual(validateSubagentReturn(good, withOwners()), []);
+});
+
+test("an edge fromId the unit does NOT own is rejected (arch-2)", () => {
+  const bad = validReturn();
+  bad.files[0].path = "src/billing/invoice.ts"; bad.files[0].anchor = "src/billing/invoice.ts:1";
+  bad.entities[0].id = "e:Invoice"; bad.entities[0].relations = [];
+  bad.dataFlowEdges[0].fromId = "f:auth:login";    // foreign-owned as the SOURCE the unit declares
+  bad.dataFlowEdges[0].toId = "f:m:src/billing:ChargeService";
+  assert.ok(validateSubagentReturn(bad, withOwners()).some((e) => e.includes("dataFlowEdges[0] fromId not in the flow-node catalog: f:auth:login")));
 });
 
 test("references/analysis-schema.md exists and is the source of truth", () => {

@@ -27,28 +27,49 @@ const isOptStrArr = (v) => v === undefined || (Array.isArray(v) && v.every((x) =
 const isOptEnum = (allowed) => (v) => v === undefined || (typeof v === "string" && allowed.includes(v));
 const isOptNonNegNum = (v) => v === undefined || (typeof v === "number" && Number.isFinite(v) && v >= 0);
 
-// Canonical identity (arch-2): a catalog id, or the reserved `new:<module-id>:<name>` form for
-// a genuinely module-local item Phase 3 reconciles. Membership is enforced only when the caller
-// passes a catalog (ctx.catalog); without one the validator does format-only checks (back-compat).
+// Canonical identity (arch-2). The catalog is either flat Sets (`entityIds`/`nodeIds` —
+// membership only, back-compat) or OWNER MAPS (`entityOwner`/`nodeOwner`: id -> owning module
+// id). `catalogView` unifies them. A `new:<module-id>:<name>` id is reserved for a module-local
+// item; the module-id may itself contain colons, so ownership is matched by PREFIX.
 function asSet(v) { return v instanceof Set ? v : new Set(v || []); }
-// A canonical id is either a catalog member, or a reserved `new:<module-id>:<name>`. The
-// module-id may itself contain colons (e.g. `m:src/billing`), so ownership is matched by
-// prefix, not a single-colon split. The `new:` form is bound to a module the UNIT OWNS
-// (arch-2): otherwise a subagent could invent `new:<foreign-module>:<x>` and attribute an
-// identity to a module it was not assigned. With `ownedModules`, a `new:` id whose module is
-// not owned (or which carries no name after the module) is rejected.
-function isCatalogId(id, allowedSet, ownedModules) {
-  if (typeof id !== "string" || id.length === 0) return false;
-  if (id.startsWith("new:")) {
-    const rest = id.slice(4);
-    if (!rest.includes(":")) return false;                 // must be new:<module>:<name>
-    if (!ownedModules) return true;                        // shape-only (no ownership context)
-    for (const mod of ownedModules) {
-      if (rest.startsWith(mod + ":") && rest.length > mod.length + 1) return true; // owned + named
-    }
-    return false;
+
+// The module a `new:` id names, when it names one the unit OWNS; "*" for shape-only (no
+// ownership context); null if malformed or naming a non-owned module.
+function newIdModule(id, ownedModules) {
+  if (typeof id !== "string" || !id.startsWith("new:")) return null;
+  const rest = id.slice(4);
+  if (!rest.includes(":")) return null;                    // must be new:<module>:<name>
+  if (!ownedModules) return "*";                           // shape-only (no ownership context)
+  for (const mod of ownedModules) {
+    if (rest.startsWith(mod + ":") && rest.length > mod.length + 1) return mod;
   }
-  return allowedSet.has(id);
+  return null;                                             // new: for a non-owned module
+}
+
+function catalogView(catalog, kind) {
+  const raw = catalog && catalog[kind + "Owner"];
+  const owner = raw ? (raw instanceof Map ? raw : new Map(Object.entries(raw))) : null;
+  const members = owner ? new Set(owner.keys()) : asSet(catalog && catalog[kind + "Ids"]);
+  return { members, ownerOf: (id) => (owner ? owner.get(id) : undefined), hasOwners: !!owner };
+}
+
+// A KNOWN reference: any catalog member (FOREIGN allowed — a cross-module relation/edge target)
+// or a `new:` id bound to an owned module. Used for relation targets and edge `toId`.
+function isKnownId(id, view, ownedModules) {
+  if (typeof id !== "string" || id.length === 0) return false;
+  if (id.startsWith("new:")) return newIdModule(id, ownedModules) !== null;
+  return view.members.has(id);
+}
+
+// An OWNED declaration: a catalog member the UNIT OWNS (or a `new:` owned id). Used for the ids a
+// unit DECLARES — `entity.id` and edge `fromId` — so a unit cannot declare another module's
+// identity. Without owner maps or ownedModules it falls back to membership (back-compat).
+function isOwnedId(id, view, ownedModules) {
+  if (typeof id !== "string" || id.length === 0) return false;
+  if (id.startsWith("new:")) return newIdModule(id, ownedModules) !== null;
+  if (!view.members.has(id)) return false;
+  if (!view.hasOwners || !ownedModules) return true;
+  return ownedModules.has(view.ownerOf(id));
 }
 
 // Per-array item contract, mirroring the tables in analysis-schema.md. `required` fields
@@ -114,17 +135,13 @@ function validateSubagentReturn(obj, ctx) {
   if (!isStr(obj.module)) errs.push("missing required string: module");
   const allow = ctx ? (ctx.allow instanceof Set ? ctx.allow : new Set(ctx.allow || [])) : null;
   const lines = ctx ? (ctx.lines instanceof Map ? Object.fromEntries(ctx.lines) : (ctx.lines || {})) : {};
-  // Identity catalog (arch-2): when present, entity ids, relation targets, and flow-node ids
-  // must resolve in the catalog (or be a reserved new: id) — not merely be nonempty strings.
+  // Identity catalog (arch-2): entities/nodes carry OWNERSHIP. A unit may only DECLARE ids it
+  // owns (entity.id, edge.fromId); it may REFERENCE any known id (relation targets, edge.toId)
+  // for legitimate cross-module links. The `module`/`moduleId` envelope handling is in bug-1.
   const catalog = ctx && ctx.catalog ? ctx.catalog : null;
-  const entityIds = catalog ? asSet(catalog.entityIds) : null;
-  const nodeIds = catalog ? asSet(catalog.nodeIds) : null;
-  // Module ids this unit is assigned to OWN (arch-2). When provided, obj.module must be one of
-  // them and every `new:` id must name an owned module.
+  const entityView = catalog ? catalogView(catalog, "entity") : null;
+  const nodeView = catalog ? catalogView(catalog, "node") : null;
   const ownedModules = catalog && catalog.moduleIds ? asSet(catalog.moduleIds) : null;
-  if (ownedModules && typeof obj.module === "string" && !ownedModules.has(obj.module)) {
-    errs.push(`module ${obj.module} is not an assigned unit module`);
-  }
 
   for (const key of REQUIRED_ARRAYS) {
     if (!(key in obj)) { errs.push(`missing required array: ${key}`); continue; }
@@ -176,22 +193,25 @@ function validateSubagentReturn(obj, ctx) {
       for (const [field, check] of Object.entries(spec.optional)) {
         if (!check(item[field])) errs.push(`${key}[${i}] optional field has wrong type: ${field}`);
       }
-      // Canonical-identity catalog enforcement (arch-2), only when a catalog was provided.
+      // Canonical-identity catalog enforcement (arch-2), only when a catalog was provided. A unit
+      // may DECLARE only ids it OWNS (entity.id, edge.fromId); it may REFERENCE any known id
+      // (relation targets, edge.toId) so cross-module links remain expressible.
       if (catalog) {
         if (key === "entities") {
-          if (typeof item.id === "string" && !isCatalogId(item.id, entityIds, ownedModules)) {
+          if (typeof item.id === "string" && !isOwnedId(item.id, entityView, ownedModules)) {
             errs.push(`entities[${i}] id not in the identity catalog: ${item.id}`);
           }
           if (Array.isArray(item.relations)) {
             item.relations.forEach((r, j) => {
-              if (!isCatalogId(r, entityIds, ownedModules)) errs.push(`entities[${i}].relations[${j}] target not in the identity catalog: ${r}`);
+              if (!isKnownId(r, entityView, ownedModules)) errs.push(`entities[${i}].relations[${j}] target not in the identity catalog: ${r}`);
             });
           }
         } else if (key === "dataFlowEdges") {
-          for (const f of ["fromId", "toId"]) {
-            if (typeof item[f] === "string" && !isCatalogId(item[f], nodeIds, ownedModules)) {
-              errs.push(`dataFlowEdges[${i}] ${f} not in the flow-node catalog: ${item[f]}`);
-            }
+          if (typeof item.fromId === "string" && !isOwnedId(item.fromId, nodeView, ownedModules)) {
+            errs.push(`dataFlowEdges[${i}] fromId not in the flow-node catalog: ${item.fromId}`);
+          }
+          if (typeof item.toId === "string" && !isKnownId(item.toId, nodeView, ownedModules)) {
+            errs.push(`dataFlowEdges[${i}] toId not in the flow-node catalog: ${item.toId}`);
           }
         }
       }
