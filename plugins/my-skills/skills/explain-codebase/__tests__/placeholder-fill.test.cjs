@@ -169,6 +169,23 @@ test("domain grouping is prototype-key safe (bug-5)", () => {
   assert.deepStrictEqual(safe.toString, ["toString"]);
 });
 
+test("demo provenance counts are self-consistent (bug-5)", () => {
+  // analysisUnit rows: <td class="mono">unit</td><td>modules</td><td class="mono">files</td>…
+  const units = [...demo.matchAll(/<td class="mono">(src\/[a-z]+)<\/td>\s*<td>(\d+)<\/td>\s*<td class="mono">(\d+)<\/td>/g)]
+    .map((m) => ({ unit: m[1], modules: +m[2], files: +m[3] }));
+  assert.ok(units.length >= 2, "demo must have ≥2 analysis units to check");
+  const unitFiles = units.reduce((a, u) => a + u.files, 0);
+  const unitModules = units.reduce((a, u) => a + u.modules, 0);
+  // fileIndex rows (path → role), excluding the analysisUnit unit-name cells above.
+  const fileIndexRows = [...demo.matchAll(/<tr><td class="mono">(src\/[^<]+)<\/td><td>[^<]+<\/td><\/tr>/g)].length;
+  const subagents = +(demo.match(/subagents<\/dt><dd[^>]*>(\d+)/) || [])[1];
+  const modulesTile = +(demo.match(/tile__n">(\d+)<\/span><span class="tile__l">modules/) || [])[1];
+
+  assert.strictEqual(unitFiles, fileIndexRows, `unit file totals (${unitFiles}) must equal fileIndex rows (${fileIndexRows})`);
+  assert.strictEqual(subagents, units.length, `subagents (${subagents}) must equal the unit count (${units.length})`);
+  assert.strictEqual(modulesTile, unitModules, `modules tile (${modulesTile}) must equal summed unit modules (${unitModules})`);
+});
+
 test("demo values conform to the analysis contract (bug-6)", () => {
   // Dependency kinds must be the documented enum (internal|external) — never runtime/dev.
   const depTags = [...demo.matchAll(/<article class="card dep">[\s\S]*?<span class="tag">([^<]+)<\/span>/g)].map((m) => m[1].trim());
