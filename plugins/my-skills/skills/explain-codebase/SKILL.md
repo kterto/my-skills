@@ -413,3 +413,7 @@ redact; it only prevents markup breakage. Three layers keep secrets out of the r
 - [`references/design-prompt.md`](references/design-prompt.md) — the Claude-design prompt
   that regenerates the template (a human step), plus the exact scalar + repeat-block fill
   contract the skill relies on.
+- [`references/vendor/mermaid.manifest.json`](references/vendor/mermaid.manifest.json) — the
+  reproducible-vendoring record for the offline Mermaid runtime (package, version, source
+  URL, sha256, license, update steps, compatibility gates); its checksum is enforced by
+  `__tests__/vendor-manifest.test.cjs`.
