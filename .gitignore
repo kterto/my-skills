@@ -15,3 +15,12 @@
 # the report artifacts under docs/reviews/, not here. Only .pr-review/memory.md is
 # meant to be tracked.
 /.pr-review/review-state.json
+
+# Generated, non-shipped build artifacts (e.g. inlined explain-codebase demo, bug-6)
+/build/
+
+# Generated PR-review HTML reports: regenerated per run and they recursively embed prior
+# reports in files[] (arch-4), so they must not live in the reviewed diff / grow unbounded.
+# The committed _sample-report.html fixture (used by scripts/validate-pr-review-skill.sh) stays.
+/docs/reviews/*.html
+!/docs/reviews/_sample-report.html
