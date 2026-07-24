@@ -208,8 +208,11 @@ Dispatch **one subagent per fan-out unit** — `Agent` (Claude, `subagent_type: 
   `node "$skill_dir/references/validate-subagent-return.cjs" "$scratch/return.json" "$scratch/allow.json"`,
   where `$scratch="$(mktemp -d)"` (a scratch dir **outside** the read-only target), `return.json`
   is the subagent's JSON, and `allow.json` is
-  `{ "allow": [<unit's slice paths>], "lines": { <path>: <lineCount> } }` built from the frozen
-  snapshot manifest (arch-1). Beyond envelope/required-field/enum
+  `{ "allow": [<unit's slice paths>], "lines": { <path>: <lineCount> }, "catalog": { "entityIds": […], "nodeIds": […] } }`
+  built from the frozen snapshot manifest (arch-1) **and the Phase-1 identity catalog** (arch-3).
+  With the catalog present the validator enforces that every `entities[].id`, relation target,
+  and `dataFlowEdges[].fromId`/`toId` resolves in the catalog (or is a reserved `new:` id) —
+  identity membership is checked at the schema boundary, not left to informal Phase-3 code. Beyond envelope/required-field/enum
   checks, the validator **rejects** any `anchor` or `files[].path` that is absolute,
   parent-traversing, **outside the assigned allowlist**, or whose line is out of range — a
   malformed or prompt-injected return citing external/nonexistent/unreviewed locations is not

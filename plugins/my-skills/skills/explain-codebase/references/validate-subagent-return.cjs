@@ -27,6 +27,15 @@ const isOptStrArr = (v) => v === undefined || (Array.isArray(v) && v.every((x) =
 const isOptEnum = (allowed) => (v) => v === undefined || (typeof v === "string" && allowed.includes(v));
 const isOptNonNegNum = (v) => v === undefined || (typeof v === "number" && Number.isFinite(v) && v >= 0);
 
+// Canonical identity (arch-2): a catalog id, or the reserved `new:<module-id>:<name>` form for
+// a genuinely module-local item Phase 3 reconciles. Membership is enforced only when the caller
+// passes a catalog (ctx.catalog); without one the validator does format-only checks (back-compat).
+const NEW_ID_RE = /^new:[^:]+:.+$/;
+function asSet(v) { return v instanceof Set ? v : new Set(v || []); }
+function isCatalogId(id, allowedSet) {
+  return typeof id === "string" && id.length > 0 && (NEW_ID_RE.test(id) || allowedSet.has(id));
+}
+
 // Per-array item contract, mirroring the tables in analysis-schema.md. `required` fields
 // must be non-empty strings (except `anchor`, checked separately for the file:line form);
 // `optional` fields, when present, must match their type/enum.
@@ -90,6 +99,11 @@ function validateSubagentReturn(obj, ctx) {
   if (!isStr(obj.module)) errs.push("missing required string: module");
   const allow = ctx ? (ctx.allow instanceof Set ? ctx.allow : new Set(ctx.allow || [])) : null;
   const lines = ctx ? (ctx.lines instanceof Map ? Object.fromEntries(ctx.lines) : (ctx.lines || {})) : {};
+  // Identity catalog (arch-2): when present, entity ids, relation targets, and flow-node ids
+  // must resolve in the catalog (or be a reserved new: id) — not merely be nonempty strings.
+  const catalog = ctx && ctx.catalog ? ctx.catalog : null;
+  const entityIds = catalog ? asSet(catalog.entityIds) : null;
+  const nodeIds = catalog ? asSet(catalog.nodeIds) : null;
 
   for (const key of REQUIRED_ARRAYS) {
     if (!(key in obj)) { errs.push(`missing required array: ${key}`); continue; }
@@ -125,6 +139,25 @@ function validateSubagentReturn(obj, ctx) {
       }
       for (const [field, check] of Object.entries(spec.optional)) {
         if (!check(item[field])) errs.push(`${key}[${i}] optional field has wrong type: ${field}`);
+      }
+      // Canonical-identity catalog enforcement (arch-2), only when a catalog was provided.
+      if (catalog) {
+        if (key === "entities") {
+          if (typeof item.id === "string" && !isCatalogId(item.id, entityIds)) {
+            errs.push(`entities[${i}] id not in the identity catalog: ${item.id}`);
+          }
+          if (Array.isArray(item.relations)) {
+            item.relations.forEach((r, j) => {
+              if (!isCatalogId(r, entityIds)) errs.push(`entities[${i}].relations[${j}] target not in the identity catalog: ${r}`);
+            });
+          }
+        } else if (key === "dataFlowEdges") {
+          for (const f of ["fromId", "toId"]) {
+            if (typeof item[f] === "string" && !isCatalogId(item[f], nodeIds)) {
+              errs.push(`dataFlowEdges[${i}] ${f} not in the flow-node catalog: ${item[f]}`);
+            }
+          }
+        }
       }
     });
   }

@@ -187,6 +187,48 @@ test("a conforming return validates against its allowlist ctx", () => {
   assert.deepStrictEqual(validateSubagentReturn(good, CTX), []);
 });
 
+// --- arch-2: canonical identities enforced against the Phase-1 catalog ---------------
+const CATALOG = {
+  entityIds: ["e:Invoice", "e:Customer"],
+  nodeIds: ["f:http:POST /charge", "f:m:src/billing:ChargeService"],
+};
+const withCatalog = () => ({ ...CTX, catalog: CATALOG, allow: [...SLICE], lines: CTX.lines });
+
+test("conforming ids validate against the identity catalog", () => {
+  const good = validReturn();
+  good.files[0].path = "src/billing/invoice.ts"; good.files[0].anchor = "src/billing/invoice.ts:1";
+  assert.deepStrictEqual(validateSubagentReturn(good, withCatalog()), []);
+});
+
+test("an entity id outside the catalog is rejected", () => {
+  const bad = validReturn();
+  bad.files[0].path = "src/billing/invoice.ts"; bad.files[0].anchor = "src/billing/invoice.ts:1";
+  bad.entities[0].id = "e:Ghost";
+  assert.ok(validateSubagentReturn(bad, withCatalog()).some((e) => e.includes("entities[0] id not in the identity catalog: e:Ghost")));
+});
+
+test("a relation target outside the catalog is rejected", () => {
+  const bad = validReturn();
+  bad.files[0].path = "src/billing/invoice.ts"; bad.files[0].anchor = "src/billing/invoice.ts:1";
+  bad.entities[0].relations = ["e:Nope"];
+  assert.ok(validateSubagentReturn(bad, withCatalog()).some((e) => e.includes("entities[0].relations[0] target not in the identity catalog: e:Nope")));
+});
+
+test("a flow-node id outside the catalog is rejected", () => {
+  const bad = validReturn();
+  bad.files[0].path = "src/billing/invoice.ts"; bad.files[0].anchor = "src/billing/invoice.ts:1";
+  bad.dataFlowEdges[0].toId = "f:rogue";
+  assert.ok(validateSubagentReturn(bad, withCatalog()).some((e) => e.includes("dataFlowEdges[0] toId not in the flow-node catalog: f:rogue")));
+});
+
+test("a reserved new: id is accepted without catalog membership", () => {
+  const good = validReturn();
+  good.files[0].path = "src/billing/invoice.ts"; good.files[0].anchor = "src/billing/invoice.ts:1";
+  good.entities[0].id = "new:m:src/billing:LocalThing";
+  good.entities[0].relations = ["new:m:src/billing:Other"];
+  assert.deepStrictEqual(validateSubagentReturn(good, withCatalog()), []);
+});
+
 test("references/analysis-schema.md exists and is the source of truth", () => {
   assert.ok(fs.existsSync(SCHEMA_MD), "references/analysis-schema.md must exist");
   const md = fs.readFileSync(SCHEMA_MD, "utf8");
