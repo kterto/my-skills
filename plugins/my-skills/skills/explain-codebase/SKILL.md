@@ -144,10 +144,21 @@ COMMIT_SHA="$(git -C "$root" rev-parse HEAD)"
 DIRTY="$(git -C "$root" status --porcelain -- ":(literal)$scope_path" ':(exclude).opencode' ':(exclude).claude')"
 
 # ONE canonical inventory (sec-1): the SINGLE, vetted, NUL-delimited path list that every
-# later step derives from — built ONCE, AFTER symlink-drop + regular-file/containment recheck
-# + secret-file exclusion (the bullets above). Nothing downstream re-runs `git ls-files`.
-inventory="$scratch/inventory"          # NUL-delimited repo-relative paths (the allowlist)
-#   ... write the vetted allowlist to "$inventory", NUL-separated ...
+# later step derives from — built ONCE here, and NEVER re-run downstream. It applies, in this
+# order, every gate from the bullets above: `:(literal)` (no pathspec magic), symlink-drop,
+# regular-file + physical-containment recheck, and secret-file exclusion. The snapshot, unit
+# slices, line maps, dispatch, and validator allow.json ALL read from `$inventory` — so no
+# second `ls-files` can re-introduce an excluded secret or a replaced-symlink path.
+inventory="$scratch/inventory"; : > "$inventory"        # NUL-delimited repo-relative paths
+secret_re='(^|/)(\.env(\..*)?|.*\.(pem|key|p12|pfx|keystore|jks|der)|id_(rsa|ed25519).*|\.netrc|\.npmrc|\.pypirc|\.pgpass|credentials(\..*)?|secrets\..*)$'
+git -C "$root" ls-files -sz -- ":(literal)$scope_path" \
+  | while IFS= read -r -d '' entry; do
+      meta="${entry%%$'\t'*}"; path="${entry#*$'\t'}"     # meta="<mode> <sha> <stage>"
+      [ "${meta%% *}" = 120000 ] && continue               # drop symlinks
+      [ -f "$root/$path" ] && [ ! -L "$root/$path" ] || continue          # regular-file recheck
+      printf '%s' "$path" | grep -Eq "$secret_re" && continue             # secret-file exclusion
+      printf '%s\0' "$path" >> "$inventory"
+    done
 
 # Materialize the IMMUTABLE snapshot from that inventory, no-follow reads (arch-1):
 node "$skill_dir/references/snapshot-scope.cjs" "$root" "$inventory" "$scratch/snapshot" \
