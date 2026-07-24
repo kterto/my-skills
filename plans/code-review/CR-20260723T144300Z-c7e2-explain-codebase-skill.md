@@ -92,3 +92,8 @@ documentation refinements (theme default reachability; provenance for 3 fill blo
 the skill's correctness or its passing gates.
 
 Invoke `/qa` with plan ID `FEAT-20260723T141806Z-d784` to run the QA suite.
+
+
+---
+
+> **Superseded for the delivered tree (bug-2).** This artifact records the 14:43/14:49 snapshot, before the template swap, the Mermaid runtime, and two /validation-fixer hardening rounds. Current evidence of record: [`plans/qa/REVALIDATION-20260724-explain-codebase-skill.md`](../qa/REVALIDATION-20260724-explain-codebase-skill.md) (commit 3c6ffaf).

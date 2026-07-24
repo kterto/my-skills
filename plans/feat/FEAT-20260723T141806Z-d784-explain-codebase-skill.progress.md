@@ -125,19 +125,10 @@ All checks pass. Safe to commit and open PR.
 
 - **FEATURE: standalone mermaid** (2026-07-23T15:44:59Z): user requested offline in-browser diagram rendering. Vendored mermaid v10.9.1 UMD → references/vendor/mermaid.min.js (3.33MB); template ships a <!-- MERMAID_RUNTIME --> marker the skill inlines at render (SKILL.md Phase 4 step 5, with the $-interpretation corruption warning); demo carries the inlined runtime. Rewrote the interaction JS to render Mermaid LAZILY per tab (mermaid cannot lay out inside a display:none panel) and re-render on theme toggle. Rewrote self-contained.test.sh to strip the vetted runtime block then assert no external-LOAD constructs (mermaid xmlns http URLs are identifiers, not loads); placeholder-fill.test.cjs strips the runtime block from the demo before scanning. design-prompt.md updated so regenerations keep the marker + init. index.json regenerated (vendor file added). Browser-verified via claude-in-chrome: ER + flowchart + sequence diagrams all render, light+dark, offline. Gates: node --test 13/13, self-contained PASS, index --check OK.
 
-- **RE-VALIDATION** (2026-07-24T00:40:29Z, commit 85ba383+): the REVIEWER APPROVED
-  (CR-20260723T144300Z-c7e2, 14:43) and QA READY_TO_COMMIT (QA-20260723T144808Z-9096, 14:49)
-  approvals predated the TEMPLATE-SWAP (15:06), the standalone-mermaid runtime (15:44), **and**
-  the subsequent pr-review-report findings hardening
-  (docs/reviews/orch-2026-07-23-explain-codebase-skill-…md, 13 items arch-1..3 / sec-1..4 /
-  bug-1..6, routed via /validation-fixer main-agent). So the original trail did not cover the
-  delivered template + runtime. Re-validated the **final** tree end to end: `node --test`
-  **26/26** (grew from 13 as bug-2/bug-3 added schema-field/enum coverage and sec-3 added
-  mermaid-safety); `self-contained.test.sh` PASS (now asserts the network-denying CSP and the
-  lean-demo marker); `index --check` up to date (9 skills); template↔demo region parity 7↔7;
-  fill contract intact (12 scalars + 9 REPEAT blocks, no stray tokens). Security posture now
-  covered by the trail: scope containment (sec-1), symlink-safe atomic write (sec-2), Mermaid
-  label sanitization + `default-src 'none'` CSP (sec-3), secret redaction (sec-4). bug-6
-  removed the duplicated 3.3 MB runtime from git; the fully-inlined demo is now generated
-  (`scripts/build-explain-inlined-demo.mjs`, git-ignored `build/`). This entry supersedes the
-  stale approval timestamps: the evidence now covers the merged template + runtime.
+- **RE-VALIDATION** — pointer only (bug-2). The original CR/QA approvals predated the template
+  swap, the Mermaid runtime, and **two** `/validation-fixer` hardening rounds (13 + 17
+  findings). The current evidence of record for the delivered tree is the formal artifact
+  **[`plans/qa/REVALIDATION-20260724-explain-codebase-skill.md`](../qa/REVALIDATION-20260724-explain-codebase-skill.md)**
+  (validated commit `3c6ffaf`: 43 cjs tests + `self-contained.test.sh` PASS, `index --check`
+  fresh, 7↔7 region parity). See `docs/reviews/orch-…-explain-codebase-skill-…md` for the
+  per-finding fix commits. This note is intentionally a pointer, not the evidence.
