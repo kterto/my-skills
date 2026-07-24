@@ -53,3 +53,14 @@ test("the inlined mermaid runtime block is stripped before scanning", () => {
   const report = `<p>ok</p><script id="mermaid-runtime">${"ab12cd34".repeat(20)}</script><p>end</p>`;
   assert.deepStrictEqual(scanSecrets(report), [], "runtime block must not trip the scan");
 });
+
+test("hits never carry the matched credential material (sec-2)", () => {
+  const secret = "AKIA1234567890ABCDEF";
+  const hits = scanSecrets(`aws_key = ${secret}`);
+  assert.ok(hits.length > 0, "should detect the secret");
+  for (const h of hits) {
+    assert.deepStrictEqual(Object.keys(h).sort(), ["index", "type"], "hit exposes only type + index");
+    assert.ok(!JSON.stringify(h).includes(secret), "hit must not contain the matched secret text");
+    assert.strictEqual(typeof h.index, "number");
+  }
+});

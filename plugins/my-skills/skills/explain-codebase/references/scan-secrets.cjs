@@ -48,6 +48,10 @@ const DETECTORS = [
 // bare `\b` would miss because `_` is not a word boundary.
 const CRED_KEY = /\b[A-Za-z0-9_]*?(pass(?:word|wd)?|secret|token|api[_-]?key|access[_-]?key|secret[_-]?key|private[_-]?key|client[_-]?secret|auth(?:[_-]?token)?|credential|conn(?:ection)?[_-]?string|dsn)\s*["']?\s*[:=]\s*["']?([^\s"'<>]{6,})/gi;
 
+// Returns [{ type, index }] — NEVER the matched credential material (sec-2). Reporting the
+// secret text (even truncated) would move it into agent/CI/terminal logs the moment a report
+// is refused, defeating the point of blocking publication. Only the detector `type` and the
+// byte `index` (for locating it in the source) are retained.
 function scanSecrets(text) {
   if (typeof text !== "string") return [];
   const body = stripRuntime(text);
@@ -55,13 +59,12 @@ function scanSecrets(text) {
   for (const [type, re] of DETECTORS) {
     re.lastIndex = 0;
     let m;
-    while ((m = re.exec(body)) !== null) hits.push({ type, match: m[0].slice(0, 60) });
+    while ((m = re.exec(body)) !== null) hits.push({ type, index: m.index });
   }
   CRED_KEY.lastIndex = 0;
   let m;
   while ((m = CRED_KEY.exec(body)) !== null) {
-    const value = m[2];
-    if (!PLACEHOLDER.test(value)) hits.push({ type: "credential-assignment", match: `${m[1]}=${value.slice(0, 40)}` });
+    if (!PLACEHOLDER.test(m[2])) hits.push({ type: "credential-assignment", index: m.index });
   }
   return hits;
 }
@@ -80,7 +83,12 @@ if (require.main === module) {
   }
   const hits = scanSecrets(raw);
   if (hits.length) {
-    for (const h of hits) console.error(`secret[${h.type}]: ${h.match}`);
+    // Log only type + byte offset — never the matched credential material (sec-2).
+    const byType = {};
+    for (const h of hits) byType[h.type] = (byType[h.type] || 0) + 1;
+    for (const [type, count] of Object.entries(byType)) {
+      console.error(`secret[${type}]: ${count} match(es) (offsets ${hits.filter((h) => h.type === type).map((h) => h.index).join(", ")})`);
+    }
     console.error(`refusing: report matches ${hits.length} secret pattern(s) — redact and re-render`);
     process.exit(1);
   }
