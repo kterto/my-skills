@@ -18,8 +18,10 @@ function stripRuntime(text) {
   return text.replace(/<script id="mermaid-runtime">[\s\S]*?<\/script>/i, "");
 }
 
-// A value that is an obvious placeholder / already-redacted marker is NOT a leaked secret.
-const PLACEHOLDER = /^(?:«redacted»|redacted|x{3,}|\*{3,}|example|changeme|your[-_]|<[^>]*>|\.\.\.|null|none|true|false|\d+)$/i;
+// A value that is an EXPLICIT redaction / example marker is NOT a leaked secret. Note this
+// intentionally does NOT exempt all-digit values (sec-3): a numeric password/token
+// (`password=1234`) is a real leaked credential, not a placeholder.
+const PLACEHOLDER = /^(?:«redacted»|redacted|x{3,}|\*{3,}|example|changeme|your[-_]|<[^>]*>|\.\.\.)$/i;
 
 // Ordered, named detectors. Token families are deterministic; the entropy thresholds are set
 // ABOVE a 40-char git SHA (hex ≥ 64) and above incidental base64 (≥ 44) to avoid flagging the
@@ -29,8 +31,11 @@ const DETECTORS = [
   ["jwt", /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g],
   ["aws-access-key-id", /\b(?:AKIA|ASIA|AROA|AIDA)[0-9A-Z]{16}\b/g],
   ["github-token", /\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{36}\b|\bgithub_pat_[A-Za-z0-9_]{22,}\b/g],
+  ["gitlab-token", /\bglpat-[A-Za-z0-9_-]{20,}\b/g],
+  ["npm-token", /\bnpm_[A-Za-z0-9]{36}\b/g],
   ["slack-token", /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g],
-  ["openai-key", /\b(?:sk|rk)-[A-Za-z0-9]{20,}\b/g],
+  // OpenAI: legacy `sk-…`/`rk-…` AND segmented project/service keys `sk-proj-…`, `sk-svcacct-…`.
+  ["openai-key", /\bsk-(?:proj|svcacct|admin)-[A-Za-z0-9_-]{20,}\b|\b(?:sk|rk)-[A-Za-z0-9]{20,}\b/g],
   ["google-api-key", /\bAIza[0-9A-Za-z_-]{35}\b/g],
   ["stripe-key", /\b(?:sk|rk|pk)_(?:live|test)_[A-Za-z0-9]{16,}\b/g],
   ["slack-webhook", /https:\/\/hooks\.slack\.com\/services\/[A-Za-z0-9/]+/g],
@@ -46,7 +51,9 @@ const DETECTORS = [
 // Catches "password: hunter2", api_key="AKIA…", secret=deadbeef… that the token families miss.
 // A leading `[A-Za-z0-9_]*?` lazily absorbs env-var prefixes (DB_PASSWORD, MY_API_KEY) that a
 // bare `\b` would miss because `_` is not a word boundary.
-const CRED_KEY = /\b[A-Za-z0-9_]*?(pass(?:word|wd)?|secret|token|api[_-]?key|access[_-]?key|secret[_-]?key|private[_-]?key|client[_-]?secret|auth(?:[_-]?token)?|credential|conn(?:ection)?[_-]?string|dsn)\s*["']?\s*[:=]\s*["']?([^\s"'<>]{6,})/gi;
+// Value length is NOT gated (sec-3): a short or numeric value under a credential key is still a
+// leaked secret; the PLACEHOLDER set (explicit redaction/example markers only) is the sole exempt.
+const CRED_KEY = /\b[A-Za-z0-9_]*?(pass(?:word|wd)?|secret|token|api[_-]?key|access[_-]?key|secret[_-]?key|private[_-]?key|client[_-]?secret|auth(?:[_-]?token)?|credential|conn(?:ection)?[_-]?string|dsn)\s*["']?\s*[:=]\s*["']?([^\s"'<>]+)/gi;
 
 // Returns [{ type, index }] — NEVER the matched credential material (sec-2). Reporting the
 // secret text (even truncated) would move it into agent/CI/terminal logs the moment a report

@@ -456,13 +456,16 @@ redact; it only prevents markup breakage. Three layers keep secrets out of the r
    report shows *that* a secret exists and *where* (the anchor), never its value.
 3. **Scan the finished report before writing** — the deterministic scanner
    [`references/scan-secrets.cjs`](references/scan-secrets.cjs), run in step 6. It covers
-   private-key blocks, JWTs, token families (AWS/GitHub/Slack/OpenAI/Google/Stripe),
-   connection strings with embedded credentials (portable JS regex — no POSIX `\s` bug),
-   ordinary `password`/`api_key`-style **assignments**, and high-entropy hex (≥64) / base64
-   (≥44) blobs, while stripping the inlined Mermaid runtime and ignoring `«redacted»`
-   markers, key names, and 40-char git SHAs. A non-empty result **refuses** the write —
-   redact the offending item and re-render; never publish a report that matches. Adversarial
-   fixtures per class live in `__tests__/secret-scan.test.cjs`.
+   private-key blocks, JWTs, token families (AWS/GitHub/GitLab/npm/Slack/OpenAI incl. segmented
+   `sk-proj-`/`sk-svcacct-`/Google/Stripe), connection strings with embedded credentials
+   (portable JS regex — no POSIX `\s` bug), `password`/`api_key`-style **assignments**
+   (value-length-**independent** — short and numeric values are caught; only explicit
+   redaction/example markers are exempt), and high-entropy hex (≥64) / base64 (≥44) blobs,
+   while stripping the inlined Mermaid runtime and ignoring `«redacted»` markers, key names,
+   and 40-char git SHAs. It reports only detector **type + byte offset — never the matched
+   material** (sec-2). A non-empty result **refuses** the write — redact and re-render; never
+   publish a report that matches. Adversarial fixtures per class live in
+   `__tests__/secret-scan.test.cjs`.
 
 ## Read-only & host discipline
 

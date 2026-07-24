@@ -29,6 +29,22 @@ test("ordinary password / api_key assignments are caught (the earlier gap)", () 
   assert.ok(hitTypes("DB_PASSWORD=s3cr3tvalue").includes("credential-assignment"));
 });
 
+test("GitLab / npm / segmented-OpenAI token families are caught (sec-3)", () => {
+  assert.ok(hitTypes("glpat-" + "a".repeat(20)).includes("gitlab-token"));
+  assert.ok(hitTypes("npm_" + "b".repeat(36)).includes("npm-token"));
+  assert.ok(hitTypes("sk-proj-" + "c".repeat(24)).includes("openai-key"));
+  assert.ok(hitTypes("sk-svcacct-" + "d".repeat(24)).includes("openai-key"));
+});
+
+test("short and numeric credential values are not exempt (sec-3)", () => {
+  assert.ok(hitTypes("password=1234").includes("credential-assignment"), "numeric password must be caught");
+  assert.ok(hitTypes("token: 42").includes("credential-assignment"), "short numeric token must be caught");
+  assert.ok(hitTypes("secret=ab").includes("credential-assignment"), "short value must be caught");
+  // But an explicitly-redacted value is still exempt.
+  assert.deepStrictEqual(scanSecrets("password=«redacted»"), []);
+  assert.deepStrictEqual(scanSecrets("api_key: changeme"), []);
+});
+
 test("connection strings with embedded credentials are caught (portable regex, no POSIX \\s)", () => {
   assert.ok(hitTypes("postgres://user:p4ssw0rd@db.example:5432/app").includes("connection-string-credentials"));
   assert.ok(hitTypes("mongodb://admin:secretpw@host/db").includes("connection-string-credentials"));
