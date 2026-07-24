@@ -126,58 +126,49 @@ candidate file:
   subagent would re-glob (which would re-introduce symlinks). A file that fails any check is
   excluded and, if it was expected in scope, noted as skipped in the report provenance.
 
-**Source-snapshot semantics (the report describes ONE snapshot).** The allowlist comes from
-Git's index, but subagents `Read` **mutable working-tree** files across several waves, while
-the report renders a single `COMMIT_SHA`. Without pinning, a report can combine bytes from
-different revisions yet advertise one commit. So freeze the snapshot up front and prove no
-drift before rendering:
+**Source-snapshot semantics — MATERIALIZE an immutable snapshot (arch-1, sec-1).** Subagents
+`Read` files across several waves while the report advertises one `COMMIT_SHA`. Hashing the
+working tree before/after fan-out does **not** freeze the bytes: a collaborator can swap an
+allowlisted file (or a directory component) *during* a Read and restore it before the final
+hash — an ABA change, or a transient symlink, injects different or outside-repo content while
+both hashes match. So don't hash in place — **copy the vetted bytes once into an immutable
+scratch snapshot and dispatch subagents to read only that snapshot** (which the analyzed repo
+cannot mutate):
 
 ```bash
-# Scratch dir OUTSIDE the read-only target holds the frozen manifest (the skill never writes
-# into the analyzed repo). The SAME $snap_manifest is reused by the drift check and the
-# sec-3 allowlist build below — define it once, here, so those references resolve.
-scratch="$(mktemp -d)"; snap_manifest="$scratch/allowlist-manifest.txt"
-# Remove the scratch dir (manifest, per-unit allow.json, subagent-return.json) on ANY exit —
-# success or abort — so runs never leave residue in the system temp dir (bug-6). $scratch is a
-# fresh mktemp -d the skill owns, so this deletes only skill-created files, never user files.
-trap 'rm -rf "$scratch"' EXIT
+# Scratch dir OUTSIDE the read-only target; removed on ANY exit (bug-6).
+scratch="$(mktemp -d)"; trap 'rm -rf "$scratch"' EXIT
 COMMIT_SHA="$(git -C "$root" rev-parse HEAD)"
-# Dirty status over the ANALYZED allowlist only, excluding host-runtime dirs. `:(literal)`
-# disables pathspec MAGIC on the scope (sec-1) — a scope like `:(top)` would otherwise make
-# git enumerate the whole repo; the `:(exclude)` magic on the host dirs stays intact.
+# `:(literal)` disables pathspec MAGIC on the scope (a scope like `:(top)` would otherwise make
+# git enumerate the whole repo); `:(exclude)` magic on host dirs stays intact.
 DIRTY="$(git -C "$root" status --porcelain -- ":(literal)$scope_path" ':(exclude).opencode' ':(exclude).claude')"
-# Freeze a content manifest of the allowlist BEFORE any subagent reads. Hash the WORKING-TREE
-# bytes each subagent actually reads — NOT the index blob id: `ls-files -s` reports the *staged*
-# blob, so an unstaged or concurrent working-tree edit leaves the id unchanged and the drift
-# check would still combine revisions under one advertised commit. `git hash-object <file>`
-# hashes the on-disk content. NUL-delimited throughout so paths with spaces survive (bug-3);
-# skip mode 120000 (symlinks) and re-assert each is a regular file just before hashing.
-: > "$snap_manifest"
-git -C "$root" ls-files -sz -- ":(literal)$scope_path" \
-  | while IFS= read -r -d '' entry; do
-      meta="${entry%%$'\t'*}"; path="${entry#*$'\t'}"     # meta="<mode> <sha> <stage>"
-      [ "${meta%% *}" = 120000 ] && continue               # skip symlinks
-      [ -f "$root/$path" ] && [ ! -L "$root/$path" ] || continue   # regular-file recheck per read
-      printf '%s\t%s\0' "$(git -C "$root" hash-object -- "$root/$path")" "$path" >> "$snap_manifest"
-    done
+
+# ONE canonical inventory (sec-1): the SINGLE, vetted, NUL-delimited path list that every
+# later step derives from — built ONCE, AFTER symlink-drop + regular-file/containment recheck
+# + secret-file exclusion (the bullets above). Nothing downstream re-runs `git ls-files`.
+inventory="$scratch/inventory"          # NUL-delimited repo-relative paths (the allowlist)
+#   ... write the vetted allowlist to "$inventory", NUL-separated ...
+
+# Materialize the IMMUTABLE snapshot from that inventory, no-follow reads (arch-1):
+node "$skill_dir/references/snapshot-scope.cjs" "$root" "$inventory" "$scratch/snapshot" \
+  || { echo "snapshot refused a path (symlink / escape) — aborting"; exit 1; }
 ```
 
+- **Dispatch snapshot paths, not working-tree paths.** Every Phase-2 subagent reads only
+  `"$scratch/snapshot/<path>"`; the analyzed repo can no longer change those bytes mid-run, so
+  ABA / transient-symlink swaps are moot. Anchors in returns stay the **original repo-relative
+  `<path>`** (the snapshot layout mirrors the repo), so provenance still points at real files.
+- **The snapshot IS the allowlist + the validator context (sec-1).** The same `$inventory`
+  yields the unit slices, per-file line maps, and the `allow.json` catalog/allowlist passed to
+  `validate-subagent-return.cjs` — one source, so no downstream `ls-files` rerun can
+  re-introduce an excluded secret or a replaced-symlink path. No before/after drift check is
+  needed: an immutable snapshot cannot drift.
 - **Snapshot identity is honest.** Render provenance as `COMMIT_SHA` **plus a dirty flag**:
   if `DIRTY` is non-empty the identity is `"<sha> (working tree, dirty)"`, never a bare clean
   commit — a dirty tree is disclosed, not hidden behind the commit hash.
-- **Drift check before render.** After the last wave, recompute each allowlist path's
-  **working-tree** hash the same way (`git hash-object` over the on-disk bytes, NUL-safe) and
-  diff against `$snap_manifest`. Any path whose content changed since the freeze means its
-  subagent read a **different** revision → re-run that unit against the current bytes, or
-  record the unit as **drifted/stale** in provenance (arch-2). Never render a report whose
-  inputs silently shifted underfoot.
-- The frozen manifest is also what binds a subagent's anchors to reviewed content
-  (see `validate-subagent-return.cjs` allowlist binding).
-- **Clean up `$scratch` on completion or abort (bug-6).** The `trap … EXIT` above covers a
-  single shell session; because these snippets may run across several sessions, also
-  **explicitly `rm -rf "$scratch"`** once the report is written (step 6) **or** the run aborts,
-  so the manifest / allow.json / subagent-return files never accumulate in the system temp dir.
-  Only the skill-owned `$scratch` (a fresh `mktemp -d`) is removed — never user files.
+- **Clean up `$scratch` (bug-6).** The `trap … EXIT` covers one shell session; because these
+  snippets may run across sessions, also **explicitly `rm -rf "$scratch"`** once the report is
+  written (step 6) or the run aborts. Only the skill-owned `$scratch` is removed.
 
 ### 2. Phase 1 — Scope & map (main agent)
 
@@ -231,7 +222,7 @@ Dispatch **one subagent per fan-out unit** — `Agent` (Claude, `subagent_type: 
   where `$scratch="$(mktemp -d)"` (a scratch dir **outside** the read-only target), `return.json`
   is the subagent's JSON, and `allow.json` is
   `{ "allow": [<unit's slice paths>], "lines": { <path>: <lineCount> }, "catalog": { "entityIds": […], "nodeIds": […] } }`
-  built from the frozen snapshot manifest (arch-1) **and the Phase-1 identity catalog** (arch-3).
+  built from the canonical `$inventory` (sec-1) **and the Phase-1 identity catalog** (arch-3).
   With the catalog present the validator enforces that every `entities[].id`, relation target,
   and `dataFlowEdges[].fromId`/`toId` resolves in the catalog (or is a reserved `new:` id) —
   identity membership is checked at the schema boundary, not left to informal Phase-3 code. Beyond envelope/required-field/enum
@@ -525,6 +516,9 @@ redact; it only prevents markup breakage. Three layers keep secrets out of the r
 - [`references/scan-secrets.cjs`](references/scan-secrets.cjs) — the deterministic final
   secret-scan gate (importable + CLI) run on the rendered report before it is written;
   adversarial fixtures in `__tests__/secret-scan.test.cjs`.
+- [`references/snapshot-scope.cjs`](references/snapshot-scope.cjs) — materializes the immutable
+  source snapshot (no-follow reads) the subagents read from; tests in
+  `__tests__/snapshot-scope.test.cjs`.
 - [`references/report-template.html`](references/report-template.html) — the committed,
   self-contained, theme-aware template (fixed chrome + inline JS) with the
   `{{PLACEHOLDER}}` + `<!-- REPEAT:block -->` fill markers.
