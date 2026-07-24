@@ -133,6 +133,15 @@ function validateSubagentReturn(obj, ctx) {
       // files[].path is itself provenance — bind it too (sec-3).
       if (key === "files" && typeof item.path === "string") {
         checkPathBinding(item.path, ctx, `files[${i}]`, errs);
+        // A file record's anchor MUST point at that same file (bug-3): otherwise a role can be
+        // attributed to a *different* reviewed file. Enforce the documented `<path>:1` form.
+        if (parsed) {
+          if (parsed.path !== item.path) {
+            errs.push(`files[${i}] anchor path ${parsed.path} must equal the record path ${item.path}`);
+          } else if (parsed.line !== 1) {
+            errs.push(`files[${i}] anchor must use the <path>:1 convention (got :${parsed.line})`);
+          }
+        }
       }
       for (const [field, check] of Object.entries(spec.required)) {
         if (!check(item[field])) errs.push(`${key}[${i}] missing/invalid required field: ${field}`);

@@ -221,6 +221,22 @@ test("a flow-node id outside the catalog is rejected", () => {
   assert.ok(validateSubagentReturn(bad, withCatalog()).some((e) => e.includes("dataFlowEdges[0] toId not in the flow-node catalog: f:rogue")));
 });
 
+test("a files[] record whose anchor cites a different file is rejected (bug-3)", () => {
+  const bad = validReturn();
+  bad.files[0].path = "src/billing/invoice.ts";
+  bad.files[0].anchor = "src/billing/charge.ts:1"; // anchor != record path
+  const errs = validateSubagentReturn(bad);
+  assert.ok(errs.some((e) => /files\[0\] anchor path src\/billing\/charge\.ts must equal the record path src\/billing\/invoice\.ts/.test(e)));
+});
+
+test("a files[] anchor not using the :1 convention is rejected (bug-3)", () => {
+  const bad = validReturn();
+  bad.files[0].path = "src/billing/invoice.ts";
+  bad.files[0].anchor = "src/billing/invoice.ts:7"; // right file, wrong line
+  const errs = validateSubagentReturn(bad);
+  assert.ok(errs.some((e) => /files\[0\] anchor must use the <path>:1 convention \(got :7\)/.test(e)));
+});
+
 test("a reserved new: id is accepted without catalog membership", () => {
   const good = validReturn();
   good.files[0].path = "src/billing/invoice.ts"; good.files[0].anchor = "src/billing/invoice.ts:1";

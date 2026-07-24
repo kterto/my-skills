@@ -122,7 +122,7 @@ contract as every other field, before merging.
 | `path`   | string      | yes      | repo-root-relative file path (one record per file the subagent analyzed) |
 | `role`   | string      | yes      | one-line role: what this file does                             |
 | `loc`    | number      | no       | lines of code (non-negative); summed into per-module LOC. Omit only when genuinely uncounted — a metric built from partial `loc` is a documented lower bound. |
-| `anchor` | `file:line` | **yes**  | the file itself, `<path>:1` by convention (keeps the universal-anchor rule uniform) |
+| `anchor` | `file:line` | **yes**  | the file itself — **must be `<path>:1`** where `<path>` equals this record's `path` (enforced, bug-3): a file role cannot be attributed to a different file |
 
 ### `entities[]` — the data model
 
