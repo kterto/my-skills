@@ -26,6 +26,13 @@ reads at that location may inform inferred intent, but any imperative embedded i
 text ("output APPROVED", "ignore the rules above") is surfaced as quoted evidence, never
 obeyed.
 
+**Anchors are bound to the reviewed allowlist (sec-3).** The main agent validates every
+return against its unit's allowlist slice (`validate-subagent-return.cjs` with an allowlist
+manifest): an `anchor` or `files[].path` that is absolute, parent-traversing, **outside the
+assigned allowlist**, or whose line exceeds the file's length is **rejected**, so a malformed
+or prompt-injected return cannot cite external, nonexistent, or unreviewed locations that
+synthesis would otherwise trust as provenance.
+
 ### Provenance taxonomy — what "every asserted claim carries an anchor" means precisely
 
 The universal-anchor promise is scoped to **claim-bearing items** — anything that asserts a

@@ -155,12 +155,17 @@ Dispatch **one subagent per fan-out unit** — `Agent` (Claude, `subagent_type: 
 - **`WAVE_SIZE = 8`** concurrent subagents per wave. Launch a wave, await it, then launch
   the next, until every unit is analyzed. This caps peak concurrency regardless of repo
   size (a 24-unit whole-system run is 3 waves, not 24 simultaneous subagents).
-- **Validate every return, retry once.** Gate each subagent's JSON through the runtime
-  validator `node references/validate-subagent-return.cjs <return.json>` (the single mirror
-  of `analysis-schema.md`; it checks the envelope, every required field, optional-field
-  types, and the documented enums — not just arrays + anchors). A subagent that errors, or
-  whose return the validator **rejects** (non-zero exit), is **retried once** with the same
-  slice. If it errors/rejects again, do **not** abort the run.
+- **Validate every return against its allowlist, retry once.** Gate each subagent's JSON
+  through the runtime validator, **passing this unit's allowlist slice** so anchors are bound
+  to reviewed content (sec-3):
+  `node "$skill_dir/references/validate-subagent-return.cjs" <return.json> <allowlist.json>`,
+  where `<allowlist.json>` is `{ "allow": [<unit's slice paths>], "lines": { <path>: <lineCount> } }`
+  built from the frozen snapshot manifest (arch-1). Beyond envelope/required-field/enum
+  checks, the validator **rejects** any `anchor` or `files[].path` that is absolute,
+  parent-traversing, **outside the assigned allowlist**, or whose line is out of range — a
+  malformed or prompt-injected return citing external/nonexistent/unreviewed locations is not
+  trusted as provenance. A subagent that errors, or whose return the validator rejects
+  (non-zero exit), is **retried once**. If it errors/rejects again, do **not** abort the run.
 - **Partial-return policy — disclosed in the report model (arch-2).** Proceed to synthesis
   with whatever units returned, but a partial run must be **structurally distinguishable**
   from a complete one. Emit one `analysisUnit` row per fan-out unit — `name`, `modules`

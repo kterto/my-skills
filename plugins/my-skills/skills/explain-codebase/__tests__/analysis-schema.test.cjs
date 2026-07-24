@@ -142,6 +142,51 @@ test("valid canonical ids + enums still validate", () => {
   assert.deepStrictEqual(validateSubagentReturn(good), []);
 });
 
+// --- sec-3: anchors/paths bound to the reviewed allowlist slice ----------------------
+const SLICE = [
+  "src/billing/invoice.ts", "src/billing/charge.ts", "src/billing/routes.ts",
+];
+const CTX = { allow: SLICE, lines: { "src/billing/invoice.ts": 200, "src/billing/charge.ts": 200, "src/billing/routes.ts": 200 } };
+
+test("absolute and parent-traversal anchor paths are rejected (no ctx needed)", () => {
+  const abs = validReturn();
+  abs.entities[0].anchor = "/etc/passwd:1";
+  assert.ok(validateSubagentReturn(abs).some((e) => /anchor path is absolute or parent-traversing/.test(e)));
+
+  const up = validReturn();
+  up.entities[0].anchor = "../../secrets.env:1";
+  assert.ok(validateSubagentReturn(up).some((e) => /anchor path is absolute or parent-traversing/.test(e)));
+});
+
+test("an anchor path outside the assigned allowlist is rejected", () => {
+  const bad = validReturn();
+  bad.entities[0].anchor = "src/other/nope.ts:5"; // not in SLICE
+  const errs = validateSubagentReturn(bad, CTX);
+  assert.ok(errs.some((e) => e.includes("anchor path not in the assigned allowlist: src/other/nope.ts")));
+});
+
+test("an anchor line beyond the file's length is rejected", () => {
+  const bad = validReturn();
+  bad.entities[0].anchor = "src/billing/invoice.ts:9999"; // file has 200 lines in CTX
+  const errs = validateSubagentReturn(bad, CTX);
+  assert.ok(errs.some((e) => /anchor line 9999 out of range/.test(e)));
+});
+
+test("a files[].path outside the allowlist is rejected", () => {
+  const bad = validReturn();
+  bad.files[0].path = "src/other/unreviewed.ts";
+  bad.files[0].anchor = "src/billing/invoice.ts:1"; // keep a valid anchor
+  const errs = validateSubagentReturn(bad, CTX);
+  assert.ok(errs.some((e) => e.includes("files[0] path not in the assigned allowlist: src/other/unreviewed.ts")));
+});
+
+test("a conforming return validates against its allowlist ctx", () => {
+  const good = validReturn();
+  good.files[0].path = "src/billing/invoice.ts";
+  good.files[0].anchor = "src/billing/invoice.ts:1";
+  assert.deepStrictEqual(validateSubagentReturn(good, CTX), []);
+});
+
 test("references/analysis-schema.md exists and is the source of truth", () => {
   assert.ok(fs.existsSync(SCHEMA_MD), "references/analysis-schema.md must exist");
   const md = fs.readFileSync(SCHEMA_MD, "utf8");

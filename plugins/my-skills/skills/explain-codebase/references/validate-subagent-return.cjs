@@ -59,13 +59,40 @@ const ITEM_SPECS = {
   },
 };
 
-function validateSubagentReturn(obj) {
+// Split a `path:line` anchor into its parts (last colon wins, so Windows-ish paths are safe).
+function parseAnchor(anchor) {
+  if (typeof anchor !== "string") return null;
+  const m = anchor.match(/^(.+):(\d+)$/);
+  if (!m) return null;
+  return { path: m[1], line: Number(m[2]) };
+}
+const isUnsafePath = (p) => typeof p !== "string" || p.startsWith("/") || p.split("/").includes("..");
+
+// Bind an anchor/path to the assigned allowlist slice (sec-3). `ctx` is optional; when absent
+// the validator does shape-only checks (back-compat). When provided:
+//   ctx.allow  — Set of repo-relative paths in this unit's slice (the reviewed allowlist)
+//   ctx.lines  — optional Map/obj of path -> line count, for line-bounds enforcement
+// A path outside the allowlist, absolute, parent-traversing, or a line out of range is a
+// prompt-injection / drift signal Phase 3 must NOT trust as provenance.
+function checkPathBinding(pathValue, ctx, label, errs) {
+  if (isUnsafePath(pathValue)) { errs.push(`${label} path is absolute or parent-traversing: ${pathValue}`); return; }
+  if (!ctx) return;
+  const allow = ctx.allow instanceof Set ? ctx.allow : new Set(ctx.allow || []);
+  if (!allow.has(pathValue)) { errs.push(`${label} path not in the assigned allowlist: ${pathValue}`); return; }
+  const lines = ctx.lines instanceof Map ? Object.fromEntries(ctx.lines) : (ctx.lines || {});
+  if (label.endsWith("anchor")) return; // line bound applied by caller via parseAnchor
+  void lines;
+}
+
+function validateSubagentReturn(obj, ctx) {
   const errs = [];
   if (obj === null || typeof obj !== "object" || Array.isArray(obj)) {
     return ["return must be a JSON object"];
   }
   // Envelope: `module` identifies the analyzed slice and is required.
   if (!isStr(obj.module)) errs.push("missing required string: module");
+  const allow = ctx ? (ctx.allow instanceof Set ? ctx.allow : new Set(ctx.allow || [])) : null;
+  const lines = ctx ? (ctx.lines instanceof Map ? Object.fromEntries(ctx.lines) : (ctx.lines || {})) : {};
 
   for (const key of REQUIRED_ARRAYS) {
     if (!(key in obj)) { errs.push(`missing required array: ${key}`); continue; }
@@ -77,8 +104,24 @@ function validateSubagentReturn(obj) {
         return;
       }
       // The universal anchor rule (message text preserved for existing callers/tests).
-      if (typeof item.anchor !== "string" || !ANCHOR_RE.test(item.anchor)) {
+      const parsed = parseAnchor(item.anchor);
+      if (!parsed) {
         errs.push(`${key}[${i}] missing required file:line anchor`);
+      } else {
+        // Bind the anchor to the reviewed allowlist slice (sec-3).
+        if (isUnsafePath(parsed.path)) {
+          errs.push(`${key}[${i}] anchor path is absolute or parent-traversing: ${parsed.path}`);
+        } else if (allow) {
+          if (!allow.has(parsed.path)) {
+            errs.push(`${key}[${i}] anchor path not in the assigned allowlist: ${parsed.path}`);
+          } else if (Object.prototype.hasOwnProperty.call(lines, parsed.path) && (parsed.line < 1 || parsed.line > lines[parsed.path])) {
+            errs.push(`${key}[${i}] anchor line ${parsed.line} out of range for ${parsed.path} (1..${lines[parsed.path]})`);
+          }
+        }
+      }
+      // files[].path is itself provenance — bind it too (sec-3).
+      if (key === "files" && typeof item.path === "string") {
+        checkPathBinding(item.path, ctx, `files[${i}]`, errs);
       }
       for (const [field, check] of Object.entries(spec.required)) {
         if (!check(item[field])) errs.push(`${key}[${i}] missing/invalid required field: ${field}`);
@@ -91,7 +134,7 @@ function validateSubagentReturn(obj) {
   return errs;
 }
 
-module.exports = { validateSubagentReturn, REQUIRED_ARRAYS, ANCHOR_RE, FLOW_KINDS, DEP_KINDS };
+module.exports = { validateSubagentReturn, parseAnchor, REQUIRED_ARRAYS, ANCHOR_RE, FLOW_KINDS, DEP_KINDS };
 
 // --- CLI ------------------------------------------------------------------------------
 if (require.main === module) {
@@ -110,7 +153,19 @@ if (require.main === module) {
     console.error(`invalid JSON: ${e.message}`);
     process.exit(2);
   }
-  const errs = validateSubagentReturn(parsed);
+  // Optional allowlist manifest binds anchors/paths to the reviewed slice (sec-3):
+  //   { "allow": ["repo/rel/path", ...], "lines": { "repo/rel/path": <lineCount> } }
+  let ctx;
+  const allowFile = process.argv[3];
+  if (allowFile) {
+    try {
+      ctx = JSON.parse(fs.readFileSync(allowFile, "utf8"));
+    } catch (e) {
+      console.error(`cannot read allowlist manifest: ${e.message}`);
+      process.exit(2);
+    }
+  }
+  const errs = validateSubagentReturn(parsed, ctx);
   if (errs.length) {
     for (const e of errs) console.error(e);
     process.exit(1);
