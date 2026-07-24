@@ -1,0 +1,26 @@
+{
+  "$comment": "Reproducible-vendoring manifest for the offline Mermaid runtime (arch-6). The 3.3 MB runtime is coupled to the template, the network-denying CSP, the label sanitizer, the hosted index, and the demo builder — this file records where it came from and how to update it safely. The checksum is verified by __tests__/vendor-manifest.test.cjs.",
+  "package": "mermaid",
+  "version": "10.9.6",
+  "distribution": "UMD minified (mermaid.min.js)",
+  "file": "mermaid.min.js",
+  "bytes": 3337508,
+  "sha256": "eda3a0ad572bbe69a318c1be0163e8233dd824f3f12939e5168feba207767151",
+  "source": "https://cdn.jsdelivr.net/npm/mermaid@10.9.6/dist/mermaid.min.js",
+  "homepage": "https://github.com/mermaid-js/mermaid",
+  "license": "MIT",
+  "vendoredOn": "2026-07-24",
+  "securityNote": "Upgraded from 10.9.1 to 10.9.6 to clear published v10 advisories (prototype pollution, sequence-label XSS, CSS/HTML injection). The procedural label sanitizer + network-denying CSP remain the primary boundary; the runtime is defense-in-depth.",
+  "updateProcedure": [
+    "Download the pinned dist: curl -fsSL https://cdn.jsdelivr.net/npm/mermaid@<version>/dist/mermaid.min.js -o mermaid.min.js",
+    "Update version, bytes, sha256 (shasum -a 256), and source in this manifest.",
+    "Run the required compatibility gates below; only commit if all pass.",
+    "Regenerate the inlined demo (node scripts/build-explain-inlined-demo.mjs) and eyeball ER + flowchart + sequence diagrams in light and dark, offline."
+  ],
+  "compatibilityGates": [
+    "__tests__/vendor-manifest.test.cjs — checksum + byte-size of mermaid.min.js match this manifest",
+    "__tests__/self-contained.test.sh — no external network loads; template/demo carry the marker; network-denying CSP present",
+    "__tests__/mermaid-safety.test.cjs — label sanitizer + CSP outer guard",
+    "mermaid.initialize({ securityLevel: 'strict' }) + mermaid.run() API used by the template must exist in the new version"
+  ]
+}
