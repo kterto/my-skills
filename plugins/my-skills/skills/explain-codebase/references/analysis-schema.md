@@ -64,6 +64,7 @@ Each subagent returns ONE JSON object for its assigned module/subsystem slice:
 ```jsonc
 {
   "module": "src/billing",        // the scope slice this subagent analyzed (string)
+  "files":         [ /* FileRecord  */ ],
   "entities":      [ /* Entity      */ ],
   "businessRules": [ /* BusinessRule */ ],
   "dataFlowEdges": [ /* DataFlowEdge */ ],
@@ -72,11 +73,22 @@ Each subagent returns ONE JSON object for its assigned module/subsystem slice:
 }
 ```
 
-All five arrays are **required and must be arrays** (empty `[]` is valid when the slice
+All six arrays are **required and must be arrays** (empty `[]` is valid when the slice
 has none of that kind). A missing key, or a key whose value is not an array, is a schema
-violation.
+violation. The subagent reads its slice, so it — not the cheap Phase-1 map — is the source
+of a **role and line count for every file it analyzed**; the main agent needs this to fill
+the file index and compute LOC/coverage metrics without re-reading source.
 
 ## Array item shapes
+
+### `files[]` — per-file role + size (source of the file index and LOC/coverage metrics)
+
+| field    | type        | required | notes                                                          |
+| -------- | ----------- | -------- | -------------------------------------------------------------- |
+| `path`   | string      | yes      | repo-root-relative file path (one record per file the subagent analyzed) |
+| `role`   | string      | yes      | one-line role: what this file does                             |
+| `loc`    | number      | no       | lines of code (non-negative); summed into per-module LOC. Omit only when genuinely uncounted — a metric built from partial `loc` is a documented lower bound. |
+| `anchor` | `file:line` | **yes**  | the file itself, `<path>:1` by convention (keeps the universal-anchor rule uniform) |
 
 ### `entities[]` — the data model
 
@@ -144,6 +156,13 @@ returns plus the Phase-1 map, never re-reading full source:
   stable ids (`<module>:<label>` by default), **never** on free-form `from`/`to` label
   equality, which cannot distinguish two different nodes that share a label.
 - Cluster `useCases` into system-wide user stories, and collapse `dependencies`.
+- **Union `files` → the file index + the derived metrics**, with explicit rules:
+  - **`fileIndex` rows** = the unioned `files[]` (`path` → `role`); `path` is self-anchoring.
+  - **Module LOC metric** = Σ `loc` over the files whose `path` is under that module. Files
+    with no `loc` are excluded and the bar is labelled a lower bound.
+  - **Use-case coverage metric** = (# modules with ≥ 1 clustered `useCase` touching them) ÷
+    (# modules), as a percentage.
+  - **Entity / rule / use-case counts** = the lengths of the synthesized arrays.
 
 Every synthesized item keeps at least one originating `file:line` anchor so the report's
 universal-anchor rule holds end to end.

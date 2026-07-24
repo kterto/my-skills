@@ -23,6 +23,9 @@ const { validateSubagentReturn, REQUIRED_ARRAYS } = require("../references/valid
 function validReturn() {
   return {
     module: "src/billing",
+    files: [
+      { path: "src/billing/invoice.ts", role: "Invoice entity + finalize transition", loc: 120, anchor: "src/billing/invoice.ts:1" },
+    ],
     entities: [
       { name: "Invoice", fields: ["id", "total"], invariants: ["total >= 0"], anchor: "src/billing/invoice.ts:12" },
     ],
@@ -45,7 +48,8 @@ test("a conforming subagent return validates", () => {
   assert.deepStrictEqual(validateSubagentReturn(validReturn()), []);
 });
 
-test("all five required arrays are enforced", () => {
+test("all required arrays are enforced", () => {
+  assert.ok(REQUIRED_ARRAYS.includes("files"), "files[] must be a required array");
   for (const key of REQUIRED_ARRAYS) {
     const bad = validReturn();
     delete bad[key];
@@ -85,6 +89,8 @@ test("the envelope `module` string is required", () => {
 
 test("required per-item fields are enforced (not just anchors)", () => {
   const cases = [
+    ["files", "path"],
+    ["files", "role"],
     ["entities", "name"],
     ["businessRules", "what"],
     ["dataFlowEdges", "from"],

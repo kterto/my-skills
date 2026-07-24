@@ -15,7 +15,7 @@
 
 const fs = require("node:fs");
 
-const REQUIRED_ARRAYS = ["entities", "businessRules", "dataFlowEdges", "dependencies", "useCases"];
+const REQUIRED_ARRAYS = ["files", "entities", "businessRules", "dataFlowEdges", "dependencies", "useCases"];
 // A `file:line` anchor: any non-empty path, a colon, then a 1+ digit line number.
 const ANCHOR_RE = /^.+:\d+$/;
 const FLOW_KINDS = ["ingress", "transform", "store", "egress"];
@@ -25,11 +25,16 @@ const isStr = (v) => typeof v === "string" && v.length > 0;
 const isOptStr = (v) => v === undefined || typeof v === "string";
 const isOptStrArr = (v) => v === undefined || (Array.isArray(v) && v.every((x) => typeof x === "string"));
 const isOptEnum = (allowed) => (v) => v === undefined || (typeof v === "string" && allowed.includes(v));
+const isOptNonNegNum = (v) => v === undefined || (typeof v === "number" && Number.isFinite(v) && v >= 0);
 
 // Per-array item contract, mirroring the tables in analysis-schema.md. `required` fields
 // must be non-empty strings (except `anchor`, checked separately for the file:line form);
 // `optional` fields, when present, must match their type/enum.
 const ITEM_SPECS = {
+  files: {
+    required: { path: isStr, role: isStr },
+    optional: { loc: isOptNonNegNum },
+  },
   entities: {
     required: { name: isStr },
     optional: { id: isOptStr, fields: isOptStrArr, invariants: isOptStrArr, relations: isOptStrArr },
