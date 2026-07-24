@@ -117,16 +117,27 @@ A cheap orientation pass — the main agent does **not** read every file:
 - Glob the in-scope tree; build a file/module inventory.
 - Read entry points and repo docs only: `README*`, schema/migration files, config,
   package manifests, and obvious entry points (routers, `main`/`index`, service roots).
-- Partition the scope into **units of fan-out** — bounded so whole-system analysis cannot
-  exceed host limits on a large repository:
+- Partition the scope into **units of fan-out** — bounded on **both count and size** so
+  whole-system analysis cannot exceed host limits on a large repository:
   - **`MAX_UNITS = 24`** — the hard cap on total fan-out units. If the raw module count is
     at or below it, one unit per module.
-  - **Above `MAX_UNITS`, group hierarchically.** Cluster sibling/related modules (by
-    top-level directory, then by package/service boundary) into **≤ `MAX_UNITS` composite
-    units**, each a set of modules one subagent analyzes together. Prefer grouping the
-    smallest, most-coupled modules; keep large or high-fan-in modules as their own unit.
-  - Record the unit list and, when grouping happened, note it (the collapsed module count)
-    so the report's provenance is honest about the granularity.
+  - **Per-unit size budget** — no single unit (module or composite) may exceed
+    **`MAX_UNIT_FILES = 120`** files **or** **`MAX_UNIT_LOC = 20000`** LOC (proxies for the
+    subagent's context/token budget). A module larger than a unit budget is **split** into
+    multiple same-module units (by subdirectory, then file groups); grouping only ever
+    *combines* small modules **up to** the budget, never past it.
+  - **Above `MAX_UNITS`, group hierarchically within the size budget.** Cluster
+    sibling/related modules (by top-level directory, then by package/service boundary) into
+    **≤ `MAX_UNITS` composite units**, each **within** `MAX_UNIT_FILES`/`MAX_UNIT_LOC`. Prefer
+    grouping the smallest, most-coupled modules; keep large or high-fan-in modules as their
+    own unit.
+  - **Total-budget exhaustion → partial, disclosed.** When 24 units each at the size budget
+    still cannot cover the scope (`MAX_UNITS × MAX_UNIT_FILES` < in-scope files), the run is
+    **partial**: select the highest-priority files (entry points, largest, most-depended-on)
+    within budget, and **disclose every omitted file** via the `analysisUnit` skipped rows +
+    `ANALYSIS_COMPLETE = partial` (arch-2). Never silently truncate.
+  - Record the unit list and, when grouping/splitting/omission happened, note it (collapsed
+    module count, omitted-file count) so the report's provenance is honest about granularity.
 - **Issue the canonical identity catalog** (`analysis-schema.md` §"Canonical identity
   namespace"): assign a stable **module id** per module, pre-register **entity ids** for
   every type discoverable from manifests / entry points / cross-module exports-imports, and
