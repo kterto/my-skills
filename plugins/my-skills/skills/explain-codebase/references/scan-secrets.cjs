@@ -39,6 +39,8 @@ const DETECTORS = [
   ["google-api-key", /\bAIza[0-9A-Za-z_-]{35}\b/g],
   ["stripe-key", /\b(?:sk|rk|pk)_(?:live|test)_[A-Za-z0-9]{16,}\b/g],
   ["slack-webhook", /https:\/\/hooks\.slack\.com\/services\/[A-Za-z0-9/]+/g],
+  // Authorization / Proxy-Authorization headers carrying a Bearer or Basic credential (sec-3).
+  ["authorization-header", /\b(?:proxy-)?authorization\b\s*[:=]\s*["']?(?:Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}/gi],
   // Connection string / URL with embedded credentials — JS regex, portable (no POSIX \s issue).
   ["connection-string-credentials", /\b[a-z][a-z0-9+.-]*:\/\/[^/@:\s"'<>]+:[^/@\s"'<>]+@/gi],
   // High-entropy standalone blobs (after runtime strip): hex ≥ 64 (avoids 40-char SHAs),

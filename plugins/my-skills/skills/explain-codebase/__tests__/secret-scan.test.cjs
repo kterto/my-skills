@@ -45,6 +45,12 @@ test("short and numeric credential values are not exempt (sec-3)", () => {
   assert.deepStrictEqual(scanSecrets("api_key: changeme"), []);
 });
 
+test("Authorization / Proxy-Authorization Bearer and Basic are caught (sec-3)", () => {
+  assert.ok(hitTypes("Authorization: Bearer abcdef1234567890").includes("authorization-header"));
+  assert.ok(hitTypes('authorization = "Basic dXNlcjpwYXNz"').includes("authorization-header"));
+  assert.ok(hitTypes("Proxy-Authorization: Bearer ZZZ12345abcdef").includes("authorization-header"));
+});
+
 test("connection strings with embedded credentials are caught (portable regex, no POSIX \\s)", () => {
   assert.ok(hitTypes("postgres://user:p4ssw0rd@db.example:5432/app").includes("connection-string-credentials"));
   assert.ok(hitTypes("mongodb://admin:secretpw@host/db").includes("connection-string-credentials"));
