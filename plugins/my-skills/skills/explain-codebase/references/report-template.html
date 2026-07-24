@@ -371,6 +371,20 @@ pre.mermaid > svg { white-space: normal; }
 /* --- Cards grid --- */
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr)); gap: var(--sp-4); }
 .cards--compact { grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); }
+/* Rule cards grouped by domain (JS-built): host becomes a block of heading + card-grid pairs. */
+#rule-cards[data-grouped="1"] { display: block; }
+#rule-cards[data-grouped="1"] .domain-group { margin: 0 0 var(--sp-6); }
+.domain-head {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin: var(--sp-5) 0 var(--sp-3);
+  padding-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--rule);
+}
 .card {
   border: 1px solid var(--rule);
   background: var(--bg-page);
@@ -711,7 +725,7 @@ details.usecase { padding: 0; overflow: hidden; }
       <figcaption>Rule / decision flowchart</figcaption>
       <div class="diagram__scroll"><pre class="mermaid">{{BUSINESS_LOGIC_MERMAID}}</pre></div>
     </figure>
-    <div class="cards">
+    <div class="cards" id="rule-cards">
       <!-- REPEAT:rule -->
       <article class="card rule" data-domain="{{rule.domain}}">
         <header class="card__head">
@@ -1040,11 +1054,41 @@ details.usecase { padding: 0; overflow: hidden; }
     return $$(".region").filter(function (p) { return !p.hidden; })[0] || null;
   }
 
+  /* Group business-rule cards under a deterministic per-domain heading (design contract:
+     rules grouped by domain, not a flat grid). Domains appear in first-seen order; a card
+     with no domain falls under "General". Idempotent (guarded by data-grouped). */
+  function groupRulesByDomain() {
+    var host = document.getElementById("rule-cards");
+    if (!host || host.getAttribute("data-grouped") === "1") return;
+    var cards = $$(".card.rule", host);
+    if (!cards.length) return;
+    var order = [], byDomain = {};
+    cards.forEach(function (c) {
+      var d = (c.getAttribute("data-domain") || "").trim() || "General";
+      if (!byDomain[d]) { byDomain[d] = []; order.push(d); }
+      byDomain[d].push(c);
+    });
+    if (order.length < 1) return;
+    host.setAttribute("data-grouped", "1");
+    host.textContent = "";
+    order.forEach(function (d) {
+      var h = document.createElement("h3");
+      h.className = "domain-head";
+      h.textContent = d;
+      host.appendChild(h);
+      var group = document.createElement("div");
+      group.className = "cards domain-group";
+      byDomain[d].forEach(function (c) { group.appendChild(c); });
+      host.appendChild(group);
+    });
+  }
+
   function init() {
     initTabs();      // activates the initial tab → renders its diagrams
     initMetrics();
     initFilter();
     initTheme();
+    groupRulesByDomain();
   }
 
   if (document.readyState === "loading") {

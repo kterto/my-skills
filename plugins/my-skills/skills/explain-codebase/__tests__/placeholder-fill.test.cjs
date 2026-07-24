@@ -134,6 +134,18 @@ test("demo renders file:line anchors (universal-anchor rule holds in sample data
   assert.ok(/[\w./-]+:\d+/.test(demo), "demo must contain at least one file:line source anchor");
 });
 
+test("business-rule cards are grouped by domain (bug-7)", () => {
+  for (const [name, src] of [["template", tpl], ["demo", demo]]) {
+    assert.ok(/id="rule-cards"/.test(src), `${name} must give the rule container an id for grouping`);
+    assert.ok(/function groupRulesByDomain\s*\(/.test(src), `${name} must define groupRulesByDomain()`);
+    assert.ok(/groupRulesByDomain\(\);/.test(src), `${name} must call groupRulesByDomain() on init`);
+    assert.ok(/class="domain-head"/.test(src) || /"domain-head"/.test(src), `${name} must build domain headings`);
+  }
+  // Rule cards carry the data-domain used to group them (was previously unused).
+  assert.ok(/class="card rule" data-domain=/.test(tpl), "template rule card must carry data-domain");
+  assert.ok(/class="card rule" data-domain="[^"]+"/.test(demo), "demo rule cards must carry a data-domain value");
+});
+
 test("demo values conform to the analysis contract (bug-6)", () => {
   // Dependency kinds must be the documented enum (internal|external) — never runtime/dev.
   const depTags = [...demo.matchAll(/<article class="card dep">[\s\S]*?<span class="tag">([^<]+)<\/span>/g)].map((m) => m[1].trim());
