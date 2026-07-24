@@ -7,7 +7,11 @@ how a human refreshes its pixel design later. Regenerating the pixel design is a
 step**, never a pipeline step — the skill never re-authors HTML per run.
 
 `report-template.demo.html` is the same template populated with sample data, kept at
-region-structure parity with the template, for visual review.
+region-structure parity with the template, for visual review. Its sample data must be a
+**valid** fixture: dependency `kind` uses only the documented enum (`internal`/`external`,
+never `runtime`/`dev`), and metrics are **statically derivable** (the skill never runs the
+target's tests, so no "test suites passing" metric). `__tests__/placeholder-fill.test.cjs`
+asserts this (bug-6).
 
 ## The prompt
 

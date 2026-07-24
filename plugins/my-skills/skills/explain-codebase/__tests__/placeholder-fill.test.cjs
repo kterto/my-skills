@@ -134,6 +134,18 @@ test("demo renders file:line anchors (universal-anchor rule holds in sample data
   assert.ok(/[\w./-]+:\d+/.test(demo), "demo must contain at least one file:line source anchor");
 });
 
+test("demo values conform to the analysis contract (bug-6)", () => {
+  // Dependency kinds must be the documented enum (internal|external) — never runtime/dev.
+  const depTags = [...demo.matchAll(/<article class="card dep">[\s\S]*?<span class="tag">([^<]+)<\/span>/g)].map((m) => m[1].trim());
+  assert.ok(depTags.length > 0, "demo must have dependency rows to check");
+  for (const k of depTags) {
+    assert.ok(["internal", "external"].includes(k), `dependency kind "${k}" is not in the enum internal|external`);
+  }
+  // The skill NEVER runs tests, so the demo must not claim passing test suites (a value the
+  // static analysis contract cannot produce).
+  assert.ok(!/test suites? (?:passing|pass)/i.test(demo), "demo must not claim passing test suites");
+});
+
 test("cross-module edges get a highlight hook and distinct styling (bug-4)", () => {
   // Template: the flowEdge row carries the crossModule fill token + data attribute, and the
   // CSS distinctly styles a cross-module edge (keyed on data-cross-module="yes").
