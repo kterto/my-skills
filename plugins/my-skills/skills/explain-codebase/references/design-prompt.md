@@ -78,8 +78,10 @@ this exact contract, which `__tests__/placeholder-fill.test.cjs` and
 
 - **Scalar placeholders** `{{NAME}}`, substituted once each:
   `SCOPE_LABEL`, `SYSTEM_PURPOSE`, `COMMIT_SHA`, `GENERATED_DATE`, `MODULE_COUNT`,
-  `ENTITY_COUNT`, `RULE_COUNT`, `USECASE_COUNT`, `SUBAGENT_COUNT`,
+  `ENTITY_COUNT`, `RULE_COUNT`, `USECASE_COUNT`, `SUBAGENT_COUNT`, `ANALYSIS_COMPLETE`,
   `DATA_MODEL_MERMAID`, `BUSINESS_LOGIC_MERMAID`, `DATA_FLOW_MERMAID`.
+  `COMMIT_SHA` carries the snapshot dirty flag (SKILL.md §"Source-snapshot semantics");
+  `ANALYSIS_COMPLETE` is `complete` or `partial — N unit(s) not analyzed` (arch-2).
 - **Repeat blocks** `<!-- REPEAT:block -->` … `<!-- /REPEAT:block -->`, each expanded
   once per row, with inner `{{block.field}}` tokens:
   - `stackBadge` → `label`, `anchor`
@@ -91,6 +93,8 @@ this exact contract, which `__tests__/placeholder-fill.test.cjs` and
   - `metric` → `label`, `value`, `max`
   - `glossaryTerm` → `term`, `definition`, `anchor`
   - `fileIndex` → `path`, `role`
+  - `analysisUnit` → `name`, `modules`, `files`, `grouped`, `status`, `skipped` (one row per
+    fan-out unit — the partial-analysis disclosure, arch-2)
 
   The `anchor` set above is the **claim-bearing** class of the provenance taxonomy in
   `analysis-schema.md` §"Provenance taxonomy": `stackBadge` and `glossaryTerm` carry an

@@ -1204,12 +1204,45 @@ details.usecase { padding: 0; overflow: hidden; }
       </div>
     </details>
 
+    <details class="acc">
+      <summary>Analysis units &amp; completeness</summary>
+      <div class="acc__body">
+        <div class="table-wrap">
+          <table class="ftable">
+            <thead><tr><th>Unit</th><th>Modules</th><th>Files</th><th>Grouped</th><th>Status</th><th>Skipped / reason</th></tr></thead>
+            <tbody>
+
+              <tr>
+                <td class="mono">src/billing</td>
+                <td>1</td>
+                <td class="mono">6</td>
+                <td>no</td>
+                <td>ok</td>
+                <td>—</td>
+              </tr>
+
+              <tr>
+                <td class="mono">src/api</td>
+                <td>1</td>
+                <td class="mono">2</td>
+                <td>no</td>
+                <td>ok</td>
+                <td>1 · secrets.json excluded (secret file)</td>
+              </tr>
+
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </details>
+
     <footer class="analysis-foot">
       <p>Analysis provenance</p>
       <dl>
         <div><dt>commit</dt><dd class="mono">a1b9f3c</dd></div>
         <div><dt>generated</dt><dd class="mono">2026-07-23</dd></div>
         <div><dt>subagents</dt><dd class="mono">5</dd></div>
+        <div><dt>coverage</dt><dd class="mono">complete</dd></div>
       </dl>
     </footer>
   </section>

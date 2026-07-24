@@ -142,10 +142,15 @@ Dispatch **one subagent per fan-out unit** — `Agent` (Claude, `subagent_type: 
   types, and the documented enums — not just arrays + anchors). A subagent that errors, or
   whose return the validator **rejects** (non-zero exit), is **retried once** with the same
   slice. If it errors/rejects again, do **not** abort the run.
-- **Partial-return policy.** Proceed to synthesis with whatever units returned. Every unit
-  that failed after its retry is recorded as an explicit **"not analyzed"** entry in the
-  report's provenance/appendix (unit name + reason), so a partial map never masquerades as
-  complete. Never silently drop a unit.
+- **Partial-return policy — disclosed in the report model (arch-2).** Proceed to synthesis
+  with whatever units returned, but a partial run must be **structurally distinguishable**
+  from a complete one. Emit one `analysisUnit` row per fan-out unit — `name`, `modules`
+  (count), `files` (count), `grouped` (yes/no), `status` (`ok` / `not analyzed` / `drifted`),
+  and `skipped` (skipped-path count + reason) — rendered in the Appendix "Analysis units"
+  table; and set the `ANALYSIS_COMPLETE` scalar to `complete` when every unit is `ok`, else
+  `partial — N unit(s) not analyzed`. A unit that failed after its retry (or drifted per the
+  snapshot check) is `not analyzed`/`drifted`, never silently dropped and never masquerading
+  as complete.
 
 Each subagent:
 

@@ -25,6 +25,7 @@ const DEMO = path.join(REF, "report-template.demo.html");
 const SCALARS = [
   "SCOPE_LABEL", "SYSTEM_PURPOSE", "COMMIT_SHA", "GENERATED_DATE",
   "MODULE_COUNT", "ENTITY_COUNT", "RULE_COUNT", "USECASE_COUNT", "SUBAGENT_COUNT",
+  "ANALYSIS_COMPLETE",
   "DATA_MODEL_MERMAID", "BUSINESS_LOGIC_MERMAID", "DATA_FLOW_MERMAID",
 ];
 // Provenance taxonomy (see references/analysis-schema.md §Provenance taxonomy):
@@ -42,6 +43,9 @@ const BLOCKS = {
   metric: ["label", "value", "max"],
   glossaryTerm: ["term", "definition", "anchor"],
   fileIndex: ["path", "role"],
+  // Partial-analysis disclosure (arch-2): one row per fan-out unit, so a partial run is
+  // structurally distinguishable from a complete one.
+  analysisUnit: ["name", "modules", "files", "grouped", "status", "skipped"],
 };
 const REGIONS = [
   "region-overview", "region-data-model", "region-business-logic",

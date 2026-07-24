@@ -831,12 +831,36 @@ details.usecase { padding: 0; overflow: hidden; }
       </div>
     </details>
 
+    <details class="acc">
+      <summary>Analysis units &amp; completeness</summary>
+      <div class="acc__body">
+        <div class="table-wrap">
+          <table class="ftable">
+            <thead><tr><th>Unit</th><th>Modules</th><th>Files</th><th>Grouped</th><th>Status</th><th>Skipped / reason</th></tr></thead>
+            <tbody>
+              <!-- REPEAT:analysisUnit -->
+              <tr>
+                <td class="mono">{{analysisUnit.name}}</td>
+                <td>{{analysisUnit.modules}}</td>
+                <td class="mono">{{analysisUnit.files}}</td>
+                <td>{{analysisUnit.grouped}}</td>
+                <td>{{analysisUnit.status}}</td>
+                <td>{{analysisUnit.skipped}}</td>
+              </tr>
+              <!-- /REPEAT:analysisUnit -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </details>
+
     <footer class="analysis-foot">
       <p>Analysis provenance</p>
       <dl>
         <div><dt>commit</dt><dd class="mono">{{COMMIT_SHA}}</dd></div>
         <div><dt>generated</dt><dd class="mono">{{GENERATED_DATE}}</dd></div>
         <div><dt>subagents</dt><dd class="mono">{{SUBAGENT_COUNT}}</dd></div>
+        <div><dt>coverage</dt><dd class="mono">{{ANALYSIS_COMPLETE}}</dd></div>
       </dl>
     </footer>
   </section>
