@@ -44,3 +44,11 @@ test("refuses when the output dir is a symlink", () => {
   fs.symlinkSync(realDir, linkDir);
   assert.throws(() => writeReport(path.join(linkDir, "r.html"), "x"), /process\.exit|refus/i);
 });
+
+test("a directory at the destination is refused and leaves no temp (bug-4)", () => {
+  const dir = tmpDir();
+  const dest = path.join(dir, "report.html");
+  fs.mkdirSync(dest); // destination is a DIRECTORY, not a regular file
+  assert.throws(() => writeReport(dest, "<html>x</html>"), /not a regular file/);
+  assert.deepStrictEqual(fs.readdirSync(dir).filter((f) => f.startsWith(".report-")), [], "no leaked temp");
+});

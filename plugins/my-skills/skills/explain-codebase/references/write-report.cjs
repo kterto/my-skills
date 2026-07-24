@@ -71,9 +71,12 @@ function writeReport(dest, content) {
       assertSameDir();
       const cur2 = lstatOrNull(dest);
       if (cur2 && cur2.isSymbolicLink()) throw new Error(`${dest} became a symlink`);
+      // An existing destination must be a REGULAR file (bug-4): renaming onto a directory throws
+      // AFTER the temp is created and would leak it; refuse (and clean up) explicitly.
+      if (cur2 && !cur2.isFile()) throw new Error(`${dest} exists and is not a regular file`);
       fs.renameSync(tmp, dest);
     } catch (e) {
-      fs.rmSync(tmp, { force: true }); // cleanup-on-error (bug-4 also)
+      fs.rmSync(tmp, { force: true }); // cleanup-on-error (bug-4): no .report-*.tmp left behind
       throw e;
     }
   } finally {
