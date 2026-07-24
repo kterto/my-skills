@@ -62,6 +62,7 @@
       "name": "explain-codebase",
       "files": [
         "__tests__/analysis-schema.test.cjs",
+        "__tests__/mermaid-safety.test.cjs",
         "__tests__/placeholder-fill.test.cjs",
         "__tests__/self-contained.test.sh",
         "references/analysis-schema.md",
@@ -150,8 +151,6 @@
         "references/item-schema.md",
         "references/mutation-ops.md",
         "references/sync-and-reeval.md",
-        "scripts/check-timestamp-parity.cjs",
-        "scripts/check-timestamp-parity.test.cjs",
         "SKILL.md",
         "templates/milestone-readme.template.html",
         "templates/milestone-readme.template.md",
