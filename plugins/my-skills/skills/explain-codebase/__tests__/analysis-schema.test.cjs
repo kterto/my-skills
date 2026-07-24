@@ -229,6 +229,15 @@ test("a files[] record whose anchor cites a different file is rejected (bug-3)",
   assert.ok(errs.some((e) => /files\[0\] anchor path src\/billing\/charge\.ts must equal the record path src\/billing\/invoice\.ts/.test(e)));
 });
 
+test("an empty (zero-line) file self-anchors at :1 without a line-bound error (bug-3)", () => {
+  const good = validReturn();
+  good.files[0].path = "src/billing/empty.ts";
+  good.files[0].anchor = "src/billing/empty.ts:1"; // :1 even though the file has 0 lines
+  const ctx = { allow: [...SLICE, "src/billing/empty.ts"], lines: { ...CTX.lines, "src/billing/empty.ts": 0 } };
+  const errs = validateSubagentReturn(good, ctx);
+  assert.ok(!errs.some((e) => /out of range/.test(e)), `empty-file self-anchor must not be a line-bound error: ${errs}`);
+});
+
 test("a files[] anchor not using the :1 convention is rejected (bug-3)", () => {
   const bad = validReturn();
   bad.files[0].path = "src/billing/invoice.ts";

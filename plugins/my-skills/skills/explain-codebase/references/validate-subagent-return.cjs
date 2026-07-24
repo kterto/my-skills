@@ -146,7 +146,13 @@ function validateSubagentReturn(obj, ctx) {
         } else if (allow) {
           if (!allow.has(parsed.path)) {
             errs.push(`${key}[${i}] anchor path not in the assigned allowlist: ${parsed.path}`);
-          } else if (Object.prototype.hasOwnProperty.call(lines, parsed.path) && (parsed.line < 1 || parsed.line > lines[parsed.path])) {
+          } else if (
+            // The files[] self-anchor is always `<path>:1` (enforced below) and must hold even
+            // for a ZERO-line file (bug-3) — so exempt it from the content line-bound check.
+            key !== "files" &&
+            Object.prototype.hasOwnProperty.call(lines, parsed.path) &&
+            (parsed.line < 1 || parsed.line > lines[parsed.path])
+          ) {
             errs.push(`${key}[${i}] anchor line ${parsed.line} out of range for ${parsed.path} (1..${lines[parsed.path]})`);
           }
         }
