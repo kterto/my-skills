@@ -350,15 +350,12 @@ tmp="$(mktemp "$outreal/.explain-XXXXXXXX.html.tmp")" || { echo "refusing: canno
 [ -L "$tmp" ] && { echo "refusing: temp is a symlink"; rm -f "$tmp"; exit 1; }
 [ -f "$tmp" ] || { echo "refusing: temp is not a regular file"; rm -f "$tmp"; exit 1; }
 # ... write the rendered HTML to "$tmp" (Write tool) ...
-# Final secret scan (see "Secret-redaction boundary") BEFORE the file is published:
-if grep -Eaiq -e '-----BEGIN [A-Z ]*PRIVATE KEY-----' \
-               -e '\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.' \
-               -e '\b(AKIA|ASIA)[0-9A-Z]{16}\b' \
-               -e '\b(sk|rk)-[A-Za-z0-9]{20,}\b' \
-               -e '\b(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{36}\b' \
-               -e 'xox[baprs]-[A-Za-z0-9-]{10,}' \
-               -e '[a-z][a-z0-9+.-]*://[^/@:\s]+:[^/@\s]+@' "$tmp"; then
-  echo "refusing: rendered report still matches a secret pattern — redact and re-render"; rm -f "$tmp"; exit 1
+# Final secret scan (see "Secret-redaction boundary") BEFORE the file is published. Use the
+# deterministic scanner in THIS skill dir (resolve it the same way as the validator, bug-3),
+# never an inline grep — it covers token families, credential-key assignments, connection
+# strings, and hex/base64 entropy with portable JS regex, and strips the inlined runtime.
+if ! node "$skill_dir/references/scan-secrets.cjs" "$tmp"; then
+  rm -f "$tmp"; exit 1     # scanner printed the hits + refusal; redact and re-render
 fi
 [ -L "$dest" ] && { echo "refusing: target became a symlink"; exit 1; }
 mv -f "$tmp" "$dest"                              # atomic replace
@@ -388,10 +385,15 @@ redact; it only prevents markup breakage. Three layers keep secrets out of the r
    high-entropy / known-token form (PEM block, JWT `eyJ…`, `AKIA…`, `sk-…`, `ghp_…`,
    `xox[baprs]-…`, a `scheme://user:password@host` URL, or a ≥20-char base64/hex blob). The
    report shows *that* a secret exists and *where* (the anchor), never its value.
-3. **Scan the finished report before writing** (the `grep` gate in step 6). If the rendered
-   HTML still matches any credential / private-key pattern, the write is **refused** — redact
-   the offending item and re-render; never publish a report that matches. This is the last
-   gate before a shareable file lands.
+3. **Scan the finished report before writing** — the deterministic scanner
+   [`references/scan-secrets.cjs`](references/scan-secrets.cjs), run in step 6. It covers
+   private-key blocks, JWTs, token families (AWS/GitHub/Slack/OpenAI/Google/Stripe),
+   connection strings with embedded credentials (portable JS regex — no POSIX `\s` bug),
+   ordinary `password`/`api_key`-style **assignments**, and high-entropy hex (≥64) / base64
+   (≥44) blobs, while stripping the inlined Mermaid runtime and ignoring `«redacted»`
+   markers, key names, and 40-char git SHAs. A non-empty result **refuses** the write —
+   redact the offending item and re-render; never publish a report that matches. Adversarial
+   fixtures per class live in `__tests__/secret-scan.test.cjs`.
 
 ## Read-only & host discipline
 
@@ -412,6 +414,9 @@ redact; it only prevents markup breakage. Three layers keep secrets out of the r
 - [`references/validate-subagent-return.cjs`](references/validate-subagent-return.cjs) — the
   runtime validator (importable + CLI) the skill runs on every subagent return; the single
   executable mirror of `analysis-schema.md`, imported by the schema test.
+- [`references/scan-secrets.cjs`](references/scan-secrets.cjs) — the deterministic final
+  secret-scan gate (importable + CLI) run on the rendered report before it is written;
+  adversarial fixtures in `__tests__/secret-scan.test.cjs`.
 - [`references/report-template.html`](references/report-template.html) — the committed,
   self-contained, theme-aware template (fixed chrome + inline JS) with the
   `{{PLACEHOLDER}}` + `<!-- REPEAT:block -->` fill markers.
