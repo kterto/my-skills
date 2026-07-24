@@ -119,6 +119,10 @@ different revisions yet advertise one commit. So freeze the snapshot up front an
 drift before rendering:
 
 ```bash
+# Scratch dir OUTSIDE the read-only target holds the frozen manifest (the skill never writes
+# into the analyzed repo). The SAME $snap_manifest is reused by the drift check and the
+# sec-3 allowlist build below — define it once, here, so those references resolve.
+scratch="$(mktemp -d)"; snap_manifest="$scratch/allowlist-manifest.txt"
 COMMIT_SHA="$(git -C "$root" rev-parse HEAD)"
 # Dirty status over the ANALYZED allowlist only, excluding host-runtime dirs.
 DIRTY="$(git -C "$root" status --porcelain -- "$scope_path" ':(exclude).opencode' ':(exclude).claude')"
