@@ -400,7 +400,11 @@ distinct scopes could overwrite each other's report or the write could fail. Bui
 same way `pr-review-report` builds its branch slug:
 
 ```bash
-raw_slug="$(printf '%s' "$scope_path" | sed -e 's#[^A-Za-z0-9._-]#-#g' -e 's#-\{2,\}#-#g' -e 's#^-*##' -e 's#-*$##')"
+# Map the whole-system scope "." to a readable label first, so the slug never starts with a
+# `.` (a hidden dotfile) (bug-4). Sanitize to LOWERCASE alphanumeric + hyphen ONLY — dots are
+# mapped to `-`, not kept — so the filename matches the alnum-hyphen constraint everywhere.
+case "$scope_path" in .) readable="whole-system" ;; *) readable="$scope_path" ;; esac
+raw_slug="$(printf '%s' "$readable" | tr 'A-Z' 'a-z' | sed -e 's#[^a-z0-9]#-#g' -e 's#-\{2,\}#-#g' -e 's#^-*##' -e 's#-*$##')"
 [ -z "$raw_slug" ] && raw_slug="scope"                       # nonempty fallback (Unicode-only → empty)
 raw_slug="$(printf '%s' "$raw_slug" | cut -b1-200 | sed 's#-*$##')"   # bound readable prefix by BYTES
 [ -z "$raw_slug" ] && raw_slug="scope"
