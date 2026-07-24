@@ -92,11 +92,19 @@ candidate file:
 - **Reject `scope_path` up front** if it is absolute (starts with `/`), contains a `..`
   segment, or is empty. The resolved scope path is always **repo-root-relative** (`.` for the
   whole system).
-- **Canonicalize and re-verify containment.** Resolve `scope_path` to a physical path and
-  require it stays under `$root`:
+- **Canonicalize and re-verify containment — handle a FILE scope separately (bug-1).** A
+  `cd` into a *file* fails, so an explicit single-file scope must canonicalize its **parent
+  directory** and be verified as a regular contained file (not `cd`'d into):
   ```bash
-  scope_abs="$(cd "$root" && cd "$scope_path" 2>/dev/null && pwd -P)" || { echo "scope does not resolve under repo"; exit 1; }
-  case "$scope_abs/" in "$root"/*) : ;; *) echo "scope escapes the repository — refusing"; exit 1 ;; esac
+  if [ -f "$root/$scope_path" ] && [ ! -L "$root/$scope_path" ]; then
+    # explicit single-file scope: canonicalize the PARENT dir, verify containment, one-file allowlist
+    scope_dir="$(cd "$root" && cd "$(dirname "$scope_path")" 2>/dev/null && pwd -P)" || { echo "scope parent does not resolve under repo"; exit 1; }
+    case "$scope_dir/" in "$root"/*) : ;; *) echo "scope escapes the repository — refusing"; exit 1 ;; esac
+    scope_abs="$scope_dir/$(basename "$scope_path")"            # the file's canonical path
+  else
+    scope_abs="$(cd "$root" && cd "$scope_path" 2>/dev/null && pwd -P)" || { echo "scope does not resolve under repo"; exit 1; }
+    case "$scope_abs/" in "$root"/*) : ;; *) echo "scope escapes the repository — refusing"; exit 1 ;; esac
+  fi
   ```
 - **Build the read allowlist from tracked, regular files only.** Enumerate candidates with
   `git -C "$root" ls-files -s -- ":(literal)$scope_path"` — the **`:(literal)`** prefix disables
