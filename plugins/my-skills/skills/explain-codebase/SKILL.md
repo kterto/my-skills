@@ -91,17 +91,24 @@ the full source**:
 - Cluster per-module `useCases` into **system-wide user stories**.
 - Collapse `dependencies`; resolve conflicts.
 
-Every synthesized item keeps at least one originating `file:line` anchor, so the
-universal-anchor rule holds end to end. Compute the metric values (module LOC, coupling,
-entity counts, use-case coverage) from the map + returns.
+Every synthesized **claim-bearing** item keeps at least one originating `file:line` anchor,
+so the universal-anchor rule holds end to end for every asserted claim. The rule is scoped
+by the **provenance taxonomy** in `analysis-schema.md` §"Provenance taxonomy": claim-bearing
+rows carry an anchor; `fileIndex.path` is self-anchoring; the counts and the `metric` bars
+are derived, non-claim aggregates; `SYSTEM_PURPOSE` is labelled inferred; diagrams are built
+only from already-anchored rows. Compute the metric values (module LOC, coupling, entity
+counts, use-case coverage) from the map + returns — these are aggregates over anchored
+items, not new per-line claims.
 
 Three fill blocks are derived here directly from the Phase-1 map rather than the subagent
 `useCase`/`entity` arrays: `stackBadge` rows come from the languages/frameworks detected in
-the Phase-1 manifests (package.json, pyproject, go.mod, …); `fileIndex` rows come from the
-Phase-1 file/module inventory (path → one-line role); `glossaryTerm` rows are the recurring
-domain nouns surfaced across the returned `entities` and `businessRules`, each defined in
-one sentence. All three remain deterministic — they are functions of the map + returns, not
-free-form prose.
+the Phase-1 manifests (package.json, pyproject, go.mod, …) and each carries the **detecting
+manifest's `file:line`** as its `anchor` (e.g. `package.json:18`); `fileIndex` rows come
+from the Phase-1 file/module inventory (path → one-line role), where the `path` is
+self-anchoring; `glossaryTerm` rows are the recurring domain nouns surfaced across the
+returned `entities` and `businessRules`, each defined in one sentence and anchored to the
+**entity/rule that defines it**. All three remain deterministic — they are functions of the
+map + returns, not free-form prose.
 
 ### 5. Phase 4 — Render (deterministic fill)
 

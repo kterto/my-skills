@@ -633,7 +633,7 @@ details.usecase { padding: 0; overflow: hidden; }
         <h3 class="subhead">Stack &amp; tech</h3>
         <div class="badges">
           <!-- REPEAT:stackBadge -->
-          <span class="badge">{{stackBadge.label}}</span>
+          <span class="badge">{{stackBadge.label}}<span class="anchor mono">{{stackBadge.anchor}}</span></span>
           <!-- /REPEAT:stackBadge -->
         </div>
       </div>
@@ -799,7 +799,7 @@ details.usecase { padding: 0; overflow: hidden; }
         <dl class="glossary">
           <!-- REPEAT:glossaryTerm -->
           <div class="glossary__item">
-            <dt>{{glossaryTerm.term}}</dt>
+            <dt>{{glossaryTerm.term}} <span class="anchor mono">{{glossaryTerm.anchor}}</span></dt>
             <dd>{{glossaryTerm.definition}}</dd>
           </div>
           <!-- /REPEAT:glossaryTerm -->

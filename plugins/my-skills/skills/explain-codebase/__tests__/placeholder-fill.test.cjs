@@ -27,15 +27,20 @@ const SCALARS = [
   "MODULE_COUNT", "ENTITY_COUNT", "RULE_COUNT", "USECASE_COUNT", "SUBAGENT_COUNT",
   "DATA_MODEL_MERMAID", "BUSINESS_LOGIC_MERMAID", "DATA_FLOW_MERMAID",
 ];
+// Provenance taxonomy (see references/analysis-schema.md §Provenance taxonomy):
+//   claim-bearing rows carry an `anchor` (entity, rule, flowEdge, useCase, dependency,
+//   stackBadge → its detecting manifest, glossaryTerm → its defining source);
+//   `fileIndex.path` is self-anchoring (it IS the file); `metric` bars and the scalar
+//   counts are derived, non-claim aggregates over already-anchored items and carry none.
 const BLOCKS = {
-  stackBadge: ["label"],
+  stackBadge: ["label", "anchor"],
   entity: ["name", "fields", "invariants", "anchor"],
   rule: ["name", "what", "why", "domain", "anchor"],
   flowEdge: ["from", "to", "kind", "anchor"],
   useCase: ["actor", "goal", "trigger", "steps", "dataTouched", "anchor", "mermaid"],
   dependency: ["name", "kind", "anchor"],
   metric: ["label", "value", "max"],
-  glossaryTerm: ["term", "definition"],
+  glossaryTerm: ["term", "definition", "anchor"],
   fileIndex: ["path", "role"],
 };
 const REGIONS = [

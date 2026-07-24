@@ -633,21 +633,21 @@ details.usecase { padding: 0; overflow: hidden; }
         <h3 class="subhead">Stack &amp; tech</h3>
         <div class="badges">
           
-          <span class="badge">TypeScript</span>
-          
-          <span class="badge">Node.js 20</span>
-          
-          <span class="badge">Fastify</span>
-          
-          <span class="badge">PostgreSQL</span>
-          
-          <span class="badge">Prisma</span>
-          
-          <span class="badge">Stripe API</span>
-          
-          <span class="badge">Zod</span>
-          
-          <span class="badge">Jest</span>
+          <span class="badge">TypeScript<span class="anchor mono">tsconfig.json:2</span></span>
+
+          <span class="badge">Node.js 20<span class="anchor mono">package.json:6</span></span>
+
+          <span class="badge">Fastify<span class="anchor mono">package.json:18</span></span>
+
+          <span class="badge">PostgreSQL<span class="anchor mono">prisma/schema.prisma:9</span></span>
+
+          <span class="badge">Prisma<span class="anchor mono">package.json:21</span></span>
+
+          <span class="badge">Stripe API<span class="anchor mono">package.json:24</span></span>
+
+          <span class="badge">Zod<span class="anchor mono">package.json:27</span></span>
+
+          <span class="badge">Jest<span class="anchor mono">package.json:33</span></span>
           
         </div>
       </div>
@@ -1147,22 +1147,22 @@ details.usecase { padding: 0; overflow: hidden; }
         <dl class="glossary">
           
           <div class="glossary__item">
-            <dt>Finalize</dt>
+            <dt>Finalize <span class="anchor mono">src/billing/invoice.ts:88</span></dt>
             <dd>The transition that freezes an invoice’s line items and tax, making it a legal record ready to charge.</dd>
           </div>
-          
+
           <div class="glossary__item">
-            <dt>Settle</dt>
+            <dt>Settle <span class="anchor mono">src/billing/payment.ts:54</span></dt>
             <dd>Recording a successful payment against an invoice and writing the matching ledger entry.</dd>
           </div>
-          
+
           <div class="glossary__item">
-            <dt>Tax hold</dt>
+            <dt>Tax hold <span class="anchor mono">src/billing/tax.ts:31</span></dt>
             <dd>A reserved tax amount computed at finalize time and released if the invoice is voided.</dd>
           </div>
-          
+
           <div class="glossary__item">
-            <dt>Idempotency key</dt>
+            <dt>Idempotency key <span class="anchor mono">src/billing/webhook.ts:19</span></dt>
             <dd>A unique id (here, the Stripe event id) that guarantees an operation runs at most once under retries.</dd>
           </div>
           

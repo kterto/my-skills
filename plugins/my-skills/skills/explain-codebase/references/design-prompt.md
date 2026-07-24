@@ -71,15 +71,20 @@ this exact contract, which `__tests__/placeholder-fill.test.cjs` and
   `DATA_MODEL_MERMAID`, `BUSINESS_LOGIC_MERMAID`, `DATA_FLOW_MERMAID`.
 - **Repeat blocks** `<!-- REPEAT:block -->` … `<!-- /REPEAT:block -->`, each expanded
   once per row, with inner `{{block.field}}` tokens:
-  - `stackBadge` → `label`
+  - `stackBadge` → `label`, `anchor`
   - `entity` → `name`, `fields`, `invariants`, `anchor`
   - `rule` → `name`, `what`, `why`, `domain`, `anchor`
   - `flowEdge` → `from`, `to`, `kind`, `anchor`
   - `useCase` → `actor`, `goal`, `trigger`, `steps`, `dataTouched`, `anchor`, `mermaid`
   - `dependency` → `name`, `kind`, `anchor`
   - `metric` → `label`, `value`, `max`
-  - `glossaryTerm` → `term`, `definition`
+  - `glossaryTerm` → `term`, `definition`, `anchor`
   - `fileIndex` → `path`, `role`
+
+  The `anchor` set above is the **claim-bearing** class of the provenance taxonomy in
+  `analysis-schema.md` §"Provenance taxonomy": `stackBadge` and `glossaryTerm` carry an
+  anchor (detecting manifest / defining source); `fileIndex.path` is self-anchoring; the
+  `metric` bars and the scalar counts are derived, non-claim aggregates and carry none.
 - The seven region `<section>`s carry the exact ids listed in region 3 above; the tests
   assert all seven appear in both the template and the demo.
 - The **template** ships with the markers in place; the **demo** is the same file with
