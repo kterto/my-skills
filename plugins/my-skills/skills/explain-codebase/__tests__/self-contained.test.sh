@@ -4,7 +4,10 @@
 # VENDORED mermaid runtime, and NO external network loads. This test asserts, for BOTH
 # the template and the demo:
 #   - no external-load constructs: no <script src=…>, no <link href=…>, no fetch(, no
-#     url(http…)/@import http in CSS. The vetted mermaid runtime block
+#     url(http…)/@import http in CSS, PLUS a network-denying CSP (default-src 'none', no
+#     connect-src) — the enforceable meaning of "self-contained + offline". This is NOT a
+#     strict CSP: inline is permitted; the CSP blocks network egress, not inline.
+#     The vetted mermaid runtime block
 #     (<script id="mermaid-runtime">…</script>) is STRIPPED before this scan — its
 #     minified source legitimately contains xmlns URLs like http://www.w3.org/2000/svg
 #     (identifiers, not network loads), so scanning it would false-positive;
@@ -43,6 +46,11 @@ for f in "$tpl" "$demo"; do
   if printf '%s' "$body" | grep -Eiq 'url\(\s*["'"'"']?https?:'; then bad "$name has a CSS url(http…)"; else ok "$name has no external CSS url()"; fi
   if printf '%s' "$body" | grep -Eiq '@import[^;]*https?:'; then bad "$name has an @import http…"; else ok "$name has no external @import"; fi
   if printf '%s' "$body" | grep -Eiq '(src|href)=["'"'"']https?://'; then bad "$name has an http(s) src/href resource"; else ok "$name loads no http(s) resource"; fi
+  # Network-denying CSP present (default-src 'none', no connect-src grant). NOT a strict
+  # CSP — inline is permitted; the CSP's job is to block network egress, not inline.
+  if printf '%s' "$body" | grep -Eiq "http-equiv=[\"']Content-Security-Policy[\"'][^>]*default-src[[:space:]]+'none'"; then ok "$name emits a default-src 'none' CSP"; else bad "$name missing network-denying CSP"; fi
+  csp="$(printf '%s' "$body" | grep -Eio 'Content-Security-Policy[^>]*' || true)"
+  if printf '%s' "$csp" | grep -Eiq 'connect-src'; then bad "$name CSP grants connect-src (network not denied)"; else ok "$name CSP denies network (no connect-src)"; fi
 done
 
 # --- Mermaid runtime fill-state: template = marker only, demo = inlined runtime -----

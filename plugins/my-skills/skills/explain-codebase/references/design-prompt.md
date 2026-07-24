@@ -14,10 +14,14 @@ region-structure parity with the template, for visual review.
 > Design a single, self-contained interactive HTML report titled **"Explain Codebase"**
 > that explains how a piece of software works. Hard requirements:
 >
-> 1. **One file, fully self-contained and CSP-safe.** All CSS and JavaScript inlined in
+> 1. **One file, fully self-contained and offline.** All CSS and JavaScript inlined in
 >    `<style>` / `<script>`. **No external CDN, no `<script src>`, no `<link href>`, no
 >    web fonts, no remote images, no `fetch`/XHR/WebSocket** — nothing that hits the
->    network. It must render offline under a strict Content-Security-Policy.
+>    network. It renders offline and emits a **network-denying** CSP (requirement 4 below).
+>    Note this is **not a *strict* CSP**: because every style and script is inlined without a
+>    nonce or hash, the CSP permits inline (`'unsafe-inline'`) — "self-contained + offline"
+>    is the accurate claim, enforced by a CSP that blocks all *network* egress, not by
+>    forbidding inline.
 > 2. **Theme-aware (light + dark).** Drive all colors from CSS custom properties on
 >    `:root`. Default to the viewer's `prefers-color-scheme`; also honor an explicit
 >    `data-theme="light|dark"` on `<html>`, and ship a visible **Toggle theme** button
