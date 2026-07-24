@@ -7,7 +7,8 @@ const assert = require("node:assert");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { materializeSnapshot } = require("../references/snapshot-scope.cjs");
+const { execFileSync } = require("node:child_process");
+const { materializeSnapshot, gitBlobId, verifyAgainstHead } = require("../references/snapshot-scope.cjs");
 
 function tmpTree() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "snap-root-"));
@@ -50,4 +51,21 @@ test("snapshot copies are read-only regular files (immutable)", () => {
   const st = fs.statSync(path.join(dest, "src/a.ts"));
   assert.ok(st.isFile());
   assert.strictEqual(st.mode & 0o200, 0, "snapshot copy must not be writable");
+});
+
+test("gitBlobId matches git hash-object", () => {
+  const buf = Buffer.from("hello world\n");
+  const real = execFileSync("git", ["hash-object", "--stdin"], { input: buf }).toString().trim();
+  assert.strictEqual(gitBlobId(buf), real);
+});
+
+test("verifyAgainstHead: clean when bytes equal HEAD, dirty when they differ (arch-1)", () => {
+  const { root, dest } = tmpTree();
+  materializeSnapshot(root, ["src/a.ts"], dest);
+  const headMatch = { "src/a.ts": gitBlobId(fs.readFileSync(path.join(dest, "src/a.ts"))) };
+  assert.deepStrictEqual(verifyAgainstHead(dest, ["src/a.ts"], headMatch), { clean: true, dirty: [] });
+  // A HEAD map that does not contain this path (or a different blob) → dirty.
+  const res = verifyAgainstHead(dest, ["src/a.ts"], { "src/a.ts": "0".repeat(40) });
+  assert.strictEqual(res.clean, false);
+  assert.deepStrictEqual(res.dirty, ["src/a.ts"]);
 });

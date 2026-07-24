@@ -139,9 +139,6 @@ cannot mutate):
 # Scratch dir OUTSIDE the read-only target; removed on ANY exit (bug-6).
 scratch="$(mktemp -d)"; trap 'rm -rf "$scratch"' EXIT
 COMMIT_SHA="$(git -C "$root" rev-parse HEAD)"
-# `:(literal)` disables pathspec MAGIC on the scope (a scope like `:(top)` would otherwise make
-# git enumerate the whole repo); `:(exclude)` magic on host dirs stays intact.
-DIRTY="$(git -C "$root" status --porcelain -- ":(literal)$scope_path" ':(exclude).opencode' ':(exclude).claude')"
 
 # ONE canonical inventory (sec-1): the SINGLE, vetted, NUL-delimited path list that every
 # later step derives from — built ONCE here, and NEVER re-run downstream. It applies, in this
@@ -160,9 +157,15 @@ git -C "$root" ls-files -sz -- ":(literal)$scope_path" \
       printf '%s\0' "$path" >> "$inventory"
     done
 
-# Materialize the IMMUTABLE snapshot from that inventory, no-follow reads (arch-1):
-node "$skill_dir/references/snapshot-scope.cjs" "$root" "$inventory" "$scratch/snapshot" \
+# Materialize the IMMUTABLE snapshot from that inventory, no-follow reads (arch-1). Pass a
+# `git ls-tree -r -z HEAD` blob map so the helper can verify the COPIED snapshot bytes against
+# HEAD and report how many differ (`dirty: <n>`) — the honest clean/dirty identity is derived
+# from the SNAPSHOT (not a status captured before the copy).
+git -C "$root" ls-tree -r -z HEAD -- ":(literal)$scope_path" > "$scratch/head-tree.z"
+snap_out="$(node "$skill_dir/references/snapshot-scope.cjs" "$root" "$inventory" "$scratch/snapshot" "$scratch/head-tree.z")" \
   || { echo "snapshot refused a path (symlink / escape) — aborting"; exit 1; }
+dirty_n="$(printf '%s\n' "$snap_out" | sed -n 's/^dirty: //p')"
+[ "${dirty_n:-0}" = 0 ] && DIRTY="" || DIRTY="dirty"   # any snapshot file != HEAD blob → dirty
 ```
 
 - **Dispatch snapshot paths, not working-tree paths.** Every Phase-2 subagent reads only
@@ -174,20 +177,31 @@ node "$skill_dir/references/snapshot-scope.cjs" "$root" "$inventory" "$scratch/s
   `validate-subagent-return.cjs` — one source, so no downstream `ls-files` rerun can
   re-introduce an excluded secret or a replaced-symlink path. No before/after drift check is
   needed: an immutable snapshot cannot drift.
-- **Snapshot identity is honest.** Render provenance as `COMMIT_SHA` **plus a dirty flag**:
-  if `DIRTY` is non-empty the identity is `"<sha> (working tree, dirty)"`, never a bare clean
-  commit — a dirty tree is disclosed, not hidden behind the commit hash.
+- **Phase 1 reads the snapshot, not the live repo (arch-1).** Both the Phase-1 map (entry
+  points, manifests, inventory) and the Phase-2 fan-out read only `"$scratch/snapshot/<path>"`
+  — after materialization nothing re-globs or re-reads the working tree, so a concurrent /
+  `assume-unchanged` edit cannot feed the map or synthesis behind a clean-commit claim.
+- **Snapshot identity is honest, derived from the SNAPSHOT vs HEAD (arch-1).** The dirty flag
+  is `DIRTY` computed above by comparing each **copied** snapshot file's git blob id to HEAD's
+  blob (`snapshot-scope.cjs` verification) — not a `git status` captured before the copy. Render
+  provenance as `COMMIT_SHA` plus that flag: a non-empty `DIRTY` → `"<sha> (working tree,
+  dirty)"`, never a bare clean commit; a report advertises a clean commit only when every
+  snapshot byte equals HEAD.
 - **Clean up `$scratch` (bug-6).** The `trap … EXIT` covers one shell session; because these
   snippets may run across sessions, also **explicitly `rm -rf "$scratch"`** once the report is
   written (step 6) or the run aborts. Only the skill-owned `$scratch` is removed.
 
 ### 2. Phase 1 — Scope & map (main agent)
 
-A cheap orientation pass — the main agent does **not** read every file:
+A cheap orientation pass — the main agent does **not** read every file. **It reads from the
+immutable snapshot `$scratch/snapshot/…`, never the live repo (arch-1)** — the snapshot was
+materialized before this phase, so the map is built from the same frozen bytes the fan-out sees.
 
-- Glob the in-scope tree; build a file/module inventory.
-- Read entry points and repo docs only: `README*`, schema/migration files, config,
-  package manifests, and obvious entry points (routers, `main`/`index`, service roots).
+- Build the file/module inventory from the **canonical `$inventory`** (already vetted) and the
+  snapshot layout — never a fresh `Glob` of the working tree.
+- Read entry points and repo docs only — `README*`, schema/migration files, config, package
+  manifests, and obvious entry points (routers, `main`/`index`, service roots) — **from the
+  snapshot** (`$scratch/snapshot/<path>`).
 - Partition the scope into **units of fan-out** — bounded on **both count and size** so
   whole-system analysis cannot exceed host limits on a large repository:
   - **`MAX_UNITS = 24`** — the hard cap on total fan-out units. If the raw module count is
