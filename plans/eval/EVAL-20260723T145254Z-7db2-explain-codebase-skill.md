@@ -84,3 +84,8 @@ Shape: healthy — every load-bearing structural invariant (fill contract, schem
 
 - Either add a one-line dual-host note for the `Skill`-tool / host-equivalent construct in SKILL.md (and, if ever used, to `allowed-tools`), or add an explicit "no Skill invocation → construct N/A" note so FR13's enumeration is fully addressed on paper.
 - Optional: add a second mermaid block (or note) covering the data-flow *sequence* view to fully match the design's "sequence + flow" wording.
+
+
+---
+
+> **Superseded for the delivered tree (bug-2).** This artifact describes the initial three-test package and the pre-runtime implementation, not the merged tree. Current evidence of record: [`plans/qa/REVALIDATION-20260724-explain-codebase-skill.md`](../qa/REVALIDATION-20260724-explain-codebase-skill.md) (commit 3ccf886: 75 cjs tests + self-contained PASS, index fresh, 10 REPEAT blocks).

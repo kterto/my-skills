@@ -93,3 +93,8 @@ PASS). No e2e is applicable to this read-only doc-authoring skill, and the cover
 per project policy. The coder's tests are strong; two advisory notes are handed to the reviewer.
 `git status --porcelain` shows only the expected paths (new skill dir, regenerated `index.json`,
 `README.md`, and the pipeline artifacts). Ready for `/reviewer`.
+
+
+---
+
+> **Superseded for the delivered tree (bug-2).** This artifact describes the initial three-test package and the pre-runtime implementation, not the merged tree. Current evidence of record: [`plans/qa/REVALIDATION-20260724-explain-codebase-skill.md`](../qa/REVALIDATION-20260724-explain-codebase-skill.md) (commit 3ccf886: 75 cjs tests + self-contained PASS, index fresh, 10 REPEAT blocks).

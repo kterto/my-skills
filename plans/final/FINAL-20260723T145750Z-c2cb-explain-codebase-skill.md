@@ -59,3 +59,8 @@ claim anchored to `file:line`.
 - **Data-flow diagrams:** the template ships one `DATA_FLOW_MERMAID` block
   (per-use-case sequence diagrams live in the user-stories region). Meets intent;
   the design's "sequence + flow" wording is satisfied across the two regions.
+
+
+---
+
+> **Superseded for the delivered tree (bug-2).** This artifact describes the initial three-test package and the pre-runtime implementation, not the merged tree. Current evidence of record: [`plans/qa/REVALIDATION-20260724-explain-codebase-skill.md`](../qa/REVALIDATION-20260724-explain-codebase-skill.md) (commit 3ccf886: 75 cjs tests + self-contained PASS, index fresh, 10 REPEAT blocks).
