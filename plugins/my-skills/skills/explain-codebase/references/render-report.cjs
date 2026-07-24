@@ -62,6 +62,56 @@ function fillTemplate(template, model) {
   return out;
 }
 
+// --- Diagram construction from STRUCTURED data (arch-3) -------------------------------
+// The renderer builds every Mermaid source itself from a structured graph — synthetic node ids
+// (n0, n1, …) + `sanitizeMermaidLabel`d labels — so repo-derived text can NEVER be prebuilt
+// Mermaid syntax handed straight to the template. The diagram `header` is chosen from a fixed
+// allowlist (never free text). A caller that supplies prebuilt source is rejected (see
+// renderModel).
+const ALLOWED_HEADERS = new Set(["flowchart TD", "flowchart LR", "erDiagram", "sequenceDiagram"]);
+function buildDiagram(graph) {
+  if (!graph || typeof graph !== "object") return "flowchart TD\n";
+  const header = ALLOWED_HEADERS.has(graph.header) ? graph.header : "flowchart TD";
+  const nodes = Array.isArray(graph.nodes) ? graph.nodes : [];
+  const edges = Array.isArray(graph.edges) ? graph.edges : [];
+  const lines = [header];
+  nodes.forEach((nd, i) => { lines.push(`  ${mermaidNode(i, nd && nd.label)}`); });
+  for (const e of edges) {
+    const a = Number(e && e.from), b = Number(e && e.to);
+    if (!Number.isInteger(a) || !Number.isInteger(b) || a < 0 || b < 0 || a >= nodes.length || b >= nodes.length) continue;
+    const label = e && e.label != null ? `|"${sanitizeMermaidLabel(String(e.label))}"|` : "";
+    lines.push(`  n${a} -->${label} n${b}`);
+  }
+  return lines.join("\n") + "\n";
+}
+
+const DIAGRAM_SCALARS = ["DATA_MODEL_MERMAID", "BUSINESS_LOGIC_MERMAID", "DATA_FLOW_MERMAID"];
+
+// The whole model → report path (arch-3). Rejects any PREBUILT Mermaid source, builds every
+// diagram from `model.diagrams` / per-useCase `sequence` structured data, then fills + inlines.
+function renderModel(template, model, runtimeSource) {
+  const scalars = { ...((model && model.scalars) || {}) };
+  const blocks = { ...((model && model.blocks) || {}) };
+  const diagrams = (model && model.diagrams) || {};
+  // Reject prebuilt source: diagram scalars and useCase.mermaid must NOT be caller-supplied.
+  for (const s of DIAGRAM_SCALARS) {
+    if (s in scalars) throw new Error(`prebuilt Mermaid source not allowed for scalar ${s} — pass structured data in model.diagrams`);
+  }
+  for (const row of blocks.useCase || []) {
+    if (row && "mermaid" in row) throw new Error("prebuilt useCase.mermaid not allowed — pass structured data in useCase.sequence");
+  }
+  // Build diagram scalars from structured data.
+  for (const s of DIAGRAM_SCALARS) scalars[s] = buildDiagram(diagrams[s]);
+  // Build each useCase's sequence diagram, then drop the structured field.
+  blocks.useCase = (blocks.useCase || []).map((row) => {
+    const { sequence, ...rest } = row || {};
+    return { ...rest, mermaid: buildDiagram(sequence || { header: "sequenceDiagram" }) };
+  });
+  let out = fillTemplate(template, { scalars, blocks });
+  if (runtimeSource != null) out = inlineRuntime(out, runtimeSource);
+  return out;
+}
+
 // --- Literal runtime inlining (no $-interpretation corruption) ------------------------
 function inlineRuntime(html, runtimeSource) {
   const marker = "<!-- MERMAID_RUNTIME -->";
@@ -71,7 +121,7 @@ function inlineRuntime(html, runtimeSource) {
   return html.replace(marker, () => block); // function replacement → $& etc. are literal
 }
 
-module.exports = { htmlEscape, sanitizeMermaidLabel, mermaidNode, fillTemplate, inlineRuntime, PLACEHOLDER };
+module.exports = { htmlEscape, sanitizeMermaidLabel, mermaidNode, buildDiagram, renderModel, fillTemplate, inlineRuntime, PLACEHOLDER };
 
 // --- CLI: render a template with a JSON model, optionally inlining a runtime file ------
 if (require.main === module) {
@@ -82,8 +132,14 @@ if (require.main === module) {
   }
   const tpl = fs.readFileSync(tplPath, "utf8");
   const model = JSON.parse(fs.readFileSync(modelPath, "utf8"));
-  let out = fillTemplate(tpl, model);
-  if (runtimePath) out = inlineRuntime(out, fs.readFileSync(runtimePath, "utf8"));
+  let out;
+  try {
+    // renderModel BUILDS every diagram from structured data + rejects prebuilt Mermaid (arch-3).
+    out = renderModel(tpl, model, runtimePath ? fs.readFileSync(runtimePath, "utf8") : null);
+  } catch (e) {
+    console.error(`render refused: ${e.message}`);
+    process.exit(1);
+  }
   if (/\{\{|<!--\s*REPEAT:/.test(out)) { console.error("render incomplete: leftover markers"); process.exit(1); }
   process.stdout.write(out);
 }

@@ -330,14 +330,24 @@ map + returns, not free-form prose.
 
 ### 5. Phase 4 — Render (deterministic fill)
 
-Fill the committed template — **never author HTML per run**. The escaping, Mermaid label
-sanitization + synthetic-id construction, REPEAT/scalar expansion, and literal runtime
-inlining are **implemented once** in [`references/render-report.cjs`](references/render-report.cjs)
-and the skill **invokes that module** (`node "$skill_dir/references/render-report.cjs" <template> <model.json> [runtime]`) rather than
-re-implementing them per run — the arch-3 executable rendering boundary. The tests import the
-**same** functions (`htmlEscape`, `sanitizeMermaidLabel`, `mermaidNode`, `fillTemplate`,
-`inlineRuntime`), so the render path cannot drift while gates stay green. The steps below
-describe what that module does:
+Fill the committed template — **never author HTML per run**. The escaping, **diagram
+construction**, REPEAT/scalar expansion, and literal runtime inlining are **implemented once**
+in [`references/render-report.cjs`](references/render-report.cjs) and the skill **invokes that
+module** (`node "$skill_dir/references/render-report.cjs" <template> <model.json> [runtime]`)
+rather than re-implementing them per run — the arch-3 executable rendering boundary. Crucially,
+the model carries **structured diagram data**, not prebuilt Mermaid:
+
+- `model.diagrams.{DATA_MODEL_MERMAID,BUSINESS_LOGIC_MERMAID,DATA_FLOW_MERMAID}` and each
+  `useCase.sequence` are `{ header, nodes:[{label}], edges:[{from,to,label?}] }` structures. The
+  renderer (`renderModel` → `buildDiagram`) constructs every Mermaid source itself with
+  **synthetic node ids** (`n0`, `n1`, …) and **`sanitizeMermaidLabel`d** labels, and the
+  `header` is chosen from a fixed allowlist — so repo-derived text can never *be* Mermaid syntax.
+- `renderModel` **rejects** a model that supplies a **prebuilt** `DATA_*_MERMAID` scalar or a
+  `useCase.mermaid` string — the sanitizer is unavoidably on the model→report path, not merely
+  exported. `__tests__/render-report.test.cjs` exercises malicious structured models through it.
+
+The tests import the **same** functions, so the render path cannot drift while gates stay green.
+The steps below describe what that module does:
 
 1. Read [`references/report-template.html`](references/report-template.html).
 2. Build the fill model per the contract in
