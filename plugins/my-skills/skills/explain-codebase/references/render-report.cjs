@@ -9,12 +9,18 @@
 const fs = require("node:fs");
 
 // --- HTML escaping (applied to every substituted value) -------------------------------
+// Also neutralizes `{`/`}` (bug-2): a substituted value is source-derived and may contain a
+// `{{TOKEN}}` sequence; without this the later scalar pass would REWRITE a known token inside the
+// value, and an unknown `{{X}}` would survive and abort the render. Escaping braces to entities
+// makes the value inert to token substitution while still displaying as `{`/`}` in the browser.
 function htmlEscape(v) {
   return String(v)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+    .replace(/"/g, "&quot;")
+    .replace(/\{/g, "&#123;")
+    .replace(/\}/g, "&#125;");
 }
 
 // --- Mermaid label sanitizer (the real one; the test imports this) --------------------

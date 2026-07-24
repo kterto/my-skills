@@ -25,6 +25,20 @@ test("a substituted value cannot break the injection seam (escaped)", () => {
   assert.ok(out.includes("&lt;script&gt;"));
 });
 
+test("source text containing a token is NOT re-interpreted (bug-2)", () => {
+  // A known token inside a REPEAT row value must display literally, not be rewritten by the
+  // later scalar pass; an unknown {{X}} in a value must not survive as a leftover marker.
+  const tpl = `<ul><!-- REPEAT:item --><li>{{item.text}}</li><!-- /REPEAT:item --></ul><h1>{{TITLE}}</h1>`;
+  const out = fillTemplate(tpl, {
+    scalars: { TITLE: "Real Title" },
+    blocks: { item: [{ text: "see {{TITLE}} and {{UNKNOWN}}" }] },
+  });
+  assert.ok(!out.includes("Real Title</li>") && !/\{\{\s*TITLE/.test(out.split("</ul>")[0]), "token in a value must not be rewritten");
+  assert.ok(!/\{\{\s*[A-Z0-9_]+\s*\}\}/.test(out), "no leftover {{...}} marker survives from a value");
+  assert.ok(out.includes("&#123;&#123;TITLE&#125;&#125;"), "the value's braces are neutralized to entities");
+  assert.ok(out.includes("<h1>Real Title</h1>"), "the real template scalar still fills");
+});
+
 test("inlineRuntime replaces the marker literally ($-sequences not expanded)", () => {
   const runtime = "var x='$&';var y='$`';var z=\"$'\";"; // $-sequences a naive replace would corrupt
   const out = inlineRuntime("<head><!-- MERMAID_RUNTIME --></head>", runtime);
