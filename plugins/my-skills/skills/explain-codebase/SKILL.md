@@ -323,9 +323,13 @@ target atomically:
   over it. Create `docs/explain` only as a real directory.
 - **Verify canonical containment of the parent.** Resolve `docs/explain` with `pwd -P` and
   require it is under `$root` (the same prefix check as step 1) before writing.
-- **Write atomically.** Write to a **same-directory** temporary regular file, then re-check
-  the final path is not a symlink and `mv -f` (atomic same-filesystem rename) into place —
-  so a partial or redirected write can never land.
+- **Write atomically to an unpredictable, exclusively-created temp (sec-1).** A *predictable*
+  temp path (`.<slug>-<date>.html.tmp`) can itself be pre-planted as a symlink that the Write
+  tool follows. So create the temp with **`mktemp`** in the same directory — a random name,
+  created with `O_EXCL` (fails if the path already exists, symlink included), mode 600 —
+  verify it is a **regular file** (not a symlink), write into it, then re-check the final
+  destination is not a symlink and `mv -f` (atomic same-filesystem rename) into place. A
+  partial or redirected write can never land.
 
 ```bash
 root="$(cd "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null && pwd -P)"
@@ -340,7 +344,11 @@ case "$outreal/" in "$root"/*) : ;; *) echo "refusing: docs/explain escapes repo
 slug="whole-system"                               # constrained: [a-z0-9-]+ only
 dest="$outreal/$slug-$(date +%F).html"
 [ -L "$dest" ] && { echo "refusing: target is a symlink"; exit 1; }
-tmp="$outreal/.$slug-$(date +%F).html.tmp"        # same-dir temp for atomic rename
+# Unpredictable, exclusively-created same-dir temp — mktemp uses O_EXCL, so a pre-planted
+# symlink at this name cannot be followed (creation fails instead).
+tmp="$(mktemp "$outreal/.explain-XXXXXXXX.html.tmp")" || { echo "refusing: cannot create temp"; exit 1; }
+[ -L "$tmp" ] && { echo "refusing: temp is a symlink"; rm -f "$tmp"; exit 1; }
+[ -f "$tmp" ] || { echo "refusing: temp is not a regular file"; rm -f "$tmp"; exit 1; }
 # ... write the rendered HTML to "$tmp" (Write tool) ...
 # Final secret scan (see "Secret-redaction boundary") BEFORE the file is published:
 if grep -Eaiq -e '-----BEGIN [A-Z ]*PRIVATE KEY-----' \
