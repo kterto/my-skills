@@ -70,8 +70,6 @@ refinements carried forward from the APPROVED review; they do not affect any gat
 All executable gates pass, the skill-index guard is up to date, no lint/type/build tooling
 applies to this markdown + template doc skill, the working tree matches the plan's expected
 scope, and the rework ratio is 0. Safe to commit and open PR.
-</content>
-</invoke>
 
 
 ---
