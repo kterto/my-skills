@@ -70,6 +70,15 @@ test("generic high-entropy hex/base64 blobs are caught", () => {
   assert.ok(hitTypes("A1b2C3d4E5f6".repeat(4) + "==").includes("base64-secret")); // 48 base64
 });
 
+test("conventional your-/your_/example- placeholders are not flagged (bug-3)", () => {
+  assert.deepStrictEqual(scanSecrets("token=your-token-here"), [], "your- example not a leak");
+  assert.deepStrictEqual(scanSecrets("api_key: your_api_key"), [], "your_ example not a leak");
+  assert.deepStrictEqual(scanSecrets("Authorization: Bearer your-token-here"), [], "your- auth example");
+  assert.deepStrictEqual(scanSecrets("secret=example-value"), [], "example- prefix");
+  // A real value that merely CONTAINS 'your' but isn't the placeholder convention is still caught.
+  assert.ok(scanSecrets("password=yourhunter2realvalue").length > 0, "no separator → still a secret");
+});
+
 test("false positives are avoided: git SHA, redacted markers, key names, colors", () => {
   // 40-char git commit SHA is below the 64-hex threshold.
   assert.deepStrictEqual(scanSecrets("commit a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0"), []);

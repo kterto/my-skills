@@ -34,7 +34,9 @@ function decodeEntities(text) {
 // A value that is an EXPLICIT redaction / example marker is NOT a leaked secret. Note this
 // intentionally does NOT exempt all-digit values (sec-3): a numeric password/token
 // (`password=1234`) is a real leaked credential, not a placeholder.
-const PLACEHOLDER = /^(?:«redacted»|redacted|x{3,}|\*{3,}|example|changeme|your[-_]|<[^>]*>|\.\.\.)$/i;
+// `your-…`/`your_…` and `example-…` are placeholder PREFIXES, not exact strings (bug-3): a
+// conventional example like `token=your-token-here` must not be flagged as a leaked credential.
+const PLACEHOLDER = /^(?:«redacted»|redacted|x{3,}|\*{3,}|(?:example|changeme|your|placeholder|dummy)[-_][A-Za-z0-9_-]*|example|changeme|<[^>]*>|\.\.\.)$/i;
 
 // Ordered, named detectors. Token families are deterministic; the entropy thresholds are set
 // ABOVE a 40-char git SHA (hex ≥ 64) and above incidental base64 (≥ 44) to avoid flagging the
