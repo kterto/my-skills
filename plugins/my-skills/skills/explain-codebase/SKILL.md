@@ -111,9 +111,12 @@ Dispatch **one subagent per fan-out unit** — `Agent` (Claude, `subagent_type: 
 - **`WAVE_SIZE = 8`** concurrent subagents per wave. Launch a wave, await it, then launch
   the next, until every unit is analyzed. This caps peak concurrency regardless of repo
   size (a 24-unit whole-system run is 3 waves, not 24 simultaneous subagents).
-- **Retry policy.** A subagent that errors or returns malformed/empty JSON (see the
-  validator in `__tests__/analysis-schema.test.cjs`, wired per the schema) is **retried
-  once**. If it fails again, do **not** abort the run.
+- **Validate every return, retry once.** Gate each subagent's JSON through the runtime
+  validator `node references/validate-subagent-return.cjs <return.json>` (the single mirror
+  of `analysis-schema.md`; it checks the envelope, every required field, optional-field
+  types, and the documented enums — not just arrays + anchors). A subagent that errors, or
+  whose return the validator **rejects** (non-zero exit), is **retried once** with the same
+  slice. If it errors/rejects again, do **not** abort the run.
 - **Partial-return policy.** Proceed to synthesis with whatever units returned. Every unit
   that failed after its retry is recorded as an explicit **"not analyzed"** entry in the
   report's provenance/appendix (unit name + reason), so a partial map never masquerades as
@@ -338,6 +341,9 @@ redact; it only prevents markup breakage. Three layers keep secrets out of the r
 - [`references/analysis-schema.md`](references/analysis-schema.md) — the normative Phase-2
   subagent JSON return shape (entities, business rules, data-flow edges, dependencies,
   use-cases) and the universal `file:line` anchor rule.
+- [`references/validate-subagent-return.cjs`](references/validate-subagent-return.cjs) — the
+  runtime validator (importable + CLI) the skill runs on every subagent return; the single
+  executable mirror of `analysis-schema.md`, imported by the schema test.
 - [`references/report-template.html`](references/report-template.html) — the committed,
   self-contained, theme-aware template (fixed chrome + inline JS) with the
   `{{PLACEHOLDER}}` + `<!-- REPEAT:block -->` fill markers.

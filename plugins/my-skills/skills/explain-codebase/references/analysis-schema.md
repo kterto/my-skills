@@ -5,9 +5,11 @@ each Phase-2 fan-out subagent returns to the main agent. `SKILL.md` summarizes a
 links here; it never restates these field definitions. The Phase-4 template fill and
 the Phase-3 synthesis both read data in this shape.
 
-The executable mirror of this schema is
-`__tests__/analysis-schema.test.cjs` — if a rule below changes, that test changes with
-it.
+The executable mirror of this schema is `references/validate-subagent-return.cjs` — the
+runtime validator the skill runs on every subagent return (envelope, required fields,
+optional-field types, and enums), which `__tests__/analysis-schema.test.cjs` imports so the
+doc, the runtime check, and the tests move together. If a rule below changes, that module
+and its test change with it.
 
 ## Universal rule — every item carries a `file:line` anchor
 

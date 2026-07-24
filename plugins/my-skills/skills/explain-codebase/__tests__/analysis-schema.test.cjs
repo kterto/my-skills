@@ -16,33 +16,9 @@ const path = require("node:path");
 
 const SCHEMA_MD = path.join(__dirname, "..", "references", "analysis-schema.md");
 
-// The five arrays every subagent return must carry (§analysis-schema.md).
-const REQUIRED_ARRAYS = ["entities", "businessRules", "dataFlowEdges", "dependencies", "useCases"];
-// A `file:line` anchor: any non-empty path, a colon, then a 1+ digit line number.
-const ANCHOR_RE = /^.+:\d+$/;
-
-// --- The executable validator: a faithful port of references/analysis-schema.md -----
-// Returns [] when valid, else an array of human-readable violation strings.
-function validateSubagentReturn(obj) {
-  const errs = [];
-  if (obj === null || typeof obj !== "object" || Array.isArray(obj)) {
-    return ["return must be a JSON object"];
-  }
-  for (const key of REQUIRED_ARRAYS) {
-    if (!(key in obj)) { errs.push(`missing required array: ${key}`); continue; }
-    if (!Array.isArray(obj[key])) { errs.push(`${key} must be an array`); continue; }
-    obj[key].forEach((item, i) => {
-      if (item === null || typeof item !== "object" || Array.isArray(item)) {
-        errs.push(`${key}[${i}] must be an object`);
-        return;
-      }
-      if (typeof item.anchor !== "string" || !ANCHOR_RE.test(item.anchor)) {
-        errs.push(`${key}[${i}] missing required file:line anchor`);
-      }
-    });
-  }
-  return errs;
-}
+// Import the SAME validator the skill runs at runtime (references/validate-subagent-return.cjs)
+// — the single mirror of analysis-schema.md, so doc, runtime, and test can never drift.
+const { validateSubagentReturn, REQUIRED_ARRAYS } = require("../references/validate-subagent-return.cjs");
 
 function validReturn() {
   return {
@@ -99,6 +75,62 @@ test("an anchor without a line number is rejected", () => {
   bad.entities[0].anchor = "src/billing/invoice.ts"; // no :line
   const errs = validateSubagentReturn(bad);
   assert.ok(errs.some((e) => e.includes("entities[0] missing required file:line anchor")));
+});
+
+test("the envelope `module` string is required", () => {
+  const bad = validReturn();
+  delete bad.module;
+  assert.ok(validateSubagentReturn(bad).some((e) => e.includes("missing required string: module")));
+});
+
+test("required per-item fields are enforced (not just anchors)", () => {
+  const cases = [
+    ["entities", "name"],
+    ["businessRules", "what"],
+    ["dataFlowEdges", "from"],
+    ["dataFlowEdges", "to"],
+    ["dependencies", "name"],
+    ["useCases", "actor"],
+    ["useCases", "goal"],
+  ];
+  for (const [key, field] of cases) {
+    const bad = validReturn();
+    delete bad[key][0][field];
+    const errs = validateSubagentReturn(bad);
+    assert.ok(
+      errs.some((e) => e.includes(`${key}[0] missing/invalid required field: ${field}`)),
+      `${key}.${field} must be required`,
+    );
+  }
+});
+
+test("optional field type violations are caught", () => {
+  const badFields = validReturn();
+  badFields.entities[0].fields = "id,total"; // must be string[]
+  assert.ok(validateSubagentReturn(badFields).some((e) => e.includes("entities[0] optional field has wrong type: fields")));
+
+  const badSteps = validReturn();
+  badSteps.useCases[0].steps = [1, 2]; // must be string[]
+  assert.ok(validateSubagentReturn(badSteps).some((e) => e.includes("useCases[0] optional field has wrong type: steps")));
+});
+
+test("documented enums are enforced", () => {
+  const badFlow = validReturn();
+  badFlow.dataFlowEdges[0].kind = "sideways"; // not ingress/transform/store/egress
+  assert.ok(validateSubagentReturn(badFlow).some((e) => e.includes("dataFlowEdges[0] optional field has wrong type: kind")));
+
+  const badDep = validReturn();
+  badDep.dependencies[0].kind = "vendored"; // not internal/external
+  assert.ok(validateSubagentReturn(badDep).some((e) => e.includes("dependencies[0] optional field has wrong type: kind")));
+});
+
+test("valid enum + optional-id values still validate", () => {
+  const good = validReturn();
+  good.entities[0].id = "src/billing:Invoice";
+  good.dataFlowEdges[0].kind = "ingress";
+  good.dataFlowEdges[0].fromId = "src/billing:route";
+  good.dependencies[0].kind = "external";
+  assert.deepStrictEqual(validateSubagentReturn(good), []);
 });
 
 test("references/analysis-schema.md exists and is the source of truth", () => {

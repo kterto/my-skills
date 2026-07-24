@@ -69,6 +69,7 @@
         "references/design-prompt.md",
         "references/report-template.demo.html",
         "references/report-template.html",
+        "references/validate-subagent-return.cjs",
         "references/vendor/mermaid.min.js",
         "SKILL.md"
       ]
