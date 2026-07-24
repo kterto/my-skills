@@ -13,33 +13,9 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const REF = path.join(__dirname, "..", "references");
-const PLACEHOLDER = "(label omitted)";
-
-// --- Reference implementation of the SKILL.md Phase-4 label sanitizer -----------------
-// Repo-derived text is only ever allowed inside a QUOTED node/edge label, and only after
-// this. Directive/keyword/URL-bearing text is REJECTED to a placeholder (never partially
-// kept); structural Mermaid metacharacters are stripped; the result is a single line.
-const DANGER = [
-  /%%/,                        // directive / comment marker (covers `%%{`)
-  /^\s*---/,                   // frontmatter block
-  /\b(?:classDef|linkStyle|style|click|call|class|href)\b/i,
-  /(?:https?|javascript|data|vbscript|file):/i, // any URL scheme
-];
-const META = /["'`\[\]{}()<>;#|]/g;          // Mermaid structural metacharacters
-const CONTROL = /[\x00-\x1f\x7f]/g;          // control chars incl. newlines/tabs
-
-function sanitizeMermaidLabel(raw) {
-  if (typeof raw !== "string") return PLACEHOLDER;
-  const oneLine = raw.replace(CONTROL, " ");
-  if (DANGER.some((re) => re.test(oneLine))) return PLACEHOLDER;
-  const cleaned = oneLine.replace(META, "").replace(/\s+/g, " ").trim();
-  return cleaned.length ? cleaned : PLACEHOLDER;
-}
-
-// A node is emitted with a SYNTHETIC id and the sanitized label quoted.
-function mermaidNode(index, rawLabel) {
-  return `n${index}["${sanitizeMermaidLabel(rawLabel)}"]`;
-}
+// Import the REAL render-boundary functions (arch-3): the skill invokes the same module, so
+// these tests exercise the actual sanitizer, not a drifting test-only copy.
+const { sanitizeMermaidLabel, mermaidNode, PLACEHOLDER } = require("../references/render-report.cjs");
 
 test("benign labels pass through, collapsed to one line", () => {
   assert.strictEqual(sanitizeMermaidLabel("Invoice total"), "Invoice total");

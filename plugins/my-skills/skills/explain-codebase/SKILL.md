@@ -305,7 +305,14 @@ map + returns, not free-form prose.
 
 ### 5. Phase 4 — Render (deterministic fill)
 
-Fill the committed template — **never author HTML per run**:
+Fill the committed template — **never author HTML per run**. The escaping, Mermaid label
+sanitization + synthetic-id construction, REPEAT/scalar expansion, and literal runtime
+inlining are **implemented once** in [`references/render-report.cjs`](references/render-report.cjs)
+and the skill **invokes that module** (`node "$skill_dir/references/render-report.cjs" <template> <model.json> [runtime]`) rather than
+re-implementing them per run — the arch-3 executable rendering boundary. The tests import the
+**same** functions (`htmlEscape`, `sanitizeMermaidLabel`, `mermaidNode`, `fillTemplate`,
+`inlineRuntime`), so the render path cannot drift while gates stay green. The steps below
+describe what that module does:
 
 1. Read [`references/report-template.html`](references/report-template.html).
 2. Build the fill model per the contract in
@@ -521,6 +528,10 @@ redact; it only prevents markup breakage. Three layers keep secrets out of the r
 - [`references/snapshot-scope.cjs`](references/snapshot-scope.cjs) — materializes the immutable
   source snapshot (no-follow reads) the subagents read from; tests in
   `__tests__/snapshot-scope.test.cjs`.
+- [`references/render-report.cjs`](references/render-report.cjs) — the single executable render
+  boundary (escaping, Mermaid sanitization + synthetic ids, template fill, runtime inlining);
+  invoked by Phase 4 and imported by `__tests__/render-report.test.cjs` +
+  `__tests__/mermaid-safety.test.cjs` (arch-3).
 - [`references/report-template.html`](references/report-template.html) — the committed,
   self-contained, theme-aware template (fixed chrome + inline JS) with the
   `{{PLACEHOLDER}}` + `<!-- REPEAT:block -->` fill markers.
