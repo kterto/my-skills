@@ -99,7 +99,10 @@ candidate file:
   case "$scope_abs/" in "$root"/*) : ;; *) echo "scope escapes the repository — refusing"; exit 1 ;; esac
   ```
 - **Build the read allowlist from tracked, regular files only.** Enumerate candidates with
-  `git -C "$root" ls-files -s -- "$scope_path"` and **drop every mode `120000` (symlink) entry**;
+  `git -C "$root" ls-files -s -- ":(literal)$scope_path"` — the **`:(literal)`** prefix disables
+  pathspec **magic** so a scope like `:(top)`/`:(glob)` cannot make git enumerate tracked files
+  **outside** the selected scope (sec-1); apply it to every scope-dependent git command
+  (allowlist, dirty-status, drift). Then **drop every mode `120000` (symlink) entry**;
   a symlink is never followed. **Parse `-s` output on the TAB** (`<mode> <sha> <stage>\t<path>`),
   or use `git ls-files -z` with NUL-safe reads — **never a bare whitespace split**, which
   truncates any path containing a space and silently drops it from the allowlist and manifest.
@@ -127,8 +130,10 @@ drift before rendering:
 # sec-3 allowlist build below — define it once, here, so those references resolve.
 scratch="$(mktemp -d)"; snap_manifest="$scratch/allowlist-manifest.txt"
 COMMIT_SHA="$(git -C "$root" rev-parse HEAD)"
-# Dirty status over the ANALYZED allowlist only, excluding host-runtime dirs.
-DIRTY="$(git -C "$root" status --porcelain -- "$scope_path" ':(exclude).opencode' ':(exclude).claude')"
+# Dirty status over the ANALYZED allowlist only, excluding host-runtime dirs. `:(literal)`
+# disables pathspec MAGIC on the scope (sec-1) — a scope like `:(top)` would otherwise make
+# git enumerate the whole repo; the `:(exclude)` magic on the host dirs stays intact.
+DIRTY="$(git -C "$root" status --porcelain -- ":(literal)$scope_path" ':(exclude).opencode' ':(exclude).claude')"
 # Freeze a content manifest of the allowlist BEFORE any subagent reads. Hash the WORKING-TREE
 # bytes each subagent actually reads — NOT the index blob id: `ls-files -s` reports the *staged*
 # blob, so an unstaged or concurrent working-tree edit leaves the id unchanged and the drift
@@ -136,7 +141,7 @@ DIRTY="$(git -C "$root" status --porcelain -- "$scope_path" ':(exclude).opencode
 # hashes the on-disk content. NUL-delimited throughout so paths with spaces survive (bug-3);
 # skip mode 120000 (symlinks) and re-assert each is a regular file just before hashing.
 : > "$snap_manifest"
-git -C "$root" ls-files -sz -- "$scope_path" \
+git -C "$root" ls-files -sz -- ":(literal)$scope_path" \
   | while IFS= read -r -d '' entry; do
       meta="${entry%%$'\t'*}"; path="${entry#*$'\t'}"     # meta="<mode> <sha> <stage>"
       [ "${meta%% *}" = 120000 ] && continue               # skip symlinks
