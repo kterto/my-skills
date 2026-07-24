@@ -142,6 +142,16 @@ function validateSubagentReturn(obj, ctx) {
   const entityView = catalog ? catalogView(catalog, "entity") : null;
   const nodeView = catalog ? catalogView(catalog, "node") : null;
   const ownedModules = catalog && catalog.moduleIds ? asSet(catalog.moduleIds) : null;
+  // Envelope module identity (bug-1): the analyzed unit is identified by a CANONICAL `moduleId`
+  // (e.g. `m:src/billing`), validated against the owned modules. The path-shaped `module` stays
+  // display-only metadata — comparing a path to canonical catalog ids (the prior bug) is wrong.
+  if (ownedModules) {
+    if (!isStr(obj.moduleId)) {
+      errs.push("missing required string: moduleId (canonical unit module id)");
+    } else if (!ownedModules.has(obj.moduleId)) {
+      errs.push(`moduleId ${obj.moduleId} is not an assigned unit module`);
+    }
+  }
 
   for (const key of REQUIRED_ARRAYS) {
     if (!(key in obj)) { errs.push(`missing required array: ${key}`); continue; }

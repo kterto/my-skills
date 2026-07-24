@@ -70,7 +70,8 @@ Each subagent returns ONE JSON object for its assigned module/subsystem slice:
 
 ```jsonc
 {
-  "module": "src/billing",        // the scope slice this subagent analyzed (string)
+  "moduleId": "m:src/billing",    // CANONICAL unit id (validated against the owned modules, bug-1)
+  "module": "src/billing",        // display-only path for the slice (NEVER compared to catalog ids)
   "files":         [ /* FileRecord  */ ],
   "entities":      [ /* Entity      */ ],
   "businessRules": [ /* BusinessRule */ ],

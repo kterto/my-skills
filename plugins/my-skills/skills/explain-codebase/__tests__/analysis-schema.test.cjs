@@ -22,7 +22,8 @@ const { validateSubagentReturn, REQUIRED_ARRAYS } = require("../references/valid
 
 function validReturn() {
   return {
-    module: "src/billing",
+    module: "src/billing",       // display-only path
+    moduleId: "m:src/billing",   // canonical unit id (bug-1)
     files: [
       { path: "src/billing/invoice.ts", role: "Invoice entity + finalize transition", loc: 120, anchor: "src/billing/invoice.ts:1" },
     ],
@@ -312,6 +313,28 @@ test("an edge fromId the unit does NOT own is rejected (arch-2)", () => {
   bad.dataFlowEdges[0].fromId = "f:auth:login";    // foreign-owned as the SOURCE the unit declares
   bad.dataFlowEdges[0].toId = "f:m:src/billing:ChargeService";
   assert.ok(validateSubagentReturn(bad, withOwners()).some((e) => e.includes("dataFlowEdges[0] fromId not in the flow-node catalog: f:auth:login")));
+});
+
+test("envelope canonical moduleId is validated; path module is display-only (bug-1)", () => {
+  // A conforming return with the RIGHT canonical moduleId and an arbitrary display path passes —
+  // the path is NOT compared to canonical catalog ids (the masked bug).
+  const good = validReturn();
+  good.files[0].path = "src/billing/invoice.ts"; good.files[0].anchor = "src/billing/invoice.ts:1";
+  good.module = "billing-service (display only)"; // path/display — not validated
+  good.moduleId = "m:src/billing";
+  assert.deepStrictEqual(validateSubagentReturn(good, withOwners()), []);
+
+  // A foreign canonical moduleId is rejected.
+  const bad = validReturn();
+  bad.files[0].path = "src/billing/invoice.ts"; bad.files[0].anchor = "src/billing/invoice.ts:1";
+  bad.moduleId = "m:src/other";
+  assert.ok(validateSubagentReturn(bad, withOwners()).some((e) => e.includes("moduleId m:src/other is not an assigned unit module")));
+
+  // A missing moduleId under an ownership catalog is rejected.
+  const miss = validReturn();
+  miss.files[0].path = "src/billing/invoice.ts"; miss.files[0].anchor = "src/billing/invoice.ts:1";
+  delete miss.moduleId;
+  assert.ok(validateSubagentReturn(miss, withOwners()).some((e) => e.includes("missing required string: moduleId")));
 });
 
 test("references/analysis-schema.md exists and is the source of truth", () => {
