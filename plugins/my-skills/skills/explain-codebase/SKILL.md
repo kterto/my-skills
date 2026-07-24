@@ -371,8 +371,27 @@ ingress/transform/store/egress edges, cross-module highlighted), **User stories*
 
 Write the rendered HTML to
 `$root/docs/explain/<scope-slug>-<YYYY-MM-DD>.html`, anchored to the git root from step 1
-so it lands at the repo root even when invoked from a subdirectory. `<scope-slug>` is the
-kebab-case of the scope (`whole system` → `whole-system`, `src/billing` → `src-billing`).
+so it lands at the repo root even when invoked from a subdirectory.
+
+**`<scope-slug>` is injective + bounded (bug-2), not a bare kebab flatten.** A naive
+kebab-case aliases distinct scopes (`src/a` and `src-a` both → `src-a`), can collapse a
+Unicode-only scope to empty, and can exceed `NAME_MAX` (255 bytes) on a long path — so
+distinct scopes could overwrite each other's report or the write could fail. Build it the
+same way `pr-review-report` builds its branch slug:
+
+```bash
+raw_slug="$(printf '%s' "$scope_path" | sed -e 's#[^A-Za-z0-9._-]#-#g' -e 's#-\{2,\}#-#g' -e 's#^-*##' -e 's#-*$##')"
+[ -z "$raw_slug" ] && raw_slug="scope"                       # nonempty fallback (Unicode-only → empty)
+raw_slug="$(printf '%s' "$raw_slug" | cut -b1-200 | sed 's#-*$##')"   # bound readable prefix by BYTES
+[ -z "$raw_slug" ] && raw_slug="scope"
+digest="$(printf '%s' "$scope_path" | git hash-object --stdin | cut -c1-12)"   # stable digest of the RAW scope
+slug="${raw_slug}-${digest}"                                 # injective: distinct raw scope → distinct slug
+```
+
+The digest hashes the **raw resolved scope**, so `src/a` and `src-a` get distinct slugs even
+though their readable parts collide, and two long scopes sharing a truncated prefix still
+differ. The **full raw scope** is retained verbatim in the report (`{{SCOPE_LABEL}}`), so the
+slug is only a filename, never the displayed identity.
 
 **HTML-only — an intentional divergence.** Unlike `pr-review-report` (which also emits a
 `.md` findings backlog), this skill writes **no** companion Markdown: there is no work-item
@@ -412,7 +431,7 @@ done
 mkdir -p "$out"                                   # real dir only (guarded above)
 outreal="$(cd "$out" && pwd -P)"                  # canonical parent
 case "$outreal/" in "$root"/*) : ;; *) echo "refusing: docs/explain escapes repo"; exit 1 ;; esac
-slug="whole-system"                               # constrained: [a-z0-9-]+ only
+slug="$slug"                                      # injective + byte-bounded, built above (bug-2)
 dest="$outreal/$slug-$(date +%F).html"
 [ -L "$dest" ] && { echo "refusing: target is a symlink"; exit 1; }
 # Unpredictable, exclusively-created same-dir temp — mktemp uses O_EXCL, so a pre-planted
