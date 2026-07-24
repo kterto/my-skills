@@ -380,8 +380,14 @@ slug="whole-system"                               # constrained: [a-z0-9-]+ only
 dest="$outreal/$slug-$(date +%F).html"
 [ -L "$dest" ] && { echo "refusing: target is a symlink"; exit 1; }
 # Unpredictable, exclusively-created same-dir temp — mktemp uses O_EXCL, so a pre-planted
-# symlink at this name cannot be followed (creation fails instead).
-tmp="$(mktemp "$outreal/.explain-XXXXXXXX.html.tmp")" || { echo "refusing: cannot create temp"; exit 1; }
+# symlink at this name cannot be followed (creation fails instead). The `X`s MUST be
+# **trailing**: BSD/macOS mktemp only substitutes a trailing run of `X`s (a mid-template
+# `.explain-XXXX.html.tmp` is left LITERAL — a constant, predictable path), and GNU mktemp
+# rejects a non-trailing-`X` template outright (the report write would always fail on Linux).
+# So the template ends in `X`s and carries no extension; the `.html` name is only the final
+# rename target. Assert the `X`s were actually substituted, else abort as non-random.
+tmp="$(mktemp "$outreal/.explain-report-XXXXXXXX")" || { echo "refusing: cannot create temp"; exit 1; }
+case "$(basename "$tmp")" in *XXXXXXXX*) rm -f "$tmp"; echo "refusing: mktemp left the template literal — non-random temp, aborting"; exit 1 ;; esac
 [ -L "$tmp" ] && { echo "refusing: temp is a symlink"; rm -f "$tmp"; exit 1; }
 [ -f "$tmp" ] || { echo "refusing: temp is not a regular file"; rm -f "$tmp"; exit 1; }
 # ... write the rendered HTML to "$tmp" (Write tool) ...
