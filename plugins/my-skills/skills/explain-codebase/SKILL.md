@@ -85,6 +85,31 @@ candidate file:
   subagent would re-glob (which would re-introduce symlinks). A file that fails any check is
   excluded and, if it was expected in scope, noted as skipped in the report provenance.
 
+**Source-snapshot semantics (the report describes ONE snapshot).** The allowlist comes from
+Git's index, but subagents `Read` **mutable working-tree** files across several waves, while
+the report renders a single `COMMIT_SHA`. Without pinning, a report can combine bytes from
+different revisions yet advertise one commit. So freeze the snapshot up front and prove no
+drift before rendering:
+
+```bash
+COMMIT_SHA="$(git -C "$root" rev-parse HEAD)"
+# Dirty status over the ANALYZED allowlist only, excluding host-runtime dirs.
+DIRTY="$(git -C "$root" status --porcelain -- "$scope" ':(exclude).opencode' ':(exclude).claude')"
+# Freeze a content manifest of the allowlist (blob hash per path) BEFORE any subagent reads.
+git -C "$root" ls-files -s -- "$scope" | awk '$1!="120000"{print $2, $4}' > "$snap_manifest"  # <mode-filtered> sha path
+```
+
+- **Snapshot identity is honest.** Render provenance as `COMMIT_SHA` **plus a dirty flag**:
+  if `DIRTY` is non-empty the identity is `"<sha> (working tree, dirty)"`, never a bare clean
+  commit — a dirty tree is disclosed, not hidden behind the commit hash.
+- **Drift check before render.** After the last wave, recompute the allowlist blob hashes and
+  diff against `$snap_manifest`. Any path whose content changed since the freeze means its
+  subagent read a **different** revision → re-run that unit against the current bytes, or
+  record the unit as **drifted/stale** in provenance (arch-2). Never render a report whose
+  inputs silently shifted underfoot.
+- The frozen manifest is also what binds a subagent's anchors to reviewed content
+  (see `validate-subagent-return.cjs` allowlist binding).
+
 ### 2. Phase 1 — Scope & map (main agent)
 
 A cheap orientation pass — the main agent does **not** read every file:
