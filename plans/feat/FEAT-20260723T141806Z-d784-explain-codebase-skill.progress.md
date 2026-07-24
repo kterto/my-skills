@@ -125,10 +125,11 @@ All checks pass. Safe to commit and open PR.
 
 - **FEATURE: standalone mermaid** (2026-07-23T15:44:59Z): user requested offline in-browser diagram rendering. Vendored mermaid v10.9.1 UMD → references/vendor/mermaid.min.js (3.33MB); template ships a <!-- MERMAID_RUNTIME --> marker the skill inlines at render (SKILL.md Phase 4 step 5, with the $-interpretation corruption warning); demo carries the inlined runtime. Rewrote the interaction JS to render Mermaid LAZILY per tab (mermaid cannot lay out inside a display:none panel) and re-render on theme toggle. Rewrote self-contained.test.sh to strip the vetted runtime block then assert no external-LOAD constructs (mermaid xmlns http URLs are identifiers, not loads); placeholder-fill.test.cjs strips the runtime block from the demo before scanning. design-prompt.md updated so regenerations keep the marker + init. index.json regenerated (vendor file added). Browser-verified via claude-in-chrome: ER + flowchart + sequence diagrams all render, light+dark, offline. Gates: node --test 13/13, self-contained PASS, index --check OK.
 
-- **RE-VALIDATION** — pointer only (bug-2). The original CR/QA approvals predated the template
-  swap, the Mermaid runtime, and **two** `/validation-fixer` hardening rounds (13 + 17
-  findings). The current evidence of record for the delivered tree is the formal artifact
+- **RE-VALIDATION** — pointer only (bug-2/bug-6). The original CR/QA approvals predated the
+  template swap, the Mermaid runtime, and **six** `/validation-fixer` hardening rounds
+  (13 + 17 + 4 + 13 + 12 + 12 = 71 findings). The current evidence of record for the delivered
+  tree is the formal artifact
   **[`plans/qa/REVALIDATION-20260724-explain-codebase-skill.md`](../qa/REVALIDATION-20260724-explain-codebase-skill.md)**
-  (validated commit `3c6ffaf`: 43 cjs tests + `self-contained.test.sh` PASS, `index --check`
+  (validated commit `02c6c8c`: 89 cjs tests + `self-contained.test.sh` PASS, `index --check`
   fresh, 7↔7 region parity). See `docs/reviews/orch-…-explain-codebase-skill-…md` for the
   per-finding fix commits. This note is intentionally a pointer, not the evidence.

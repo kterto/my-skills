@@ -1,12 +1,23 @@
 # Re-validation — explain-codebase skill (delivered tree)
 
 **Plan**: FEAT-20260723T141806Z-d784-explain-codebase-skill
-**Validated commit**: `3ccf886` (branch `orch/2026-07-23-explain-codebase-skill`)
+**Validated commit**: `02c6c8c` (branch `orch/2026-07-23-explain-codebase-skill`)
 **Date**: 2026-07-24
 **Supersedes for the delivered tree**: CR-20260723T144300Z-c7e2 (14:43), QA-20260723T144808Z-9096
 (14:49), **and the terminal pipeline artifacts** TEST-20260723T144019Z-0432,
 EVAL-20260723T145254Z-7db2, FINAL-20260723T145750Z-c2cb — all of which describe the initial
 three-test package and the pre-runtime implementation, not the delivered tree.
+
+> **Refreshed (bug-6, round 7).** Re-pinned to `02c6c8c` (**89 cjs tests across 8 files** + the
+> shell gate). Round 7 replaced earlier mechanisms that this record used to describe: the
+> source snapshot is now an **immutable no-follow scratch copy verified against HEAD blobs**
+> (not the round-5 working-tree hash), the catalog carries **entity/node ownership** (declare
+> only owned, reference any known) with a **canonical envelope `moduleId`**, the renderer
+> **builds every diagram from structured data** (rejecting prebuilt Mermaid), snapshot traversal
+> is **dirfd-style no-follow with pre/post-read metadata checks**, and the report writer
+> **verifies the output-dir identity across temp-create + rename**. The security summary below
+> describes these CURRENT mechanisms; the round-4/5 "working-tree-hash" wording is retained only
+> as dated history.
 
 > **Refreshed (bug-2, round 6).** Re-pinned to `3ccf886` (**75 cjs tests across 8 files** +
 > the shell gate). Corrects an earlier miscount (the fill contract has **10** REPEAT blocks,
@@ -31,7 +42,7 @@ three-test package and the pre-runtime implementation, not the delivered tree.
 ## Why this exists (bug-2)
 
 The original REVIEWER `APPROVED` and QA `READY_TO_COMMIT` were produced **before** the
-template swap (15:06), the standalone-Mermaid runtime (15:44), and **five** subsequent
+template swap (15:06), the standalone-Mermaid runtime (15:44), and **six** subsequent
 `pr-review-report` hardening rounds routed through `/validation-fixer` (main-agent):
 
 - **Round 1** — 13 findings: provenance taxonomy, qualified identities, bounded fan-out, scope
@@ -55,14 +66,21 @@ template swap (15:06), the standalone-Mermaid runtime (15:44), and **five** subs
   Proxy-Authorization detection, entity-decoding before secret classification, empty-file
   self-anchors, non-dotfile whole-system slug, self-consistent demo counts, generated review
   HTML out of the reviewed diff, and this corrected terminal evidence.
+- **Round 6** — 12 findings: Phase-1-reads-snapshot + **HEAD-blob verification**, catalog
+  **entity/node ownership** (declare-owned / reference-known), renderer **builds diagrams from
+  structured data** (rejects prebuilt Mermaid), **dirfd-style no-follow snapshot traversal** +
+  pre/post-read metadata, **output-dir-identity-verified** report writer, **any-scheme**
+  Authorization detection, canonical envelope **moduleId**, brace-safe template substitution,
+  your-/example- placeholder handling, write-report cleanup-on-error, demo Modules-metric
+  consistency, and this refreshed terminal evidence.
 
 So the earlier approval trail (which described "13 tests, three test files, the pre-runtime
 implementation") does not cover what is being merged. This artifact re-validates the
 **delivered** tree; the earlier CR/QA remain as historical records of their snapshots.
 
-## Evidence at `3ccf886`
+## Evidence at `02c6c8c`
 
-- **Automated tests — 75 cjs tests across 8 files, all pass; plus the shell gate:**
+- **Automated tests — 89 cjs tests across 8 files, all pass; plus the shell gate:**
   - `__tests__/analysis-schema.test.cjs` — schema shape, required fields, enums, canonical
     ids, allowlist-bound anchors, **identity-catalog enforcement** (arch-2 r5), **cross-file
     anchor rejection** (bug-3 r5).
@@ -78,18 +96,21 @@ implementation") does not cover what is being merged. This artifact re-validates
     lean-demo (no inlined runtime). PASS.
 - **Hosted index** — `node scripts/generate-opencode-skill-index.mjs --check` up to date.
 - **Region parity** — 7 region ids in both template and demo.
-- **Security posture covered by the trail (5 rounds)** — scope resolution + canonical
-  containment, source-snapshot pinning by **working-tree hash** with drift check (arch-1 r5),
-  **literal pathspecs** (sec-1 r5), allowlist- + **catalog**-bound provenance (sec-3 r2 /
-  arch-2 r5), Mermaid label sanitization + `default-src 'none'` CSP, **runtime upgraded to
-  10.9.6** (sec-4 r5), a **non-material-logging, broad** secret scanner (sec-2/sec-3 r5),
-  symlink-safe **and portable/random-temp** atomic writes (sec-1 r4) for the report and the
-  demo builder, and the vendored-runtime checksum gate.
+- **Security posture covered by the trail (6 rounds)** — CURRENT mechanisms — scope resolution + canonical
+  containment; an **immutable no-follow source snapshot verified against HEAD blobs** that
+  Phase 1 + fan-out both read (arch-1 r7); **dirfd-style no-follow traversal with pre/post-read
+  metadata checks** (sec-1 r7); one **canonical inventory** feeding snapshot + validator; the
+  validator's **catalog ownership** (declare-owned / reference-known) + **canonical envelope
+  moduleId** (arch-2 / bug-1 r7); the renderer that **builds diagrams from structured data and
+  rejects prebuilt Mermaid** (arch-3 r7) with `default-src 'none'` CSP; a **broad,
+  non-material-logging** secret scanner incl. any-scheme Authorization (sec-2/sec-3 r7);
+  **Mermaid 10.9.6**; and a **TOCTOU-safe report writer** that verifies output-dir identity
+  across create + rename (sec-2 r7). Generated review HTML is kept out of the reviewed diff.
 
 ## Verdict
 
-`RE_VALIDATED` — the delivered tree at `3ccf886` passes every automated gate (75 cjs tests +
-`self-contained.test.sh` PASS, index fresh, 7↔7 region parity) and **all five** rounds of
-adversarial review findings (13 + 17 + 4 + 13 + 12 = 59) are each closed with a per-finding fix
+`RE_VALIDATED` — the delivered tree at `02c6c8c` passes every automated gate (89 cjs tests +
+`self-contained.test.sh` PASS, index fresh, 7↔7 region parity) and **all six** rounds of
+adversarial review findings (13 + 17 + 4 + 13 + 12 + 12 = 71) are each closed with a per-finding fix
 commit (provenance in `docs/reviews/orch-…-explain-codebase-skill-…{md,html}`). This artifact
 is the current evidence of record for the merge.
