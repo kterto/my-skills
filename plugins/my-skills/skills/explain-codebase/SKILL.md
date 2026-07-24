@@ -137,6 +137,10 @@ drift before rendering:
 # into the analyzed repo). The SAME $snap_manifest is reused by the drift check and the
 # sec-3 allowlist build below — define it once, here, so those references resolve.
 scratch="$(mktemp -d)"; snap_manifest="$scratch/allowlist-manifest.txt"
+# Remove the scratch dir (manifest, per-unit allow.json, subagent-return.json) on ANY exit —
+# success or abort — so runs never leave residue in the system temp dir (bug-6). $scratch is a
+# fresh mktemp -d the skill owns, so this deletes only skill-created files, never user files.
+trap 'rm -rf "$scratch"' EXIT
 COMMIT_SHA="$(git -C "$root" rev-parse HEAD)"
 # Dirty status over the ANALYZED allowlist only, excluding host-runtime dirs. `:(literal)`
 # disables pathspec MAGIC on the scope (sec-1) — a scope like `:(top)` would otherwise make
@@ -169,6 +173,11 @@ git -C "$root" ls-files -sz -- ":(literal)$scope_path" \
   inputs silently shifted underfoot.
 - The frozen manifest is also what binds a subagent's anchors to reviewed content
   (see `validate-subagent-return.cjs` allowlist binding).
+- **Clean up `$scratch` on completion or abort (bug-6).** The `trap … EXIT` above covers a
+  single shell session; because these snippets may run across several sessions, also
+  **explicitly `rm -rf "$scratch"`** once the report is written (step 6) **or** the run aborts,
+  so the manifest / allow.json / subagent-return files never accumulate in the system temp dir.
+  Only the skill-owned `$scratch` (a fresh `mktemp -d`) is removed — never user files.
 
 ### 2. Phase 1 — Scope & map (main agent)
 
