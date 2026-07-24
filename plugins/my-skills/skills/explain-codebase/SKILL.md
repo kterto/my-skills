@@ -129,18 +129,27 @@ scratch="$(mktemp -d)"; snap_manifest="$scratch/allowlist-manifest.txt"
 COMMIT_SHA="$(git -C "$root" rev-parse HEAD)"
 # Dirty status over the ANALYZED allowlist only, excluding host-runtime dirs.
 DIRTY="$(git -C "$root" status --porcelain -- "$scope_path" ':(exclude).opencode' ':(exclude).claude')"
-# Freeze a content manifest of the allowlist (blob hash per path) BEFORE any subagent reads.
-# `ls-files -s` is `<mode> <sha> <stage>\t<path>` — split on the TAB so a path containing
-# spaces survives intact (a naive `$2/$4` whitespace split truncates it). Emit a TAB-delimited
-# `<sha>\t<path>` manifest (path last, so it stays whole for the drift check + allowlist build).
-git -C "$root" ls-files -s -- "$scope_path" \
-  | awk -F'\t' '{ n=split($1, m, " "); if (m[1] != "120000") printf "%s\t%s\n", m[2], $2 }' > "$snap_manifest"
+# Freeze a content manifest of the allowlist BEFORE any subagent reads. Hash the WORKING-TREE
+# bytes each subagent actually reads — NOT the index blob id: `ls-files -s` reports the *staged*
+# blob, so an unstaged or concurrent working-tree edit leaves the id unchanged and the drift
+# check would still combine revisions under one advertised commit. `git hash-object <file>`
+# hashes the on-disk content. NUL-delimited throughout so paths with spaces survive (bug-3);
+# skip mode 120000 (symlinks) and re-assert each is a regular file just before hashing.
+: > "$snap_manifest"
+git -C "$root" ls-files -sz -- "$scope_path" \
+  | while IFS= read -r -d '' entry; do
+      meta="${entry%%$'\t'*}"; path="${entry#*$'\t'}"     # meta="<mode> <sha> <stage>"
+      [ "${meta%% *}" = 120000 ] && continue               # skip symlinks
+      [ -f "$root/$path" ] && [ ! -L "$root/$path" ] || continue   # regular-file recheck per read
+      printf '%s\t%s\0' "$(git -C "$root" hash-object -- "$root/$path")" "$path" >> "$snap_manifest"
+    done
 ```
 
 - **Snapshot identity is honest.** Render provenance as `COMMIT_SHA` **plus a dirty flag**:
   if `DIRTY` is non-empty the identity is `"<sha> (working tree, dirty)"`, never a bare clean
   commit — a dirty tree is disclosed, not hidden behind the commit hash.
-- **Drift check before render.** After the last wave, recompute the allowlist blob hashes and
+- **Drift check before render.** After the last wave, recompute each allowlist path's
+  **working-tree** hash the same way (`git hash-object` over the on-disk bytes, NUL-safe) and
   diff against `$snap_manifest`. Any path whose content changed since the freeze means its
   subagent read a **different** revision → re-run that unit against the current bytes, or
   record the unit as **drifted/stale** in provenance (arch-2). Never render a report whose
