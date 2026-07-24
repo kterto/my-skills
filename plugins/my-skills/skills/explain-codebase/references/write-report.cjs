@@ -17,44 +17,68 @@ const O_NOFOLLOW = fs.constants.O_NOFOLLOW || 0;
 function refuse(msg) { throw new Error(`refusing: ${msg}`); } // CLI turns this into exit 1
 function lstatOrNull(p) { try { return fs.lstatSync(p); } catch { return null; } }
 
+const O_DIRECTORY = fs.constants.O_DIRECTORY || 0;
+
 function writeReport(dest, content) {
   const dir = path.dirname(dest);
-  // The output dir must be a real directory (not a symlink) and the dest must not be a symlink.
-  const ds = lstatOrNull(dir);
-  if (!ds || !ds.isDirectory() || ds.isSymbolicLink()) refuse(`${dir} is not a real directory`);
-  const cur = lstatOrNull(dest);
-  if (cur && cur.isSymbolicLink()) refuse(`${dest} is a symlink`);
-
-  // Exclusive, no-follow temp in the SAME directory (same filesystem → atomic rename).
-  let fd, tmp;
-  for (let i = 0; i < 8; i++) {
-    tmp = path.join(dir, `.report-${process.pid}-${i}-${Buffer.from([i, Date.now() & 0xff]).toString("hex")}.tmp`);
-    try {
-      fd = fs.openSync(tmp, fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_WRONLY | O_NOFOLLOW, 0o644);
-      break;
-    } catch (e) {
-      if (e.code === "EEXIST") { tmp = null; continue; }
-      refuse(`cannot create temp: ${e.code}`);
-    }
-  }
-  if (fd === undefined) refuse("could not create an exclusive temp");
+  // Open the output dir ONCE with O_NOFOLLOW|O_DIRECTORY and record its identity (dev+ino).
+  // Node has no openat/renameat, so temp create + rename are still by path — but every such
+  // step is bracketed by a re-verification that the dir path still resolves to the SAME real
+  // directory (sec-2). A swap of `docs/explain` for a symlink between steps changes the identity
+  // (or makes the path a symlink) and is refused, so the write can't be redirected outside.
+  let dirFd;
+  try { dirFd = fs.openSync(dir, fs.constants.O_RDONLY | O_NOFOLLOW | O_DIRECTORY); }
+  catch (e) { refuse(`${dir} is not a real directory (${e.code})`); }
+  const dirId = fs.fstatSync(dirFd);
+  const assertSameDir = () => {
+    const l = lstatOrNull(dir);
+    if (!l || l.isSymbolicLink() || !l.isDirectory()) refuse(`${dir} is no longer a real directory (swapped?)`);
+    const now = fs.statSync(dir);
+    if (now.dev !== dirId.dev || now.ino !== dirId.ino) refuse(`${dir} identity changed mid-write (swap detected)`);
+  };
   try {
-    const buf = Buffer.isBuffer(content) ? content : Buffer.from(content);
-    let off = 0;
-    while (off < buf.length) off += fs.writeSync(fd, buf, off, buf.length - off);
-    fs.fsyncSync(fd);
-    const st = fs.fstatSync(fd);
-    if (!st.isFile()) { fs.closeSync(fd); fs.rmSync(tmp, { force: true }); refuse("temp is not a regular file"); }
-  } catch (e) {
-    try { fs.closeSync(fd); } catch {}
-    fs.rmSync(tmp, { force: true });
-    refuse(`write failed: ${e.message}`);
+    const cur = lstatOrNull(dest);
+    if (cur && cur.isSymbolicLink()) refuse(`${dest} is a symlink`);
+
+    // Exclusive, no-follow temp in the SAME (verified) directory.
+    assertSameDir();
+    let fd, tmp;
+    for (let i = 0; i < 8; i++) {
+      tmp = path.join(dir, `.report-${process.pid}-${i}-${Buffer.from([i, (i * 7 + 13) & 0xff]).toString("hex")}.tmp`);
+      try {
+        fd = fs.openSync(tmp, fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_WRONLY | O_NOFOLLOW, 0o644);
+        break;
+      } catch (e) {
+        if (e.code === "EEXIST") { tmp = null; continue; }
+        refuse(`cannot create temp: ${e.code}`);
+      }
+    }
+    if (fd === undefined) refuse("could not create an exclusive temp");
+    try {
+      const buf = Buffer.isBuffer(content) ? content : Buffer.from(content);
+      let off = 0;
+      while (off < buf.length) off += fs.writeSync(fd, buf, off, buf.length - off);
+      fs.fsyncSync(fd);
+      if (!fs.fstatSync(fd).isFile()) throw new Error("temp is not a regular file");
+    } catch (e) {
+      try { fs.closeSync(fd); } catch {}
+      fs.rmSync(tmp, { force: true });
+      refuse(`write failed: ${e.message}`);
+    }
+    fs.closeSync(fd);
+    // Re-verify the dir identity and the destination just before the atomic rename.
+    try {
+      assertSameDir();
+      const cur2 = lstatOrNull(dest);
+      if (cur2 && cur2.isSymbolicLink()) throw new Error(`${dest} became a symlink`);
+      fs.renameSync(tmp, dest);
+    } catch (e) {
+      fs.rmSync(tmp, { force: true }); // cleanup-on-error (bug-4 also)
+      throw e;
+    }
+  } finally {
+    fs.closeSync(dirFd);
   }
-  fs.closeSync(fd);
-  // Final symlink re-check on the destination, then atomic rename of OUR exclusive temp.
-  const cur2 = lstatOrNull(dest);
-  if (cur2 && cur2.isSymbolicLink()) { fs.rmSync(tmp, { force: true }); refuse(`${dest} became a symlink`); }
-  fs.renameSync(tmp, dest);
 }
 
 module.exports = { writeReport };

@@ -464,11 +464,13 @@ target atomically:
 - **Write through the TOCTOU-safe writer, never the host Write tool (sec-2).** Splitting the
   write into "create+close a checked temp" then "reopen that pathname and write" (mktemp + the
   Write tool) leaves a window where an attacker who can mutate `docs/explain` swaps the checked
-  temp for a symlink before the reopen and redirects the HTML. So the report is published by
-  **`references/write-report.cjs`**, which in **one process** opens an exclusive `O_NOFOLLOW`
-  temp in the output dir, writes+fsyncs+fstats through **that same descriptor** (never a
-  reopen-by-name), and atomically renames it over the destination after a final symlink
-  re-check. Tests in `__tests__/write-report.test.cjs`.
+  temp — or the **output directory itself** — for a symlink and redirects the HTML. So the report
+  is published by **`references/write-report.cjs`**, which opens the output dir once with
+  `O_NOFOLLOW|O_DIRECTORY`, records its identity (`dev`+`ino`), writes+fsyncs+fstats through an
+  exclusive `O_NOFOLLOW` temp descriptor (never a reopen-by-name), and **re-verifies the dir's
+  identity immediately before creating the temp and before the atomic rename** — a swapped
+  directory changes the identity (or becomes a symlink) and is refused. Tests in
+  `__tests__/write-report.test.cjs`.
 
 ```bash
 root="$(cd "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null && pwd -P)"
