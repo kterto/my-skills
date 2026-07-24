@@ -62,12 +62,34 @@ A cheap orientation pass — the main agent does **not** read every file:
 - Glob the in-scope tree; build a file/module inventory.
 - Read entry points and repo docs only: `README*`, schema/migration files, config,
   package manifests, and obvious entry points (routers, `main`/`index`, service roots).
-- Partition the scope into **modules/subsystems** — one unit of fan-out each.
+- Partition the scope into **units of fan-out** — bounded so whole-system analysis cannot
+  exceed host limits on a large repository:
+  - **`MAX_UNITS = 24`** — the hard cap on total fan-out units. If the raw module count is
+    at or below it, one unit per module.
+  - **Above `MAX_UNITS`, group hierarchically.** Cluster sibling/related modules (by
+    top-level directory, then by package/service boundary) into **≤ `MAX_UNITS` composite
+    units**, each a set of modules one subagent analyzes together. Prefer grouping the
+    smallest, most-coupled modules; keep large or high-fan-in modules as their own unit.
+  - Record the unit list and, when grouping happened, note it (the collapsed module count)
+    so the report's provenance is honest about the granularity.
 
-### 3. Phase 2 — Fan-out (parallel subagents)
+### 3. Phase 2 — Fan-out (parallel subagents, bounded waves)
 
-Dispatch **one subagent per module/subsystem** in scope, in parallel — `Agent` (Claude,
-`subagent_type: Explore` or `general-purpose`) / `task` (opencode). Each subagent:
+Dispatch **one subagent per fan-out unit** — `Agent` (Claude, `subagent_type: Explore` or
+`general-purpose`) / `task` (opencode) — but **in bounded waves, never all at once**:
+
+- **`WAVE_SIZE = 8`** concurrent subagents per wave. Launch a wave, await it, then launch
+  the next, until every unit is analyzed. This caps peak concurrency regardless of repo
+  size (a 24-unit whole-system run is 3 waves, not 24 simultaneous subagents).
+- **Retry policy.** A subagent that errors or returns malformed/empty JSON (see the
+  validator in `__tests__/analysis-schema.test.cjs`, wired per the schema) is **retried
+  once**. If it fails again, do **not** abort the run.
+- **Partial-return policy.** Proceed to synthesis with whatever units returned. Every unit
+  that failed after its retry is recorded as an explicit **"not analyzed"** entry in the
+  report's provenance/appendix (unit name + reason), so a partial map never masquerades as
+  complete. Never silently drop a unit.
+
+Each subagent:
 
 - Reads **only its slice** of the tree (keeps each context small; scales module →
   whole-system).
