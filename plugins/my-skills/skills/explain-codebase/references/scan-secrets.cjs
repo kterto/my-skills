@@ -52,8 +52,6 @@ const DETECTORS = [
   ["google-api-key", /\bAIza[0-9A-Za-z_-]{35}\b/g],
   ["stripe-key", /\b(?:sk|rk|pk)_(?:live|test)_[A-Za-z0-9]{16,}\b/g],
   ["slack-webhook", /https:\/\/hooks\.slack\.com\/services\/[A-Za-z0-9/]+/g],
-  // Authorization / Proxy-Authorization headers carrying a Bearer or Basic credential (sec-3).
-  ["authorization-header", /\b(?:proxy-)?authorization\b\s*[:=]\s*["']?(?:Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}/gi],
   // Connection string / URL with embedded credentials — JS regex, portable (no POSIX \s issue).
   ["connection-string-credentials", /\b[a-z][a-z0-9+.-]*:\/\/[^/@:\s"'<>]+:[^/@\s"'<>]+@/gi],
   // High-entropy standalone blobs (after runtime strip): hex ≥ 64 (avoids 40-char SHAs),
@@ -69,6 +67,11 @@ const DETECTORS = [
 // Value length is NOT gated (sec-3): a short or numeric value under a credential key is still a
 // leaked secret; the PLACEHOLDER set (explicit redaction/example markers only) is the sole exempt.
 const CRED_KEY = /\b[A-Za-z0-9_]*?(pass(?:word|wd)?|secret|token|api[_-]?key|access[_-]?key|secret[_-]?key|private[_-]?key|client[_-]?secret|auth(?:[_-]?token)?|credential|conn(?:ection)?[_-]?string|dsn)\s*["']?\s*[:=]\s*["']?([^\s"'<>]+)/gi;
+
+// Authorization / Proxy-Authorization header — EVERY non-placeholder value is sensitive,
+// regardless of scheme (Bearer/Basic/Token/ApiKey/Digest/custom) or length (sec-3). group1 is
+// the optional scheme, group2 the credential token (any length); a placeholder group2 is exempt.
+const AUTH_HEADER = /\b(?:proxy-)?authorization\b["']?\s*[:=]\s*["']?(?:([A-Za-z][A-Za-z0-9._-]*)\s+)?([^\s"'<>]+)/gi;
 
 // Returns [{ type, index }] — NEVER the matched credential material (sec-2). Reporting the
 // secret text (even truncated) would move it into agent/CI/terminal logs the moment a report
@@ -87,6 +90,13 @@ function scanSecrets(text) {
   let m;
   while ((m = CRED_KEY.exec(body)) !== null) {
     if (!PLACEHOLDER.test(m[2])) hits.push({ type: "credential-assignment", index: m.index });
+  }
+  AUTH_HEADER.lastIndex = 0;
+  let a;
+  while ((a = AUTH_HEADER.exec(body)) !== null) {
+    // group2 is the credential token; a bare placeholder (Bearer «redacted», Basic changeme, …)
+    // is not a leak. Any real value under any scheme, any length, is.
+    if (!PLACEHOLDER.test(a[2])) hits.push({ type: "authorization-header", index: a.index });
   }
   return hits;
 }

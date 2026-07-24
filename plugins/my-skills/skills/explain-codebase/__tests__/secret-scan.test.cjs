@@ -45,10 +45,19 @@ test("short and numeric credential values are not exempt (sec-3)", () => {
   assert.deepStrictEqual(scanSecrets("api_key: changeme"), []);
 });
 
-test("Authorization / Proxy-Authorization Bearer and Basic are caught (sec-3)", () => {
+test("Authorization / Proxy-Authorization: every scheme + length caught (sec-3)", () => {
   assert.ok(hitTypes("Authorization: Bearer abcdef1234567890").includes("authorization-header"));
   assert.ok(hitTypes('authorization = "Basic dXNlcjpwYXNz"').includes("authorization-header"));
   assert.ok(hitTypes("Proxy-Authorization: Bearer ZZZ12345abcdef").includes("authorization-header"));
+  // Short Basic + alternate/custom schemes that the old >=8-Bearer/Basic-only rule missed.
+  assert.ok(hitTypes("Authorization: Basic ab").includes("authorization-header"), "short Basic");
+  assert.ok(hitTypes("Authorization: Token deadbeef").includes("authorization-header"), "Token scheme");
+  assert.ok(hitTypes("Authorization: ApiKey k123").includes("authorization-header"), "ApiKey scheme");
+  assert.ok(hitTypes('Authorization: Digest username="x"').includes("authorization-header"), "Digest scheme");
+  assert.ok(hitTypes("Authorization: SuperCustom xyz").includes("authorization-header"), "custom scheme");
+  // A redacted/example value is still exempt.
+  assert.deepStrictEqual(scanSecrets("Authorization: Bearer «redacted»"), []);
+  assert.deepStrictEqual(scanSecrets("Authorization: Basic changeme"), []);
 });
 
 test("connection strings with embedded credentials are caught (portable regex, no POSIX \\s)", () => {
