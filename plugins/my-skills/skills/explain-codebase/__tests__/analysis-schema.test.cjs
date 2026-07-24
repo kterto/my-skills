@@ -27,13 +27,13 @@ function validReturn() {
       { path: "src/billing/invoice.ts", role: "Invoice entity + finalize transition", loc: 120, anchor: "src/billing/invoice.ts:1" },
     ],
     entities: [
-      { name: "Invoice", fields: ["id", "total"], invariants: ["total >= 0"], anchor: "src/billing/invoice.ts:12" },
+      { id: "e:Invoice", name: "Invoice", fields: ["id", "total"], invariants: ["total >= 0"], relations: ["e:Customer"], anchor: "src/billing/invoice.ts:12" },
     ],
     businessRules: [
       { name: "No negative charge", what: "reject charge < 0", why: "billing integrity", domain: "billing", anchor: "src/billing/charge.ts:40" },
     ],
     dataFlowEdges: [
-      { from: "http:POST /charge", to: "ChargeService", kind: "ingress", anchor: "src/billing/routes.ts:8" },
+      { from: "http:POST /charge", to: "ChargeService", fromId: "f:http:POST /charge", toId: "f:m:src/billing:ChargeService", kind: "ingress", anchor: "src/billing/routes.ts:8" },
     ],
     dependencies: [
       { name: "stripe", kind: "external", anchor: "src/billing/charge.ts:1" },
@@ -92,9 +92,12 @@ test("required per-item fields are enforced (not just anchors)", () => {
     ["files", "path"],
     ["files", "role"],
     ["entities", "name"],
+    ["entities", "id"],
     ["businessRules", "what"],
     ["dataFlowEdges", "from"],
     ["dataFlowEdges", "to"],
+    ["dataFlowEdges", "fromId"],
+    ["dataFlowEdges", "toId"],
     ["dependencies", "name"],
     ["useCases", "actor"],
     ["useCases", "goal"],
@@ -130,11 +133,11 @@ test("documented enums are enforced", () => {
   assert.ok(validateSubagentReturn(badDep).some((e) => e.includes("dependencies[0] optional field has wrong type: kind")));
 });
 
-test("valid enum + optional-id values still validate", () => {
+test("valid canonical ids + enums still validate", () => {
   const good = validReturn();
-  good.entities[0].id = "src/billing:Invoice";
+  good.entities[0].id = "e:Invoice";               // canonical catalog id (arch-3)
   good.dataFlowEdges[0].kind = "ingress";
-  good.dataFlowEdges[0].fromId = "src/billing:route";
+  good.dataFlowEdges[0].fromId = "f:m:src/billing:route";
   good.dependencies[0].kind = "external";
   assert.deepStrictEqual(validateSubagentReturn(good), []);
 });

@@ -79,6 +79,27 @@ violation. The subagent reads its slice, so it — not the cheap Phase-1 map —
 of a **role and line count for every file it analyzed**; the main agent needs this to fill
 the file index and compute LOC/coverage metrics without re-reading source.
 
+## Canonical identity namespace
+
+Cross-module identities must **not** be invented independently by isolated subagents — two
+units would then default a shared type to different ids (`billing:User` vs `auth:User`) and
+never merge, while a genuine merge would require them to *guess* the same string. Instead
+**Phase 1 issues one canonical catalog** and hands each unit the slice it needs:
+
+- **Module ids** — a stable id per module/service (e.g. `m:src/billing`).
+- **Entity ids** — every type discoverable from manifests, entry points, and cross-module
+  exports/imports is pre-registered with a canonical id (e.g. `e:User`), so all units that
+  touch it cite the **same** id.
+- **Flow-node ids** — endpoints, stores, and external systems that cross a boundary get a
+  canonical node id (e.g. `f:http:POST /charge`).
+
+A subagent **uses catalog ids** for `entities[].id`, `entities[].relations` (target ids),
+and `dataFlowEdges[].fromId`/`toId`. For a genuinely module-local item the catalog did not
+pre-register, it emits the reserved `new:<module-id>:<name>` form; Phase-3 synthesis promotes
+or reconciles those. **Synthesis rejects any id that is neither a catalog id nor a `new:` id**
+(a malformed or injected return citing an unknown identity is dropped, not trusted). The main
+agent validates ids against the catalog before merging.
+
 ## Array item shapes
 
 ### `files[]` — per-file role + size (source of the file index and LOC/coverage metrics)
@@ -94,11 +115,11 @@ the file index and compute LOC/coverage metrics without re-reading source.
 
 | field        | type       | required | notes                                                        |
 | ------------ | ---------- | -------- | ------------------------------------------------------------ |
-| `id`         | string     | no       | **stable identity** for cross-module merge, separate from the display `name`. Default when absent: `<module>:<name>`. A shared/imported type reused across modules should be given the **same** `id` in each return so it merges; two unrelated same-named types get distinct ids and stay separate. |
+| `id`         | string     | **yes**  | **canonical identity** from the Phase-1 catalog (§"Canonical identity namespace"), separate from the display `name`. A shared/imported type carries the **same** catalog id in every unit so it merges; a genuinely new module-local type uses the reserved `new:<module-id>:<name>` form, reconciled in synthesis. Never independently invented per subagent. |
 | `name`       | string     | yes      | entity / table / type name (**display label only**, never the merge key) |
 | `fields`     | string[]   | no       | field or column names                                        |
 | `invariants` | string[]   | no       | validation rules / constraints on the entity                 |
-| `relations`  | string[]   | no       | relationships to other entities (for the ER edge). **Preserved (unioned) on merge — never dropped.** |
+| `relations`  | string[]   | no       | related entities as **canonical entity ids** (the ER-edge targets), never free-form prose. **Preserved (unioned) on merge — never dropped.** Each id must resolve in the catalog (or a `new:` id reconciled in synthesis). |
 | `anchor`     | `file:line`| **yes**  | where the entity is defined (all contributing anchors are kept on merge) |
 
 ### `businessRules[]` — policies / decisions
@@ -117,8 +138,8 @@ the file index and compute LOC/coverage metrics without re-reading source.
 | -------- | ----------- | -------- | ----------------------------------------------------------- |
 | `from`   | string      | yes      | source node **display label** (endpoint, function, store, external system) |
 | `to`     | string      | yes      | destination node **display label**                          |
-| `fromId` | string      | no       | **stable node identity** of the source, used for cross-module stitching. Default when absent: `<module>:<from>`. A node crossing a module boundary must be given the **same** id on both sides (e.g. the callee's own `<module>:<name>`). |
-| `toId`   | string      | no       | **stable node identity** of the destination (default `<module>:<to>`). Cross-module stitching matches `toId` ≡ `fromId`, **never** free-form label equality. |
+| `fromId` | string      | **yes**  | **canonical node id** of the source from the Phase-1 flow-node namespace (§"Canonical identity namespace"). Used for cross-module stitching; never independently invented. |
+| `toId`   | string      | **yes**  | **canonical node id** of the destination. Cross-module stitching matches `toId` ≡ `fromId` on catalog ids, **never** free-form label equality. `crossModule` is derived when `fromId` and `toId` belong to different module ids. |
 | `kind`   | string      | no       | one of `ingress` / `transform` / `store` / `egress`         |
 | `anchor` | `file:line` | **yes**  | where the edge is realized in code                          |
 
@@ -146,15 +167,18 @@ the file index and compute LOC/coverage metrics without re-reading source.
 The main agent merges the per-subagent returns above, working ONLY from these structured
 returns plus the Phase-1 map, never re-reading full source:
 
-- **Merge `entities` by stable `id`, never by display `name`.** The merge key is `id`
-  (default `<module>:<name>`), so two unrelated types that happen to share a `name` across
-  modules stay **separate**, and a genuinely shared type (same `id`) merges. On merge,
-  union `fields`, `invariants`, **and `relations`** (relations are never dropped), and keep
-  **all** contributing `file:line` anchors.
-- **Stitch `dataFlowEdges` across modules by explicit node ids.** An edge whose `toId` in
-  one module equals a `fromId` in another becomes a cross-module edge — matched on the
-  stable ids (`<module>:<label>` by default), **never** on free-form `from`/`to` label
-  equality, which cannot distinguish two different nodes that share a label.
+- **Merge `entities` by canonical `id`, never by display `name`.** The merge key is the
+  Phase-1 catalog `id` (§"Canonical identity namespace"), so two unrelated types that share a
+  `name` across modules stay **separate**, and a genuinely shared type (same catalog id)
+  merges. On merge, union `fields`, `invariants`, **and `relations`** (relations are never
+  dropped), and keep **all** contributing `file:line` anchors. **Reject any `id` or relation
+  target that is neither a catalog id nor a reconciled `new:` id** — an unknown identity from
+  a malformed or injected return is dropped, not trusted as provenance.
+- **Stitch `dataFlowEdges` across modules by canonical node ids.** An edge whose `toId` in
+  one module equals a `fromId` in another becomes a cross-module edge — matched on catalog
+  node ids, **never** on free-form `from`/`to` label equality, which cannot distinguish two
+  different nodes that share a label. `crossModule` is set when `fromId`/`toId` resolve to
+  different module ids.
 - Cluster `useCases` into system-wide user stories, and collapse `dependencies`.
 - **Union `files` → the file index + the derived metrics**, with explicit rules:
   - **`fileIndex` rows** = the unioned `files[]` (`path` → `role`); `path` is self-anchoring.

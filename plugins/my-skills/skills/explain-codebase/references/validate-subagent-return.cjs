@@ -36,16 +36,18 @@ const ITEM_SPECS = {
     optional: { loc: isOptNonNegNum },
   },
   entities: {
-    required: { name: isStr },
-    optional: { id: isOptStr, fields: isOptStrArr, invariants: isOptStrArr, relations: isOptStrArr },
+    // `id` is the canonical catalog identity (arch-3) — required, never guessed per subagent.
+    required: { name: isStr, id: isStr },
+    optional: { fields: isOptStrArr, invariants: isOptStrArr, relations: isOptStrArr },
   },
   businessRules: {
     required: { name: isStr, what: isStr },
     optional: { why: isOptStr, domain: isOptStr },
   },
   dataFlowEdges: {
-    required: { from: isStr, to: isStr },
-    optional: { fromId: isOptStr, toId: isOptStr, kind: isOptEnum(FLOW_KINDS) },
+    // fromId/toId are canonical flow-node ids (arch-3) — required for cross-module stitching.
+    required: { from: isStr, to: isStr, fromId: isStr, toId: isStr },
+    optional: { kind: isOptEnum(FLOW_KINDS) },
   },
   dependencies: {
     required: { name: isStr },

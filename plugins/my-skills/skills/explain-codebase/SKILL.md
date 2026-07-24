@@ -127,6 +127,14 @@ A cheap orientation pass — the main agent does **not** read every file:
     smallest, most-coupled modules; keep large or high-fan-in modules as their own unit.
   - Record the unit list and, when grouping happened, note it (the collapsed module count)
     so the report's provenance is honest about the granularity.
+- **Issue the canonical identity catalog** (`analysis-schema.md` §"Canonical identity
+  namespace"): assign a stable **module id** per module, pre-register **entity ids** for
+  every type discoverable from manifests / entry points / cross-module exports-imports, and
+  **flow-node ids** for boundary-crossing endpoints/stores/externals. This is done **once**
+  by the main agent so identities are not independently invented per subagent. Each Phase-2
+  unit receives the catalog slice it needs; its returns cite catalog ids for `entities[].id`,
+  `entities[].relations` (target ids), and `dataFlowEdges[].fromId`/`toId`, using the reserved
+  `new:<module-id>:<name>` form only for genuinely module-local items.
 
 ### 3. Phase 2 — Fan-out (parallel subagents, bounded waves)
 
@@ -177,14 +185,16 @@ Do not restate the schema here — `analysis-schema.md` is its single source of 
 Merge the subagent JSON returns, working from the **map + structured returns only, never
 the full source**:
 
-- Merge `entities` by their stable `id` (default `<module>:<name>`), **never by display
-  `name`** — so two unrelated same-named types in different modules stay distinct and a
-  shared type (same `id`) merges. On merge, union `fields`, `invariants`, **and
-  `relations`**, and keep **every** contributing `file:line` anchor.
-- Stitch `dataFlowEdges` across modules by explicit node ids: an edge whose `toId` matches
-  another's `fromId` (both default `<module>:<label>`) becomes a **cross-module** edge,
-  highlighted in the report — matched on stable ids, **never** on free-form `from`/`to`
-  labels.
+- Merge `entities` by their **canonical catalog `id`**, **never by display `name`** — so two
+  unrelated same-named types in different modules stay distinct and a shared type (same
+  catalog id) merges. On merge, union `fields`, `invariants`, **and `relations`** (target
+  ids), and keep **every** contributing `file:line` anchor. **Reject any id or relation
+  target not in the catalog** (and not a reconciled `new:` id) — an injected/unknown identity
+  is dropped, not trusted.
+- Stitch `dataFlowEdges` across modules by **canonical node ids**: an edge whose `toId`
+  matches another's `fromId` becomes a **cross-module** edge (`crossModule` set when the ids
+  resolve to different module ids), highlighted in the report — matched on catalog ids,
+  **never** on free-form `from`/`to` labels.
 - Cluster per-module `useCases` into **system-wide user stories**.
 - Collapse `dependencies`; resolve conflicts.
 
