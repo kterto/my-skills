@@ -16,14 +16,29 @@ A plan ID (e.g. `FEAT-001`) or path to a plan file. The plan must have `status: 
 0. Read `.orchestrator/config.json` for `output_format` (`md` | `html`; default `md`; an `output_format=` line in your prompt wins) and `.orchestrator/artifact-format.md` for emission rules, the allow-list, and ID allocation.
 1. Locate and fully read the plan file and its `.progress.md`.
 2. Read `.orchestrator/PROJECT-CONTEXT.md`, plus any project files it points to. Extract: stack, code-style guardrails, load-bearing invariants, out-of-scope list, and working principles.
-3. Run `git diff <range> -- $MAESTRO_REVIEWER_DIFF_PATHSPEC` to get changed code. `<range>` is `$MAESTRO_PREV_CR_REF...HEAD` if `MAESTRO_PREV_CR_REF` is set, otherwise `main...HEAD`. `$MAESTRO_REVIEWER_DIFF_PATHSPEC` defaults to `. ':(exclude)plans/'` if unset. The `plans/` directory is excluded by default because plan files, progress logs, FIX files, and CR files are orchestration metadata that you already read directly in Step 1.1, and including them in the diff bloats input without adding review signal.
+3. Get the changed code as a **complete working-tree snapshot** — see *Building the review snapshot* below. `$MAESTRO_REVIEWER_DIFF_PATHSPEC` defaults to `. ':(exclude)plans/'` if unset. The `plans/` directory is excluded by default because plan files, progress logs, FIX files, and CR files are orchestration metadata that you already read directly in Step 1.1, and including them in the diff bloats input without adding review signal.
+
+   **Building the review snapshot (do not substitute a commit range).** **The pipeline never commits** — the coder leaves its work in the working tree, and the orchestrator stops at `READY_TO_COMMIT`. A commit-to-commit range such as `main...HEAD` therefore shows **none** of the work you were asked to review: staged, unstaged, and newly-created untracked files are all invisible to it, and on a fresh branch it is simply empty. Reviewing that range would let you approve a change set you never saw. So snapshot the tree instead, through an **isolated index** so the user's real index is never touched:
+
+   ```bash
+   base="${MAESTRO_REVIEW_BASE:-$(git merge-base main HEAD)}"   # the run's pre-flight base
+   export GIT_INDEX_FILE="$(mktemp -u)"                         # isolated — never the real index
+   git read-tree HEAD
+   git add -A -- $MAESTRO_REVIEWER_DIFF_PATHSPEC                # staged + unstaged + untracked
+   snap="$(git write-tree)"
+   git diff "$base" "$snap" -- $MAESTRO_REVIEWER_DIFF_PATHSPEC
+   ```
+
+   `MAESTRO_REVIEW_BASE` is the pre-flight base the orchestrator recorded at Step 0a (`base_sha` in the run manifest); fall back to the merge-base only when it is unset. Use `$MAESTRO_PREV_CR_REF` in place of `$base` when it is set, to review only what changed since the previous CR.
+
+   **Recheck the snapshot before you commit to a verdict.** Re-run `git add -A` + `git write-tree` in the same isolated index at the end of your review and confirm the tree hash still equals `$snap`. If it moved, the working tree changed under you — your verdict describes a change set that no longer exists. Say so and re-review rather than reporting a stale conclusion.
 4. Read each changed file in full for complete understanding.
 
 **If plan status is not `DONE`**: stop and report — reviewer only acts on completed plans.
 
 ### Step 1a — `PACT` ID input (parallel mode only)
 
-When the ID you were given carries the `PACT-` prefix, you were invoked **at the outer join** over a leaf fan-out. **When your preamble carries a `leaves=` line, that is the leaf plan set — use it as given.** Only when it is absent — a **legacy** run, started before the orchestrator emitted the line — resolve the set yourself. A resumed run is not such a case: Step 0r rebuilds the leaf set centrally and emits it. Either way, `.orchestrator/artifact-format.md` → **`PACT` ID resolution** is the single normative rule for resolving it, for what to evaluate, and for where to write back — **that rule is your entire knowledge of nesting.** Your Step 1.3 `git diff` range already yields the union — the leaves share one workspace — so the command itself is unchanged.
+When the ID you were given carries the `PACT-` prefix, you were invoked **at the outer join** over a leaf fan-out. **When your preamble carries a `leaves=` line, that is the leaf plan set — use it as given.** Only when it is absent — a **legacy** run, started before the orchestrator emitted the line — resolve the set yourself. A resumed run is not such a case: Step 0r rebuilds the leaf set centrally and emits it. Either way, `.orchestrator/artifact-format.md` → **`PACT` ID resolution** is the single normative rule for resolving it, for what to evaluate, and for where to write back — **that rule is your entire knowledge of nesting.** Step 1.3's **working-tree snapshot** already yields the union — every leaf wrote into this one shared workspace and none of them committed — so the snapshot command is unchanged at the join. What is **not** true is that a commit range would yield it: with no leaf commits to range over, `main...HEAD` shows none of the fan-out's work. The snapshot is what makes "the union" real here, which is why Step 1.3 forbids substituting a range for it.
 
 Your additions on top of that:
 

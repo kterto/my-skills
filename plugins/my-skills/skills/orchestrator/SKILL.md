@@ -245,8 +245,11 @@ Log the resolution:
 ORCHESTRATOR — pre-flight resolved
 Workspace: {repo-root | worktree-path}
 Branch: {branch}
+Base: {base_sha}
 Strategy: {use-current | new-branch | new-worktree | commit+... | stash+...}
 ```
+
+**Record `base_sha` here** — `git rev-parse HEAD` on the resolved workspace, after the branch/worktree choice is applied. It is the run's fixed comparison point: everything the pipeline produces is a delta from it. It is what the reviewer diffs its working-tree snapshot against (`MAESTRO_REVIEW_BASE`), what Step 7a's eval measures, and what the run manifest binds a resumable run to (Step 0r). Capture it once; never re-derive it later from a moved `HEAD`.
 
 #### 0b — Initialise counters
 
@@ -1058,6 +1061,7 @@ Artifact rules: read .orchestrator/artifact-format.md before writing any artifac
 HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
 ID to use: {computed CR-<id>}
 leaves={comma-separated leaf FEAT IDs, in dispatch order}   ← parallel path ONLY; omit the line entirely on a sequential run
+MAESTRO_REVIEW_BASE={base_sha}   ← the Step 0a pre-flight base; the reviewer snapshots the working tree against it
 
 Review plan {plan_id}. The plan is in DONE status.
 Follow your full reviewer workflow and print the structured output summary.
