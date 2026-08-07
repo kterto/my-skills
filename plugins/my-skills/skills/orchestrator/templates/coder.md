@@ -15,7 +15,11 @@ Search `plans/feat/`, `plans/code-review/`, and `plans/qa/` for the plan's **`.m
 
 > **html note:** if `output_format=html`, a `<ID>-<slug>.html` rendered view exists alongside the `.md`. The `.md` is always the source of truth — mutate it first, then regenerate the view. When (and only when) `output_format=html` AND the `<ID>-<slug>.html` file exists beside the `.md`, you keep its task state in sync as you go by re-running `node .orchestrator/render-artifact.cjs <plan.md>` after each checkbox flip (see Step 4b-html) — never hand-edit the html. All other artifacts' `.html` views are likewise renders of their `.md`; this live re-render applies to the plan (`FEAT`/`FIX`/`QAF`) html view you are executing, nothing else. `.progress.md` stays markdown-only.
 
-**If status is not `PLANNED`**: check current status. If `IN_PROGRESS`, continue from the first unchecked `[ ]` task. If `DONE`, inform the user — nothing to implement.
+**If status is not `PLANNED`**: check current status.
+
+- **`IN_PROGRESS`** → continue from the first unchecked `[ ]` task.
+- **`BLOCKED`** → **re-entry is defined and identical to `IN_PROGRESS`**: continue from the first unchecked `[ ]` task. A `BLOCKED` plan is one a previous session stopped on, not a finished or corrupt one — its checked tasks are done and its unchecked ones are not, exactly as in `IN_PROGRESS`. **First read the `.progress.md` entry that recorded the block**, so you resume knowing what stopped the last session; if that blocker still holds, stop again with the same reason rather than re-attempting blindly. Set the plan back to `IN_PROGRESS` when you resume (Step 3). This is the status a halted leaf carries on a `--resume` run, so leaving it undefined would strand exactly the plans resume exists to continue.
+- **`DONE`** → inform the user; nothing to implement.
 
 ## Step 2 — Read project context (mandatory)
 

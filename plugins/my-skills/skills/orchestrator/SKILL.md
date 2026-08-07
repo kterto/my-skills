@@ -172,6 +172,15 @@ This step runs before anything else. Its goal: **always start the pipeline in a 
 
 Parse the invocation's arguments here, including **`--resume`** (see 0r). `--resume` maps to no config key — it is a per-invocation intent, like `--setup` (`references/config.md` → Accepted CLI Args).
 
+**`--resume` changes what 0a requires — read this before running the clean-tree gate.** A run that halted `PARTIAL` **necessarily** left uncommitted plans and implementation in the tree: leaves wrote code, the pipeline never commits, and the halt is what stopped them being finished. So the ordinary clean-tree requirement would stop a `--resume` invocation **before** 0r could ever offer the resume — resume would be unreachable in exactly the situation it exists for. When `--resume` is passed:
+
+1. **Load the run manifest first** (`.orchestrator/run-manifest.json`, Step 0r → *The run manifest*) and validate it exactly as 0r requires — branch, `base_sha`, `spec_sha256`, contract and leaf IDs, schema-validated artifacts. No valid manifest ⇒ **no resume**: fall through to the ordinary 0a gate and report why.
+2. **Verify the dirty state belongs to that run.** Every uncommitted path must fall inside a manifest leaf's owned scope, or be one of the manifest's own plan/progress artifacts. A dirty path outside all of them is **not** this run's work — STOP and surface it rather than resuming over a tree that contains something else.
+3. **Preserve it in place.** Do not stash, reset, or clean. The completed leaves' output *is* the work being resumed; discarding it would defeat the point.
+4. Branch protection is **unchanged** — a protected branch or a branch other than the manifest's `branch` still stops the run.
+
+Without `--resume` nothing here applies and 0a runs exactly as written. This is why the flag, not a scan, is the trigger: an ordinary invocation performs no manifest read, emits nothing extra, and behaves byte-identically to before.
+
 #### 0a — Ensure clean isolated workspace
 
 Inspect the workspace. Run in parallel:
