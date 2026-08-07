@@ -862,7 +862,9 @@ So the barrier is a **simplicity choice, not a correctness one**: every inner jo
 
 Then, **for each sub-split lane, in a deterministic order** (lane-map row order — never analysis order or completion order, so two runs over the same contract reconcile identically):
 
-1. **Verify every sub-contract interface row on both sides.** For each row in that lane's sub-contract, confirm the **producer** sub-lane emitted the frozen shape and the **consumer** sub-lane consumes that same shape. Use the **same failure format the outer join prints**, one level down:
+1. **Run that lane's integration sub-lane first**, if its sub-contract declared one, through a **single sequential coder invocation** — after its sibling sub-lanes are DONE, never concurrently with them. It is the one sub-lane that legitimately touches several sub-lanes' outputs. **It runs before row verification, not after:** cross-slice wiring is exactly what an integration sub-lane exists to perform, so verifying rows first would fail a perfectly valid contract for work its own designated implementation step had not been given the chance to do. Verification judges the finished state, so the step that produces that state must precede it.
+
+2. **Then verify every sub-contract interface row on both sides.** For each row in that lane's sub-contract, confirm the **producer** sub-lane emitted the frozen shape and the **consumer** sub-lane consumes that same shape — including any row the integration sub-lane just wired. Use the **same failure format the outer join prints**, one level down:
 
    ```
    SUBJOIN — interface row unsatisfied
@@ -871,7 +873,6 @@ Then, **for each sub-split lane, in a deterministic order** (lane-map row order 
    Consumer: sub-lane {qualified name} — {consumes frozen shape | MISSING}
    ```
 
-2. **Run that lane's integration sub-lane**, if its sub-contract declared one, through a **single sequential coder invocation** — after its sibling sub-lanes are DONE, never concurrently with them. It is the one sub-lane that legitimately touches several sub-lanes' outputs.
 3. **Update the sub-contract's sub-lane-status table.**
 4. **Mark the lane DONE in the *parent* contract's lane-status table.** The inner join is what turns a set of finished sub-lanes back into one finished lane, so the outer join sees a lane exactly as it would have seen a flat one — which is why 3j needs no special case for a split lane's completion.
 
@@ -909,7 +910,9 @@ A `BLOCKED` sub-lane routes through the **same precedence rule** the outer join 
 
 Then, in order:
 
-1. **Verify every parent `PACT` interface row.** For each row, confirm the **producer** side emitted the frozen shape and the **consumer** side consumes that same shape. Any unsatisfied row is a join failure that names **the row, the lane, and the side that is missing**:
+1. **Run the integration lane first**, if the parent `PACT` declared one, through a **single sequential coder invocation** — after all other lanes are DONE, never concurrently with them. **It runs before row verification, not after**, for the same reason it does at the inner join: the integration lane is the leaf *assigned* to perform cross-lane wiring, so verifying rows ahead of it would fail a valid contract for work its designated implementation step had not yet been allowed to do.
+
+2. **Then verify every parent `PACT` interface row.** For each row, confirm the **producer** side emitted the frozen shape and the **consumer** side consumes that same shape — including any row the integration lane just wired. Any unsatisfied row is a join failure that names **the row, the lane, and the side that is missing**:
 
    ```
    JOIN — interface row unsatisfied
@@ -920,7 +923,6 @@ Then, in order:
 
    **When a row's producer or consumer lane was sub-split, verify it against the sub-lane that lane's sub-contract assigned it to** — read the assignment from the sub-contract's **Inherited interface assignments** region (`.orchestrator/artifact-format.md`). **The outer join never guesses which leaf owns a parent row**; that region exists precisely so it does not have to. Report such a side by its qualified name (`backend/data`).
 
-2. **Run the integration lane**, if the parent `PACT` declared one, through a **single sequential coder invocation** — after all other lanes are DONE, never concurrently with them.
 3. **Run `simplify` once** over the **union diff** — not once per lane and not once per sub-lane. This is the same single pre-review simplification pass Step 3 describes; parallel mode changes only its scope, not its cadence.
 
    **`simplify` and the full test suite run exactly once per run, at this outer join — never per lane, never per sub-lane, at any depth.** Running `simplify` per lane would multiply a pass whose entire value is seeing the union; running the suite anywhere but here would test a workspace other leaves were still mutating.
