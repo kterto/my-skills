@@ -13,8 +13,8 @@
 | `agent_sync_targets` | array of strings | `[]` | — (tooling-only) |
 | `parallelism` | string (`off` \| `ask` \| `lanes` \| `full`) | `"off"` | `--parallel` |
 | `lanes` | array of `{name: string, path: string, sublanes?: [{name, path}]}` | `[]` | — |
-| `max_parallel_lanes` | integer | `6` | — |
-| `max_contract_amendments` | integer | `2` | — |
+| `max_parallel_lanes` | integer ≥ 1 (finite) | `6` | — |
+| `max_contract_amendments` | integer ≥ 0 (finite) | `2` | — |
 
 `automation_level` governs whether the brainstormer stops to interview the user. `manual` (default) runs the full interview loop and confirmation gate. `autonomous` resolves every open question with the brainstormer's own stated default (recorded under "Decisions resolved by Brainstormer default") and produces a `READY_FOR_PLANNING` spec with no prompts. Only the brainstormer acts on this key; all other roles ignore it.
 
@@ -326,7 +326,26 @@ Three lanes × three sub-lanes is nine concurrent coders in one shared workspace
 
 **Planning preference, on top of enforcement.** When an adopted nested plan would exceed the ceiling, the inner gate additionally **drops the lowest-marginal-gain sub-splits** (those lanes run flat), printing each drop with its lane name and the ceiling. Waves would already keep such a plan safe, so this is not what makes it correct — it avoids paying a sub-contract for a split that would only have queued behind a wave anyway. Dropping by lowest marginal gain — rather than by array order or lane size — keeps that choice consistent with the cost model instead of arbitrary.
 
-`max_parallel_lanes` is **absent-tolerant** like every other key: a config written before it existed resolves it to `6`.
+`max_parallel_lanes` is **absent-tolerant** like every other key: a config written before it existed resolves it to `6`. Its accepted range is fixed by *Bounds* below.
+
+### Bounds — the numeric keys fail closed
+
+Declaring a key "integer" constrains its **type**, not its **usability**, and both parallel limits have values that are well-typed and still unusable:
+
+| Key | Accepted | Why the boundary is there |
+| --- | -------- | ------------------------- |
+| `max_parallel_lanes` | a **finite integer ≥ 1** | It caps in-flight dispatch width as a wave size (Steps 2L/3L). A wave of **0** dispatches nothing and the run cannot progress; a **negative** width has no meaning at all. `1` is the honest floor — it degrades the fan-out to fully serial, which is a legitimate configuration. |
+| `max_contract_amendments` | a **finite integer ≥ 0** | `0` is meaningful and supported: amendment is disabled, and the first `contract violation` falls straight back to sequential. A **negative** cap makes the `amendment_count` comparison undefined — already at or past the cap before any amendment is attempted — so the intent it expresses is already `0`'s. |
+
+Non-integers, non-finite values (`NaN`, `Infinity`), and non-numeric types are rejected the same way an out-of-range integer is.
+
+**Validation happens at config resolution (Step 0b), before any dispatch, and fails closed.** A value outside its range does **not** halt the run and is **never clamped silently** — it resolves to the key's **canonical default** (`6` / `2`) with the reason printed:
+
+```
+config: max_parallel_lanes {value} out of range (finite integer ≥ 1) — using default 6
+```
+
+Failing closed rather than halting keeps a malformed config from bricking a run, and printing rather than clamping quietly keeps the operator aware that the value they wrote is not the value in force. This matters more than usual for these two keys: they load from the **merge-base** (see *Precedence*), so an out-of-range value may well come from a file the invoking user is not currently looking at.
 
 ### `max_contract_amendments`
 

@@ -288,7 +288,7 @@ max_qa_cycles: {max_qa_cycles}
 - Read the three keys from **`$mb:.orchestrator/config.json`** — the pinned merge-base copy — never from the working-tree file.
 - **A CLI flag outranks the merge-base**, because a flag is *the invoking user's* authority expressed at run time, not branch-authored content. `--parallel` therefore still wins.
 - When the merge-base has no `.orchestrator/config.json`, or the file is absent/unparseable there, fall back to the **defaults** (`off` / `6` / `2`) — never to the working-tree copy.
-- **Validate the numeric values before any dispatch**; an out-of-range value fails closed to the default with the reason printed rather than dispatching an impossible or unbounded wave.
+- **Validate the numeric values before any dispatch**, per `references/config.md` → *Bounds* (`max_parallel_lanes` a finite integer ≥ 1, `max_contract_amendments` a finite integer ≥ 0); an out-of-range value fails closed to the key's canonical default with the reason printed, rather than dispatching a wave of zero or comparing against an undefined cap.
 
 Every other key (`output_format`, `automation_level`, the thresholds) keeps reading from the working tree as before — they are presentation and interview preferences, not concurrency authority, and none of them widens a branch's blast radius.
 
