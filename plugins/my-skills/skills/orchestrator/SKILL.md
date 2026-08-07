@@ -1432,15 +1432,24 @@ Output only — review the diff, then commit and open the PR yourself.
 
 ### Step 7c — Progress timeline (html mode)
 
-When `output_format=html`, after the pipeline reaches a terminal state, render a progress timeline for the active plan by running the renderer on its `.progress.md` append-log:
+When `output_format=html`, after the pipeline reaches a terminal state, render a progress timeline for **every plan-shaped artifact the run produced** — not only the active one — by running the renderer on each `.progress.md` append-log:
 
 ```bash
 node .orchestrator/render-artifact.cjs plans/<dir>/<ID>-<slug>.progress.md
 ```
 
+**Render the whole set, from the run manifest.** Every artifact the architect creates gets a paired `.progress.md` (Step 2c, 2s, 2L, and each `FIX`/`QAF`), and Step 7d's pairing gate requires an `.html` sibling for **every** branch-added `plans/**.md` — a `.progress.md` included. Rendering only the active plan therefore leaves every other log unpaired, so **an `html` run on the parallel path could never pass its own blocking gate**. The set to render is:
+
+- the **parent contract** and, on a `full` run, **every sub-contract** (`contract_ids` in `.orchestrator/run-manifest.json`);
+- **every leaf plan** (`leaf_ids`), including the integration leaves;
+- **every `FIX` and `QAF` plan** produced by the review and QA loops;
+- on a sequential run this collapses to the single active plan — the previous behavior, unchanged.
+
+The manifest is the enumeration source precisely because it already holds the run's complete artifact set (Step 0r → *The run manifest*); a directory scan would also sweep in artifacts from earlier runs on the branch, which this step must not re-render.
+
 The renderer auto-selects the `progress-timeline` scaffold for a `*.progress.md` source, emits one timeline row per log entry (role → action/status → timestamp) with the status→pill mapping, fills the `<main data-*>` shell and the Related link to the plan, and writes `<plan-path-without-.md>.progress.html`. `.progress.md` stays the markdown source-of-truth log; the `.html` is a regenerated read-only view.
 
-This step ALSO runs at the STALLED/BLOCKED stop points (review-cycle limit, qa-cycle limit, tester BLOCKED, qa BLOCKED_STALE) so a halted run still produces a timeline. In `md` mode this step is skipped — `.progress.md` is the only progress artifact.
+This step ALSO runs at the STALLED/BLOCKED stop points (review-cycle limit, qa-cycle limit, tester BLOCKED, qa BLOCKED_STALE) so a halted run still produces a timeline — and there too it renders the **whole** manifest set, since a `PARTIAL` parallel run has exactly the same unpaired-log problem. In `md` mode this step is skipped — `.progress.md` is the only progress artifact.
 
 ### Step 7d — Artifact validation gates (html mode — blocking)
 
