@@ -283,7 +283,9 @@ parallelism: {resolved parallelism}
 
 This sub-step runs **after** `parallelism` is resolved, never before. On an `off` run it does not exist and prints nothing — that is what keeps 0b's byte-identical-stdout guarantee true, and it is why the check cannot sit above the step that resolves the mode.
 
-**Detection.** Look for a prior run that halted `PARTIAL`: a `PACT` in `plans/feat/` whose **lane-status table has at least one non-DONE lane** and whose spec has **no completed downstream terminal artifact** (no `FINAL` in `plans/final/` referencing it). If none is found, this sub-step is over and the run proceeds normally — detection alone changes nothing.
+**Detection is manifest-anchored — never a scan for whatever `PACT` happens to be on disk.** A resumable run is one this orchestrator itself recorded, in `.orchestrator/run-manifest.json` (written at Step 2c, updated at 2s/2L — see *The run manifest* below). Look for a manifest whose recorded run halted `PARTIAL`: its parent contract's **lane-status table has at least one non-DONE lane** and its spec has **no completed downstream terminal artifact** (no `FINAL` in `plans/final/` referencing it). **No manifest ⇒ nothing to resume** — print the hint and start fresh. If none is found, this sub-step is over and the run proceeds normally — detection alone changes nothing.
+
+**Why a manifest and not a directory scan.** `plans/**` is contributor-editable working-tree content, and resume hands its recovered artifacts to **command-capable coders** while deliberately skipping spec and contract generation. A scan-based resume would therefore execute *any* well-formed `PACT` + `FEAT` plans a branch happened to contain, with no evidence this orchestrator ever produced them. The manifest is what makes "resume the run I halted" mean that, rather than "run the plans I found".
 
 **Resume is opt-in and never prompts.** Two outcomes, no third:
 
@@ -300,15 +302,30 @@ Hint: re-run with --resume to continue its {N} incomplete leaves instead of star
 
 The hint is printed **once**, is informational, and **never blocks** — so the guarantee that **no non-interactive caller can ever be blocked** is structural here rather than guarded, and this sub-step needs no `automation_level` or host-capability test of its own. Auto-resuming would be worse than starting clean: it would silently re-enter a prior run's frozen contract on what the caller issued as a fresh invocation.
 
+##### The run manifest — the provenance anchor
+
+At **Step 2c**, immediately after the parent contract verifies, write `.orchestrator/run-manifest.json`; update it at **2s** (sub-contract IDs) and **2L** (leaf plan IDs), and again on a **contract amendment** (Step 3j.2 step 6, so the manifest tracks the amended tree). It records:
+
+| Field | Binds the run to |
+| ----- | ---------------- |
+| `branch` | the branch resolved at Step 0a |
+| `base_sha` | the pre-flight base commit recorded at Step 0a |
+| `spec_id` + `spec_sha256` | the exact spec bytes the split was derived from |
+| `contract_ids` | the parent `PACT` and every sub-contract, in tree shape |
+| `leaf_ids` | every leaf `FEAT` ID, in dispatch order |
+| `parallelism` | the level the run resolved |
+
 **Re-entry, when and only when resume is applied.**
 
-1. **Skip Steps 1, 2p, 2c, 2s, and 2L entirely.** The spec, the parent contract, every sub-contract, and every leaf plan already exist on disk and are **authoritative**. Re-deriving any of them would produce a different split from the one the completed leaves were written against.
-2. Recover the parent contract from the detected `PACT`.
-3. **Walk its `Sub-contract` column** to rebuild the **full leaf set** — sub-lane plans for each sub-split lane, the lane plan for each flat one — using the one-level resolution rule in `.orchestrator/artifact-format.md` → **`PACT` ID resolution**. An absent column means the prior run was all-flat.
-4. **Re-enter at Step 3L**, with the leaf set **restricted to leaves whose `FEAT` plan is not `DONE`**. A leaf already `DONE` is not re-dispatched and its work is not rolled back.
-5. Proceed through **Step 3s and Step 3j normally**. The coder's existing resume-from-first-unchecked-task semantics carry the rest and are **unchanged** — that is what makes per-leaf resume free.
+1. **Validate the manifest against the working tree before trusting a single artifact.** The current branch equals `branch`; the pre-flight base equals `base_sha`; the spec file's SHA-256 equals `spec_sha256`; and every `contract_ids` / `leaf_ids` entry exists on disk with that exact ID in its frontmatter. Recovered artifacts are additionally **schema-validated** — a contract carries its six required regions, a leaf plan its five frontmatter keys and a `related_to` naming its governing contract.
+2. **On any mismatch, missing manifest, or more than one resumable manifest: do NOT resume.** Print what failed and **require explicit selection** — the user names the run to resume, or starts fresh. Never auto-pick. A spec whose bytes changed, a base that moved, a branch that differs, or an artifact absent from the manifest means the on-disk plans are **not** provably this orchestrator's; treating them as authoritative is exactly the escalation this gate exists to stop.
+3. **Only then skip Steps 1, 2p, 2c, 2s, and 2L.** The spec, the parent contract, every sub-contract, and every leaf plan already exist on disk and — **having passed validation** — are authoritative. Re-deriving any of them would produce a different split from the one the completed leaves were written against.
+4. Recover the parent contract by the manifest's `contract_ids` root, never by scanning `plans/feat/`.
+5. **Rebuild the full leaf set from the manifest's `leaf_ids`**, cross-checked against the parent contract's `Sub-contract` column (the one-level resolution rule in `.orchestrator/artifact-format.md` → **`PACT` ID resolution`**). The two must agree; a disagreement is a mismatch under step 2 and stops the resume.
+6. **Re-enter at Step 3L**, with the leaf set **restricted to leaves whose `FEAT` plan is not `DONE`**. A leaf already `DONE` is not re-dispatched and its work is not rolled back.
+7. Proceed through **Step 3s and Step 3j normally**. The coder's existing resume-from-first-unchecked-task semantics carry the rest and are **unchanged** — that is what makes per-leaf resume free.
 
-**A resumed run emits `leaves=` too.** Step 3 above rebuilt the full leaf set from the parent contract's `Sub-contract` column, so by the time the join-level spawns are issued the orchestrator holds exactly the same resolved set a fresh run would hold — the resume path re-derives it once, centrally, rather than leaving each of the three roles to re-derive it separately. The Step 3b, Step 4, and Step 5 prompt blocks therefore carry `leaves=` on a resumed run exactly as they do on a fresh one, and it names the **full** leaf set, not only the leaves being re-dispatched: the tester, reviewer, and QA evaluate the union of every leaf's diff, including the ones that were already `DONE` and were not re-run. This is what narrows the three join templates' documented `PACT`-walk fallback to **legacy** runs — a run started before `leaves=` existed — rather than to resumed ones.
+**A resumed run emits `leaves=` too.** Step 5 above rebuilt the full leaf set from the manifest, so by the time the join-level spawns are issued the orchestrator holds exactly the same resolved set a fresh run would hold — the resume path re-derives it once, centrally, rather than leaving each of the three roles to re-derive it separately. The Step 3b, Step 4, and Step 5 prompt blocks therefore carry `leaves=` on a resumed run exactly as they do on a fresh one, and it names the **full** leaf set, not only the leaves being re-dispatched: the tester, reviewer, and QA evaluate the union of every leaf's diff, including the ones that were already `DONE` and were not re-run. This is what narrows the three join templates' documented `PACT`-walk fallback to **legacy** runs — a run started before `leaves=` existed — rather than to resumed ones.
 
 Print what was recovered and what is being re-dispatched, so a resumed run is never indistinguishable from a fresh one in the transcript (`.orchestrator/artifact-format.md` → Parallel-mode lines):
 
@@ -649,6 +666,8 @@ Passing the 2p.1 digest is what keeps the contract cheap and honest: the archite
 
 Parse the architect's output to extract `pact_id` (from `ARCHITECT — {ID} created`) and `pact_path` (from `Contract: {path}`).
 
+**Write the run manifest.** Immediately after this verification passes, write `.orchestrator/run-manifest.json` with the run's `branch`, `base_sha`, `spec_id`, `spec_sha256`, `contract_ids` (the parent only, so far), `leaf_ids` (empty until 2L), and resolved `parallelism` — the schema in Step 0r → *The run manifest*. Update it at 2s (sub-contract IDs), at 2L (leaf plan IDs), and on any amendment (3j.2). This is what makes the run **resumable by provenance** rather than by scanning `plans/` for whatever artifacts a branch happens to carry.
+
 **Bind `root_plan_id = pact_id`.** On the parallel path the parent `PACT` — not any leaf plan and not any remediation plan — is the run's aggregate under evaluation, because it is the only artifact that resolves the **whole** leaf union. Remediation reassigns the *active* `plan_id` (Steps 4c, 5d); it **never** reassigns `root_plan_id`. The **one** thing that rebinds `root_plan_id` is a **parent-contract amendment** (Step 3j.2 step 4), because that genuinely replaces which aggregate is under evaluation; nothing else does. This distinction is what keeps a cycle-3 reviewer evaluating the same union a cycle-1 reviewer did, instead of narrowing to whatever `FIX`/`QAF` plan happened to run last.
 
 **File verification (mandatory before continuing)** — mirroring Step 2's: read the `PACT` at `pact_path` and its paired `.progress.md`. If either is missing or empty, re-invoke the architect once with the same prompt; if still missing after the retry, stop and report. Confirm its `related_to` references `spec_id`, and that its lane map, path-ownership, interface-points, unowned-files, integration-lane, and per-lane-definition-of-done regions are all present. A `PACT` missing a region is not usable — re-invoke once, then stop.
@@ -708,6 +727,8 @@ Mirroring Step 2c's. For **each** sub-contract: read it and its paired `.progres
 - its `related_to` references **both** the spec **and** the parent `PACT`;
 - **every required region is present** — sub-lane map, path ownership, interface points, unowned files, integration sub-lane, per-sub-lane definition of done, **and the Inherited interface assignments region** (a sub-contract missing it is not usable: it is what keeps a leaf reading exactly one contract).
 
+**Update `.orchestrator/run-manifest.json`** with every verified sub-contract ID, so `contract_ids` holds the full tree shape (Step 0r → *The run manifest*).
+
 Then read the parent contract **once**, after the whole wave has returned, and confirm its `Sub-contract` column names every adopted lane's contract. Read it once for the wave, not once per sub-contract — the orchestrator allocated those IDs itself at 2c and wrote that column itself, so this is a cheap self-check, not a per-lane discovery.
 
 A sub-contract failing any of these is re-invoked once, then stop and report. This barrier is worth the round-trip for the same reason Step 2L's is: nothing has been written to the workspace yet.
@@ -750,7 +771,7 @@ Lane: {qualified leaf name} → {FEAT-ID}
 
 **Why this is contention-free:** every leaf plan and its `.progress.md` are owned exclusively by one leaf's architect and later one leaf's coder. No two subagents ever write the same artifact, so no locking is needed — the isolation is structural, and it does not weaken at the second level because a sub-lane plan is an ordinary `FEAT` plan with an ordinary sole owner.
 
-Verify every leaf plan file and its `.progress.md` exist and are non-empty before continuing, exactly as Step 2 does for the single-plan path.
+Verify every leaf plan file and its `.progress.md` exist and are non-empty before continuing, exactly as Step 2 does for the single-plan path. Then **update `.orchestrator/run-manifest.json`** with the verified `leaf_ids`, in dispatch order (Step 0r → *The run manifest*) — the manifest is complete at this point, which is what makes a run halting after this step resumable by provenance.
 
 ### Step 3L — Coder fan-out: one coder per leaf
 
@@ -903,7 +924,7 @@ The amendment is an **atomic transaction**: it either completes every step below
 3. **Invoke the architect to write the amended contract** — a new artifact with its own pre-allocated ID whose `related_to` references the **superseded** one. The superseded contract is left on disk **unmodified**; it is history, not state. Verify it through **Step 2c's file verification** (or 2s.3 for a sub-contract) before continuing.
 4. **Rebind the active contract.** The amended contract becomes the run's **active** contract at its level, and its ID replaces the superseded one in the run's contract tree. When the amended contract is the **parent**, `root_plan_id` is rebound to the amended parent `PACT` ID — the single exception to its immutability (Step 2c), and the only one: it tracks *which aggregate is under evaluation*, and after a parent amendment that aggregate is the amended contract. The superseded ID is never used to dispatch, verify, or invoke a role again.
 5. **Partition the leaf set — preserve only what the amendment cannot have invalidated.** A leaf is **preserved** when it is `DONE` **and** the amendment changed no row it produces or consumes and no glob it owns; its work stands and it is not re-dispatched. Every other leaf is **invalidated**: any leaf the amendment's rows or globs touch (whatever its status), plus every leaf of a sub-contract the amendment re-authored. An invalidated `DONE` leaf is **not** silently kept — it was completed against a shape that no longer holds.
-6. **Rebuild the leaf set** from the amended contract tree: preserved leaves keep their existing plan IDs; invalidated leaves take the replacement `FEAT` IDs from step 2, with new plans authored by a Step 2L architect pass and verified as 2L requires. The rebuilt set is what `leaves=` carries from here on (Step 3j.3), so every subsequent join-level role sees the amended union rather than the superseded one.
+6. **Rebuild the leaf set** from the amended contract tree: preserved leaves keep their existing plan IDs; invalidated leaves take the replacement `FEAT` IDs from step 2, with new plans authored by a Step 2L architect pass and verified as 2L requires. The rebuilt set is what `leaves=` carries from here on (Step 3j.3), so every subsequent join-level role sees the amended union rather than the superseded one. **Update `.orchestrator/run-manifest.json`** with the amended `contract_ids` tree and the rebuilt `leaf_ids` (Step 0r → *The run manifest*), so a later `--resume` validates against the amended state and not the superseded one.
 7. **Re-dispatch only the invalidated leaves** through Step 3L, under the same `max_parallel_lanes` wave rule. Preserved leaves are never re-run.
 8. **Increment `amendment_count` by 1**, then return to the join.
 
