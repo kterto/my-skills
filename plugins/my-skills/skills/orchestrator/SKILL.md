@@ -649,7 +649,7 @@ Passing the 2p.1 digest is what keeps the contract cheap and honest: the archite
 
 Parse the architect's output to extract `pact_id` (from `ARCHITECT — {ID} created`) and `pact_path` (from `Contract: {path}`).
 
-**Bind `root_plan_id = pact_id`, and treat it as immutable for the rest of the run.** On the parallel path the parent `PACT` — not any leaf plan and not any remediation plan — is the run's aggregate under evaluation, because it is the only artifact that resolves the **whole** leaf union. Remediation reassigns the *active* `plan_id` (Steps 4c, 5d); it **never** reassigns `root_plan_id`. This distinction is what keeps a cycle-3 reviewer evaluating the same union a cycle-1 reviewer did, instead of narrowing to whatever `FIX`/`QAF` plan happened to run last.
+**Bind `root_plan_id = pact_id`.** On the parallel path the parent `PACT` — not any leaf plan and not any remediation plan — is the run's aggregate under evaluation, because it is the only artifact that resolves the **whole** leaf union. Remediation reassigns the *active* `plan_id` (Steps 4c, 5d); it **never** reassigns `root_plan_id`. The **one** thing that rebinds `root_plan_id` is a **parent-contract amendment** (Step 3j.2 step 4), because that genuinely replaces which aggregate is under evaluation; nothing else does. This distinction is what keeps a cycle-3 reviewer evaluating the same union a cycle-1 reviewer did, instead of narrowing to whatever `FIX`/`QAF` plan happened to run last.
 
 **File verification (mandatory before continuing)** — mirroring Step 2's: read the `PACT` at `pact_path` and its paired `.progress.md`. If either is missing or empty, re-invoke the architect once with the same prompt; if still missing after the retry, stop and report. Confirm its `related_to` references `spec_id`, and that its lane map, path-ownership, interface-points, unowned-files, integration-lane, and per-lane-definition-of-done regions are all present. A `PACT` missing a region is not usable — re-invoke once, then stop.
 
@@ -896,9 +896,26 @@ Status: PARTIAL — re-run with --resume to continue the incomplete leaves
 
 Reached for the leaves Step 3j's classification routed here — a `contract violation` with budget remaining. Such a leaf halts the fan-out at the join and enters the loop:
 
-1. Invoke the architect to write an **amended contract** — a new artifact with its own ID whose `related_to` references the **superseded** one. The superseded contract is left on disk unmodified.
-2. **Re-slice** against the amended contract and **resume the affected leaves** (only those whose plans the amendment changes).
-3. Increment `amendment_count` by 1.
+The amendment is an **atomic transaction**: it either completes every step below and leaves the run with one coherent contract tree and leaf set, or it fails and the run halts `PARTIAL` (3j.1). A half-applied amendment — a new contract on disk that nothing points at, or a leaf plan written against a superseded shape — is the failure mode these steps exist to prevent. Never re-dispatch a leaf before step 6 completes.
+
+1. **Determine the amendment scope** per *Amendment scoping* below: the narrowest contract that can fix the violated row, and — from that contract's lane map — the **affected set** of leaves.
+2. **Allocate every replacement ID up front**, before any spawn, exactly as Steps 2c/2s/2L do: `newid PACT` for the amended contract (and for each sub-contract the amendment invalidates), and `newid FEAT` for each **affected** leaf's replacement plan. Pre-allocation is what keeps the amendment collision-free under the same no-directory-scan rule the initial fan-out uses.
+3. **Invoke the architect to write the amended contract** — a new artifact with its own pre-allocated ID whose `related_to` references the **superseded** one. The superseded contract is left on disk **unmodified**; it is history, not state. Verify it through **Step 2c's file verification** (or 2s.3 for a sub-contract) before continuing.
+4. **Rebind the active contract.** The amended contract becomes the run's **active** contract at its level, and its ID replaces the superseded one in the run's contract tree. When the amended contract is the **parent**, `root_plan_id` is rebound to the amended parent `PACT` ID — the single exception to its immutability (Step 2c), and the only one: it tracks *which aggregate is under evaluation*, and after a parent amendment that aggregate is the amended contract. The superseded ID is never used to dispatch, verify, or invoke a role again.
+5. **Partition the leaf set — preserve only what the amendment cannot have invalidated.** A leaf is **preserved** when it is `DONE` **and** the amendment changed no row it produces or consumes and no glob it owns; its work stands and it is not re-dispatched. Every other leaf is **invalidated**: any leaf the amendment's rows or globs touch (whatever its status), plus every leaf of a sub-contract the amendment re-authored. An invalidated `DONE` leaf is **not** silently kept — it was completed against a shape that no longer holds.
+6. **Rebuild the leaf set** from the amended contract tree: preserved leaves keep their existing plan IDs; invalidated leaves take the replacement `FEAT` IDs from step 2, with new plans authored by a Step 2L architect pass and verified as 2L requires. The rebuilt set is what `leaves=` carries from here on (Step 3j.3), so every subsequent join-level role sees the amended union rather than the superseded one.
+7. **Re-dispatch only the invalidated leaves** through Step 3L, under the same `max_parallel_lanes` wave rule. Preserved leaves are never re-run.
+8. **Increment `amendment_count` by 1**, then return to the join.
+
+Print, so an amended run is never indistinguishable from a first-pass one:
+
+```
+AMEND — {superseded contract ID} → {amended contract ID}
+Scope: {parent | sub-contract {lane}}
+Leaves preserved: {qualified names}
+Leaves invalidated: {qualified name} → {replacement FEAT-ID}, …
+Amendments used: {amendment_count} / {max_contract_amendments}
+```
 
 ##### Amendment scoping — amend at the narrowest contract that can fix the row
 
