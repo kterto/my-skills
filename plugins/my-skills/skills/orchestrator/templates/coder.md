@@ -35,6 +35,8 @@ Read the `PACT` at `contract=`. **It is the authority on what you own** — and 
 
 Other coders are running **concurrently in this same workspace**, isolated from you by nothing but those globs — the run shares one workspace because per-lane worktrees would require per-lane commits, and the pipeline never commits. A write outside your globs is therefore not a style violation; it is a collision with another agent's work. This is equally true of a **sibling sub-lane** of your own lane: its globs are as much someone else's as another lane's are, because containment guarantees they are disjoint from yours.
 
+**"Inside your globs" means canonically inside, checked at write time.** A path that reads as in-scope can resolve elsewhere if any component is a symlink — including one a concurrent leaf created *after* your contract was frozen. So before writing, resolve the destination's existing components (symlinks included) and confirm the **canonical** path is still inside your lane's **canonical** owned scope, per `.orchestrator/config.md` → *Owned-glob rejection*, case 7. A write whose canonical destination lands outside it is a `lane boundary` stop like any other — the string looking right is not the test.
+
 So: **a required edit outside your lane's globs is not performed.** Do not make it "just this once", do not make it and note it, do not widen your own globs. Stop with the `lane boundary` BLOCKED reason in Step 5.
 
 Two further rules follow from the same reasoning:

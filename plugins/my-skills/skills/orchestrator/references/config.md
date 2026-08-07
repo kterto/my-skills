@@ -115,7 +115,8 @@ No newline, quote, or `<` can appear, which is what makes YAML/HTML injection vi
 - **no `..` segments** and no `.` segments (must already be normalized);
 - **no control characters** — no newline (`\n`), carriage return (`\r`), tab, or NUL, and no other C0/C1 control bytes;
 - restricted to the portable path charset `[A-Za-z0-9._/-]`, single internal `/` separators, no trailing `/`;
-- a length cap of **≤ 200 characters**.
+- a length cap of **≤ 200 characters**;
+- and — because every bullet above is **lexical** — it must additionally pass **canonical containment** (*Owned-glob rejection*, case 7): neither the path nor any ancestor may be a symlink, and its canonical form must stay inside the canonical repository root. A `path` that satisfies every string rule can still resolve elsewhere if a component is a symlink.
 
 **The one delta from `systems`:** `path` is **required** for a lane, where `systems` treats it as optional. A lane with no `path` has no owned scope, and owned scope is the only isolation mechanism between concurrent coders.
 
@@ -140,9 +141,21 @@ A `PACT`'s per-leaf owned path globs are the *only* isolation mechanism between 
 3. **escaping the repo via `..`**;
 4. **carrying control characters or newlines**;
 5. **overlapping another lane's globs** (at the parent level) or **another sibling sub-lane's globs** (within one lane);
-6. **not contained within its parent lane's globs** — the **containment rule**, sub-lane globs only.
+6. **not contained within its parent lane's globs** — the **containment rule**, sub-lane globs only;
+7. **rooted at, or reached through, a symlink** — see *Canonical containment* below.
 
-This list is normative and **singular** — `SKILL.md`, `templates/architect.md`, and every rule about sub-lanes point here rather than restating it, so adding a case means editing exactly one list. Cases 1–4 apply **unchanged** to a sub-lane's globs; case 5 is the same rule read one level down; case 6 exists only at the sub-lane level.
+This list is normative and **singular** — `SKILL.md`, `templates/architect.md`, and every rule about sub-lanes point here rather than restating it, so adding a case means editing exactly one list. Cases 1–4 apply **unchanged** to a sub-lane's globs; case 5 is the same rule read one level down; case 6 exists only at the sub-lane level; case 7 applies **unchanged at both levels**.
+
+**Canonical containment (case 7, security — lexical checks are not sufficient).** Cases 1–3 are **lexical**: they read the path string. A path can satisfy every one of them and still resolve somewhere else entirely, because **any component may be a symlink**. `apps/api` contains no `..`, is relative, and uses only the portable charset — yet if `apps/api` (or `apps`) is a symlink it can resolve outside the repository, or into a *different lane's* directory. Lexical containment then certifies an isolation boundary that does not exist at write time, which defeats the one mechanism separating concurrent coders.
+
+So containment is enforced on **canonical** paths, not on strings:
+
+- **Canonicalize every existing component** of an owned scope — the scope itself and each of its ancestors up to the repository root — resolving symlinks (`realpath`-equivalent). Canonicalize the repository root the same way, so the comparison is symlink-to-symlink consistent.
+- **Reject a scope whose canonical form escapes the canonical repository root**, and reject one **whose scope or any ancestor is itself a symlink** — a symlinked owned scope is rejected outright rather than followed, because its target can be re-pointed after validation.
+- **Re-apply canonical containment at write time, not only at contract-authoring time.** A path that did not exist when the contract was frozen may be created as a symlink by a concurrent leaf, so *validated once, trusted forever* is not sound here. A write whose canonical destination falls outside its leaf's canonical owned scope is a **`lane boundary`** stop (`templates/coder.md`), exactly as a lexically out-of-scope write is.
+- **Case 6 is evaluated on canonical paths too.** Sub-lane containment within a parent lane means canonical-within-canonical; a sub-lane whose canonical form leaves its parent's canonical scope is rejected even when the strings nest cleanly.
+
+This is what makes the disjointness proof above hold against the filesystem rather than only against the path strings.
 
 **Containment (case 6, load-bearing).** Every sub-lane's owned globs must be a **strict partition of its parent lane's owned globs**: their union is contained within the parent's globs, and they are mutually disjoint. No sub-lane may claim a path outside its parent lane.
 
