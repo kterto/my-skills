@@ -180,6 +180,12 @@
       ]
     },
     {
+      "name": "simplify",
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
       "name": "validation-fixer",
       "files": [
         "SKILL.md"

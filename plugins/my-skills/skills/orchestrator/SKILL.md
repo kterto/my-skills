@@ -22,7 +22,7 @@ Bootstrap runs when `--setup` is passed or `.orchestrator/config.json` is absent
 
 ### B1 — Context gate
 
-1. **Explore scan** (the only subagent in the gate): spawn an `Explore` subagent with the prompt:
+1. **Explore scan** (the only subagent in the gate): spawn a **read-only scan subagent** (see *The read-only scan subagent type* below) with the prompt:
    > "Scan this repo and return a structured digest of stack, build/test/lint/e2e/coverage commands, directory layout, naming conventions, and any documented domain rules. Read CLAUDE.md, AGENTS.md, README, and config/manifest files."
    Collect the digest.
 
@@ -42,6 +42,8 @@ Check whether the `spec-driven-eval` skill is available (look for it in the skil
 - If the user declines, instruct them to run the command manually later.
 
 Record availability in memory for the current run. Do **not** block bootstrap on decline — the eval stage (Step 7) will handle a missing skill gracefully.
+
+Check for a resolvable **`simplify`** skill the same way, and record its availability too. It ships in this marketplace, so a plugin install already satisfies it on both hosts; a host-provided `simplify` satisfies it equally. When none resolves, print one line saying the pre-review simplification pass will be skipped — do **not** offer to install anything and do **not** block bootstrap. Steps 3 and 3j degrade explicitly on it.
 
 ### B3 — Materialize
 
@@ -91,7 +93,7 @@ brainstormer → 2p ───→ 2c ────────┤                 
              └─(non-viable / autonomous / no question tool)→ off ─────→ the sequential path above, unchanged
 ```
 
-- **2p** — slicing analysis (**one** `Explore` subagent covering **both** levels in one pass), the flat-vs-nested cost/benefit, the inner viability gate, the six-condition `lanes` viability gate, and the `ask` ladder. `full` degrades to `lanes`; `lanes` degrades to `off`.
+- **2p** — slicing analysis (**one** read-only scan subagent covering **both** levels in one pass), the flat-vs-nested cost/benefit, the inner viability gate, the six-condition `lanes` viability gate, and the `ask` ladder. `full` degrades to `lanes`; `lanes` degrades to `off`.
 - **2c** — one architect authors the **parent** `PACT`, freezing the lane map, path ownership, and every cross-lane interface.
 - **2s** — **`full` only, and only for lanes the gate adopted.** One architect per sub-split lane, concurrently, each authoring that lane's **sub-contract** (a child `PACT`). Skipped entirely under `lanes`.
 - **2L / 3L** — one architect then one coder **per leaf**, both concurrent, isolated by disjoint path ownership in one shared workspace. **3L is a single flat dispatch over the whole leaf set**, not per-lane groups.
@@ -125,6 +127,18 @@ task({
 ```
 
 The subagent prompt MUST be self-contained: it does not see this conversation. Include the user's raw input, the spec/plan path or ID, and any locked decisions.
+
+#### The read-only scan subagent type
+
+Two steps spawn a **scan** subagent rather than a pipeline role: Bootstrap B1 (context digest) and Step 2p.1 (slicing analysis). Unlike the six roles, this one is **not materialized by B3** — it is whatever read-only agent type the host already provides, and the name differs per host. Resolve it **once per run**, in this order, and use the first that exists:
+
+1. `Explore` — Claude Code's built-in read-only search agent.
+2. `explore` — the opencode equivalent, when the host registers one.
+3. `general-purpose` (Claude Code) / `general` (opencode) — the catch-all agent type.
+
+**Never let this resolution fail the run.** If none of the three exists, do **not** spawn: perform the scan inline in the orchestrator's own context using the host's read tools, and note in the step's stdout that the digest was gathered inline rather than in a subagent. The digest is untrusted input either way (Step 2p.1), so gathering it inline changes only *where* the reading happened, never how the result is treated.
+
+This matters most at **Step 2p.1**, where a failed spawn would leave the run with no lane set at all. A scan-subagent failure is never a parallelization verdict — Step 2p.3 owns those, and it decides on the digest's content, not on how the digest was obtained.
 
 #### Mandatory role-prompt preamble (every spawn)
 
@@ -433,12 +447,12 @@ Only continue when `spec_status` is `READY_FOR_PLANNING`.
 
 Apply the no-prompt guards of 2p.4 — **only when the resolved value is `ask`**, per that step — and viability conditions 1 and 6 **now**, while they cost nothing: they are answerable from Step 0b/0c state and host capability alone. If any fires, set `parallelism = off`, print the reason, and go to Step 2 — **without spawning the analysis subagent**. Spawning it first and discarding its digest is the one avoidable cost on this path, and it is exactly what an autonomous or non-fan-out host would pay on every `ask` run. An explicitly configured `lanes` or `full` skips the guards entirely here and continues to 2p.1, since neither guard can apply to it.
 
-#### 2p.1 — Slicing analysis (one read-only Explore subagent)
+#### 2p.1 — Slicing analysis (one read-only scan subagent)
 
-Spawn **exactly one** read-only `Explore` subagent — the same pattern Bootstrap B1 uses, with the call shape from *How to spawn a subagent* — with the spec path and the candidate lane set from Step 0c. It produces no artifact; it reads and reports.
+Spawn **exactly one** read-only scan subagent — the same pattern Bootstrap B1 uses, with the call shape and the host-resolution order from *How to spawn a subagent* → **The read-only scan subagent type** — with the spec path and the candidate lane set from Step 0c. It produces no artifact; it reads and reports. When no scan agent type exists on the host, run the analysis inline per that section rather than skipping it.
 
 - `description`: `Slice spec into lanes`
-- `subagent_type`: `Explore`
+- `subagent_type`: the resolved scan type (`Explore` / `explore` / `general-purpose` / `general`)
 - `prompt`: spec path + the delimited `LANE METADATA` block + the digest request below. When Step 0c's candidate set is empty, ask it to derive the lane set from `PROJECT-CONTEXT.md` → **Layout** instead.
 
 Ask it for a digest containing, **per candidate lane**: the spec's functional requirements that map to it, an estimated task count, the file/dir globs it would own, and — separately — **every requirement that maps to more than one lane** (an overlap).
@@ -510,6 +524,16 @@ Declare parallelization **non-viable** and fall back to sequential — **printin
 6. **The host cannot spawn concurrent subagents.** → `non-viable: host cannot fan out concurrent subagents`
 
 Condition 6 is the fallback that keeps this host-agnostic: concurrent `task` fan-out is not guaranteed on every opencode host, and a host that cannot fan out simply runs sequentially rather than failing.
+
+**How condition 6 is determined (normative — do not guess it).** "Can the host fan out?" is a capability question about the *executing session*, so answer it from what that session can observe, in this order:
+
+1. **The subagent tool is absent entirely** → condition 6 holds. Nothing downstream can spawn a role, so parallel and sequential are both impossible-as-written; a sequential run at least degrades to the documented path.
+2. **The session cannot issue more than one tool call in a single assistant message** → condition 6 holds. Concurrency here *is* multiple subagent calls emitted together; a host that serializes tool calls turns every fan-out into a sequence that still pays the full contract-authoring and join cost. That is strictly worse than `off`, which is why this degrades rather than proceeds.
+3. **Otherwise → condition 6 does NOT hold.** Assume the host can fan out and continue. Do not probe for it with a throwaway spawn, and do not infer it from the host's name.
+
+**Concurrency is a preference, not a correctness requirement — this is what makes rule 3 safe.** Every leaf owns disjoint paths under a frozen contract, and the joins (3s, 3j) are barriers on leaf *completion*, not on leaf *simultaneity*. A host that accepts the calls together but executes them one after another produces the identical tree; it just does not shorten the critical path. So rule 3 risks losing the speedup, never the result — whereas wrongly asserting condition 6 costs every host the feature.
+
+**A resumed run re-derives this verdict for its own session and does not inherit the halted one's.** That is safe for the same reason rule 3 is: the manifest pins the *split* — contracts, leaves, dispatch order — and a session that answers condition 6 differently re-dispatches the same remaining leaves at a different speed, not a different shape.
 
 On any of these: set `parallelism = off`, print the reason, and continue to Step 2 as an ordinary sequential run.
 
@@ -651,7 +675,9 @@ Read the plan file at `plan_path` and confirm `status: DONE` is present in the f
 
 **Simplification pass (mandatory before tester):**
 
-After coder DONE is confirmed, invoke the `simplify` skill on the changes from this plan. This is the cheap pre-review pass for simplicity. Any fixes the skill produces are folded into the same diff — they belong to this plan, not a new one — and the plan stays at `status: DONE`. If `simplify` reports no issues, continue. Log the result to `.progress.md` as a `SIMPLIFY` entry. Do not loop on simplify; it runs once.
+After coder DONE is confirmed, invoke the `simplify` skill on the changes from this plan — pass `--plan {this plan's ID}` so the skill resolves the scope to the paths this plan's tasks touched. This is the cheap pre-review pass for simplicity. Any fixes the skill produces are folded into the same diff — they belong to this plan, not a new one — and the plan stays at `status: DONE`. If `simplify` reports no issues, continue. Log the result to `.progress.md` as a `SIMPLIFY` entry. Do not loop on simplify; it runs once.
+
+**Which `simplify`, and what if there is none.** The skill ships in this marketplace (`plugins/my-skills/skills/simplify/`), so it is present on both hosts once the plugin is installed — `/my-skills:simplify` in Claude Code, the `simplify` skill in opencode. A host that also provides its own `simplify` (Claude Code has a built-in one) satisfies this step equally; the step needs the *behavior*, not a specific implementation. **If no `simplify` is resolvable at all, do not silently skip the pass and do not attempt it inline as the orchestrator:** print `SIMPLIFY skipped — no simplify skill available`, log that same line to `.progress.md`, and continue to the phase-gate re-run below (which is then a no-op, since nothing edited the diff). This is the same graceful-degrade contract Bootstrap B2 gives `spec-driven-eval` — an absent optional dependency reduces the run's quality, never its correctness.
 
 **Re-run the plan's own phase gates after `simplify` edits the diff — mandatory, before the tester.** For **every** phase of the plan whose touched paths the simplify diff intersects, re-run that phase's gate commands from the plan's own **`## Verification (per phase)`** section and **assert exit 0** for every one of them. The coder ran those gates against the tree it produced; `simplify` then changed that tree, so the coder's green is evidence about a diff that no longer exists.
 
@@ -927,7 +953,7 @@ Then, in order:
 
    **When a row's producer or consumer lane was sub-split, verify it against the sub-lane that lane's sub-contract assigned it to** — read the assignment from the sub-contract's **Inherited interface assignments** region (`.orchestrator/artifact-format.md`). **The outer join never guesses which leaf owns a parent row**; that region exists precisely so it does not have to. Report such a side by its qualified name (`backend/data`).
 
-3. **Run `simplify` once** over the **union diff** — not once per lane and not once per sub-lane. This is the same single pre-review simplification pass Step 3 describes; parallel mode changes only its scope, not its cadence.
+3. **Run `simplify` once** over the **union diff** — not once per lane and not once per sub-lane. Invoke it with **no scope argument** (or the run's base range) so it resolves the union itself; never pass a leaf's `--plan` ID here, which would reduce this pass to one lane's diff. This is the same single pre-review simplification pass Step 3 describes, and it resolves the skill and degrades on its absence **exactly as Step 3 specifies** — parallel mode changes only its scope, not its cadence and not its dependency contract.
 
    **`simplify` and the full test suite run exactly once per run, at this outer join — never per lane, never per sub-lane, at any depth.** Running `simplify` per lane would multiply a pass whose entire value is seeing the union; running the suite anywhere but here would test a workspace other leaves were still mutating.
 

@@ -9,6 +9,7 @@ Authored agent skills for [Claude Code](https://code.claude.com) and [opencode](
 | `clean-code-gates` | Runs Clean Code quality gates (G1–G7: coverage, complexity, length/nesting, naming, no-comments, mutation, dependency-structure) and emits an agnostic JSON + Markdown report. Portable across stacks (node-ts, dart-flutter). |
 | `commit-pr` | Stage, commit, push the current branch, and open a PR targeting `main`. Confirms before any remote mutation. |
 | `validation-fixer` | Routes recorded user-validation bugs through a chosen framework (superpowers / gsd / orchestrator) and tracks each fix in-file; orchestrator items are severity-routed (fixed inline, batched, or run dedicated). |
+| `simplify` | Reviews changed code across five cleanup angles (reuse, simplification, efficiency, altitude, quotable convention violations) and applies the fixes in the working tree. Quality only — it does not hunt for correctness bugs. Fans the angles out as concurrent subagents when the host allows, single-pass inline otherwise. Never commits. |
 | `design-to-code` | Translates Claude design output files (self-contained HTML with tokens, reviewer comments, component states) into pixel-perfect, correctly-behaving code. |
 | `orchestrator` | Project-agnostic 6-agent pipeline (brainstormer → architect → coder → tester → reviewer → qa) with a context-confidence gate, spec-driven-eval integration, and a final Markdown/HTML report. Auto-detects first-run bootstrap vs. straight pipeline execution. Optional **parallel lane execution** (`--parallel lanes|full|ask`) fans architect+coder out across disjoint lanes — and, under `full`, nested sub-lanes — behind a frozen interface contract, with resumable halted runs. |
 | `roadmap` | Decomposes a project spec into an auditable milestone→phase→user-story roadmap under `/roadmap/`, with append-only audit logs, orchestrator-ready user-story briefs, `/roadmap sync` trailer stamping, diff+preserve re-evaluation, release bands, and doc-only mutation ops. |
@@ -75,6 +76,8 @@ brainstormer → 2p ───→ 2c ────────┤                 
 
 **Degradation is explicit.** `full` degrades to `lanes` when no lane clears the inner gate; `lanes` degrades to `off` when the viability gate fails; `ask` degrades to `off` in `autonomous` mode or without a structured question tool. Every degradation prints its specific reason.
 
+**Host capability.** The sixth non-viability condition — "the host cannot spawn concurrent subagents" — is decided from the executing session, not guessed from the host's name: no subagent tool, or a session that cannot emit several tool calls in one message, degrades to `off`; otherwise the run proceeds. Concurrency is a preference, not a correctness requirement (leaves own disjoint paths under a frozen contract, and joins are barriers on completion, not simultaneity), so a host that accepts the calls but serializes them still produces the identical tree — it just doesn't shorten the critical path.
+
 **Resume.** A halted parallel run is detected from `.orchestrator/run-manifest.json` (a provenance anchor, not a `plans/**` scan). Without `--resume` you get a single non-blocking hint and a fresh run; with `--resume`, completed leaves are preserved in place — no stash, reset, or clean — and only the incomplete leaves re-dispatch. Any manifest mismatch or ambiguity aborts rather than guessing.
 
 ### Config
@@ -102,6 +105,9 @@ Stored in `.orchestrator/config.json`; overridable per-run via CLI args.
 ### Dependencies
 
 - **spec-driven-eval** skill — used at `READY_TO_COMMIT` to evaluate the deliverable against the original spec. Bootstrap checks availability and offers to install it. The pipeline degrades gracefully if the skill is absent (eval step is skipped with a warning).
+- **simplify** skill — the mandatory pre-review cleanup pass at sequential Step 3 (scoped `--plan <FEAT-id>`) and at the parallel outer join Step 3j (scoped to the union diff, once per run). It ships in this marketplace, so installing the plugin satisfies it on both hosts; a host-provided `simplify` satisfies it equally. Bootstrap B2 records availability, and both steps degrade explicitly — printing `SIMPLIFY skipped — no simplify skill available` — rather than skipping silently or having the orchestrator do the pass itself.
+
+The two scan steps (Bootstrap B1's context digest, Step 2p.1's slicing analysis) spawn a **read-only scan subagent**, resolved per host in order: `Explore` → `explore` → `general-purpose` / `general`. If none exists, the scan runs inline in the orchestrator's own context rather than failing — a scan-subagent failure is never a parallelization verdict.
 
 ---
 
@@ -291,6 +297,7 @@ my-skills/
 │           ├── clean-code-gates/SKILL.md
 │           ├── commit-pr/SKILL.md
 │           ├── validation-fixer/SKILL.md
+│           ├── simplify/SKILL.md
 │           ├── design-to-code/SKILL.md
 │           ├── orchestrator/SKILL.md
 │           ├── roadmap/SKILL.md
@@ -334,7 +341,7 @@ curl -fsSL https://raw.githubusercontent.com/kterto/my-skills/main/scripts/insta
 
 Then restart opencode. Skills load as normal opencode skills: `clean-code-gates`, `commit-pr`, `orchestrator`, `roadmap`, `product-manager`, `pr-review-report`, etc.
 
-Slash commands are installed too: `/clean-code-gates`, `/commit-pr`, `/orchestrator`, `/roadmap`, `/product-manager`, `/pr-review-report`, etc. In opencode, slash commands are separate from skills, so these command files explicitly load the matching skill before running it. Hand-written templates under `.opencode/commands/` override the generated command prompt for the same name; `roadmap` and `product-manager` have explicit templates so their expanded command surfaces match Claude Code usage.
+Slash commands are installed too: `/clean-code-gates`, `/commit-pr`, `/orchestrator`, `/roadmap`, `/product-manager`, `/pr-review-report`, `/simplify`, etc. In opencode, slash commands are separate from skills, so these command files explicitly load the matching skill before running it. Hand-written templates under `.opencode/commands/` override the generated command prompt for the same name; `roadmap`, `product-manager`, and `simplify` have explicit templates so their expanded command surfaces match Claude Code usage.
 
 Manual equivalent:
 
