@@ -431,7 +431,7 @@ Only continue when `spec_status` is `READY_FOR_PLANNING`.
 
 #### 2p.0 — Static guards first (before any subagent spawn)
 
-Apply the no-prompt guards of 2p.4 and viability conditions 1 and 6 **now**, while they cost nothing: they are answerable from Step 0b/0c state and host capability alone. If any fires, set `parallelism = off`, print the reason, and go to Step 2 — **without spawning the analysis subagent**. Spawning it first and discarding its digest is the one avoidable cost on this path, and it is exactly what an autonomous or non-fan-out host would pay on every run.
+Apply the no-prompt guards of 2p.4 — **only when the resolved value is `ask`**, per that step — and viability conditions 1 and 6 **now**, while they cost nothing: they are answerable from Step 0b/0c state and host capability alone. If any fires, set `parallelism = off`, print the reason, and go to Step 2 — **without spawning the analysis subagent**. Spawning it first and discarding its digest is the one avoidable cost on this path, and it is exactly what an autonomous or non-fan-out host would pay on every `ask` run. An explicitly configured `lanes` or `full` skips the guards entirely here and continues to 2p.1, since neither guard can apply to it.
 
 #### 2p.1 — Slicing analysis (one read-only Explore subagent)
 
@@ -552,14 +552,16 @@ parallelism: full → lanes (flat split unaffected; it passed its own gate at 2p
 
 #### 2p.4 — Two hard no-prompt guards
 
-Step 2p **never prompts** in either of these cases. Each resolves to `off` and prints the reason:
+**These guards apply only while the resolved value is `ask`.** They exist to remove a *prompt*, and `ask` is the only value that produces one — `lanes` and `full` are applied directly without prompting (2p.5), so there is nothing for a guard to prevent. In either case below, an `ask` run resolves to `off` and prints the reason:
 
 1. `automation_level=autonomous` → `parallelism: off — autonomous mode does not prompt`
 2. The host cannot present a structured question → `parallelism: off — host cannot present a structured question`
 
 Both are answerable before any spawn, which is why 2p.0 applies them first. A non-viable split (2p.3) also resolves to `off`, but that is 2p.3's own outcome, not a third guard.
 
-This is what guarantees **no non-interactive caller can ever be blocked by this step**. A non-interactive caller may additionally pass `--parallel off` explicitly, so the step does not exist for its run at all rather than depending on the default.
+**An explicitly configured `lanes` or `full` is unaffected by either guard.** It proceeds through the 2p.3 viability gate — and, for `full`, the 2p.3n inner gate — and degrades only if a gate says so. Firing these guards against it would silently override an explicit instruction with `off` on the strength of a prompt that was never going to happen, which is precisely the direct-apply behavior 2p.5 documents. An **autonomous** run configured `--parallel full` therefore runs `full`; it is `--parallel ask` under autonomous that resolves to `off`, because there is no way to ask.
+
+This is what guarantees **no non-interactive caller can ever be blocked by this step**: the only path to a prompt is `ask`, and on `ask` these guards remove it. A non-interactive caller may additionally pass `--parallel off` explicitly, so the step does not exist for its run at all rather than depending on the default.
 
 #### 2p.5 — The `ask` ladder
 
