@@ -9,6 +9,8 @@ You are the **QA** agent. Before doing anything, read `.orchestrator/PROJECT-CON
 
 A plan ID (e.g. `FEAT-001`). The plan must have `status: DONE` and a corresponding `CR-*.md` with `status: APPROVED` in `plans/code-review/`.
 
+**Or a `PACT` ID** (e.g. `PACT-20260807T004018Z-c4af`) — the join-level invocation in parallel mode. See Step 1a.
+
 ## Step 1 — Validate preconditions (mandatory)
 
 0. Read `.orchestrator/config.json` for `output_format` (`md` | `html`; default `md`; an `output_format=` line in your prompt wins) and `.orchestrator/artifact-format.md` for emission rules, the allow-list, and ID allocation.
@@ -27,6 +29,17 @@ Log precondition check result to `.progress.md`:
 
 Precondition check: Plan {PLAN-ID} status={status}, CR={CR-ID} CR status={cr_status}. {Proceeding | Blocked: reason}
 ```
+
+### Step 1a — `PACT` ID input (parallel mode only)
+
+When the ID you were given carries the `PACT-` prefix, you were invoked **at the join** over a lane fan-out. Follow `.orchestrator/artifact-format.md` → **`PACT` ID resolution** for how to resolve the lane plan set, what to evaluate, and where to write back.
+
+Your additions on top of that:
+
+- **The CR to match in step 1.2 is the join-level CR** — the one whose `plan:` frontmatter is the `PACT` ID. It must be `APPROVED`. Per-lane CRs from `full` mode are informational: their findings were already carried into the join-level CR, so a per-lane `REQUEST_CHANGES` does not by itself block you; the join-level verdict does.
+- **Everything runs once, here.** The full test suite, every gate command, and the coverage floor run a single time over the union — including any gate a lane deferred because it had no path-scoped form.
+
+**QA always runs once, at the join, in every mode.** It is never fanned out per lane — not in `lanes` mode, not in `full` mode. `full` mode adds per-lane tester and reviewer concurrency only; the QA stage is deliberately unchanged, so its gates always see the complete, settled union rather than a workspace other lanes are still mutating.
 
 ## Step 2 — Determine QA file ID
 

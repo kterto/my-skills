@@ -50,6 +50,11 @@ function escAttr(s) {
     .replace(/[\x00-\x1F\x7F]/g, (c) => '&#' + c.charCodeAt(0) + ';');
 }
 
+const SCAFFOLD = {
+  SPEC: 'spec', FEAT: 'plan', FIX: 'plan', QAF: 'plan', PACT: 'plan',
+  TEST: 'test-report', CR: 'code-review', QA: 'qa-report', FINAL: 'final-report',
+};
+
 const KICKER = {
   spec: 'Functional Specification',
   plan: 'Execution Plan',
@@ -58,6 +63,9 @@ const KICKER = {
   'qa-report': 'QA Report',
   'final-report': 'Final Report',
 };
+
+/** Prefixes whose document label differs from the scaffold they borrow chrome from. */
+const KICKER_BY_PREFIX = { PACT: 'Interface Contract' };
 
 /**
  * A link target is allowed only when it is a scheme-less relative reference
@@ -330,13 +338,12 @@ function timelineRows(body) {
 function toHtml(abs, src) {
   const { fm, body } = parseFrontmatter(src);
   const isProgress = /\.progress\.md$/.test(abs);
-  const tplName = isProgress
-    ? 'progress-timeline.template.html'
-    : /\/eval\//.test(abs) ? 'qa-report.template.html'
-    : path.basename(abs).replace(/^([A-Z]+).*/, (_, p) => ({
-        SPEC: 'spec', FEAT: 'plan', FIX: 'plan', QAF: 'plan',
-        TEST: 'test-report', CR: 'code-review', QA: 'qa-report', FINAL: 'final-report',
-      }[p] || 'qa-report')) + '.template.html';
+  const prefix = (path.basename(abs).match(/^([A-Z]+)/) || [])[1];
+  const scaffold = isProgress
+    ? 'progress-timeline'
+    : /\/eval\//.test(abs) ? 'qa-report'
+    : SCAFFOLD[prefix] || 'qa-report';
+  const tplName = scaffold + '.template.html';
 
   const id = fm.id || path.basename(abs).replace(/\.md$/, '');
   const status = fm.status || 'DONE';
@@ -345,8 +352,7 @@ function toHtml(abs, src) {
   const cycle = fm.cycle != null ? fm.cycle : '0';
   const pill = STATUS_PILL[status] || 'muted';
   const title = (body.match(/^#\s+(.+)$/m) || [, id])[1];
-  const stem = tplName.replace(/\.template\.html$/, '');
-  const ctx = { id, title, status, pill, created, updated, cycle, kicker: KICKER[stem] || 'Artifact' };
+  const ctx = { id, title, status, pill, created, updated, cycle, kicker: KICKER_BY_PREFIX[prefix] || KICKER[scaffold] || 'Artifact' };
 
   const mainInner = isProgress ? progressBody(body, ctx) : documentBody(body, ctx);
   const main =

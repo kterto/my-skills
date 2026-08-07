@@ -90,8 +90,35 @@ The ONLY directories permitted under `plans/`. No role or step may invent any ot
 | qa report     | `plans/qa/`          | `QA`    | qa                             |
 | spec eval     | `plans/eval/`        | `EVAL`  | orchestrator (Step 7a)         |
 | final report  | `plans/final/`       | `FINAL` | orchestrator (Step 7b)         |
+| interface contract | `plans/feat/`   | `PACT`  | architect (type `contract`)    |
 
 `QNA-{NNN}` files (brainstormer, non-interactive mode) share the paired SPEC's **ID token** (the `{NNN}` part only, without the `SPEC-` prefix) and live in `plans/specs/`.
+
+**The no-new-top-level-directory ban stands.** `PACT` is a new *prefix*, not a new directory: it is written into the existing `plans/feat/` alongside the lane `FEAT` plans it governs, exactly as `FIX` co-locates with `CR` in `plans/code-review/` and `QAF` with `QA` in `plans/qa/`. The table above remains the complete allow-list of directories under `plans/`; no role or step may invent another.
+
+### `PACT` frontmatter contract
+
+A `PACT` carries the **same five required frontmatter keys as every other artifact** (`id`, `status`, `created_at`, `updated_at`, `cycle`) plus `related_to` referencing the source spec, and a **Related** region linking back to it. Nothing about its shape is special-cased:
+
+- `check-artifact-pairing.cjs` accepts it unchanged — it requires the `.html` sibling and the complete five-key frontmatter, both of which a `PACT` has.
+- `check-artifact-links.cjs` accepts it unchanged — its Related link is an ordinary relative link that resolves on disk.
+- The renderer maps prefix `PACT` to the existing **`plan` scaffold** (`plan.template.html`), so it renders with the same `<main data-*>` shell, collapsible sections, disabled task checkboxes, and cycle badge as a `FEAT`. No new scaffold is introduced. Its masthead kicker is **`Interface Contract`**, not `Execution Plan`: which chrome a prefix borrows and what the document *is* are two decisions, and a `PACT` carries no `## Tasks` and no `## Verification (per phase)`.
+
+An **amended** `PACT` is a new artifact with its own ID whose `related_to` additionally references the superseded `PACT`; the superseded one is left on disk unmodified.
+
+### `PACT` ID resolution — receiving a contract ID as a role input
+
+The tester, reviewer, and QA roles can be invoked with a `PACT` ID where a plan ID would normally go. That is the **join-level invocation** in parallel mode: one pass over a whole lane fan-out. It resolves identically for all three, so it is specified once here and each role template carries only its own delta.
+
+When the ID you were given carries the `PACT-` prefix:
+
+1. **Read the `PACT`** at `plans/feat/{PACT-ID}-*.md`.
+2. **Resolve the lane plan set from its lane map** — the `Lane plan ID` column gives one `FEAT` ID per lane. Read every one of those lane plans in place of the single plan your own Step 1 would have read.
+3. **Every lane plan must be `status: DONE`.** If any is not, stop and report which lane is incomplete — the union is not yet a complete change set, so any verdict over it would describe work that does not exist.
+4. **Evaluate the union of the lane diffs as one change set**, in a single join-level pass. Never once per lane. The lanes share one workspace, so the ordinary diff range already yields the union; what changes is that you evaluate it against every lane plan's acceptance criteria plus the `PACT`, not one plan's.
+5. **Write back at the join:** set `plan:` in your report frontmatter to the `PACT` ID, fill the Related region with a relative link to the `PACT`, and append your Progress Log entry to **every** lane plan and its `.progress.md`, so no lane's log is missing the join verdict.
+
+The single-plan-ID path is otherwise **unchanged** — same steps, same statuses, same stdout header lines. A `PACT` ID simply appears where a plan ID would.
 
 ## ID allocation — timestamp-based, collision-free
 
@@ -132,7 +159,8 @@ Edges (each role fills the links it knows the paths of; omit a link when that ar
 | Artifact | Related links |
 |---|---|
 | spec | none |
-| plan (FEAT/FIX/QAF) | source spec (and source CR/QA for fix/qa plans) |
+| plan (FEAT/FIX/QAF) | source spec (and source CR/QA for fix/qa plans; and the governing `PACT` for a lane plan) |
+| interface contract (PACT) | source spec (and the superseded `PACT` when this one is an amendment) |
 | test report | the plan |
 | code-review | the plan |
 | qa report | the plan |
@@ -156,3 +184,18 @@ Required header lines per role:
 | qa           | `QA — QA-{NNN} created`                    | `Status: READY_TO_COMMIT \| BLOCKED \| READY_WITH_WARNINGS`   | `Report: {path}`    |
 
 Roles that have a path line also print it immediately after the Status line (or after the ID line for architect, which has no Status line). Additional informational lines (e.g. `Coverage:`, `Next:`) may follow but are not parsed by the orchestrator for control flow.
+
+### Parallel-mode lines (additive — only when `parallelism` is not `off`)
+
+These lines exist only on the parallel path. Every row in the table above is **unchanged byte-for-byte**; nothing below replaces or reformats an existing line.
+
+| Step | Printed by | Line |
+| ---- | ---------- | ---- |
+| 2c | architect (type `contract`) | `ARCHITECT — PACT-{NNN} created` then `Contract: {path}` — the architect's generic `ARCHITECT — {ID} created` row already covers the ID line; only the path label differs (`Contract:` rather than `Plan:`) |
+| 2L | orchestrator | `LANES — {N} lane plans dispatched` then one `Lane: {name} → {FEAT-ID}` per lane |
+| 3L | orchestrator | `LANES — {N} lane coders dispatched` then one `Lane: {name} → {FEAT-ID}` per lane |
+| 3j | orchestrator | `JOIN — PACT-{NNN} reconciled` then `Status: JOINED \| PARTIAL \| AMENDED` and one `Lane: {name} — {DONE \| BLOCKED} ({reason})` per lane |
+
+A lane's tester/reviewer/QA invocation prints that role's **existing** header lines verbatim — a `PACT` ID simply appears where a plan ID would.
+
+**Additive backward-compatibility guarantee.** The header-line contract only ever gains rows for the new artifact and the new steps; no existing row's text, order, or format changes. Every downstream parser therefore keeps working unmodified — notably `product-manager`, which keys off the orchestrator's `pipeline complete` banner. That banner is untouched, is still printed exactly once at the end of a run in every mode, and is never emitted by the join. With `parallelism` unset or `off` none of the lines in this section is printed at all, so an `off`-mode run's stdout is byte-identical to a pre-feature run's.

@@ -23,6 +23,25 @@ Read `.orchestrator/PROJECT-CONTEXT.md`, plus any project files it points to.
 
 Apply the Invariants and Commands sections of `PROJECT-CONTEXT.md` before writing any code.
 
+## Step 2L — Lane boundary (parallel mode only)
+
+Applies **only when your orchestrator preamble carries `lane=` and `contract=` lines.** Those lines are the sole authority on lane membership: present ⇒ this is a lane invocation and this step binds; absent ⇒ skip this step entirely and the rest of this template is unchanged. Never infer a lane from plan prose, a file path, or an ID — a boundary rule that switches itself off because an architect worded an Overview differently would fail open and silently.
+
+Read the `PACT` at `contract=`. It is the authority on what you own. Then hold this rule for the whole session:
+
+> **Every file you write must fall inside your lane's owned path globs.**
+
+Other coders are running **concurrently in this same workspace**, isolated from you by nothing but those globs — the run shares one workspace because per-lane worktrees would require per-lane commits, and the pipeline never commits. A write outside your globs is therefore not a style violation; it is a collision with another agent's work.
+
+So: **a required edit outside your lane's globs is not performed.** Do not make it "just this once", do not make it and note it, do not widen your own globs. Stop with the `lane boundary` BLOCKED reason in Step 5.
+
+Two further rules follow from the same reasoning:
+
+- **You may never change the contract.** The `PACT`'s interface shapes are frozen. If you discover a frozen shape is wrong, unimplementable, or contradicts the spec, that is not yours to fix — stop with the `contract violation` BLOCKED reason. Only the architect writes an amended `PACT`.
+- **You may never edit the `PACT` file itself** — not its interface rows, not its lane map, and not its lane-status table (the orchestrator is that table's sole writer).
+
+Build against the **consumer stub strategy** the contract specifies for any interface row you consume; that is what keeps your lane from blocking on another lane's progress.
+
 ## Step 3 — Mark plan IN_PROGRESS
 
 In the plan file, change:
@@ -121,6 +140,11 @@ Rules for this sub-step:
 1. MANDATORY before checking the last task in the phase. Not optional.
 2. Either confirm all-green and proceed, OR treat any failure as a blocker and route it through Step 5 (BLOCKED procedure). Do NOT silently rewrite source to make a gate pass without a corresponding plan task.
 3. G1 (coverage) and G6 (mutation, when scaffolded) are NOT in this sub-step — they remain QA-owned. If the plan's verification section references them, escalate to architect; the plan template is wrong.
+4. **Lane-scoped gates (parallel mode only).** When your plan declares a lane, every gate command you run is **scoped to your lane's owned paths** — pass the lane's globs/directories to the command rather than running it repo-wide. Other lanes are mid-edit in the same workspace, so a repo-wide gate would report their in-flight state as your failure and waste a BLOCKED stop on work that is not yours.
+
+   If a gate has **no path-scoped form** in `PROJECT-CONTEXT.md` → Commands, **defer it to the join** instead of running it concurrently. Note the deferral in `.progress.md` and proceed; the join runs it once over the union diff. Deferring is the correct outcome here, not a failure.
+
+   **The full test suite is never run inside a lane.** It runs exactly **once, at the join**, over the union of every lane's diff. Running it concurrently from within a lane would test a workspace that other coders are actively mutating.
 
 ### TDD rules (non-negotiable)
 
@@ -148,6 +172,32 @@ Unblocking needed: {what is required}
 
 4. Update `**Status**` in `.progress.md` to `BLOCKED`.
 5. Stop and report to user.
+
+### Lane BLOCKED reasons (parallel mode only)
+
+Two reasons are **reserved** and, when they apply, must be named exactly — the orchestrator's join routes on them. They are additions to the free-form reason above, not replacements for it; a plan that declares no lane can never emit either.
+
+**`lane boundary`** — a task requires editing a file outside your lane's owned globs. Do not perform the edit. The stop must name **the offending file** and **the lane that owns it** (or state that no lane owns it, which makes it an unowned-file gap in the contract):
+
+```
+### {ISO 8601 datetime} | CODER
+
+BLOCKED on task: "{task text}"
+Reason: lane boundary — {path/to/offending/file} is outside lane `{my lane}`; owned by lane `{owning lane}` (or: owned by no lane)
+Unblocking needed: reassign the file in the PACT, or move this task to the owning lane / the integration lane
+```
+
+**`contract violation`** — a frozen `PACT` interface row is wrong, unimplementable, or contradicts the spec. Do not amend the contract, do not work around it silently, and do not implement a different shape. The stop must name **the offending `PACT` row**:
+
+```
+### {ISO 8601 datetime} | CODER
+
+BLOCKED on task: "{task text}"
+Reason: contract violation — PACT row {row id} ({producer} → {consumer}, {kind}) cannot be satisfied as frozen: {what is wrong}
+Unblocking needed: architect must write an amended PACT revising row {row id}
+```
+
+Both halt this lane only. The orchestrator waits for every other in-flight lane, then halts the run at the join in a `PARTIAL` state; completed lanes stay DONE and re-running resumes only the incomplete lane plans from their first unchecked task.
 
 ## Step 6 — Mark plan DONE
 
@@ -184,6 +234,7 @@ Refer to the Commands and Conventions sections of `PROJECT-CONTEXT.md` for the c
 - Never commit secrets, credentials, or generated env files.
 - Do not add comments unless asked.
 - Every line in your diff must trace to a task in the current plan. No drive-by refactors or reformatting outside scope.
+- **Parallel mode only:** never write outside your lane's owned globs; never edit the `PACT`; never run the full test suite inside a lane.
 
 ## Output to user
 
@@ -197,3 +248,25 @@ Tasks remaining: {N}
 {If DONE}: Next: invoke /reviewer with plan ID {PLAN-ID}
 {If BLOCKED}: Blocked on: "{task text}" — {reason}
 ```
+
+**Parallel mode only.** When your plan declares a lane, add a `Lane: {name}` line directly under the `Status:` line. When the stop was one of the two reserved reasons, the `Blocked on:` reason string starts with that exact token so the join can route on it:
+
+```
+CODER — {PLAN-ID} session complete
+Status: BLOCKED
+Lane: {name}
+Tasks completed this session: {N}
+Tasks remaining: {N}
+Blocked on: "{task text}" — lane boundary — {file} outside lane `{my lane}`; owned by lane `{owning lane}`
+```
+
+```
+CODER — {PLAN-ID} session complete
+Status: BLOCKED
+Lane: {name}
+Tasks completed this session: {N}
+Tasks remaining: {N}
+Blocked on: "{task text}" — contract violation — PACT row {row id} cannot be satisfied as frozen
+```
+
+Every other line, and the whole non-lane output above, is unchanged.

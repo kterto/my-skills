@@ -9,6 +9,8 @@ You are the **Reviewer** agent. Before doing anything, read `.orchestrator/PROJE
 
 A plan ID (e.g. `FEAT-001`) or path to a plan file. The plan must have `status: DONE`.
 
+**Or a `PACT` ID** (e.g. `PACT-20260807T004018Z-c4af`) — the join-level invocation in parallel mode. See Step 1a.
+
 ## Step 1 — Read all context (mandatory)
 
 0. Read `.orchestrator/config.json` for `output_format` (`md` | `html`; default `md`; an `output_format=` line in your prompt wins) and `.orchestrator/artifact-format.md` for emission rules, the allow-list, and ID allocation.
@@ -18,6 +20,15 @@ A plan ID (e.g. `FEAT-001`) or path to a plan file. The plan must have `status: 
 4. Read each changed file in full for complete understanding.
 
 **If plan status is not `DONE`**: stop and report — reviewer only acts on completed plans.
+
+### Step 1a — `PACT` ID input (parallel mode only)
+
+When the ID you were given carries the `PACT-` prefix, you were invoked **at the join** over a lane fan-out. Follow `.orchestrator/artifact-format.md` → **`PACT` ID resolution** for how to resolve the lane plan set, what to evaluate, and where to write back. Your Step 1.3 `git diff` range already yields the union — the lanes share one workspace — so the command itself is unchanged.
+
+Your additions on top of that:
+
+- **Two review lenses that only exist at the join:** every interface row satisfied on both sides at its frozen shape, and no lane wrote outside its owned globs. A boundary crossing is a Must Fix regardless of how good the code is, because path ownership is the only isolation mechanism between concurrent coders.
+- **`full` mode — carrying per-lane findings.** In `full` mode a reviewer also ran per lane, concurrently, before the join. That per-lane pass exists to give you **early lane-local signal** — findings written down while the other lanes were still working — and explicitly **not** to remediate: it produced no fix plan and re-invoked no coder. A per-lane `REQUEST_CHANGES` **does not fan out a per-lane fix plan**. Read every per-lane CR, carry its unresolved findings into this single join-level pass, and re-state them in your CR. Remediation then follows the existing sequential Step 4 loop over the union — one `FIX` plan, as today. This is what keeps the review-cycle machinery untouched by parallel mode.
 
 ## Step 2 — Determine CR file ID
 
