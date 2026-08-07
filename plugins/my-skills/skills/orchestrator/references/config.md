@@ -52,12 +52,14 @@ The default is `off`, not `ask`, because **backward compatibility is mandatory**
 
 The analysis mechanics, the ladder wording, and the no-prompt guards are normative in `SKILL.md` → Step 2p — read them there rather than from a summary here. The **rules** they apply — the viability conditions restated at sub-lane granularity, the makespan model, and the marginal-gain test — are normative *here*, under *The inner viability gate* below.
 
-**Two gates, composed in one fixed order, never conflated.** A `full` run is gated twice, and the two gates test different things:
+**Two gates, never conflated.** A `full` run is gated twice, and the two gates test different things:
 
-1. **The inner viability gate** (this file, *The inner viability gate*) asks *should any lane be sub-split?* When **no** lane clears it, `full` **degrades to `lanes`** — never straight to `off` — and the specific reason is printed.
-2. **The existing six-condition `lanes` viability gate** (`SKILL.md` → Step 2p.3) then asks *should the run be lane-parallel at all?* `lanes` may independently degrade to `off` under it, with its own reason printed.
+1. **The six-condition `lanes` viability gate** (`SKILL.md` → Step 2p.3) asks *should the run be lane-parallel at all?* `lanes` may degrade to `off` under it, with its own reason printed.
+2. **The inner viability gate** (this file, *The inner viability gate*) asks *should any lane be sub-split?* When **no** lane clears it, `full` **degrades to `lanes`** — never straight to `off` — and the specific reason is printed.
 
-They run in that order, inner then outer, and a failure of one is **never** reported or implemented as a failure of the other. Collapsing a failed inner test into a full sequential fallback would discard a flat split that already passed its own viability gate — which is exactly the split the user was shown priced.
+**The evaluation order is normative in `SKILL.md` → Step 2p.3n — outer (2p.3) first, then inner (2p.3n) — and is deliberately not re-derived here.** Read it there. The order follows from what each gate consumes: a failed outer gate leaves no lane split to sub-slice, and the inner gate's makespan model is computed over the very lane set 2p.3 validated.
+
+What *is* normative here is that **a failure of one is never reported or implemented as a failure of the other.** Collapsing a failed inner test into a full sequential fallback would discard a flat split that already passed its own viability gate — which is exactly the split the user was shown priced.
 
 ### `lanes`
 
