@@ -271,6 +271,15 @@ max_qa_cycles: {max_qa_cycles}
 
 **Resolve `parallelism`** with the standard precedence — CLI `--parallel` > `.orchestrator/config.json` > default `off`. Also read `max_contract_amendments` (default `2`) and set `amendment_count = 0`, and read `max_parallel_lanes` (default `6`). Every key's values, semantics, and absent-key tolerance are normative in **`references/config.md`** — read them there; they are deliberately not restated here.
 
+**These three keys are execution policy, so they load from the merge-base — not the working tree.** `parallelism`, `max_parallel_lanes`, and `max_contract_amendments` decide **how many command-capable coders run concurrently** against a shared workspace, and `.orchestrator/config.json` is a contributor-editable file inside the branch under review. Reading them from the working tree would let a branch grant itself nested execution and a wide fan-out as part of the very change being reviewed. Per the project's **two-trust-anchors invariant** (`PROJECT-CONTEXT.md`), policy and config load from the **merge-base (`$mb`)**:
+
+- Read the three keys from **`$mb:.orchestrator/config.json`** — the pinned merge-base copy — never from the working-tree file.
+- **A CLI flag outranks the merge-base**, because a flag is *the invoking user's* authority expressed at run time, not branch-authored content. `--parallel` therefore still wins.
+- When the merge-base has no `.orchestrator/config.json`, or the file is absent/unparseable there, fall back to the **defaults** (`off` / `6` / `2`) — never to the working-tree copy.
+- **Validate the numeric values before any dispatch**; an out-of-range value fails closed to the default with the reason printed rather than dispatching an impossible or unbounded wave.
+
+Every other key (`output_format`, `automation_level`, the thresholds) keeps reading from the working tree as before — they are presentation and interview preferences, not concurrency authority, and none of them widens a branch's blast radius.
+
 **If the resolved value is `off` (including by default), the run is finished with parallel mode.** **Steps 0c, 0r, 2p, 2c, 2s, 2L, 3L, 3s, and 3j do not exist for this run**: skip them entirely and follow Steps 1 → 2 → 3 → 3b → 4 → 5 → 7 exactly as written. Do not print a parallelism line in the banner above, and emit nothing else — an `off` run's stdout is byte-identical to a pre-feature run's.
 
 Add one line to the status output **only when `parallelism` is not `off`**:
