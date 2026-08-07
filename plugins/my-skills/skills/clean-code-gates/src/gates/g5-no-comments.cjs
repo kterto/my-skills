@@ -1,6 +1,6 @@
 'use strict';
 const CITATION_TODO = /^\s*\/\/\s*TODO\(REF\)/;
-const CITATION_ID   = /^\s*\/\/\s*(?:SPEC|FEAT|FIX|CR|QAF|QA)-\d+\b/;
+const CITATION_ID   = /^\s*\/\/\s*(?:SPEC|FEAT|FIX|CR|QAF|QA)-(?:\d+|\d{8}T\d{6}Z-[0-9a-f]{4})\b/;
 const ANALYZER_DIRECTIVE = /^\s*\/\/\s*ignore(?:_for_file)?:/; // Dart analyzer pragma, not prose
 const DOC_LINE = /^\s*\/\/\//;            // Dart doc
 const DOC_BLOCK_OPEN = /^\s*\/\*\*/;       // TS doc block open
