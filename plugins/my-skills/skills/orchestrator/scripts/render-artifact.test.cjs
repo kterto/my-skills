@@ -564,6 +564,155 @@ test('P4(i) the CLI surfaces ERENDERPATH like ERENDERINVALID: concise render-art
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+// ---------- PACT interface contract → plan scaffold (FEAT-20260807T004018Z-c4af) ----------
+
+// A `PACT` interface-contract artifact. It carries the same five frontmatter keys as
+// any other artifact plus `related_to`, and a **Related:** region pointing at its
+// source spec — the shape `references/artifact-format.md` documents for the prefix.
+const PACT_MD = `---
+id: PACT-20260101T000000Z-abcd
+status: DONE
+created_at: 2026-01-01T00:00:00Z
+updated_at: 2026-01-02T00:00:00Z
+cycle: 2
+related_to: SPEC-20260101T000000Z-0000
+---
+
+**Related:** [SPEC-20260101T000000Z-0000](../specs/SPEC-20260101T000000Z-0000-x.md)
+
+## Lane Map
+
+| Lane | Owned globs | Requirements | Lane plan |
+| ---- | ----------- | ------------ | --------- |
+| backend | apps/api/** | 1, 2 | FEAT-20260101T000000Z-0001 |
+| app | apps/mobile/** | 3 | FEAT-20260101T000000Z-0002 |
+
+## Per-lane Definition of Done
+
+- [ ] backend satisfies every interface row it produces
+- [x] app consumes the frozen shape of row I-1
+`;
+
+// toHtml is pure and the fixture is an immutable string, so one render serves every assertion.
+const PACT_HTML = toHtml('/repo/plans/feat/PACT-20260101T000000Z-abcd-fixture.md', PACT_MD);
+
+function styleOf(html) {
+  return (html.match(/<style>([\s\S]*?)<\/style>/) || [])[1];
+}
+
+test('PACT(a) a PACT-*.md renders through the plan scaffold under its own document label', () => {
+  // the lifted <style> must be byte-identical to the plan scaffold's, not the qa-report fallback's
+  assert.equal(styleOf(PACT_HTML), styleOf(planHtml()), 'PACT must lift the plan scaffold styles');
+  // …but a contract is not a plan: scaffold and document label are separate decisions
+  assert.match(PACT_HTML, /<p class="masthead__kicker"><span>Interface Contract<\/span><\/p>/);
+  assert.doesNotMatch(PACT_HTML, /<span>Execution Plan<\/span>/);
+  assert.doesNotMatch(PACT_HTML, /<span>QA Report<\/span>/);
+});
+
+test('PACT(b) a rendered PACT keeps the <main data-*> shell, cycle badge, Related nav, and validates clean', () => {
+  for (const attr of ['data-id', 'data-status', 'data-created-at', 'data-updated-at', 'data-cycle']) {
+    assert.match(PACT_HTML, new RegExp(attr + '="'));
+  }
+  assert.match(PACT_HTML, /data-id="PACT-20260101T000000Z-abcd"/);
+  assert.match(PACT_HTML, /<span class="badge">cycle 2<\/span>/);
+  assert.match(PACT_HTML, /<nav class="related"><span class="label">Related:<\/span>/);
+  assert.match(PACT_HTML, /<a href="\.\.\/specs\/SPEC-20260101T000000Z-0000-x\.md">/);
+  assert.deepEqual(validateHtml(PACT_HTML, PACT_MD, false), []);
+  // …and the conformant document it validates as is the plan-scaffold one: same lifted
+  // behavior script under the same CSP (H3(b) already pins hash↔script binding).
+  const pactScript = PACT_HTML.match(/<script(?: nonce="[^"]*")?>([\s\S]*?)<\/script>/);
+  const planScript = planHtml().match(/<script(?: nonce="[^"]*")?>([\s\S]*?)<\/script>/);
+  assert.ok(pactScript && planScript, 'both renders must lift a behavior <script>');
+  assert.equal(pactScript[1], planScript[1], 'PACT must lift the plan scaffold script');
+  assert.equal(cspOf(PACT_HTML), cspOf(planHtml()), 'PACT must carry the plan scaffold CSP');
+});
+
+test('PACT(c) a PACT-*.md on disk renders end-to-end through the CLI to a valid .html sibling', () => {
+  // PACT(a)/(b) pin the pure mapping; this drives the flow the orchestrator actually
+  // runs — `render-artifact.cjs <artifact.md>` — so the write path, the containment
+  // guard, and the internal validateHtml gate are exercised for the new prefix too.
+  const dir = mkTmp('render-pact-cli-');
+  const md = path.join(dir, 'PACT-20260101T000000Z-abcd-fixture.md');
+  fs.writeFileSync(md, PACT_MD);
+  const res = spawnSync(process.execPath, [SCRIPT, md], {
+    encoding: 'utf8',
+    env: { ...process.env, RENDER_ARTIFACT_ALLOW_ROOT: dir },
+  });
+  assert.equal(res.status, 0, res.stderr);
+  const out = md.replace(/\.md$/, '.html');
+  assert.ok(fs.existsSync(out), 'the CLI must write the .html sibling');
+  const written = fs.readFileSync(out, 'utf8');
+  assert.match(written, /<p class="masthead__kicker"><span>Interface Contract<\/span><\/p>/);
+  assert.match(written, /data-id="PACT-20260101T000000Z-abcd"/);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+// ---------- prefix → scaffold map (regression lock for the SCAFFOLD/KICKER_BY_PREFIX split) ----------
+
+// Every prefix on the `references/artifact-format.md` allow-list, with the scaffold it
+// borrows chrome from and the document label it is titled under. Before the split, the
+// label was derived from the scaffold filename, so the two columns could not disagree;
+// PACT is the first prefix where they do. Pinning the whole table means a future edit to
+// either map cannot silently re-point an established prefix.
+const PREFIX_SCAFFOLD = [
+  ['SPEC', 'specs', 'spec', 'Functional Specification'],
+  ['FEAT', 'feat', 'plan', 'Execution Plan'],
+  ['FIX', 'code-review', 'plan', 'Execution Plan'],
+  ['QAF', 'qa', 'plan', 'Execution Plan'],
+  ['PACT', 'feat', 'plan', 'Interface Contract'],
+  ['TEST', 'test', 'test-report', 'Test Report'],
+  ['CR', 'code-review', 'code-review', 'Code Review'],
+  ['QA', 'qa', 'qa-report', 'QA Report'],
+  ['FINAL', 'final', 'final-report', 'Final Report'],
+];
+
+const MAP_MD = (id) => `---
+id: ${id}
+status: DONE
+created_at: 2026-01-01T00:00:00Z
+updated_at: 2026-01-02T00:00:00Z
+cycle: 0
+---
+
+## Section
+
+Body text.
+`;
+
+// The lifted <style> is copied verbatim from the scaffold, so comparing it against the
+// scaffold file on disk identifies which template was loaded without trusting the kicker.
+function scaffoldStyle(name) {
+  const tplDir = process.env.RENDER_ARTIFACT_TPL_DIR;
+  return styleOf(fs.readFileSync(path.join(tplDir, name + '.template.html'), 'utf8'));
+}
+
+test('MAP(a) every allow-listed prefix resolves to its documented scaffold and document label', () => {
+  for (const [prefix, dir, scaffold, kicker] of PREFIX_SCAFFOLD) {
+    const id = `${prefix}-20260101T000000Z-abcd`;
+    const html = toHtml(`/repo/plans/${dir}/${id}-fixture.md`, MAP_MD(id));
+    assert.equal(styleOf(html), scaffoldStyle(scaffold), `${prefix} must lift the ${scaffold} scaffold`);
+    assert.match(
+      html,
+      new RegExp(`<p class="masthead__kicker"><span>${kicker}</span></p>`),
+      `${prefix} must be titled "${kicker}"`,
+    );
+  }
+});
+
+test('MAP(b) a plans/eval/ artifact and an unrecognised prefix both fall back to the qa-report scaffold', () => {
+  // `plans/eval/` has no prefix of its own — the directory overrides whatever the
+  // basename starts with, so EVAL must not be readable as a scaffold key.
+  const evalId = 'EVAL-20260101T000000Z-abcd';
+  const evalHtml = toHtml(`/repo/plans/eval/${evalId}-fixture.md`, MAP_MD(evalId));
+  assert.equal(styleOf(evalHtml), scaffoldStyle('qa-report'), 'plans/eval/ must lift the qa-report scaffold');
+
+  // An unknown prefix must degrade to the same documented fallback rather than throwing
+  // on a template filename derived from the basename.
+  const unknownId = 'ZZZ-20260101T000000Z-abcd';
+  const unknownHtml = toHtml(`/repo/plans/feat/${unknownId}-fixture.md`, MAP_MD(unknownId));
+  assert.equal(styleOf(unknownHtml), scaffoldStyle('qa-report'), 'an unknown prefix must fall back to qa-report');
+});
+
 test('P4(j) in a multi-arg batch the first offending arg fails and later args are not rendered', () => {
   const dir = mkTmp('render-cli-batch-');
   const bad = path.join(dir, 'evil.conf');

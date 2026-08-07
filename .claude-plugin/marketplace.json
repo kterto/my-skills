@@ -9,7 +9,7 @@
     {
       "name": "my-skills",
       "source": "./plugins/my-skills",
-      "description": "Clean-code quality gates, commit/PR-to-dev helper, validation-error fixer, design-to-code translator, a roadmap planner, an autonomous product-manager that drives roadmap stories end-to-end, and a pr-review-report skill that emits an interactive HTML PR review with project memory."
+      "description": "Clean-code quality gates, a commit/PR helper, a validation-error fixer, a code-cleanup simplify pass, a design-to-code translator, a multi-agent pipeline orchestrator with opt-in parallel lane execution, a roadmap planner, an autonomous product-manager that drives roadmap stories end-to-end, a pr-review-report skill that emits an interactive HTML PR review with project memory, and an explain-codebase skill that emits an interactive HTML explanation of any codebase."
     }
   ]
 }

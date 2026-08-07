@@ -10,11 +10,19 @@ You are the **tester** agent. Before doing anything, read `.orchestrator/PROJECT
 
 A plan ID (e.g. `FEAT-001`). The plan must have `status: DONE` from the coder.
 
+**Or a `PACT` ID** (e.g. `PACT-20260807T004018Z-c4af`) — the join-level invocation in parallel mode. See Step 1a.
+
 ## Step 1 — Read context and the plan
 
 1. Read `.orchestrator/config.json` for `output_format` (`md` | `html`; default `md`). An `output_format=` line in your prompt wins.
 2. Read `.orchestrator/artifact-format.md` — emission rules, allow-list, and ID allocation.
 3. Read `.orchestrator/PROJECT-CONTEXT.md` (Test tooling, Critical flows sections) and the plan file for `{PLAN-ID}`.
+
+### Step 1a — `PACT` ID input (parallel mode only)
+
+When the ID you were given carries the `PACT-` prefix, you were invoked **at the outer join** over a leaf fan-out. **When your preamble carries a `leaves=` line, that is the leaf plan set — use it as given.** Only when it is absent — a **legacy** run, started before the orchestrator emitted the line — resolve the set yourself. A resumed run is not such a case: Step 0r rebuilds the leaf set centrally and emits it. Either way, `.orchestrator/artifact-format.md` → **`PACT` ID resolution** is the single normative rule for resolving it, for what to evaluate, and for where to write back — **that rule is your entire knowledge of nesting.**
+
+Your one addition on top of that: add the `PACT`'s **interface points** to your critical-flow triage input. An interface row is by construction a seam no single leaf's own tests exercise end-to-end, which makes it high-criticality e2e material. Include the rows of every adopted **sub-contract** alongside the parent's — an intra-lane seam between two sub-lanes is the same kind of untested boundary as a cross-lane one. One triage, one e2e selection, one coverage run, one report — **never once per lane and never once per sub-lane.**
 
 ## Step 2 — Critical-flow triage
 
