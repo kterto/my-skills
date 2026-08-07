@@ -848,6 +848,8 @@ Both lines remain the **single authoritative source of lane membership at every 
 
 **Runs after the leaf barrier and before Step 3j.** Wait for **every** in-flight leaf subagent — across all lanes, not just this lane's — to return before beginning any inner join.
 
+**Apply the all-leaves-DONE barrier here too, for this lane's sub-lanes** (Step 3j, same rule): verify each sub-lane plan carries `status: DONE` with zero unchecked tasks — from the artifact, not the returned status line — retry once, and route any still-non-DONE sub-lane to `PARTIAL` rather than reconciling around it. An inner join that runs over an unfinished sub-lane verifies interface rows against half-written work, and its lane would then be marked reconciled in the parent contract.
+
 **What the barrier buys is a single deterministic reconciliation order and one join state machine — not input wholeness.** Input wholeness is what **containment already guarantees**: a lane's sub-lane globs strictly partition that lane's globs and lane globs are mutually disjoint (`references/config.md` → `lanes` → *Owned-glob rejection*, the containment case), so no other lane's leaves can touch the paths a given inner join reconciles. That lane's inner-join inputs are whole the moment **its own** sub-lanes return. It is the same two-local-checks argument Step 3L's flat dispatch leans on, applied one level down.
 
 So the barrier is a **simplicity choice, not a correctness one**: every inner join sees the same frozen world in the same lane-map row order, and there is one place where "all leaves are in" becomes true instead of one per lane. Early per-lane inner joins — starting a lane's 3s as soon as that lane's own sub-lanes return, concurrently with still-running leaves elsewhere — are **safe by containment** and would convert `k` serialized join passes into overlapped ones, but they are deliberately **not** taken at this depth. That is a spec-level change to the barrier discipline, recorded as a follow-up rather than assumed here. Do not read the barrier as load-bearing for correctness; it is not, and a future editor removing it needs the containment proof, not this paragraph.
@@ -889,7 +891,13 @@ A `BLOCKED` sub-lane routes through the **same precedence rule** the outer join 
 
 **Wait for every in-flight leaf subagent to return. Never abandon a running leaf** — the leaves share one workspace, so abandoning one leaves that workspace in an unknown state. Collect every leaf's `Status:` and, when BLOCKED, its reason. On a `full` run, **every inner join (Step 3s) has already completed** by the time this step begins, so what this step sees is a set of lanes, each either flat-and-finished or reconciled by its inner join.
 
-**Classify every BLOCKED leaf by its reserved reason before anything else** (`templates/coder.md` → Lane BLOCKED reasons). This is the single statement of the precedence between the two halt paths, at the one place the classification happens — and it holds identically at both depths, so Step 3s routes a blocked sub-lane through it too:
+**Then require every leaf to be DONE — the all-leaves-DONE barrier.** Returning is not finishing: the coder's status vocabulary is `IN_PROGRESS | DONE | BLOCKED`, so a leaf can return without being either done or blocked — a session that ran out of room, or a subagent that stopped early. Classifying only `BLOCKED` would let such a leaf fall through into reconciliation, `simplify`, the tester, the reviewer, and QA, all evaluating a change set that is still being written. So before anything else:
+
+1. **Verify, from the artifacts and not from the returned status line**, that **every** leaf `FEAT` plan — plus every **integration** plan dispatched at either join — carries `status: DONE` **and** has zero unchecked `[ ]` tasks. A status line claiming DONE over a plan with unchecked tasks is not DONE; the file wins.
+2. **Retry once.** Re-invoke the coder for each non-DONE leaf, exactly as Step 3's file verification re-invokes a coder that returned short. Most such leaves simply need another session to finish their remaining tasks.
+3. **Any leaf still not DONE after the retry routes to `PARTIAL`** (3j.1), carrying its plan ID and its unchecked-task count — never onward into reconciliation. This is independent of the `BLOCKED` classification below: a `BLOCKED` leaf has a *reason* to route on, an `IN_PROGRESS` one has only unfinished work, and both are equally disqualifying for the union.
+
+**Then classify every BLOCKED leaf by its reserved reason** (`templates/coder.md` → Lane BLOCKED reasons). This is the single statement of the precedence between the two halt paths, at the one place the classification happens — and it holds identically at both depths, so Step 3s routes a blocked sub-lane through it too:
 
 > `contract violation` **and** `amendment_count < max_contract_amendments` → the amendment loop (3j.2), evaluated **first**. Every other reason — including `lane boundary` — and any violation past the cap → the `PARTIAL` halt (3j.1), applied to whatever remains after the amendment resolves.
 
@@ -925,9 +933,9 @@ Status: JOINED | PARTIAL | AMENDED
 Lane: {name} — {DONE | BLOCKED} ({reason})
 ```
 
-#### 3j.1 — `PARTIAL` halt (any leaf BLOCKED for a non-amendable reason)
+#### 3j.1 — `PARTIAL` halt (any leaf not DONE)
 
-Reached for the leaves Step 3j's classification routed here. The join halts the run in a **`PARTIAL`** state:
+Reached for the leaves Step 3j routed here — those **BLOCKED** for a non-amendable reason, and those still **not DONE** after the barrier's single retry. The join halts the run in a **`PARTIAL`** state:
 
 - **Completed lanes stay DONE.** Their work is not rolled back and not re-run.
 - The blocked lane and its reason are reported.
