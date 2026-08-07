@@ -10,7 +10,7 @@ Authored agent skills for [Claude Code](https://code.claude.com) and [opencode](
 | `commit-pr` | Stage, commit, push the current branch, and open a PR targeting `main`. Confirms before any remote mutation. |
 | `validation-fixer` | Routes recorded user-validation bugs through a chosen framework (superpowers / gsd / orchestrator) and tracks each fix in-file; orchestrator items are severity-routed (fixed inline, batched, or run dedicated). |
 | `design-to-code` | Translates Claude design output files (self-contained HTML with tokens, reviewer comments, component states) into pixel-perfect, correctly-behaving code. |
-| `orchestrator` | Project-agnostic 6-agent pipeline (brainstormer → architect → coder → tester → reviewer → qa) with a context-confidence gate, spec-driven-eval integration, and a final Markdown/HTML report. Auto-detects first-run bootstrap vs. straight pipeline execution. |
+| `orchestrator` | Project-agnostic 6-agent pipeline (brainstormer → architect → coder → tester → reviewer → qa) with a context-confidence gate, spec-driven-eval integration, and a final Markdown/HTML report. Auto-detects first-run bootstrap vs. straight pipeline execution. Optional **parallel lane execution** (`--parallel lanes|full|ask`) fans architect+coder out across disjoint lanes — and, under `full`, nested sub-lanes — behind a frozen interface contract, with resumable halted runs. |
 | `roadmap` | Decomposes a project spec into an auditable milestone→phase→user-story roadmap under `/roadmap/`, with append-only audit logs, orchestrator-ready user-story briefs, `/roadmap sync` trailer stamping, diff+preserve re-evaluation, release bands, and doc-only mutation ops. |
 | `product-manager` | Autonomously drives roadmap stories to completion and manages roadmap planning PRs — runs story briefs through the orchestrator, commits with `Roadmap-Story:`, syncs the roadmap, pushes/opens PRs, and exposes `assign`/`park`/`add-spec`/`add-milestone`/`add-phase`/`add-ticket`/`revise`/release-management verbs. |
 | `pr-review-report` | Reviews the current branch against an auto-detected base and emits paired `docs/reviews/<branch_slug>-<date>.{html,md}` artifacts — a self-contained interactive HTML report (architecture with recommend-only ADR flags, security, bugs/improvements lenses; rendered diff with inline annotations; severity-coded findings) plus a Markdown findings backlog shaped to hand off to `validation-fixer`. Reconciles triage across runs via a reviewer-local `.pr-review/review-state.json`, merges an existing backlog by fingerprint on re-review, and proposes optional review memory. |
@@ -27,9 +27,13 @@ A project-agnostic 6-agent pipeline that takes a plain-language task description
 /orchestrator "<task description>" --setup          # force re-bootstrap (re-interview + regenerate context)
 /orchestrator "<task description>" --mode autonomous # no prompts: resolve open questions with recorded defaults
 /orchestrator "<task description>" --clarity 0.95    # lower the brainstormer's manual-mode interview target
+/orchestrator "<task description>" --parallel lanes  # fan architect+coder out across lanes (off|ask|lanes|full)
+/orchestrator "<task description>" --resume          # continue a prior halted parallel run instead of restarting
 ```
 
 On the first run (or when `.orchestrator/config.json` is absent) the skill runs **bootstrap** automatically: it scans the repo, interviews you about missing context until confidence ≥ `context_threshold`, writes `.orchestrator/PROJECT-CONTEXT.md`, renders the six role templates into the host agent directory (`.claude/agents/` in Claude Code, `.opencode/agent/` in opencode), and writes `.orchestrator/config.json`. Subsequent invocations skip straight to the pipeline.
+
+Bootstrap also **materializes the load-bearing runtime files** into `.orchestrator/` — `artifact-format.md`, `config.md`, the seven `html-templates/*.template.html` scaffolds, and four zero-dependency Node scripts (`render-artifact.cjs`, `check-artifact-pairing.cjs`, `check-artifact-links.cjs`, `gate-scope.cjs`) — because subagents cannot read the skill's own directories. They are re-copied on every bootstrap so they track the installed skill version.
 
 ### Pipeline
 
@@ -41,6 +45,37 @@ brainstormer → architect → coder → tester → reviewer ──(APPROVED)─
 ```
 
 The skill never commits or pushes.
+
+### Parallel lane execution (opt-in)
+
+With `parallelism` ≠ `off`, the single architect→coder pair is replaced by a **leaf** fan-out that rejoins before the tester. Everything after the join — tester, reviewer, QA, the two cycle caps, eval, and the final report — is identical in both branches.
+
+```
+                                  ┌ 2L arch(app) ────────→ 3L coder(app) ─────────────────────────┐
+                                  │        [unsplit lane — one leaf, no sub-contract]             │
+brainstormer → 2p ───→ 2c ────────┤                                                               ├─ 3j ─→ tester → reviewer → qa
+  (spec)    analysis  PACT        │              ┌ 2L arch(backend/api) → 3L coder(backend/api) ┐ │  outer
+             │      parent        └ 2s ──────────┤                                              ├─3s┘  join
+             │      contract    sub-contract     └ 2L arch(backend/data)→ 3L coder(backend/data)┘ inner join
+             │                  PACT (backend)   [`full` only — split lane; sub-lanes are leaves]
+             ├─(no lane clears the inner gate)──→ degrade to `lanes`
+             └─(non-viable / autonomous / no question tool)→ degrade to `off` (sequential path, unchanged)
+```
+
+| Step | What it does |
+|---|---|
+| `2p` | One `Explore` slicing analysis covering both levels, the flat-vs-nested cost/benefit, the six-condition `lanes` viability gate, the inner viability gate, and the `ask` ladder |
+| `2c` | One architect authors the **parent `PACT`** — freezes the lane map, path ownership, and every cross-lane interface |
+| `2s` | **`full` only** — one architect per sub-split lane, concurrently, each authoring that lane's **sub-contract** (child `PACT`) |
+| `2L` / `3L` | One architect then one coder **per leaf**, concurrent, isolated by disjoint path ownership in one shared workspace. `3L` is a single flat dispatch over the whole leaf set |
+| `3s` | **`full` only** — inner join per split lane: verify its sub-contract rows, run its integration sub-lane sequentially, mark the lane DONE in the parent contract |
+| `3j` | Outer join: wait for every leaf, verify every parent-contract row on both sides, run the top-level integration lane, `simplify` once over the union, hand the parent `PACT` ID to tester/reviewer/qa |
+
+**Levels.** `off` (default) is the strictly sequential pipeline — byte-identical behavior to the pre-feature pipeline. `lanes` runs one architect + one coder per lane concurrently with a single join. `full` is `lanes` plus **nested inner-lane parallelism**: lanes that clear the inner gate are sliced into sub-lanes under their own sub-contract, and dispatch happens at leaf granularity. `ask` is a sentinel, not a level — it runs the analysis, then asks you to pick a level annotated with the measured cost/benefit. **Nesting is hard-capped at depth 2**; a leaf always reads exactly one governing contract. `simplify` and the full test suite run **exactly once per run**, at the outer join.
+
+**Degradation is explicit.** `full` degrades to `lanes` when no lane clears the inner gate; `lanes` degrades to `off` when the viability gate fails; `ask` degrades to `off` in `autonomous` mode or without a structured question tool. Every degradation prints its specific reason.
+
+**Resume.** A halted parallel run is detected from `.orchestrator/run-manifest.json` (a provenance anchor, not a `plans/**` scan). Without `--resume` you get a single non-blocking hint and a fresh run; with `--resume`, completed leaves are preserved in place — no stash, reset, or clean — and only the incomplete leaves re-dispatch. Any manifest mismatch or ambiguity aborts rather than guessing.
 
 ### Config
 
@@ -55,6 +90,12 @@ Stored in `.orchestrator/config.json`; overridable per-run via CLI args.
 | `max_review_cycles` | `10` | `--max-review` | Max architect→coder→reviewer cycles before the pipeline hard-stops |
 | `max_qa_cycles` | `5` | `--max-qa` | Max qa-remediation cycles before the pipeline hard-stops |
 | `agent_sync_targets` | `[]` | — | Tooling-only (the pipeline ignores it): dir list used by [`scripts/sync-agents.sh`](#updating-agent-copies-in-consumer-projects) to refresh a project's agent copies. Empty → auto-detect existing agent dirs. |
+| `parallelism` | `"off"` | `--parallel` | `off` \| `ask` \| `lanes` \| `full` — how much of one spec's implementation fans out across lanes. See [Parallel lane execution](#parallel-lane-execution-opt-in) |
+| `lanes` | `[]` | — | Lane map: `{name, path, sublanes?: [{name, path}]}[]`. Empty → the slicing analysis proposes one |
+| `max_parallel_lanes` | `6` | — | Finite integer ≥ 1; caps in-flight dispatches |
+| `max_contract_amendments` | `2` | — | Finite integer ≥ 0; caps contract amendments per run (`0` is meaningful — no amendment allowed) |
+
+`--setup` and `--resume` are per-invocation intents and map to **no** config key — they cannot be made sticky in `.orchestrator/config.json`.
 
 **Automation modes.** `manual` (default) interviews you at the brainstormer and asks for confirmation before writing the spec. `autonomous` never prompts: it resolves each open question with the brainstormer's own stated default (recorded in the spec under "Decisions resolved by Brainstormer default") and produces a `READY_FOR_PLANNING` spec — except **reserved decisions** (out-of-scope, open product, compliance, or irreversible one-way-door choices), which are surfaced and keep the spec `DRAFT` unless the prompt explicitly authorized that decision.
 
@@ -254,14 +295,15 @@ my-skills/
 │           ├── orchestrator/SKILL.md
 │           ├── roadmap/SKILL.md
 │           ├── product-manager/SKILL.md
-│           └── pr-review-report/SKILL.md
+│           ├── pr-review-report/SKILL.md
+│           └── explain-codebase/SKILL.md
 ├── scripts/
 │   ├── generate-opencode-skill-index.mjs
 │   ├── install-opencode.sh
 │   └── sync-agents.sh            # refresh a project's orchestrator agent copies
 ├── .opencode/
 │   ├── commands/                 # opencode-specific slash command templates
-│   └── skills/                   # opencode-specific skill ports/overrides
+│   └── skills/                   # opencode-only override ports (pr-review-report, spec-driven-eval)
 ├── sync.sh                      # author-side: symlink skills into ~/.claude/skills
 └── README.md
 ```
