@@ -443,11 +443,11 @@ Spawn **exactly one** read-only `Explore` subagent — the same pattern Bootstra
 
 Ask it for a digest containing, **per candidate lane**: the spec's functional requirements that map to it, an estimated task count, the file/dir globs it would own, and — separately — **every requirement that maps to more than one lane** (an overlap).
 
-**When the resolved level is `full`, the same single spawn also covers the second level.** Ask it to additionally propose, **per candidate lane**, a sub-lane split with the **same per-slice fields** it already produces for lanes — the spec requirements mapping to each sub-lane, an estimated task count, the globs it would own — plus **every requirement that maps to more than one sub-lane of that lane** (an **intra-lane** overlap). Sub-lane globs must be proposed **contained within** the parent lane's globs (`references/config.md` → *Containment*).
+**When the resolved level is `full` — or `ask` — the same single spawn also covers the second level.** Ask it to additionally propose, **per candidate lane**, a sub-lane split with the **same per-slice fields** it already produces for lanes — the spec requirements mapping to each sub-lane, an estimated task count, the globs it would own — plus **every requirement that maps to more than one sub-lane of that lane** (an **intra-lane** overlap). Sub-lane globs must be proposed **contained within** the parent lane's globs (`references/config.md` → *Containment*).
 
 **One pass, not two — and this is a decision, not an economy.** The marginal-gain gate needs **both levels' numbers simultaneously** to price nested against flat: `M_nested` cannot be computed without the sub-lane task counts, and `M_flat` cannot be compared against it without the lane counts from the same analysis. A second pass would also **double the one fixed overhead the gate exists to keep visible**, which would be self-defeating for a step whose entire job is to make cost legible.
 
-**When the resolved level is `lanes`, request the lane-level digest only.** The sub-lane analysis is `full`-only work and is not paid for by a `lanes` run.
+**When the resolved level is `lanes`, request the lane-level digest only.** The sub-lane analysis is not paid for by a run that cannot use it. **`ask` can** — it may resolve to `full` at the ladder, and it must present option 3 priced, so it requests both levels; an `ask` run that ends at `off` or `lanes` simply discards the sub-lane portion (2p.3n). Requesting it only under an already-resolved `full` is what left the ladder quoting an option nothing had computed.
 
 **Keep the digest, and hand it on verbatim.** It is the raw material for 2p.2 and for both contract levels:
 
@@ -515,7 +515,11 @@ On any of these: set `parallelism = off`, print the reason, and continue to Step
 
 #### 2p.3n — The inner viability gate (`full` only)
 
-**Runs only when the resolved level is `full`, and runs after 2p.3.** The two gates test different things and are **never conflated**: 2p.3 asks *should the run be lane-parallel at all?*; this one asks *should any lane be sub-split?* A failure of one is never reported or implemented as a failure of the other.
+**Runs when the resolved level is `full` **or** `ask`, and runs after 2p.3.** The two gates test different things and are **never conflated**: 2p.3 asks *should the run be lane-parallel at all?*; this one asks *should any lane be sub-split?* A failure of one is never reported or implemented as a failure of the other.
+
+**Why `ask` must run it too.** `ask` is a sentinel, not a level: it resolves to `off`, `lanes`, or `full` *at the ladder* (2p.5). But the ladder's option 3 quotes `M_nested`, the adopted sub-splits, the lanes left flat, and the `k` extra passes — and its omission rule needs to know whether any lane cleared this gate. Every one of those is an **output of this step**. Gating this step on an already-resolved `full` would leave `ask` presenting a nested option it never computed, or omitting one that was viable. So under `ask` the nested analysis and this gate run **speculatively**, before the question is asked.
+
+**A speculative run is discarded, not applied.** If the user picks `off` or `lanes`, the adopted sub-splits and every `newid`-allocated ID from this analysis are dropped — nothing was frozen, no contract was authored, and Steps 2s/3s simply do not exist for that run. The only cost of an unchosen option is the analysis that made it presentable, which is exactly what the ladder is for. If the user picks `full`, the already-computed adoption set is used as-is; it is never recomputed, so the plan the user approved is the plan that runs.
 
 **The gate's rules, thresholds, and cost model are normative in `references/config.md` → *The inner viability gate*. Read and apply them from there — they are deliberately not restated here, so a threshold can never be tuned in one file and left contradicted in the other.** This step is the dispatch point plus the printed vocabulary; that is all.
 
