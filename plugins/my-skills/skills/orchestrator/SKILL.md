@@ -567,6 +567,8 @@ Parse the architect's output to extract:
 - `plan_id` — e.g. `FEAT-003` (from line `ARCHITECT — {ID} created`)
 - `plan_path` — e.g. `plans/feat/FEAT-003-slug.md`
 
+Also bind **`root_plan_id = plan_id`** here. `plan_id` is the **active** plan and is reassigned by every remediation cycle (Steps 4c, 5d); `root_plan_id` is the run's **aggregate under evaluation** and is **immutable for the whole run**. On a sequential run the two start equal and only `plan_id` moves.
+
 If the architect reports an error or does not produce a plan ID, stop and report to user.
 
 **File verification (mandatory before continuing):**
@@ -646,6 +648,8 @@ A lane the 2p.3n gate adopted for **sub-splitting** gets **no lane-level `FEAT` 
 Passing the 2p.1 digest is what keeps the contract cheap and honest: the architect verifies and freezes a split the user already saw priced at the `ask` ladder, instead of re-analyzing the spec and possibly landing on a different one.
 
 Parse the architect's output to extract `pact_id` (from `ARCHITECT — {ID} created`) and `pact_path` (from `Contract: {path}`).
+
+**Bind `root_plan_id = pact_id`, and treat it as immutable for the rest of the run.** On the parallel path the parent `PACT` — not any leaf plan and not any remediation plan — is the run's aggregate under evaluation, because it is the only artifact that resolves the **whole** leaf union. Remediation reassigns the *active* `plan_id` (Steps 4c, 5d); it **never** reassigns `root_plan_id`. This distinction is what keeps a cycle-3 reviewer evaluating the same union a cycle-1 reviewer did, instead of narrowing to whatever `FIX`/`QAF` plan happened to run last.
 
 **File verification (mandatory before continuing)** — mirroring Step 2's: read the `PACT` at `pact_path` and its paired `.progress.md`. If either is missing or empty, re-invoke the architect once with the same prompt; if still missing after the retry, stop and report. Confirm its `related_to` references `spec_id`, and that its lane map, path-ownership, interface-points, unowned-files, integration-lane, and per-lane-definition-of-done regions are all present. A `PACT` missing a region is not usable — re-invoke once, then stop.
 
@@ -921,7 +925,9 @@ Status: continuing sequentially from the current state
 
 #### 3j.3 — Downstream roles at the outer join
 
-**Identical in `lanes` and in `full`, at every depth.** The tester (Step 3b), the reviewer (Step 4), and QA (Step 5) each run **exactly once, at the outer join, invoked with the parent `PACT` ID** in place of a plan ID. There is no per-lane and no per-sub-lane tester, reviewer, or QA pass at any level.
+**Identical in `lanes` and in `full`, at every depth.** The tester (Step 3b), the reviewer (Step 4), and QA (Step 5) each run **exactly once, at the outer join, invoked with `root_plan_id` — the parent `PACT` ID (Step 2c)** — in place of a plan ID. There is no per-lane and no per-sub-lane tester, reviewer, or QA pass at any level.
+
+**This holds on every remediation cycle, not just the first.** The review and QA loops reassign the *active* `plan_id` to a `FIX`/`QAF` ID (Steps 4c, 5d), but `root_plan_id` is immutable, so the join roles are always invoked against the aggregate and the remediation plan travels as a **related input**. Invoking them against the remediation plan instead would silently narrow evaluation to that plan's diff — the leaf union would stop being reviewed the moment the first fix cycle ran.
 
 Each resolves the **leaf** plan set from the preamble's `leaves=` line and uses it as given — the orchestrator dispatched those leaves and still holds the list, so the primary path is a read, not a walk. Resolving the set by hand from the parent `PACT`'s lane map, one level down its `Sub-contract` column, is the **legacy fallback**: it applies only when `leaves=` is absent because the run was started before the orchestrator emitted that line. A resumed run is not such a case (Step 0r rebuilds the set centrally and emits it). Both paths are governed by the same normative rule in `.orchestrator/artifact-format.md` → **`PACT` ID resolution**, which all three already follow, and either way the role evaluates the **union** of the leaf diffs as one change set. This matches the preamble contract stated at `leaves=` above; the two statements are one rule, not two.
 
@@ -947,7 +953,7 @@ Run tests for plan {plan_id}.
 Follow your full tester workflow and print the structured output summary.
 ```
 
-> **On the parallel path, `{plan_id}` is the `PACT` ID** (Step 3j.3) — the tester runs once at the join over the union. The block above is otherwise unchanged, and on an `off` run `{plan_id}` is the plan ID exactly as before.
+> **On the parallel path the tester is invoked with `root_plan_id` — the parent `PACT` ID — not the active `plan_id`** (Step 3j.3), so it runs once at the join over the **whole** leaf union. This holds on **every** cycle: after a remediation pass reassigns `plan_id` to a `FIX`/`QAF` ID (Steps 4c, 5d), `root_plan_id` is unchanged, so the join role still evaluates the aggregate rather than narrowing to the last remediation plan. Pass the remediation plan as a **related input**, never as the subject. On an `off` run `root_plan_id` and `plan_id` coincide at Step 2 and the block reads exactly as before.
 >
 > **`leaves=` is emitted here, on the parallel path only.** The orchestrator dispatched the leaves at Step 3L and still holds the resolved set, so it hands it over rather than making the role rebuild it. The line is **omitted entirely on an `off` run**, exactly as `lane=` and `contract=` are — that omission is what keeps a sequential run's prompt byte-identical to a pre-feature run's.
 
@@ -1002,7 +1008,7 @@ Review plan {plan_id}. The plan is in DONE status.
 Follow your full reviewer workflow and print the structured output summary.
 ```
 
-> **On the parallel path, `{plan_id}` is the `PACT` ID** (Step 3j.3) — the reviewer runs once at the join over the union. The block above is otherwise unchanged, and on an `off` run `{plan_id}` is the plan ID exactly as before.
+> **On the parallel path the reviewer is invoked with `root_plan_id` — the parent `PACT` ID — not the active `plan_id`** (Step 3j.3), so it runs once at the join over the **whole** leaf union, on every review cycle. A remediation pass reassigns `plan_id` (Step 4c) but never `root_plan_id`, so cycle 2 reviews the same aggregate cycle 1 did, with the `FIX` plan supplied as a **related input** rather than as the subject. On an `off` run the two coincide and the block reads exactly as before.
 >
 > **`leaves=` is emitted here, on the parallel path only.** The orchestrator dispatched the leaves at Step 3L and still holds the resolved set, so it hands it over rather than making the role rebuild it. The line is **omitted entirely on an `off` run**, exactly as `lane=` and `contract=` are. It is re-emitted on **every** review cycle, so a cycle-10 run re-reads nothing a cycle-1 run already resolved.
 
@@ -1088,7 +1094,7 @@ Follow your full tester workflow and print the structured output summary.
 
 Apply the same `tester_status` logic: `BLOCKED` → stop; `BELOW_FLOOR` → soft warning, continue; `PASS` → continue.
 
-**4c — Update `plan_id` to `fix_plan_id`**, then loop back to Step 4.
+**4c — Update `plan_id` to `fix_plan_id`**, then loop back to Step 4. **`root_plan_id` is NOT updated** — it stays the run's aggregate (the parent `PACT` on the parallel path, the original `FEAT` on a sequential one), so the next reviewer pass still evaluates the whole change set with `fix_plan_id` as a related input.
 
 ### Step 5 — QA: validate the approved plan
 
@@ -1108,7 +1114,7 @@ Run the QA suite for plan {plan_id}. The plan is DONE and has an APPROVED CR.
 Follow your full QA workflow and print the structured output summary.
 ```
 
-> **On the parallel path, `{plan_id}` is the `PACT` ID** (Step 3j.3) — QA runs once at the join over the union, in every mode. The block above is otherwise unchanged, and on an `off` run `{plan_id}` is the plan ID exactly as before.
+> **On the parallel path QA is invoked with `root_plan_id` — the parent `PACT` ID — not the active `plan_id`** (Step 3j.3), so it runs once at the join over the **whole** leaf union, in every mode and on every QA cycle. A QA-remediation pass reassigns `plan_id` (Step 5d) but never `root_plan_id`, so the gates always see the aggregate; the `QAF` plan is a **related input**, never the subject. The CR QA matches is likewise the join-level CR — the one whose `plan:` frontmatter is `root_plan_id`. On an `off` run the two coincide and the block reads exactly as before.
 >
 > **`leaves=` is emitted here, on the parallel path only.** The orchestrator dispatched the leaves at Step 3L and still holds the resolved set, so it hands it over rather than making the role rebuild it. The line is **omitted entirely on an `off` run**, exactly as `lane=` and `contract=` are. It is re-emitted on **every** QA cycle, for the same reason it is on every review cycle.
 
@@ -1219,7 +1225,7 @@ Follow your full reviewer workflow and print the structured output summary.
 
 If `REQUEST_CHANGES`: increment `review_cycle`, apply the review fix loop (steps 4a–4c) with `qaf_plan_id` as the active plan, subject to the same `max_review_cycles` cap. When approved, continue.
 
-**5d — Update `plan_id` to `qaf_plan_id`**, then loop back to Step 5.
+**5d — Update `plan_id` to `qaf_plan_id`**, then loop back to Step 5. **`root_plan_id` is NOT updated** — the next QA pass runs its gates over the run's aggregate, with `qaf_plan_id` as a related input, so a remediation cycle can never shrink what QA is validating.
 
 ### Parsing rules
 
