@@ -27,18 +27,20 @@ Apply the Invariants and Commands sections of `PROJECT-CONTEXT.md` before writin
 
 Applies **only when your orchestrator preamble carries `lane=` and `contract=` lines.** Those lines are the sole authority on lane membership: present ⇒ this is a lane invocation and this step binds; absent ⇒ skip this step entirely and the rest of this template is unchanged. Never infer a lane from plan prose, a file path, or an ID — a boundary rule that switches itself off because an architect worded an Overview differently would fail open and silently.
 
-Read the `PACT` at `contract=`. It is the authority on what you own. Then hold this rule for the whole session:
+**Your `lane=` may be a plain lane name (`backend`) or a qualified leaf name (`backend/data`), and your `contract=` may point at the run's parent `PACT` or at your lane's sub-contract.** Both forms mean exactly the same thing to you, and **this step is identical either way**: `lane=` names what you are, `contract=` names your **governing contract**, and there is **no new rule for the nested case**. A qualified name is not a signal to read two contracts or to reason about a parent — it is just your name.
+
+Read the `PACT` at `contract=`. **It is the authority on what you own** — and it is the **only** contract you read. Whichever level it sits at, it states your owned globs, your own interface rows, and (in a sub-contract) the parent rows inherited to your sub-lane in its *Inherited interface assignments* region. Everything you need is in that one document by construction. Then hold this rule for the whole session:
 
 > **Every file you write must fall inside your lane's owned path globs.**
 
-Other coders are running **concurrently in this same workspace**, isolated from you by nothing but those globs — the run shares one workspace because per-lane worktrees would require per-lane commits, and the pipeline never commits. A write outside your globs is therefore not a style violation; it is a collision with another agent's work.
+Other coders are running **concurrently in this same workspace**, isolated from you by nothing but those globs — the run shares one workspace because per-lane worktrees would require per-lane commits, and the pipeline never commits. A write outside your globs is therefore not a style violation; it is a collision with another agent's work. This is equally true of a **sibling sub-lane** of your own lane: its globs are as much someone else's as another lane's are, because containment guarantees they are disjoint from yours.
 
 So: **a required edit outside your lane's globs is not performed.** Do not make it "just this once", do not make it and note it, do not widen your own globs. Stop with the `lane boundary` BLOCKED reason in Step 5.
 
 Two further rules follow from the same reasoning:
 
-- **You may never change the contract.** The `PACT`'s interface shapes are frozen. If you discover a frozen shape is wrong, unimplementable, or contradicts the spec, that is not yours to fix — stop with the `contract violation` BLOCKED reason. Only the architect writes an amended `PACT`.
-- **You may never edit the `PACT` file itself** — not its interface rows, not its lane map, and not its lane-status table (the orchestrator is that table's sole writer).
+- **You may never change the contract.** The `PACT`'s interface shapes are frozen — including a parent row inherited to you through a sub-contract. If you discover a frozen shape is wrong, unimplementable, or contradicts the spec, that is not yours to fix — stop with the `contract violation` BLOCKED reason. Only the architect writes an amended contract, and the orchestrator decides which contract to amend.
+- **You may never edit any `PACT` file** — not your governing contract, not the parent contract above it, not a sibling's sub-contract. Not their interface rows, not their maps, and not their lane- or sub-lane-status tables (the orchestrator is the sole writer of every one of those tables, at both levels).
 
 Build against the **consumer stub strategy** the contract specifies for any interface row you consume; that is what keeps your lane from blocking on another lane's progress.
 
@@ -142,9 +144,9 @@ Rules for this sub-step:
 3. G1 (coverage) and G6 (mutation, when scaffolded) are NOT in this sub-step — they remain QA-owned. If the plan's verification section references them, escalate to architect; the plan template is wrong.
 4. **Lane-scoped gates (parallel mode only).** When your plan declares a lane, every gate command you run is **scoped to your lane's owned paths** — pass the lane's globs/directories to the command rather than running it repo-wide. Other lanes are mid-edit in the same workspace, so a repo-wide gate would report their in-flight state as your failure and waste a BLOCKED stop on work that is not yours.
 
-   If a gate has **no path-scoped form** in `PROJECT-CONTEXT.md` → Commands, **defer it to the join** instead of running it concurrently. Note the deferral in `.progress.md` and proceed; the join runs it once over the union diff. Deferring is the correct outcome here, not a failure.
+   If a gate has **no path-scoped form** in `PROJECT-CONTEXT.md` → Commands, **defer it to the nearest enclosing join** instead of running it concurrently — the **inner** join if you are a sub-lane, the **outer** join if you are an unsplit lane. Note the deferral in `.progress.md` and proceed; that join runs it once over its own scope. Deferring is the correct outcome here, not a failure. A sub-lane never defers a gate past its own inner join when that join can run it.
 
-   **The full test suite is never run inside a lane.** It runs exactly **once, at the join**, over the union of every lane's diff. Running it concurrently from within a lane would test a workspace that other coders are actively mutating.
+   **The full test suite is never run inside a lane** — and never inside a sub-lane either. It runs exactly **once per run, at the outer join**, over the union of every leaf's diff, at any depth. Running it concurrently from within a leaf would test a workspace that other coders are actively mutating.
 
 ### TDD rules (non-negotiable)
 
@@ -175,7 +177,9 @@ Unblocking needed: {what is required}
 
 ### Lane BLOCKED reasons (parallel mode only)
 
-Two reasons are **reserved** and, when they apply, must be named exactly — the orchestrator's join routes on them. They are additions to the free-form reason above, not replacements for it; a plan that declares no lane can never emit either.
+Two reasons are **reserved** and, when they apply, must be named exactly — the orchestrator's joins route on them, and the halt-vs-amend decision is made **entirely from which of the two you name**. They are additions to the free-form reason above, not replacements for it; a plan that declares no lane can never emit either.
+
+**Both spellings and both meanings are identical at every depth.** Whether your `lane=` is `backend` or `backend/data`, and whether your `contract=` is the parent `PACT` or your lane's sub-contract, you emit the **same two literal strings** — `lane boundary` and `contract violation` — for the **same two situations**. Do not qualify them, do not coin a `sub-lane boundary` or a `sub-contract violation`, and do not add a third reason: the orchestrator matches these exact tokens, and a decorated variant routes nowhere. Substitute *sub-lane* for *lane* mentally when you are one; the reason string does not change.
 
 **`lane boundary`** — a task requires editing a file outside your lane's owned globs. Do not perform the edit. The stop must name **the offending file** and **the lane that owns it** (or state that no lane owns it, which makes it an unowned-file gap in the contract):
 
@@ -197,7 +201,9 @@ Reason: contract violation — PACT row {row id} ({producer} → {consumer}, {ki
 Unblocking needed: architect must write an amended PACT revising row {row id}
 ```
 
-Both halt this lane only. The orchestrator waits for every other in-flight lane, then halts the run at the join in a `PARTIAL` state; completed lanes stay DONE and re-running resumes only the incomplete lane plans from their first unchecked task.
+**In a sub-lane, both rows still read the same way.** `{my lane}` is your qualified leaf name (`backend/data`), `{owning lane}` is whichever leaf owns the file — possibly a sibling sub-lane of your own lane — and `PACT row {row id}` is a row of your **governing** contract, which is your sub-contract (either one of its own intra-lane rows or a parent row inherited to you). You never reach past it to cite a parent row directly.
+
+Both halt this leaf only. The orchestrator waits for every other in-flight leaf, then applies its precedence rule at the join: **`contract violation` enters the amendment loop first; any other reason — including `lane boundary` — halts the run `PARTIAL`.** Completed leaves stay DONE, and re-running with `--resume` continues only the incomplete leaf plans from their first unchecked task.
 
 ## Step 6 — Mark plan DONE
 

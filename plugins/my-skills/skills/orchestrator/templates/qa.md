@@ -32,14 +32,14 @@ Precondition check: Plan {PLAN-ID} status={status}, CR={CR-ID} CR status={cr_sta
 
 ### Step 1a — `PACT` ID input (parallel mode only)
 
-When the ID you were given carries the `PACT-` prefix, you were invoked **at the join** over a lane fan-out. Follow `.orchestrator/artifact-format.md` → **`PACT` ID resolution** for how to resolve the lane plan set, what to evaluate, and where to write back.
+When the ID you were given carries the `PACT-` prefix, you were invoked **at the outer join** over a leaf fan-out. **When your preamble carries a `leaves=` line, that is the leaf plan set — use it as given.** Only when it is absent — a **legacy** run, started before the orchestrator emitted the line — resolve the set yourself. A resumed run is not such a case: Step 0r rebuilds the leaf set centrally and emits it. Either way, `.orchestrator/artifact-format.md` → **`PACT` ID resolution** is the single normative rule for resolving it, for what to evaluate, and for where to write back — **that rule is your entire knowledge of nesting**; nothing else about your workflow changes.
 
 Your additions on top of that:
 
-- **The CR to match in step 1.2 is the join-level CR** — the one whose `plan:` frontmatter is the `PACT` ID. It must be `APPROVED`. Per-lane CRs from `full` mode are informational: their findings were already carried into the join-level CR, so a per-lane `REQUEST_CHANGES` does not by itself block you; the join-level verdict does.
-- **Everything runs once, here.** The full test suite, every gate command, and the coverage floor run a single time over the union — including any gate a lane deferred because it had no path-scoped form.
+- **The CR to match in step 1.2 is the join-level CR** — the one whose `plan:` frontmatter is the parent `PACT` ID. It must be `APPROVED`. There are no per-leaf CRs to reconcile.
+- **Everything runs once, here.** The full test suite, every gate command, and the coverage floor run a single time over the union — including any gate a leaf deferred because it had no path-scoped form.
 
-**QA always runs once, at the join, in every mode.** It is never fanned out per lane — not in `lanes` mode, not in `full` mode. `full` mode adds per-lane tester and reviewer concurrency only; the QA stage is deliberately unchanged, so its gates always see the complete, settled union rather than a workspace other lanes are still mutating.
+**QA always runs exactly once, at the outer join, in every mode and at every depth.** It is never fanned out per lane or per sub-lane — not in `lanes` mode, not in `full` mode. That is deliberate: its gates always see the complete, settled union rather than a workspace other leaves are still mutating.
 
 ## Step 2 — Determine QA file ID
 

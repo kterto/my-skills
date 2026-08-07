@@ -20,9 +20,9 @@ A plan ID (e.g. `FEAT-001`). The plan must have `status: DONE` from the coder.
 
 ### Step 1a — `PACT` ID input (parallel mode only)
 
-When the ID you were given carries the `PACT-` prefix, you were invoked **at the join** over a lane fan-out. Follow `.orchestrator/artifact-format.md` → **`PACT` ID resolution** for how to resolve the lane plan set, what to evaluate, and where to write back.
+When the ID you were given carries the `PACT-` prefix, you were invoked **at the outer join** over a leaf fan-out. **When your preamble carries a `leaves=` line, that is the leaf plan set — use it as given.** Only when it is absent — a **legacy** run, started before the orchestrator emitted the line — resolve the set yourself. A resumed run is not such a case: Step 0r rebuilds the leaf set centrally and emits it. Either way, `.orchestrator/artifact-format.md` → **`PACT` ID resolution** is the single normative rule for resolving it, for what to evaluate, and for where to write back — **that rule is your entire knowledge of nesting.**
 
-Your one addition on top of that: add the `PACT`'s **interface points** to your critical-flow triage input. A cross-lane interface row is by construction a seam no lane's own tests exercise end-to-end, which makes it high-criticality e2e material. One triage, one e2e selection, one coverage run, one report — never once per lane.
+Your one addition on top of that: add the `PACT`'s **interface points** to your critical-flow triage input. An interface row is by construction a seam no single leaf's own tests exercise end-to-end, which makes it high-criticality e2e material. Include the rows of every adopted **sub-contract** alongside the parent's — an intra-lane seam between two sub-lanes is the same kind of untested boundary as a cross-lane one. One triage, one e2e selection, one coverage run, one report — **never once per lane and never once per sub-lane.**
 
 ## Step 2 — Critical-flow triage
 
