@@ -873,8 +873,12 @@ Then, **for each sub-split lane, in a deterministic order** (lane-map row order 
    Consumer: sub-lane {qualified name} — {consumes frozen shape | MISSING}
    ```
 
-3. **Update the sub-contract's sub-lane-status table.**
-4. **Mark the lane DONE in the *parent* contract's lane-status table.** The inner join is what turns a set of finished sub-lanes back into one finished lane, so the outer join sees a lane exactly as it would have seen a flat one — which is why 3j needs no special case for a split lane's completion.
+3. **Run every gate this lane's sub-lanes deferred — mandatory, and blocking.** A sub-lane coder that met a gate with no path-scoped form in `PROJECT-CONTEXT.md` → Commands **deferred it to this join** and recorded the deferral in its `.progress.md` (`templates/coder.md`). Collect those deferrals across the lane's sub-lanes, **de-duplicate them**, and run each **once over the settled lane union** — which is the smallest scope on which an unscopable gate is meaningful, and is exactly why the coder was told to defer rather than run it concurrently. **A non-zero exit blocks the inner join**: the lane is not reconciled, it is not marked DONE in the parent contract, and it routes to `PARTIAL` (3j.1) like any other unfinished lane. Skipping this step would leave every deferred gate unexecuted until QA — or entirely uncovered, since the reviewer sits between them — which is precisely the coverage the deferral promised.
+
+   A gate that has no path-scoped form **at this level either** defers once more, to the outer join, and is noted as such. Deferral only ever moves a gate outward to a wider scope; it never drops one.
+
+4. **Update the sub-contract's sub-lane-status table.**
+5. **Mark the lane DONE in the *parent* contract's lane-status table.** The inner join is what turns a set of finished sub-lanes back into one finished lane, so the outer join sees a lane exactly as it would have seen a flat one — which is why 3j needs no special case for a split lane's completion.
 
 Print, per `.orchestrator/artifact-format.md` → Parallel-mode lines:
 
@@ -931,7 +935,9 @@ Then, in order:
 
    This does **not** change the cadence rule above: the gates are re-run here because this is where `simplify` runs, and `simplify` still runs exactly once per run.
 
-4. **Update the parent `PACT`'s lane-status table.** The **orchestrator is its sole writer** at both levels (Step 3s.1) — no subagent ever touches a `PACT` or a sub-contract — so the run-level view has exactly one writer and cannot be raced.
+4. **Run every gate still deferred to this join — mandatory, and blocking.** The same rule the inner join applies (Step 3s item 3), at the outer scope: collect the deferrals recorded by every **unsplit** lane's coder, plus any an inner join could not run at its own level, de-duplicate them, and run each **once over the union**. **A non-zero exit blocks the join** — the run does not proceed to the tester, and routes to `PARTIAL` (3j.1). This is the last scope any gate can defer to; a gate unrunnable here is a `PROJECT-CONTEXT.md` → Commands gap to report, never a gate silently skipped.
+
+5. **Update the parent `PACT`'s lane-status table.** The **orchestrator is its sole writer** at both levels (Step 3s.1) — no subagent ever touches a `PACT` or a sub-contract — so the run-level view has exactly one writer and cannot be raced.
 
 Print:
 
