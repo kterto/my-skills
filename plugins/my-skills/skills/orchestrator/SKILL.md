@@ -89,11 +89,12 @@ brainstormer → 2p ───→ 2c ────────┤                 
              │                        ↑                                                            ↑
              │                   `full` only              ── one flat concurrent dispatch ──────────
              │                                               over the WHOLE leaf set (3L)
-             ├─(no lane clears the inner gate)──→ degrade to `lanes` ─→ the flat branch above (no 2s / no 3s)
+             ├─(no lane clears the inner gate, flat split viable)→ degrade to `lanes` → the flat branch above (no 2s / no 3s)
+             ├─(no lane clears the inner gate, flat split non-viable)→ off ─→ the sequential path above, unchanged
              └─(non-viable / autonomous / no question tool)→ off ─────→ the sequential path above, unchanged
 ```
 
-- **2p** — slicing analysis (**one** read-only scan subagent covering **both** levels in one pass), the flat-vs-nested cost/benefit, the inner viability gate, the six-condition `lanes` viability gate, and the `ask` ladder. `full` degrades to `lanes`; `lanes` degrades to `off`.
+- **2p** — slicing analysis (**one** read-only scan subagent covering **both** levels in one pass), the flat-vs-nested cost/benefit, the inner viability gate, the six-condition `lanes` viability gate, and the `ask` ladder. `full` degrades to `lanes`; `lanes` degrades to `off`. On `full`, the two **work-concentration** conditions (fewer than 2 slices carry work; one slice holds >70%) are evaluated over the **leaf set**, not the lane set — a spec whose work lands entirely in one lane is the shape `full` exists for — and a `full` run whose flat split is non-viable degrades to `off` rather than to `lanes` when the inner gate adopts nothing.
 - **2c** — one architect authors the **parent** `PACT`, freezing the lane map, path ownership, and every cross-lane interface.
 - **2s** — **`full` only, and only for lanes the gate adopted.** One architect per sub-split lane, concurrently, each authoring that lane's **sub-contract** (a child `PACT`). Skipped entirely under `lanes`.
 - **2L / 3L** — one architect then one coder **per leaf**, both concurrent, isolated by disjoint path ownership in one shared workspace. **3L is a single flat dispatch over the whole leaf set**, not per-lane groups.
@@ -445,7 +446,9 @@ Only continue when `spec_status` is `READY_FOR_PLANNING`.
 
 #### 2p.0 — Static guards first (before any subagent spawn)
 
-Apply the no-prompt guards of 2p.4 — **only when the resolved value is `ask`**, per that step — and viability conditions 1 and 6 **now**, while they cost nothing: they are answerable from Step 0b/0c state and host capability alone. If any fires, set `parallelism = off`, print the reason, and go to Step 2 — **without spawning the analysis subagent**. Spawning it first and discarding its digest is the one avoidable cost on this path, and it is exactly what an autonomous or non-fan-out host would pay on every `ask` run. An explicitly configured `lanes` or `full` skips the guards entirely here and continues to 2p.1, since neither guard can apply to it.
+Apply the no-prompt guards of 2p.4 — **only when the resolved value is `ask`**, per that step — and viability conditions 1 and 6 **now**, while they cost nothing: they are answerable from Step 0b/0c state and host capability alone. If any fires, set `parallelism = off`, print the reason, and go to Step 2 — **without spawning the analysis subagent**.
+
+**Condition 1 is a static guard only when the resolved level is `lanes`.** On `full` — and on `ask`, which may resolve to it — a single candidate lane is **not** a stopping condition: `full` slices *inside* a lane, so one lane can still yield two or more leaves, and conditions 1 and 2 are evaluated over the leaf set at 2p.3n rather than over the lane set at 2p.3 (`references/config.md` → *The two work-concentration conditions are evaluated at leaf granularity*). Aborting here would decide that question before the analysis that answers it has run. Condition 6 remains a static guard at every level — a host that cannot fan out cannot fan out at any granularity. Spawning it first and discarding its digest is the one avoidable cost on this path, and it is exactly what an autonomous or non-fan-out host would pay on every `ask` run. An explicitly configured `lanes` or `full` skips the guards entirely here and continues to 2p.1, since neither guard can apply to it.
 
 #### 2p.1 — Slicing analysis (one read-only scan subagent)
 
@@ -493,12 +496,21 @@ Interface points to freeze: {N}
 Verdict: {viable | non-viable — reason}
 ```
 
+**On a `full` or `ask` run, a `Verdict:` of non-viable on condition 1 or 2 must say what happens next**, because that verdict no longer ends the run (2p.3 → *How a `full` run applies this gate*). Print it as:
+
+```
+Verdict: flat non-viable — {reason} → evaluating nested split ({resolved level})
+```
+
+Printing the bare `non-viable — only 1 lane carries work` line there is what makes a `full` run look like it stopped when it is about to slice inside that lane.
+
 The speed estimate is **task-count-weighted lane balance with its assumption stated inline**. Never print a wall-clock ETA — that would be fabricated precision. Never omit the overhead line: the whole point of the gate is that the cost is visible, not hidden.
 
 **When the resolved level is `full`, print the nested evaluation as well** — as an *extension* of the block above, immediately after it, showing **flat vs nested side by side** so `full` is priced against `lanes` rather than against sequential. Pricing against sequential would make every nested plan look good regardless of what it buys over the flat split the user could have had for free. Every term is defined normatively in `references/config.md` → *The inner viability gate*:
 
 ```
 ORCHESTRATOR — nested slicing analysis
+Baseline:    {flat | sequential} — {M_flat | M_seq} task-equivalents{, flat split non-viable: {reason}}
 Flat plan:   makespan {M_flat} (critical lane {name}={n} tasks)
 Nested plan: makespan {M_nested} (critical leaf {qualified name}={n} tasks)
 Sub-split lanes: {lane}→{k} sub-lanes ({marginal gain} tasks off the critical path, cost {c}), …
@@ -510,6 +522,8 @@ Verdict: {nested viable | nested non-viable — reason → degrading to lanes}
 
 Both blocks rest on the **same** assumption, already stated inline in the first one — do not print it twice. This block extends that one; it never repeats it.
 
+The `Baseline` line names **what the nested plan is priced against** — normative in `references/config.md` → *The makespan model* → *The baseline*. It reads `flat` when the flat verdict was viable and `sequential` when it was not, and in the sequential case it carries the failing flat condition, because a reader who sees `M_flat` printed on the next line must be able to tell at a glance that it is shown for reference and is **not** a plan on offer. Print the line on every `full` (and speculative `ask`) evaluation, not only the sequential case — a baseline that is only mentioned when it is unusual is a baseline nobody checks.
+
 `Lanes left flat` is **not an error list** — partial adoption is the normal outcome (`references/config.md` → *Greedy, recomputed adoption*), so a run that sub-splits one lane of three and prints two reasons is working exactly as designed. On a `lanes` run this second block is not printed at all.
 
 #### 2p.3 — Viability gate (six non-viability conditions)
@@ -518,10 +532,20 @@ Declare parallelization **non-viable** and fall back to sequential — **printin
 
 1. **Fewer than 2 lanes carry work.** → `non-viable: only {N} lane carries work`
 2. **One lane holds more than 70% of the estimated tasks.** → `non-viable: lane {name} holds {p}% of tasks — the split would not shorten the critical path`
+   > **Conditions 1 and 2 are evaluated over *lanes* only when the resolved level is `lanes`.** On `full` — and on `ask`, which may resolve to `full` — they are evaluated over the **leaf set** at 2p.3n instead, because a leaf is what `full` dispatches on. Read the rule in `references/config.md` → *The two work-concentration conditions are evaluated at leaf granularity*; the mechanics for this step are in *How a `full` run applies this gate*, immediately below the condition list.
 3. **Candidate lane path ownership cannot be made disjoint.** → `non-viable: lanes {a} and {b} cannot be given disjoint path ownership`
 4. **The interface-point count exceeds the total task count of the smallest lane.** → `non-viable: {I} interface points exceed the smallest lane's {n} tasks — contract cost exceeds the gain`
 5. **The project's gate commands from `PROJECT-CONTEXT.md` → Commands cannot be scoped to a lane's paths.** → `non-viable: gate {cmd} has no path-scoped form`
 6. **The host cannot spawn concurrent subagents.** → `non-viable: host cannot fan out concurrent subagents`
+
+**How a `full` run applies this gate.** Evaluate all six conditions as written, then route by level:
+
+- **`lanes`** — any failing condition sets `parallelism = off` with its reason. Unchanged.
+- **`full` and `ask`** — a failing **condition 3, 4, 5, or 6** sets `parallelism = off` with its reason, exactly as for `lanes`; none of them is repaired by slicing a lane further. A failing **condition 1 or 2** does **not** end the run: record the run's **flat verdict** as `non-viable — {the first failing condition's reason}`, print that reason on the `Verdict:` line of the 2p.2 block as today, and **continue to 2p.3n**. Record `flat verdict: viable` when neither fires.
+
+The flat verdict is then consumed in three places and nowhere else: it selects the inner gate's baseline (2p.3n), it decides what `full` degrades to when nothing is adopted (2p.3n), and it omits option 2 from the `ask` ladder (2p.5).
+
+A run whose flat verdict is non-viable **never dispatches a flat plan**. If the inner gate adopts nothing, the run is `off` — it does not silently run the `lanes` plan that just failed its own conditions.
 
 Condition 6 is the fallback that keeps this host-agnostic: concurrent `task` fan-out is not guaranteed on every opencode host, and a host that cannot fan out simply runs sequentially rather than failing.
 
@@ -535,11 +559,11 @@ Condition 6 is the fallback that keeps this host-agnostic: concurrent `task` fan
 
 **A resumed run re-derives this verdict for its own session and does not inherit the halted one's.** That is safe for the same reason rule 3 is: the manifest pins the *split* — contracts, leaves, dispatch order — and a session that answers condition 6 differently re-dispatches the same remaining leaves at a different speed, not a different shape.
 
-On any of these: set `parallelism = off`, print the reason, and continue to Step 2 as an ordinary sequential run.
+On any of these — subject to the `full`/`ask` routing above, which sends a failing condition 1 or 2 to 2p.3n instead — set `parallelism = off`, print the reason, and continue to Step 2 as an ordinary sequential run.
 
 #### 2p.3n — The inner viability gate (`full` only)
 
-**Runs when the resolved level is `full` **or** `ask`, and runs after 2p.3.** The two gates test different things and are **never conflated**: 2p.3 asks *should the run be lane-parallel at all?*; this one asks *should any lane be sub-split?* A failure of one is never reported or implemented as a failure of the other.
+**Runs when the resolved level is `full` **or** `ask`, and runs after 2p.3 — including when 2p.3 recorded a non-viable flat verdict on condition 1 or 2.** That case is the one this gate most needs to see: it is a spec whose work concentrates in a single lane, which is exactly the shape inner-lane parallelism exists for. The two gates test different things and are **never conflated**: 2p.3 asks *should the run be lane-parallel at all?*; this one asks *should any lane be sub-split?* A failure of one is never reported or implemented as a failure of the other.
 
 **Why `ask` must run it too.** `ask` is a sentinel, not a level: it resolves to `off`, `lanes`, or `full` *at the ladder* (2p.5). But the ladder's option 3 quotes `M_nested`, the adopted sub-splits, the lanes left flat, and the `k` extra passes — and its omission rule needs to know whether any lane cleared this gate. Every one of those is an **output of this step**. Gating this step on an already-resolved `full` would leave `ask` presenting a nested option it never computed, or omitting one that was viable. So under `ask` the nested analysis and this gate run **speculatively**, before the question is asked.
 
@@ -557,6 +581,8 @@ Print the matching line for each outcome:
 | A candidate fails a re-applied per-sub-lane viability condition | `sub-split rejected: lane {name} — {condition}` |
 | A sub-split is dropped to fit the leaf-width ceiling | `sub-split dropped: lane {name} — leaf set would exceed ceiling {max_parallel_lanes}` |
 | The assembled nested plan fails the aggregate-payback test | `nested non-viable: {I} aggregate interface points exceed the smallest leaf's {n} tasks` |
+| The assembled leaf set has fewer than 2 leaves carrying work | `nested non-viable: only {N} leaf carries work` |
+| One leaf still holds more than 70% of the run's tasks | `nested non-viable: leaf {qualified name} holds {p}% of tasks — the split would not shorten the critical path` |
 
 **Every rejection names its reason and leaves that lane flat.** A rejected sub-split never rejects the run and never degrades the flat split that already passed 2p.3.
 
@@ -564,7 +590,11 @@ Print the matching line for each outcome:
 
 Downstream of this gate the same shortfall is **not** recoverable. A sub-contract architect at Step 2s that cannot give 2+ sub-lanes bounded, contained, disjoint globs stops and reports, and Step 2s.3 re-invokes it once and then **halts the run** — it does not demote the lane to flat. That asymmetry is deliberate and is stated in `templates/architect.md` → *Sub-contract deltas*, item 2, in the same terms.
 
-**When no lane clears this gate, `full` degrades to `lanes` — never to `off`** — and the reason is printed:
+**The last two rows are the deferred conditions 1 and 2**, re-applied here over the adopted **leaf set** — the rule and its arithmetic are normative in `references/config.md` → *Leaf-level re-application of the two work-concentration conditions*. They can only fail on a run whose flat verdict was already non-viable (a leaf is a lane or a slice of one), so this is a no-op for every run that passed 2p.3 outright. Unlike the `sub-split rejected` rows, a failure here rejects **the whole nested plan**, not one candidate.
+
+**This step is also where the baseline is selected**, from the flat verdict recorded at 2p.3: `M_flat` when it was viable, `M_seq` when it was not. Everything that follows from that — the gain measured from `span_base`, the first adoption carrying the whole nested overhead — is normative in `references/config.md` → *The makespan model* → *The baseline* and *The cost side*. Do not re-derive either here.
+
+**When no lane clears this gate, what `full` degrades to is decided by the flat verdict** — and both are printed:
 
 ```
 ORCHESTRATOR — nested split not adopted
@@ -572,7 +602,16 @@ Reason: {the specific reason}
 parallelism: full → lanes (flat split unaffected; it passed its own gate at 2p.3)
 ```
 
-`lanes` may then independently degrade to `off` under 2p.3's conditions, which is the outer gate's own outcome, not this one's.
+```
+ORCHESTRATOR — nested split not adopted
+Reason: {the specific reason}
+Flat split: non-viable — {the 2p.3 condition that failed}
+parallelism: full → off (no flat plan to fall back to)
+```
+
+The first form is the normal one. The second is the **only** path from `full` to `off` at this gate, and it is not a conflation of the two gates: there is simply no `lanes` plan to degrade to, because the flat split failed its own conditions at 2p.3. Printing both reasons is what keeps the two failures distinguishable in `.progress.md` a week later.
+
+On the first form, `lanes` may then independently degrade to `off` under 2p.3's conditions 3–6, which is the outer gate's own outcome, not this one's.
 
 #### 2p.4 — Two hard no-prompt guards
 
@@ -591,21 +630,22 @@ This is what guarantees **no non-interactive caller can ever be blocked by this 
 
 When resolved `parallelism` is `ask` **and** 2p.3 found the split viable **and** no guard in 2p.4 fired, present the three levels via the host's structured question tool (`AskUserQuestion` in Claude Code, `question` in opencode), **each option annotated with its evaluation from 2p.2**:
 
-1. **Sequential (`off`)** — today's pipeline; zero contract overhead.
+1. **Sequential (`off`)** — today's pipeline; zero contract overhead. Estimated makespan **{M_seq} task-equivalents** (the run's total task count). Always quote it: when option 2 is omitted this is the baseline option 3 was priced against, and an option 3 figure shown with nothing to compare it to is not a choice the user can make.
 2. **Lane-parallel implementation (`lanes`)** — parent contract + {N} lane plans + {N} concurrent coders; one tester, one reviewer, one QA over the union at the join. Estimated makespan **{M_flat} task-equivalents**.
 3. **Nested lane-parallel (`full`)** — everything `lanes` does, **plus** a sub-contract and concurrent sub-lane coders for each lane that cleared the marginal gate. Estimated makespan **{M_nested} task-equivalents**. **What it costs:** {k} extra contract-authoring passes and {k} extra inner-join passes. **Sub-splits:** {lane}→{k} sub-lanes, …; lanes left flat: {names}.
 
 Annotate every option from the 2p.2 evaluation, and carry the assumption line with it — a makespan shown without *"task counts proxy wall-clock effort equally"* is a number pretending to be a measurement.
 
-**Option 3 is omitted from the ladder entirely when no lane cleared the inner gate (2p.3n)**, with a single reason line printed above the question:
+**An option whose gate it failed is omitted from the ladder entirely**, with a single reason line printed above the question:
 
-```
-nested split not offered: {reason}
-```
+- **Option 3** is omitted when no lane cleared the inner gate (2p.3n) → `nested split not offered: {reason}`
+- **Option 2** is omitted when the flat verdict is non-viable (2p.3, condition 1 or 2) → `flat split not offered: {reason}`
 
-Offering a level that would immediately degrade to the level below it misrepresents the choice. When option 3 is omitted the ladder is a two-option question (`off`, `lanes`); nothing else about it changes.
+Offering a level that would immediately degrade to another misrepresents the choice. Omitting one leaves a two-option question; nothing else about the ladder changes. The two omissions are independent, and **option 2 omitted with option 3 offered is a normal, expected ladder** — it is the single-lane spec whose only useful split is the nested one, presented as `off` vs `full`.
 
-**Option 1 is always offered**, and is **always the recommendation when the flat verdict is non-viable**. Adopt whichever level the user picks; `ask` never survives this step.
+**When both options 2 and 3 are omitted, no question is presented at all.** There is nothing to choose between: print both reason lines, set `parallelism = off`, and go to Step 2. Asking a one-option question is not a choice, and the guards at 2p.4 exist precisely so no run is blocked on a prompt that decides nothing.
+
+**Option 1 is always offered.** Adopt whichever level the user picks; `ask` never survives this step.
 
 When resolved `parallelism` is `lanes` or `full`, **do not prompt** — apply the level directly, still subject to the 2p.3 viability gate and, for `full`, the 2p.3n inner gate.
 
@@ -720,6 +760,8 @@ Follow your full architect workflow and print the structured output summary.
 ```
 
 Pre-generate the `FEAT` ID of every lane that will run **flat** with `newid FEAT` **before** this spawn (see Step 2L) so the contract's lane map can carry real plan IDs. **Step 2c is the sole allocation site for an unsplit lane's plan ID.**
+
+**When every lane that carries work was adopted for sub-splitting, the `Lane plan IDs to use` line reads `none`** and no `FEAT` ID is pre-generated at this step at all — every leaf plan ID is then allocated at 2s. That is the shape a single-lane run takes (`references/config.md` → *Worked example — one lane carries all the work*): a one-row parent lane map whose row carries `—` in `Lane plan ID` and a real `PACT` ID in `Sub-contract`. `templates/architect.md` → *Path ownership* states the matching exception on the architect's side, so the one-lane contract is written rather than refused.
 
 A lane the 2p.3n gate adopted for **sub-splitting** gets **no lane-level `FEAT` ID here** — its plans are its sub-lanes', allocated at Step 2s. Its lane-map row carries `—` in `Lane plan ID` and its sub-contract's ID in the new **`Sub-contract`** column (`.orchestrator/artifact-format.md` → *The parent lane map's `Sub-contract` column*). Pre-generate each adopted lane's `PACT` ID with `newid PACT` before this spawn as well, so the parent's lane map can carry real sub-contract IDs and the parent never has to be revisited to add them.
 

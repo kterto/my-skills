@@ -55,11 +55,25 @@ The analysis mechanics, the ladder wording, and the no-prompt guards are normati
 **Two gates, never conflated.** A `full` run is gated twice, and the two gates test different things:
 
 1. **The six-condition `lanes` viability gate** (`SKILL.md` → Step 2p.3) asks *should the run be lane-parallel at all?* `lanes` may degrade to `off` under it, with its own reason printed.
-2. **The inner viability gate** (this file, *The inner viability gate*) asks *should any lane be sub-split?* When **no** lane clears it, `full` **degrades to `lanes`** — never straight to `off` — and the specific reason is printed.
+2. **The inner viability gate** (this file, *The inner viability gate*) asks *should any lane be sub-split?* When **no** lane clears it, `full` **degrades to `lanes`** — and the specific reason is printed. The one exception is stated under *Degradation* below: when the flat split was itself non-viable there is no `lanes` plan left to degrade to, and `full` degrades to `off` with **both** reasons printed.
 
 **The evaluation order is normative in `SKILL.md` → Step 2p.3n — outer (2p.3) first, then inner (2p.3n) — and is deliberately not re-derived here.** Read it there. The order follows from what each gate consumes: a failed outer gate leaves no lane split to sub-slice, and the inner gate's makespan model is computed over the very lane set 2p.3 validated.
 
 What *is* normative here is that **a failure of one is never reported or implemented as a failure of the other.** Collapsing a failed inner test into a full sequential fallback would discard a flat split that already passed its own viability gate — which is exactly the split the user was shown priced.
+
+#### The two work-concentration conditions are evaluated at **leaf** granularity on a `full` run
+
+Outer conditions 1 (*fewer than 2 lanes carry work*) and 2 (*one lane holds more than 70% of the estimated tasks*) ask a single question — **is the work spread across enough concurrent slices for a split to shorten the critical path?** On a `lanes` run the slices are lanes, so the question is answered over lanes. On a `full` run **the slices are leaves**, and answering over lanes answers a question `full` did not ask.
+
+This matters because the shape those two conditions reject is **precisely the shape inner-lane parallelism exists for**: a spec whose work lands entirely inside one lane (`mobile=all`, every other lane `0`), or overwhelmingly inside one lane, has no useful *flat* split and may still have an excellent *nested* one. Ending such a run at 2p.3 makes `full` unreachable exactly where it is worth the most, and it does so on the strength of a lane taxonomy the spec never had to respect.
+
+So, normatively:
+
+- **On `lanes`** — all six conditions are evaluated over lanes at 2p.3, unchanged.
+- **On `full`, and on `ask`** (which may resolve to `full`) — conditions 1 and 2 do **not** end the run at 2p.3. Their outcome is recorded as the run's **flat verdict** (`viable` / `non-viable — {reason}`) and the two conditions are **re-applied over the adopted leaf set** at 2p.3n (*Leaf-level re-application*, below).
+- **Conditions 3, 4, 5, and 6 are unchanged at both levels.** They are properties of the lane set and of the host — path ownership that cannot be made disjoint, contract cost exceeding the smallest lane, an unscopable gate command, a host that cannot fan out — and none of them is repaired by slicing a lane further. They end the run at 2p.3 as before.
+
+**A non-viable flat verdict is not a failure state; it is an input.** It selects the baseline the inner gate prices against (*The makespan model*), it omits option 2 from the `ask` ladder (`SKILL.md` → Step 2p.5), and it changes what `full` degrades to when nothing is adopted (*Degradation*). It never, on its own, ends a `full` run.
 
 ### `lanes`
 
@@ -208,7 +222,19 @@ This is the normative definition of every number the `full` level's gate compute
 - **`span_max`** — `max` over all lanes `L` of `span(L)`. This is the bare critical-path term, carrying **no** overhead. It is the only term a sub-split actually shortens, and therefore the term the marginal gain is measured over.
 - **`makespan`** — `span_max`, **plus the overhead term defined immediately below**. The overhead is never dropped from the number: the whole point of the gate is that the cost is visible, not hidden. Keeping `span_max` and `makespan` as two named quantities is what lets the gain be measured over one and the cost over the other, so that no task-equivalent is counted on both sides of the same comparison.
 - **`M_flat`** — the makespan with **no** lane split (the `lanes` plan): `max` over lanes of `tasks(L)`, plus `A` for the single parent contract, plus `J` for the single outer join, plus the parent contract's interface-point count.
+- **`M_seq`** — the sequential makespan (the `off` plan): the run's **total** task count `T` = sum over lanes of `tasks(L)`, with **no** overhead term at all. An `off` run authors no contract and runs no join, so it has nothing to charge.
 - **`M_nested`** — the makespan under the **adopted** nested plan, per the overhead split below.
+
+**The baseline — what the nested plan is priced against.** The gate always prices a candidate against **the plan that would run if it adopted nothing**, and which plan that is follows from the flat verdict (*The two work-concentration conditions*, above):
+
+| Flat verdict | Baseline | `span_base` (the baseline's critical-path term) | Baseline overhead |
+| ------------ | -------- | --------------------------------------------- | ----------------- |
+| viable | `M_flat` | `max` over lanes of `tasks(L)` | `A + J +` parent interface points |
+| non-viable | `M_seq` | `T`, the total task count | `0` |
+
+**Pricing against a plan that cannot run is the defect this table exists to prevent — in both directions.** Pricing a nested plan against `M_flat` when the flat split was ruled non-viable would refund it the `A + J` the flat plan pays — 4 task-equivalents at the defaults — quoting a candidate as cheaper than an alternative the run does not have; and it would measure the gain from a critical path (`max` over lanes) that no plan on offer achieves. Conversely, pricing against `M_seq` whenever flat *is* viable would make every nested plan look good regardless of what it buys over the flat split the user could have had for free — the failure this model names two paragraphs below, under *Never print a wall-clock ETA*.
+
+The consequence for the cost side is mechanical and is stated once, in *The cost side*: with a sequential baseline **the first adoption carries the whole nested overhead**, because none of it — not the parent contract, not the outer join — exists in the baseline.
 
 **The overhead term is split by shape, because the two levels have opposite shapes.** Summing them as one flat quantity is what made an earlier form of this model optimistic:
 
@@ -232,7 +258,7 @@ Charging the two levels as one undifferentiated overhead makes `M_nested` optimi
 
 > **Assumption (state it inline every single time a number derived from it is shown):** leaves run concurrently, **task counts proxy wall-clock effort equally**, *and* the three conversions above hold — an architect pass, a join pass, and an interface point are each worth the stated number of tasks. The conversion is the load-bearing half of this disclosure: concurrency alone says nothing about how a *pass* or an *interface point* becomes a number, and it is the unstated conversion, not the concurrency, that would let two identical runs adopt different plans.
 
-**Never print a wall-clock ETA**, at either level. Task counts are the honest, checkable proxy; minutes would be fabricated precision. `full` is always priced against `M_flat`, never against a sequential baseline — pricing against sequential would make every nested plan look good regardless of what it actually buys over the flat split the user could have had for free.
+**Never print a wall-clock ETA**, at either level. Task counts are the honest, checkable proxy; minutes would be fabricated precision. `full` is priced against `M_flat` **whenever the flat plan is on offer** — pricing against sequential there would make every nested plan look good regardless of what it actually buys over the flat split the user could have had for free. The single exception is a **non-viable flat verdict**, where the flat plan is not on offer at all and `M_seq` is the only honest baseline (*The baseline*, above). The rule is one rule in both cases: price against the plan that would otherwise run.
 
 #### Marginal-gain rule (the critical-path test)
 
@@ -248,11 +274,13 @@ max(second_largest_span, largest_sublane_of_L)
 
 and the **marginal gain** `g` is the reduction in `span_max` — the current `span_max` minus that value.
 
+**Before the first adoption, "the current `span_max`" is `span_base`** (*The makespan model* → *The baseline*), which is `max` over lanes of `tasks(L)` under a viable flat verdict and `T` under a non-viable one. After any adoption it is the recomputed `span_max` of the plan adopted so far, per *Greedy, recomputed adoption*. This is the whole of the baseline's effect on the gain side, and it is what makes the first adoption on a sequential baseline correctly credited with **both** things it buys — the lane-level concurrency the flat plan could not deliver on its own, and the sub-split itself. Under a sequential baseline the *zero-gain* case above therefore does not arise for the first adoption: with nothing running concurrently yet, every viable split strictly lowers the span. It reappears for every adoption after the first, unchanged.
+
 It is deliberately **not** the reduction in `makespan`. `makespan` is defined above to always carry the overhead term, and the overhead a candidate adds is exactly what the cost side charges as `c`. Measuring `g` over `makespan` as well would net that overhead against itself inside one comparison, so a candidate would be billed for it on the right-hand side and silently refunded it on the left. `g` is the span reduction; `c` is the overhead increase; `g > c` weighs each of them once. This is also why the after-value above is stated as a `span_max`, not as a `makespan`: it carries no overhead term, and naming it a makespan is what previously put the two sides of the test on different accounts.
 
 #### The cost side
 
-A candidate's cost `c` is the **marginal makespan delta** it causes: the amount its adoption adds to `M_nested`'s overhead term, in the **same task-equivalents** the gain is computed in. Deriving `c` from `M_nested` rather than listing charges assembled independently of it is what keeps the gate and the ladder on **one account** — every task-equivalent the user sees inside option 3's figure is a task-equivalent the gate charged, and every task-equivalent the gate charged is visible in that figure.
+A candidate's cost `c` is the **marginal makespan delta** it causes **against the baseline's overhead** (*The makespan model* → *The baseline*): the amount its adoption adds to `M_nested`'s overhead term over and above what the baseline plan already pays, in the **same task-equivalents** the gain is computed in. Deriving `c` from `M_nested` rather than listing charges assembled independently of it is what keeps the gate and the ladder on **one account** — every task-equivalent the user sees inside option 3's figure is a task-equivalent the gate charged, and every task-equivalent the gate charged is visible in that figure.
 
 For the candidate under evaluation:
 
@@ -261,6 +289,10 @@ For the candidate under evaluation:
 - the **sub-contract architect pass** (Step 2s) — `A` task-equivalents, charged on the **first** adoption only. Step 2s spawns its `k` sub-contract architects concurrently, so that whole level costs `slowest-of-k` = `A` no matter how many lanes are adopted — the same claim `M_nested` is built on. Charging `A` once per candidate would bill `k × A` for a level `M_nested` prices at `A`, which is precisely how the gate and the ladder drifted onto two accounts. The first adopted candidate is what brings the Step 2s level into existence, so it carries the charge; every later one rides it at no extra cost.
 
 > **Why there is no separate barrier charge.** An earlier form of this list carried a fourth item: a further `A` for the architect round-trip the Step 2s barrier imposes on every lane, on the grounds that `full` pays three serial architect round-trips where `lanes` pays two. That is a double-charge of the pass the bullet above already prices. `M_nested` carries `+ A` for Step 2c and `+ A` for Step 2s against `M_flat`'s single `+ A` for Step 2c, so the difference between the two plans **already is** exactly one extra architect round-trip; billing it a second time is what let `c` exceed `g` on candidates whose own `M_nested` was strictly below `M_flat`. The underlying observation is still true and still worth knowing — an unsplit lane's architect does wait on sub-contracts it will never read (see `SKILL.md` → Step 2L) — but it is an argument for why the Step 2s `A` sits on the critical path at all, not a second charge on top of it.
+
+**Under a sequential baseline the first adoption additionally carries the flat plan's own overhead** — `A` for the parent contract (Step 2c), `J` for the outer join (Step 3j), and the **parent** contract's interface points — because a non-viable flat verdict means none of that exists in the baseline. The list above charges the marginal delta against `M_flat`; when the baseline is `M_seq` the delta is against zero, so those three terms are charged too, once, on the first adoption. Every adoption after the first is charged exactly as it is above: `J` plus that sub-contract's interface points.
+
+Concretely, on a sequential baseline the first adoption costs `A + A + J + J + I` — parent contract, sub-contract level, its inner join, the outer join, and the aggregate interface points — which is exactly `M_nested`'s whole overhead term for `k = 1`. That is the correct number: it is the entire price of leaving `off`, and it is the price the ladder's option 3 quotes.
 
 A sub-split is adopted **only when its marginal gain exceeds that cost**. **Equal is not enough** — a wash means paying contract overhead for zero wall-clock. Both sides are already in task-equivalents, so the test is ordinary arithmetic and needs no conversion at the comparison site.
 
@@ -278,6 +310,24 @@ Gain `g` is the reduction in `span_max`: `12 − 6` = **6**. Cost `c` is the mar
 
 Under the pre-correction arithmetic they did not. The cost side billed `A` for the sub-contract pass **and** a second `A` for the barrier round-trip, giving `c = 6` against the same `g = 6` — and *"equal is not enough"* rejected the candidate, while the ladder went on printing `M_nested = 14` against `M_flat = 16`, telling the user that the plan the gate had just refused was two task-equivalents cheaper than the one it recommended. A gate and a ladder computed from different overhead accounts can disagree about the same candidate; keeping `c` defined as a delta of `M_nested` is what makes that structurally impossible. Re-check this example whenever either side of the model is edited.
 
+#### Worked example — one lane carries all the work (sequential baseline)
+
+The shape the leaf-granularity rule exists for. Lane set `{mobile, backend, web, admin, landing, shared}`; the spec maps **every** requirement to `mobile`, so `tasks(mobile) = 24` and every other lane is `0`. The candidate splits `mobile` into `{ui: 8, data: 8, services: 8}`; `k = 1`; defaults `A = 2`, `J = 2`; the parent contract has **0** interface points (one lane carries work, so there is no cross-lane row to freeze) and the sub-contract has **2**.
+
+Outer gate: conditions 3–6 pass; condition 1 fails — `only 1 lane carries work`. On `lanes` that ends the run. On `full` it is recorded as **flat verdict: non-viable**, so the baseline is `M_seq`.
+
+| | baseline (`off`) | nested (candidate adopted) |
+| --- | --- | --- |
+| `span_base` / `span_max` | `T` = **24** | `max(8, 8, 8)` = **8** |
+| overhead | **0** | `A` + `A` + `1 × J` + `J` + `I(0 + 2)` = **10** |
+| makespan | `M_seq` = **24** | `M_nested` = **18** |
+
+Gain `g` = `24 − 8` = **16**. Cost `c` = `10 − 0` = **10** — the first adoption on a sequential baseline, so it carries the parent contract, the sub-contract level, its inner join, the outer join, and the aggregate interface points. `g > c` (`16 > 10`), so the candidate is **adopted**, and `M_nested` (18) is below `M_seq` (24). The leaf-level re-application then passes: **3** leaves carry work (≥ 2), and the largest holds `8/24` = **33%** (≤ 70%).
+
+The run is `full` with a **one-lane parent contract** whose single row carries `—` in `Lane plan ID` and the sub-contract's `PACT` ID in `Sub-contract`. That is a legitimate contract, not a degenerate one — `templates/architect.md` → *Path ownership* states the same exception in the same terms — and the run dispatches 3 leaves, not 1.
+
+Had the sub-split instead come out `{20, 4}`, `span_max` = 20, `g` = 4, `c` = 10, and the candidate would be **rejected**; with no other candidate, `full` would degrade to **`off`** (not to `lanes` — the flat split was already non-viable), printing both reasons.
+
 #### Greedy, recomputed adoption
 
 Evaluate candidates **critical-lane first**. After each adoption, **recompute the makespan** and re-evaluate every remaining candidate against the **new** critical path. Stop when no remaining candidate's marginal gain exceeds its cost, or when the leaf-width ceiling (`max_parallel_lanes`) is reached.
@@ -288,7 +338,7 @@ Recomputing after each adoption is what makes *"each split shrinks the next one'
 
 #### Aggregate diminishing-payback rule
 
-After the nested plan is assembled, **reject the whole nested plan and fall back to flat `lanes`** when the **aggregate** interface-point count — across the parent contract **plus every adopted sub-contract** — exceeds the **smallest leaf's** task count.
+After the nested plan is assembled, **reject the whole nested plan** — falling back per *Degradation* below, which is `lanes` on a viable flat verdict and `off` on a non-viable one — when the **aggregate** interface-point count — across the parent contract **plus every adopted sub-contract** — exceeds the **smallest leaf's** task count.
 
 This is the two-level form of the flat gate's condition 4, and it is the direct expression of the fact that each split shrinks each slice's payback: reconciliation cost is global while the slices it must be repaid from keep getting smaller.
 
@@ -305,13 +355,33 @@ Every per-lane viability condition is re-applied at **sub-lane granularity** for
 
 Any failure **rejects that lane's split with a named reason and leaves that lane flat**. It never rejects the run, and it never degrades the flat split that already passed its own gate.
 
+#### Leaf-level re-application of the two work-concentration conditions
+
+After the nested plan is assembled — after greedy adoption, the aggregate payback rule, and the leaf-width ceiling — outer conditions 1 and 2 are re-applied **over the run's adopted leaf set**, which is what *The two work-concentration conditions are evaluated at leaf granularity* defers them to:
+
+1. at least **2 leaves** carry work → otherwise `nested non-viable: only {N} leaf carries work`;
+2. no leaf holds more than **70%** of the run's **total** task count → otherwise `nested non-viable: leaf {qualified name} holds {p}% of tasks — the split would not shorten the critical path`.
+
+**These two checks can only ever bite when the flat verdict was non-viable, and that is a property of the arithmetic, not a convention.** A leaf is a lane or a slice of one, so if every lane held ≤ 70% then every leaf does, and if ≥ 2 lanes carried work then ≥ 2 leaves do. On a run whose flat split already passed conditions 1 and 2 this step is a no-op that cannot change a verdict — which is precisely why deferring the two conditions is safe for every run that was already working.
+
+Failure here rejects **the nested plan**, not an individual candidate, and the run then falls back per *Degradation* below.
+
 #### Leaf-width ceiling
 
 The adopted nested plan's leaf set is capped by `max_parallel_lanes` — see that key for the full policy. This is a **planning** preference (do not adopt a split whose payoff is smaller than the sub-splits it would force out), not the enforcement: dispatch width is bounded unconditionally at Steps 2L/3L.
 
 #### Degradation
 
-When **no** lane clears this gate, `full` **degrades to `lanes`** with the specific reason printed, per *Two gates, composed in one fixed order* under `parallelism`. It never degrades straight to `off`.
+When **no** lane clears this gate — or the assembled plan fails the aggregate payback rule or the leaf-level re-application — what `full` degrades to is decided by the **flat verdict**, and by nothing else:
+
+| Flat verdict | `full` degrades to | Printed |
+| ------------ | ------------------ | ------- |
+| viable | `lanes` | the nested reason; the flat split is unaffected, it passed its own gate |
+| non-viable | `off` | **both** reasons — the nested one and the flat condition that failed at 2p.3 |
+
+A viable flat verdict is what makes `full → lanes` correct: there is a priced, gated plan to fall back to. A non-viable one means there never was one, so `off` is not a conflation of the two gates — it is the only remaining plan, and printing both reasons is what keeps the two failures distinguishable in the log.
+
+`lanes` itself never degrades to `off` from this gate; that is conditions 3–6's outcome at 2p.3, printed there.
 
 ### `max_parallel_lanes`
 
