@@ -65,7 +65,11 @@ for (const md of targets) {
   const bad = targetProblem(md, { root: ROOT, auditPath: 'plans', ext: '.md', enforceContainment: !explicitMode });
   if (bad) { problems.push(`${rel}: ${bad}`); continue; }
   const html = md.replace(/\.md$/, '.html');
-  if (!fs.existsSync(html)) problems.push(`missing html sibling: ${rel}`);
+  // Guard the sibling with the SAME fail-closed check as the `.md` target above:
+  // existsSync alone follows symlinks and accepts a directory, so a `foo.html/` dir
+  // or a link pointing outside plans/ satisfied the pairing gate (sec-1).
+  const htmlBad = targetProblem(html, { root: ROOT, auditPath: 'plans', ext: '.html', enforceContainment: !explicitMode });
+  if (htmlBad) problems.push(`html sibling: ${htmlBad}: ${rel}`);
   // Progress logs are append-logs, not frontmatter artifacts — pairing only.
   if (/\.progress\.md$/.test(md)) continue;
   const keys = frontmatterKeys(fs.readFileSync(md, 'utf8'));

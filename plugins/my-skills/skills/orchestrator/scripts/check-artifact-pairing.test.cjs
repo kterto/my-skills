@@ -64,5 +64,45 @@ try {
   else fail(`no-plans empty-explicit: expected fail-closed, got status=${r.status} out=${JSON.stringify(out.trim())}`);
 }
 
+// sec-1 regression: the `.html` sibling gets the SAME fail-closed guard as the `.md`
+// target. A bare existsSync follows symlinks and accepts a directory, so a `foo.html/`
+// dir or a link pointing anywhere satisfied the pairing gate.
+const FM = '---\nid: X\nstatus: DONE\ncreated_at: t\nupdated_at: t\ncycle: 1\n---\n# x\n';
+const pairCase = (name, mkHtml, expect) => {
+  const dir = fs.mkdtempSync(path.join(root, 'pair-'));
+  const md = path.join(dir, 'a.md');
+  fs.writeFileSync(md, FM);
+  try {
+    mkHtml(path.join(dir, 'a.html'));
+  } catch (e) {
+    if (e && (e.code === 'EPERM' || e.code === 'ENOSYS')) { pass(`${name}: skipped (unsupported here)`); return; }
+    throw e;
+  }
+  const r = run(['--', md]);
+  const out = (r.stdout || '') + (r.stderr || '');
+  if (r.status !== 0 && expect.test(out)) pass(`${name}: fail-closed`);
+  else fail(`${name}: expected fail-closed, got status=${r.status} out=${JSON.stringify(out.trim())}`);
+};
+
+pairCase('html sibling directory', (html) => fs.mkdirSync(html), /html sibling: not a regular file/i);
+pairCase('html sibling symlink', (html) => {
+  const outside = path.join(root, 'outside.html');
+  fs.writeFileSync(outside, '<html></html>\n');
+  fs.symlinkSync(outside, html);
+}, /html sibling: not a regular file/i);
+pairCase('html sibling absent', () => {}, /html sibling: missing target/i);
+
+// A regular `.html` sibling still passes (the guard is not over-tight).
+{
+  const dir = fs.mkdtempSync(path.join(root, 'pair-ok-'));
+  const md = path.join(dir, 'a.md');
+  fs.writeFileSync(md, FM);
+  fs.writeFileSync(path.join(dir, 'a.html'), '<html></html>\n');
+  const r = run(['--', md]);
+  const out = (r.stdout || '') + (r.stderr || '');
+  if (r.status === 0 && /artifact-pairing: OK/.test(out)) pass('html sibling regular file: OK');
+  else fail(`html sibling regular file: expected OK, got status=${r.status} out=${JSON.stringify(out.trim())}`);
+}
+
 if (failures) { console.error(`\ncheck-artifact-pairing: ${failures} failure(s)`); process.exit(1); }
 console.log('\ncheck-artifact-pairing: OK');
