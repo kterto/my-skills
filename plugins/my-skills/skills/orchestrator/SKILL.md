@@ -647,7 +647,9 @@ This is what guarantees **no non-interactive caller can ever be blocked by this 
 
 #### 2p.5 — The `ask` ladder
 
-When resolved `parallelism` is `ask` **and** 2p.3 found the split viable **and** no guard in 2p.4 fired, present the three levels via the host's structured question tool (`AskUserQuestion` in Claude Code, `question` in opencode), **each option annotated with its evaluation from 2p.2**:
+When resolved `parallelism` is `ask` **and** 2p.3 did not end the run **and** 2p.3n has completed **and** no guard in 2p.4 fired, present the three levels via the host's structured question tool (`AskUserQuestion` in Claude Code, `question` in opencode), **each option annotated with its evaluation from 2p.2**:
+
+**"2p.3 did not end the run" is a condition-3-to-6 test, not a flat verdict.** A failing condition **3, 4, 5, or 6** ends the run at 2p.3 — there is nothing left to ask about, so no ladder. A failing condition **1 or 2** does **not**: on `ask` it records a **non-viable flat verdict** and continues to 2p.3n (2p.3 → *How a `full` run applies this gate*), which is exactly the single-lane shape whose only useful split is the nested one. Gating the ladder on a *viable* flat verdict would skip the question precisely there, and would make the option-2 omission rule below unreachable — an omission rule for a state that can never present a ladder is dead text. The flat verdict decides **which options appear**, never **whether the question is asked**.
 
 1. **Sequential (`off`)** — today's pipeline; zero contract overhead. Estimated makespan **{M_seq} task-equivalents** (the run's total task count). Always quote it: when option 2 is omitted this is the baseline option 3 was priced against, and an option 3 figure shown with nothing to compare it to is not a choice the user can make.
 2. **Lane-parallel implementation (`lanes`)** — parent contract + {N} lane plans + {N} concurrent coders; one tester, one reviewer, one QA over the union at the join. Estimated makespan **{M_flat} task-equivalents**.
