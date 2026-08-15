@@ -273,10 +273,12 @@ Splitting a lane that is **not** the current critical path yields a **marginal g
 Formally, splitting the critical lane `L` lowers `span_max` only to:
 
 ```
-max(second_largest_span, largest_sublane_of_L)
+max(second_largest_span, span(L after the split))
 ```
 
 and the **marginal gain** `g` is the reduction in `span_max` — the current `span_max` minus that value.
+
+**The second term is the split lane's `span(L)`, not its largest sub-lane.** `span(L)` for a split lane is `max` over its **concurrent** sub-lanes **plus** its integration sub-lane (*The makespan model*), and that whole quantity is what the run waits for — so substituting `largest_sublane_of_L` silently drops the serialized integration work from the gain side while `span(L)` carries it everywhere else. Concretely: lane `L` = 16 split into `{5, 5}` plus an integration sub-lane of 6, with a second lane at 10. The real post-split critical path is `max(10, 5 + 6)` = **11**; `largest_sublane_of_L` yields `max(10, 5)` = **10**, overstating `g` by 1 and adopting a candidate that may not clear its true cost. The two terms are also **different kinds of quantity** — one is a run-level span over lanes, the other a sub-lane's bare task count — and mixing them inside one `max` is what let the error hide.
 
 **Before the first adoption, "the current `span_max`" is `span_base`** (*The makespan model* → *The baseline*), which is `max` over lanes of `tasks(L)` under a viable flat verdict and `T` under a non-viable one. After any adoption it is the recomputed `span_max` of the plan adopted so far, per *Greedy, recomputed adoption*. This is the whole of the baseline's effect on the gain side, and it is what makes the first adoption on a sequential baseline correctly credited with **both** things it buys — the lane-level concurrency the flat plan could not deliver on its own, and the sub-split itself. Under a sequential baseline the *zero-gain* case above therefore does not arise for the first adoption: with nothing running concurrently yet, every viable split strictly lowers the span. It reappears for every adoption after the first, unchanged.
 

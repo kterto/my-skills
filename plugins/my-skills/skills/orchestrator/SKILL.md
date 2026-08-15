@@ -522,7 +522,8 @@ Slice axis:  {feature | layer | other} (as reported by the slicing analysis)
 Flat plan:   makespan {M_flat} (critical lane {name}={n} tasks)
 Nested plan: makespan {M_nested} (critical leaf {qualified name}={n} tasks{, + integration sub-lane {n}})
 Sub-split lanes: {lane}→{k} sub-lanes
-  span = max(concurrent {n},…) + integration({n}) = {span_max}
+  span({lane}) = max(concurrent {n},…) + integration({n}) = {span_L}
+  span_max     = max(second-largest span {n}, span({lane}) {span_L}) = {span_max}
   g    = {span_base} − {span_max} = {g}
   c    = {the candidate's marginal terms, per the form below} = {c}
   {adopted | rejected}: g {>|≤} c
@@ -531,6 +532,8 @@ Leaf set: {N} leaves (ceiling {max_parallel_lanes})
 Contracts to freeze: 1 parent + {k} sub-contracts; {I} interface points total
 Verdict: {nested viable | nested non-viable — reason → degrading to lanes}
 ```
+
+**`span(L)` and `span_max` are two different quantities and are printed as two lines.** `span(L)` is what the split lane itself takes — its concurrent sub-lanes' max plus its serialized integration sub-lane. `span_max` is what the **run** takes, which is that value only when `L` is still the critical path: a lane split from 16 to `{5, 5}` + integration 6 has `span(L) = 11`, but with another lane at 10 the run's `span_max` is `max(10, 11) = 11`, and had the second lane been at 14 it would be 14. `g` is measured over `span_max` — the run-level term — never over `span(L)`, so printing one line labelled `span_max` that actually holds a lane span overstates the gain by exactly the amount the other lanes were ignored.
 
 **`c` is the candidate's *marginal* cost, not the plan's total overhead.** The `c` printed on this line is the same `c` the `g > c` predicate on the next line consumes, so it must be the quantity `references/config.md` → *The cost side* defines — **the overhead this candidate adds over what the baseline already pays** — and its printed terms are therefore **baseline-dependent and adoption-order-dependent**:
 
