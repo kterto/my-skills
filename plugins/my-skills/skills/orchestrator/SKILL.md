@@ -524,7 +524,7 @@ Nested plan: makespan {M_nested} (critical leaf {qualified name}={n} tasks{, + i
 Sub-split lanes: {lane}→{k} sub-lanes
   span = max(concurrent {n},…) + integration({n}) = {span_max}
   g    = {span_base} − {span_max} = {g}
-  c    = A({A}) + A({A}) + k×J({k}×{J}) + J({J}) + I({I}×0.25={i}) = {c}
+  c    = {the candidate's marginal terms, per the form below} = {c}
   {adopted | rejected}: g {>|≤} c
 Lanes left flat: {name} — {reason}, …
 Leaf set: {N} leaves (ceiling {max_parallel_lanes})
@@ -532,9 +532,18 @@ Contracts to freeze: 1 parent + {k} sub-contracts; {I} interface points total
 Verdict: {nested viable | nested non-viable — reason → degrading to lanes}
 ```
 
-**`g`, `c`, and `span` are printed term by term with their values substituted — never as bare scalars.** Print `c = A(2) + A(2) + k×J(1×2) + J(2) + I(8×0.25=2) = 10`, not `cost 10`. A scalar is unfalsifiable: neither the user nor a later reader can see **which term went missing**, and a run that silently dropped the `I` term or the sequential baseline's flat-plan terms prints a plausible number that nothing in the transcript contradicts. That is not hypothetical — it is the defect ADR-0012 was opened on, where a run printed `cost ~3` for a quantity the model cannot evaluate below `A + A + J + J`. The expanded form makes the arithmetic auditable in the transcript by the person reading it, which is the only check this step has.
+**`c` is the candidate's *marginal* cost, not the plan's total overhead.** The `c` printed on this line is the same `c` the `g > c` predicate on the next line consumes, so it must be the quantity `references/config.md` → *The cost side* defines — **the overhead this candidate adds over what the baseline already pays** — and its printed terms are therefore **baseline-dependent and adoption-order-dependent**:
 
-Show only the terms that apply: omit `k×J` when `k = 0`, and on a **sequential** baseline show the flat-plan terms the first adoption additionally carries (`references/config.md` → *The cost side*) rather than folding them into a single number.
+| Baseline | First adoption | Every later adoption |
+| -------- | -------------- | -------------------- |
+| `M_flat` (viable flat verdict) | `A({A}) + J({J}) + I({i}×0.25={…})` — the sub-contract level plus this lane's inner join and its sub-contract's interface points. The parent contract and outer join are already paid by the flat plan. | `J({J}) + I(…)` — the Step 2s level exists already and its architects run concurrently, so no second `A`. |
+| `M_seq` (non-viable flat verdict) | `A({A}) + A({A}) + J({J}) + J({J}) + I({I}×0.25={i})` — the whole nested overhead, because none of it exists in the baseline. | `J({J}) + I(…)` — identical to the flat-baseline case. |
+
+Printing `M_nested`'s complete overhead term on every candidate — parent contract, sub-contract level, **every** inner join, outer join, aggregate interfaces — and then feeding it to `g > c` charges the first flat-baseline candidate roughly `A + J` it never owed. On the `{12, 6}` worked example that is `c = 8` against the correct `c = 4`, which rejects a candidate `references/config.md` adopts. The whole-plan overhead has exactly one printed home — the `M_nested` figure on the `Nested plan:` line — and it is not this one.
+
+**`g`, `c`, and `span` are printed term by term with their values substituted — never as bare scalars.** Print `c = A(2) + J(2) + I(0×0.25=0) = 4`, not `cost 4`. A scalar is unfalsifiable: neither the user nor a later reader can see **which term went missing**, and a run that silently dropped the `I` term or the sequential baseline's flat-plan terms prints a plausible number that nothing in the transcript contradicts. That is not hypothetical — it is the defect ADR-0012 was opened on, where a run printed `cost ~3` for a quantity the model cannot evaluate below `A + A + J + J`. The expanded form makes the arithmetic auditable in the transcript by the person reading it, which is the only check this step has.
+
+Show only the terms that apply, per the table above: omit the interface term when the sub-contract froze no rows, and never print a `k×J` aggregate on a candidate line — a candidate is charged **one** inner join, its own. `k × J` is a property of the assembled plan and belongs to `M_nested`.
 
 **This is deliberately not delegated to a script.** A deterministic calculator would need to run on every non-`off` run, and this skill is dual-host — a host without node would either lose `full` or fall back to unchecked agent arithmetic. Worse, a script *plus* the printed model would put the gate and the ladder on two accounts again, which is the exact failure `references/config.md` → *Worked example — the gate verdict and the ladder figure must agree* records as having already happened once.
 
