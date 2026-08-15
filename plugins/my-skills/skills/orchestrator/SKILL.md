@@ -564,8 +564,8 @@ Declare parallelization **non-viable** and fall back to sequential — **printin
 2. **One lane holds more than 70% of the estimated tasks.** → `non-viable: lane {name} holds {p}% of tasks — the split would not shorten the critical path`
    > **Conditions 1 and 2 are evaluated over *lanes* only when the resolved level is `lanes`.** On `full` — and on `ask`, which may resolve to `full` — they are evaluated over the **leaf set** at 2p.3n instead, because a leaf is what `full` dispatches on. Read the rule in `references/config.md` → *The two work-concentration conditions are evaluated at leaf granularity*; the mechanics for this step are in *How a `full` run applies this gate*, immediately below the condition list.
 3. **Candidate lane path ownership cannot be made disjoint.** → `non-viable: lanes {a} and {b} cannot be given disjoint path ownership`
-4. **The interface-point count exceeds `T`, the run's total task count.** → `non-viable: {I} interface points exceed the run's {T} tasks — contract cost exceeds the gain`
-   > **The comparand is `T`, not the smallest lane's task count**, for the reason given normatively in `references/config.md` → *Aggregate diminishing-payback rule*: a comparand that shrinks as the split gets finer makes the guard fire hardest on the plans that help most. Both levels of this check use the same slice-invariant comparand.
+4. **The plan freezes more interface rows than the run has tasks** (`I > T`). → `non-viable: {I} interface rows exceed the run's {T} tasks — reconciliation touches every unit of work`
+   > **This is a risk heuristic, not a cost test, and `I > T` compares two counts** — never two task-equivalent quantities. Interface-point *cost* is charged at `0.25` each by `g > c` (`references/config.md` → *The cost side*); this condition bounds the **variance** `g > c` does not model. The reason line therefore never claims contract cost exceeds the gain. **The comparand is `T`, not the smallest lane's task count**: a comparand that shrinks as the split gets finer makes the guard fire hardest on the plans that help most. Both levels of this check use the same slice-invariant comparand. Normative in `references/config.md` → *Aggregate diminishing-payback rule*.
 5. **The project's gate commands from `PROJECT-CONTEXT.md` → Commands cannot be scoped to a lane's paths.** → `non-viable: gate {cmd} has no path-scoped form`
 6. **The host cannot spawn concurrent subagents.** → `non-viable: host cannot fan out concurrent subagents`
 
@@ -611,7 +611,7 @@ Print the matching line for each outcome:
 | A candidate sub-split fails the marginal-gain-vs-cost test | `sub-split rejected: lane {name} — gain {g} task-equivalents does not exceed cost {c} task-equivalents` |
 | A candidate fails a re-applied per-sub-lane viability condition | `sub-split rejected: lane {name} — {condition}` |
 | A sub-split is dropped to fit the leaf-width ceiling | `sub-split dropped: lane {name} — leaf set would exceed ceiling {max_parallel_lanes}` |
-| The assembled nested plan fails the aggregate-payback test | `nested non-viable: {I} aggregate interface points exceed the run's {T} tasks` |
+| The assembled nested plan fails the aggregate-payback test | `nested non-viable: {I} aggregate interface rows exceed the run's {T} tasks — reconciliation touches every unit of work` |
 | The assembled leaf set has fewer than 2 leaves carrying work | `nested non-viable: only {N} leaf carries work` |
 | One leaf still holds more than 70% of the run's tasks | `nested non-viable: leaf {qualified name} holds {p}% of tasks — the split would not shorten the critical path` |
 

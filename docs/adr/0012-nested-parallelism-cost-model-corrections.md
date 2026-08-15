@@ -45,8 +45,14 @@ probability approaches 1 as parallelism approaches usefulness.
 so an aggregate guard firing *after* `g > c` passed can only contradict correct arithmetic.
 But `g > c` prices interface points as *mean cost* and says nothing about *variance*:
 reconciliation touching nearly every leaf carries rework probability that is on no account in
-this model. `I > T` keeps that backstop at a threshold that means something — reconciliation
-costing more than the entire run's work — rather than at one guaranteed to trip.
+this model. `I > T` keeps that backstop at a threshold that means something.
+
+**`I > T` is a dimensionless ratio of counts, not a cost inequality.** It fires when the plan
+freezes more interface rows than the run has tasks — a shape where reconciliation touches
+essentially every unit of work. It must **not** be described as *"interface cost exceeds the
+run's work"*: with a point priced at `0.25` (change 2 below), that claim would be `0.25 I > T`,
+i.e. `I > 4T`, a threshold so extreme it could never fire. The cost reading was dropped rather
+than the comparand rescaled — a guard that never fires is not a guard.
 
 ### 2. An interface point costs `0.25` task-equivalents, not `1`
 
