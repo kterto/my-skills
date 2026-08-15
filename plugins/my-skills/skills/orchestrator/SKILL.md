@@ -513,7 +513,7 @@ Printing the bare `non-viable — only 1 lane carries work` line there is what m
 
 The speed estimate is **task-count-weighted lane balance with its assumption stated inline**. Never print a wall-clock ETA — that would be fabricated precision. Never omit the overhead line: the whole point of the gate is that the cost is visible, not hidden.
 
-**When the resolved level is `full`, print the nested evaluation as well** — as an *extension* of the block above, immediately after it, showing **flat vs nested side by side** so `full` is priced against `lanes` rather than against sequential. Pricing against sequential would make every nested plan look good regardless of what it buys over the flat split the user could have had for free. Every term is defined normatively in `references/config.md` → *The inner viability gate*:
+**When the resolved level is `full` — or `ask`, whose nested analysis runs speculatively (2p.3n) — print the nested evaluation as well**, as an *extension* of the block above, immediately after it, showing **flat vs nested side by side**. Which of the two the nested plan is *priced against* follows the flat verdict, and is normative in `references/config.md` → *The makespan model* → *The baseline*: `M_flat` when the flat verdict was viable, `M_seq` when it was not. Price against the plan that would otherwise run — pricing a nested plan against `M_flat` when the flat split is not on offer refunds it the `A + J` that plan pays, while pricing against `M_seq` whenever flat *is* viable makes every nested plan look good regardless of what it buys over the flat split the user could have had for free. Every term is defined normatively in `references/config.md` → *The inner viability gate*:
 
 ```
 ORCHESTRATOR — nested slicing analysis
