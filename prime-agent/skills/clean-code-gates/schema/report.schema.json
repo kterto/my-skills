@@ -1,0 +1,175 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://clean-code-gates/schema/report.schema.json",
+  "title": "CleanCodeGatesReport",
+  "description": "Agnostic report emitted by clean-code-gates CLI.",
+  "type": "object",
+  "required": ["schemaVersion", "generatedAt", "tool", "scope", "summary", "gates"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "description": "Schema version of this report format.",
+      "const": "1.0"
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when the report was generated."
+    },
+    "tool": {
+      "type": "object",
+      "required": ["name", "version"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "required": ["kind", "files", "stacks"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["project", "diff", "module", "files"]
+        },
+        "baseRef": {
+          "type": ["string", "null"],
+          "description": "Git base ref; present when kind=diff."
+        },
+        "files": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "stacks": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["status", "gatesRun", "gatesMissingTool", "blockers", "warnings"],
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["pass", "warn", "blocked"]
+        },
+        "gatesRun": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "gatesMissingTool": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "blockers": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "warnings": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "gates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["gate", "name", "stack", "status", "tool", "findings"],
+        "additionalProperties": false,
+        "properties": {
+          "gate": {
+            "type": "string",
+            "pattern": "^G[1-9][0-9]*$",
+            "description": "Gate identifier, e.g. G1, G5."
+          },
+          "name": {
+            "type": "string",
+            "description": "Human-readable gate name."
+          },
+          "stack": {
+            "type": "string",
+            "description": "Stack this gate ran against."
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pass", "fail", "warn", "missing_tool", "skipped", "error"]
+          },
+          "tool": {
+            "type": "string",
+            "description": "Tool that ran this gate (builtin, eslint, jest, stryker, etc.)."
+          },
+          "command": {
+            "type": "string",
+            "description": "Exact command that was run, if applicable."
+          },
+          "thresholds": {
+            "type": "object",
+            "description": "Thresholds used for this gate run.",
+            "additionalProperties": true
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["id", "severity", "file", "line", "rule", "message"],
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "Unique finding ID, e.g. G5-a.ts:2."
+                },
+                "severity": {
+                  "type": "string",
+                  "enum": ["blocker", "warning"]
+                },
+                "file": {
+                  "type": "string",
+                  "description": "Relative file path."
+                },
+                "line": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "endLine": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "Last line of the violation (optional)."
+                },
+                "rule": {
+                  "type": "string",
+                  "description": "Rule or gate check name."
+                },
+                "message": {
+                  "type": "string"
+                },
+                "metric": {
+                  "type": "object",
+                  "description": "Numeric metric context (value vs limit).",
+                  "additionalProperties": true
+                },
+                "fixHint": {
+                  "type": "string",
+                  "description": "Actionable fix suggestion for a fixer agent."
+                },
+                "baselineGrandfathered": {
+                  "type": "boolean",
+                  "description": "True when the finding was pre-existing in the baseline manifest."
+                }
+              }
+            }
+          },
+          "installHint": {
+            "type": ["string", "null"],
+            "description": "Install/scaffold instruction when status=missing_tool."
+          }
+        }
+      }
+    }
+  }
+}

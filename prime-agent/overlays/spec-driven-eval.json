@@ -1,0 +1,9 @@
+{
+  "skill": "spec-driven-eval",
+  "insertAfterFrontmatter": [
+    "preamble.spec-driven-eval.md"
+  ],
+  "dropFrontmatterKeys": [
+    "disable-model-invocation"
+  ]
+}

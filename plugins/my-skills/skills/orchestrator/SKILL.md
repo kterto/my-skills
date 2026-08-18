@@ -36,12 +36,13 @@ Bootstrap runs when `--setup` is passed or `.orchestrator/config.json` is absent
 
 ### B2 — Dependency check
 
-Check whether the `spec-driven-eval` skill is available (look for it in the skills registry or installed skill paths). If it is not found:
+Resolve the `spec-driven-eval` skill in this order, stopping at the first hit:
 
-- Offer the user to run `npx @tech-leads-club/agent-skills install --skill spec-driven-eval` to install it. Confirm with the user before executing.
-- If the user declines, instruct them to run the command manually later.
+1. **The copy bundled with this marketplace** (`plugins/my-skills/skills/spec-driven-eval/`) — `/my-skills:spec-driven-eval` in Claude Code, the `spec-driven-eval` skill in opencode. A plugin install already satisfies this, so on a normal install the check ends here.
+2. **A host-provided or separately installed copy** — anything the skills registry or the installed skill paths resolve under that name.
+3. **Nothing resolved** — the plugin is installed partially or the skill was invoked outside it. Offer the user `npx @tech-leads-club/agent-skills install --skill spec-driven-eval` as a fallback, and confirm with the user before executing. If the user declines, instruct them to run the command manually later.
 
-Record availability in memory for the current run. Do **not** block bootstrap on decline — the eval stage (Step 7) will handle a missing skill gracefully.
+Record availability in memory for the current run. Do **not** block bootstrap when nothing resolves or the user declines — the eval stage (Step 7) degrades explicitly, exactly as the `simplify` step below does.
 
 Check for a resolvable **`simplify`** skill the same way, and record its availability too. It ships in this marketplace, so a plugin install already satisfies it on both hosts; a host-provided `simplify` satisfies it equally. When none resolves, print one line saying the pre-review simplification pass will be skipped — do **not** offer to install anything and do **not** block bootstrap. Steps 3 and 3j degrade explicitly on it.
 
@@ -1467,8 +1468,9 @@ If an agent output is ambiguous or missing the expected pattern, re-read the rel
 
 On READY_TO_COMMIT (or READY_WITH_WARNINGS):
 
-1. If spec-driven-eval is unavailable (user declined install at bootstrap B2) → skip eval,
-   note "eval skipped — skill not installed" in the report, continue to Step 7b.
+1. If spec-driven-eval did not resolve at bootstrap B2 (nothing bundled, nothing installed,
+   and the user declined the fallback install) → skip eval, note "eval skipped — skill not
+   installed" in the report, continue to Step 7b.
 2. Else invoke the `spec-driven-eval` skill, passing the brainstormer SPEC-{NNN} path and the
    accumulated diff (`git diff` against the pre-flight base recorded in Step 0). Capture its
    validation result.

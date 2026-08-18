@@ -1,0 +1,35 @@
+{
+  "name": "@kterto/my-skills-prime-agent",
+  "version": "1.1.0",
+  "description": "Prime Agent distribution of my-skills",
+  "license": "MIT",
+  "author": {
+    "name": "Kainã Terto",
+    "email": "kaintp@gmail.com"
+  },
+  "homepage": "https://github.com/kterto/my-skills",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kterto/my-skills.git",
+    "directory": "prime-agent"
+  },
+  "bugs": {
+    "url": "https://github.com/kterto/my-skills/issues"
+  },
+  "files": [
+    "skills",
+    "install.sh",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "keywords": [
+    "prime-agent",
+    "agent-skills",
+    "claude-code",
+    "my-skills"
+  ],
+  "scripts": {
+    "test": "bash tests/install.sh && bash tests/parity.sh"
+  }
+}

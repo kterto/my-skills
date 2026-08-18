@@ -1,0 +1,1103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<!-- Network-denying CSP: default-src 'none' blocks ALL network egress (no fetch/XHR/WS,
+     no remote script/style/img/font/frame). Inline styles + the inlined interaction JS and
+     vendored Mermaid runtime are the only things permitted (unsafe-inline; unsafe-eval for
+     the runtime's parser), and data: images/fonts for self-contained assets. This is what
+     "self-contained + offline" means enforceably — it is NOT a strict CSP (inline is
+     allowed), and it is the outer guard against a Mermaid directive that slipped label
+     sanitization trying to load remote CSS/resources. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'; img-src data:; font-src data:; base-uri 'none'; form-action 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Explain Codebase</title>
+<style>
+/* ============================================================
+   EDITORIAL DESIGN SYSTEM v1 — Explain Codebase report
+   Self-contained, offline, CSP-safe. All tokens below.
+   ============================================================ */
+:root {
+  /* Surfaces / text — warm neutral, light */
+  --bg-page:        #faf9f7;
+  --bg-surface:     #f3f1ee;
+  --bg-overlay:     #ece9e4;
+  --bg-sunken:      #efede9;
+
+  --text-primary:   #1a1917;
+  --text-secondary: #4a4844;
+  --text-muted:     #8a8680;
+
+  --accent:         #3730a3;
+  --accent-subtle:  #e0e7ff;
+  --accent-focus:   #4f46e5;
+
+  --rule:           #d6d2cb;
+  --rule-heavy:     #b5b0a8;
+
+  /* Data-flow edge kinds (spec-mandated distinct color per kind) */
+  --flow-ingress:   #2563eb;  /* blue   */
+  --flow-transform: #7c3aed;  /* violet */
+  --flow-store:     #16a34a;  /* green  */
+  --flow-egress:    #ea580c;  /* orange */
+
+  --font-serif: Georgia, "Times New Roman", serif;
+  --font-sans:  -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                "Helvetica Neue", Arial, sans-serif;
+  --font-mono:  ui-monospace, "SF Mono", "Cascadia Code", "Fira Mono",
+                Menlo, Consolas, monospace;
+
+  --text-xs:   0.75rem;
+  --text-sm:   0.8125rem;
+  --text-base: 0.9375rem;
+  --text-lg:   1.0625rem;
+  --text-xl:   1.25rem;
+  --text-2xl:  1.5rem;
+
+  --sp-1: 0.25rem; --sp-2: 0.5rem; --sp-3: 0.75rem; --sp-4: 1rem;
+  --sp-5: 1.25rem; --sp-6: 1.5rem; --sp-8: 2rem; --sp-12: 3rem;
+
+  --radius: 6px;
+  --measure: 68ch;
+}
+
+/* Dark tokens — system preference (unless forced light) or explicit toggle */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg-page:        #141312;
+    --bg-surface:     #1e1c1a;
+    --bg-overlay:     #272420;
+    --bg-sunken:      #191715;
+
+    --text-primary:   #f0ece6;
+    --text-secondary: #b8b3ab;
+    --text-muted:     #857f78;
+
+    --accent:         #a5b4fc;
+    --accent-subtle:  #23204d;
+    --accent-focus:   #a5b4fc;
+
+    --rule:           #322e2a;
+    --rule-heavy:     #47423c;
+
+    --flow-ingress:   #3b82f6;
+    --flow-transform: #a78bfa;
+    --flow-store:     #22c55e;
+    --flow-egress:    #f97316;
+  }
+}
+:root[data-theme="dark"] {
+  --bg-page:        #141312;
+  --bg-surface:     #1e1c1a;
+  --bg-overlay:     #272420;
+  --bg-sunken:      #191715;
+
+  --text-primary:   #f0ece6;
+  --text-secondary: #b8b3ab;
+  --text-muted:     #857f78;
+
+  --accent:         #a5b4fc;
+  --accent-subtle:  #23204d;
+  --accent-focus:   #a5b4fc;
+
+  --rule:           #322e2a;
+  --rule-heavy:     #47423c;
+
+  --flow-ingress:   #3b82f6;
+  --flow-transform: #a78bfa;
+  --flow-store:     #22c55e;
+  --flow-egress:    #f97316;
+}
+
+/* ============================================================ Base */
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+::selection { background: var(--accent-subtle); color: var(--accent); }
+code, .mono { font-family: var(--font-mono); }
+
+h2 {
+  font-family: var(--font-serif);
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0 0 var(--sp-5);
+  color: var(--text-primary);
+}
+h3 { margin: 0; }
+.subhead {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin: 0 0 var(--sp-3);
+}
+
+button:focus-visible, select:focus-visible, summary:focus-visible,
+a:focus-visible, input:focus-visible, [role="tab"]:focus-visible {
+  outline: 2px solid var(--accent-focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ============================================================ Sticky topbar */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: color-mix(in srgb, var(--bg-page) 88%, transparent);
+  backdrop-filter: saturate(1.4) blur(10px);
+  border-bottom: 1px solid var(--rule);
+}
+.topbar__inner {
+  max-width: 68rem;
+  margin: 0 auto;
+  padding: var(--sp-4) var(--sp-6) 0;
+}
+.scope {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--sp-4) var(--sp-6);
+}
+.scope__title { display: flex; flex-direction: column; gap: 3px; }
+.scope__kicker {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--text-muted);
+}
+.scope h1 {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: clamp(1.4rem, 3vw, 1.9rem);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+.prov {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-5);
+  margin: 0 0 2px;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+.prov__item { display: inline-flex; gap: 0.45em; align-items: baseline; }
+.prov__item dt { color: var(--text-muted); margin: 0; }
+.prov__item dd { color: var(--text-secondary); margin: 0; }
+.scope__spacer { flex: 1 1 auto; }
+.btn {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  padding: 5px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--rule-heavy);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  line-height: 1.5;
+}
+.btn:hover { border-color: var(--text-muted); color: var(--text-primary); }
+
+/* --- Tabs --- */
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+  margin-top: var(--sp-4);
+}
+.tab {
+  appearance: none;
+  border: none;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: var(--sp-3) var(--sp-3);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  white-space: nowrap;
+}
+.tab:hover { color: var(--text-secondary); }
+.tab[aria-selected="true"] {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent);
+}
+
+/* ============================================================ Main */
+main {
+  max-width: 68rem;
+  margin: 0 auto;
+  padding: var(--sp-8) var(--sp-6) var(--sp-12);
+}
+.region[hidden] { display: none; }
+
+/* --- Overview --- */
+.banner {
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--accent);
+  background: var(--bg-surface);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  padding: var(--sp-3) var(--sp-5);
+  margin-bottom: var(--sp-8);
+}
+.banner__label {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin: 0 0 2px;
+}
+.banner__scope { color: var(--text-primary); font-size: var(--text-lg); margin: 0; }
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: var(--sp-8);
+  align-items: start;
+}
+.prose { color: var(--text-secondary); font-size: var(--text-lg); max-width: var(--measure); margin: 0 0 var(--sp-6); }
+.prose strong { color: var(--text-primary); }
+
+.badges { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.badge {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  background: var(--accent-subtle);
+  color: var(--accent);
+  padding: 3px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-8);
+}
+.tile {
+  border: 1px solid var(--rule);
+  background: var(--bg-page);
+  border-radius: var(--radius);
+  padding: var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tile__n {
+  font-family: var(--font-serif);
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text-primary);
+}
+.tile__l {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+.prov-block {
+  border-top: 1px solid var(--rule);
+  padding-top: var(--sp-4);
+}
+.prov-block dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: var(--sp-2) var(--sp-4); }
+.prov-block dt { font-family: var(--font-mono); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+.prov-block dd { margin: 0; font-family: var(--font-mono); font-size: var(--text-sm); color: var(--text-secondary); }
+
+/* --- Source anchor tag --- */
+.anchor {
+  font-size: var(--text-xs);
+  color: var(--accent);
+  background: var(--bg-overlay);
+  padding: 2px 7px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+/* --- Mermaid diagram frame --- */
+.diagram {
+  margin: 0 0 var(--sp-8);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: var(--bg-surface);
+  overflow: hidden;
+}
+.diagram figcaption {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--rule);
+}
+.diagram__scroll { overflow-x: auto; padding: var(--sp-4); }
+pre.mermaid {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--text-secondary);
+  white-space: pre;
+  min-width: max-content;
+}
+/* When a Mermaid-capable viewer renders the block, it injects an <svg>;
+   drop the raw-text styling so the rendered graphic sits cleanly. */
+pre.mermaid[data-processed="true"],
+pre.mermaid > svg { white-space: normal; }
+.diagram--seq { margin-top: var(--sp-4); }
+
+/* --- Cards grid --- */
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr)); gap: var(--sp-4); }
+.cards--compact { grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); }
+/* Rule cards grouped by domain (JS-built): host becomes a block of heading + card-grid pairs. */
+#rule-cards[data-grouped="1"] { display: block; }
+#rule-cards[data-grouped="1"] .domain-group { margin: 0 0 var(--sp-6); }
+.domain-head {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin: var(--sp-5) 0 var(--sp-3);
+  padding-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--rule);
+}
+.card {
+  border: 1px solid var(--rule);
+  background: var(--bg-page);
+  border-radius: var(--radius);
+  padding: var(--sp-4) var(--sp-5);
+}
+.card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+}
+.card__title {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.card__head .anchor { margin-left: auto; }
+
+.kv { display: grid; grid-template-columns: 6.5rem 1fr; gap: var(--sp-3); padding: var(--sp-1) 0; }
+.kv__k { font-family: var(--font-mono); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); padding-top: 2px; }
+.kv__v { color: var(--text-secondary); }
+.kv__v.mono { font-size: var(--text-sm); word-break: break-word; }
+
+/* --- Business-logic rule cards (what / why / where) --- */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--bg-surface);
+  border: 1px solid var(--rule-heavy);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.wcol { display: flex; flex-direction: column; gap: var(--sp-3); }
+.w { display: grid; grid-template-columns: 4rem 1fr; gap: var(--sp-3); }
+.w__k { font-family: var(--font-mono); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); padding-top: 2px; }
+.w p { margin: 0; color: var(--text-secondary); }
+.w p.mono { font-size: var(--text-sm); color: var(--text-muted); }
+
+/* --- Data-flow edge cards (color per kind) --- */
+.edge { border-left-width: 3px; }
+.edge[data-kind="ingress"]   { border-left-color: var(--flow-ingress); }
+.edge[data-kind="transform"] { border-left-color: var(--flow-transform); }
+.edge[data-kind="store"]     { border-left-color: var(--flow-store); }
+.edge[data-kind="egress"]    { border-left-color: var(--flow-egress); }
+.edge__flow { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; margin-bottom: var(--sp-3); }
+.edge__node { font-size: var(--text-sm); color: var(--text-primary); background: var(--bg-overlay); padding: 2px 8px; border-radius: 4px; }
+.edge__arrow { color: var(--text-muted); }
+.edge__foot { display: flex; align-items: center; gap: var(--sp-2); }
+.edge__foot .anchor { margin-left: auto; }
+.kind-chip {
+  display: inline-flex;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+.edge[data-kind="ingress"]   .kind-chip { background: var(--flow-ingress); }
+.edge[data-kind="transform"] .kind-chip { background: var(--flow-transform); }
+.edge[data-kind="store"]     .kind-chip { background: var(--flow-store); }
+.edge[data-kind="egress"]    .kind-chip { background: var(--flow-egress); }
+/* Cross-module edges get distinct highlighting; the chip shows only when flagged. */
+.xm-chip { display: none; }
+.edge[data-cross-module="yes"] {
+  border-left-style: double;
+  border-left-width: 5px;
+  box-shadow: inset 0 0 0 1px var(--accent-subtle);
+}
+.edge[data-cross-module="yes"] .xm-chip {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  padding: 1px 7px;
+  border-radius: 999px;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* --- User stories filter + collapsibles --- */
+.filterbar { margin-bottom: var(--sp-5); }
+.filter-input {
+  width: 100%;
+  max-width: 30rem;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--rule-heavy);
+  border-radius: var(--radius);
+  background: var(--bg-page);
+  color: var(--text-primary);
+}
+.filter-input::placeholder { color: var(--text-muted); }
+.empty-note { font-family: var(--font-serif); font-style: italic; color: var(--text-muted); }
+.usecases { display: flex; flex-direction: column; gap: var(--sp-3); }
+.usecase[hidden] { display: none; }
+details.usecase { padding: 0; overflow: hidden; }
+.usecase > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+  padding: var(--sp-4) var(--sp-5);
+  user-select: none;
+}
+.usecase > summary::-webkit-details-marker { display: none; }
+.usecase > summary::before {
+  content: "\25B8";
+  font-size: 0.85em;
+  color: var(--text-muted);
+  transition: transform 0.16s ease;
+  flex: none;
+}
+.usecase[open] > summary::before { transform: rotate(90deg); }
+.usecase__goal { font-family: var(--font-sans); font-size: var(--text-base); font-weight: 600; color: var(--text-primary); }
+.usecase__actor { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-muted); }
+.usecase__actor::before { content: "actor: "; opacity: 0.7; }
+.usecase > summary .anchor { margin-left: auto; }
+.usecase__body { padding: 0 var(--sp-5) var(--sp-5); border-top: 1px solid var(--rule); padding-top: var(--sp-4); }
+
+/* --- Metrics (inline JS bars) --- */
+.metrics { display: flex; flex-direction: column; gap: var(--sp-5); max-width: 46rem; }
+.metric__head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--sp-2); }
+.metric__label { color: var(--text-secondary); }
+.metric__value { font-size: var(--text-sm); color: var(--text-primary); font-weight: 600; }
+.metric__track { height: 10px; background: var(--bg-overlay); border-radius: 999px; overflow: hidden; }
+.metric__fill {
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* --- Appendix --- */
+.acc {
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: var(--bg-surface);
+  margin-bottom: var(--sp-4);
+  overflow: hidden;
+}
+.acc > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-5);
+  font-family: var(--font-sans);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--text-primary);
+  user-select: none;
+}
+.acc > summary::-webkit-details-marker { display: none; }
+.acc > summary::before {
+  content: "\25B8";
+  font-size: 0.85em;
+  color: var(--text-muted);
+  transition: transform 0.16s ease;
+  flex: none;
+}
+.acc[open] > summary::before { transform: rotate(90deg); }
+.acc__body { padding: 0 var(--sp-5) var(--sp-5); }
+
+.dep__row { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-2); }
+.dep__name { font-size: var(--text-sm); color: var(--text-primary); }
+.dep__row .tag { margin-left: auto; }
+.tag {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid var(--rule-heavy);
+  color: var(--text-muted);
+  background: var(--bg-page);
+  white-space: nowrap;
+}
+.dep .anchor { font-size: 0.6875rem; }
+
+.glossary { margin: 0; }
+.glossary__item { padding: var(--sp-3) 0; border-bottom: 1px solid var(--rule); }
+.glossary__item:last-child { border-bottom: none; }
+.glossary dt { font-family: var(--font-mono); font-size: var(--text-sm); font-weight: 700; color: var(--text-primary); margin-bottom: 2px; }
+.glossary dd { margin: 0; color: var(--text-secondary); max-width: var(--measure); }
+
+.table-wrap { overflow-x: auto; }
+.ftable { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+.ftable thead th {
+  text-align: left;
+  background: var(--bg-page);
+  font-family: var(--font-sans);
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: var(--sp-2) var(--sp-4);
+  border-bottom: 1px solid var(--rule-heavy);
+  white-space: nowrap;
+}
+.ftable tbody td { padding: var(--sp-2) var(--sp-4); border-bottom: 1px solid var(--rule); color: var(--text-secondary); vertical-align: baseline; }
+.ftable tbody td.mono { color: var(--text-primary); }
+.ftable tbody tr:last-child td { border-bottom: none; }
+
+.analysis-foot {
+  margin-top: var(--sp-8);
+  padding-top: var(--sp-5);
+  border-top: 2px solid var(--rule-heavy);
+}
+.analysis-foot > p {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+  margin: 0 0 var(--sp-3);
+}
+.analysis-foot dl { margin: 0; display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-6); }
+.analysis-foot div { display: inline-flex; gap: 0.45em; align-items: baseline; font-family: var(--font-mono); font-size: var(--text-sm); }
+.analysis-foot dt { color: var(--text-muted); margin: 0; }
+.analysis-foot dd { color: var(--text-secondary); margin: 0; }
+
+@media (max-width: 720px) {
+  .topbar__inner { padding: var(--sp-3) var(--sp-4) 0; }
+  main { padding: var(--sp-6) var(--sp-4) var(--sp-12); }
+  .grid-2 { grid-template-columns: 1fr; }
+  .prov { width: 100%; }
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar__inner">
+    <div class="scope">
+      <div class="scope__title">
+        <span class="scope__kicker">Explain Codebase</span>
+        <h1>{{SCOPE_LABEL}}</h1>
+      </div>
+      <dl class="prov">
+        <div class="prov__item"><dt>commit</dt><dd class="mono">{{COMMIT_SHA}}</dd></div>
+        <div class="prov__item"><dt>generated</dt><dd class="mono">{{GENERATED_DATE}}</dd></div>
+        <div class="prov__item"><dt>subagents</dt><dd class="mono">{{SUBAGENT_COUNT}}</dd></div>
+      </dl>
+      <span class="scope__spacer"></span>
+      <button class="btn" id="theme-toggle" aria-label="Toggle light or dark theme">Toggle theme</button>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Report regions">
+      <button class="tab" role="tab" id="tab-overview" aria-controls="region-overview" aria-selected="true">Overview</button>
+      <button class="tab" role="tab" id="tab-data-model" aria-controls="region-data-model" aria-selected="false" tabindex="-1">Data model</button>
+      <button class="tab" role="tab" id="tab-business-logic" aria-controls="region-business-logic" aria-selected="false" tabindex="-1">Business logic</button>
+      <button class="tab" role="tab" id="tab-data-flow" aria-controls="region-data-flow" aria-selected="false" tabindex="-1">Data flow</button>
+      <button class="tab" role="tab" id="tab-user-stories" aria-controls="region-user-stories" aria-selected="false" tabindex="-1">User stories</button>
+      <button class="tab" role="tab" id="tab-metrics" aria-controls="region-metrics" aria-selected="false" tabindex="-1">Metrics</button>
+      <button class="tab" role="tab" id="tab-appendix" aria-controls="region-appendix" aria-selected="false" tabindex="-1">Appendix</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+  <!-- ======================================================== OVERVIEW -->
+  <section class="region" id="region-overview" role="tabpanel" aria-labelledby="tab-overview">
+    <div class="banner">
+      <p class="banner__label">Scope</p>
+      <p class="banner__scope mono">{{SCOPE_LABEL}}</p>
+    </div>
+    <div class="grid-2">
+      <div>
+        <h2>Inferred purpose</h2>
+        <p class="prose">{{SYSTEM_PURPOSE}}</p>
+        <h3 class="subhead">Stack &amp; tech</h3>
+        <div class="badges">
+          <!-- REPEAT:stackBadge -->
+          <span class="badge">{{stackBadge.label}}<span class="anchor mono">{{stackBadge.anchor}}</span></span>
+          <!-- /REPEAT:stackBadge -->
+        </div>
+      </div>
+      <div>
+        <h3 class="subhead">At a glance</h3>
+        <div class="tiles">
+          <div class="tile"><span class="tile__n">{{MODULE_COUNT}}</span><span class="tile__l">modules</span></div>
+          <div class="tile"><span class="tile__n">{{ENTITY_COUNT}}</span><span class="tile__l">entities</span></div>
+          <div class="tile"><span class="tile__n">{{RULE_COUNT}}</span><span class="tile__l">rules</span></div>
+          <div class="tile"><span class="tile__n">{{USECASE_COUNT}}</span><span class="tile__l">use cases</span></div>
+        </div>
+        <div class="prov-block">
+          <p class="subhead">Provenance</p>
+          <dl>
+            <dt>commit</dt><dd>{{COMMIT_SHA}}</dd>
+            <dt>generated</dt><dd>{{GENERATED_DATE}}</dd>
+            <dt>subagents</dt><dd>{{SUBAGENT_COUNT}}</dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================================================== DATA MODEL -->
+  <section class="region" id="region-data-model" role="tabpanel" aria-labelledby="tab-data-model" hidden>
+    <h2>Data model</h2>
+    <figure class="diagram">
+      <figcaption>Entity-relationship diagram</figcaption>
+      <div class="diagram__scroll"><pre class="mermaid">{{DATA_MODEL_MERMAID}}</pre></div>
+    </figure>
+    <div class="cards">
+      <!-- REPEAT:entity -->
+      <article class="card entity">
+        <header class="card__head">
+          <h3 class="card__title">{{entity.name}}</h3>
+          <span class="anchor mono">{{entity.anchor}}</span>
+        </header>
+        <div class="kv"><span class="kv__k">fields</span><span class="kv__v mono">{{entity.fields}}</span></div>
+        <div class="kv"><span class="kv__k">invariants</span><span class="kv__v">{{entity.invariants}}</span></div>
+      </article>
+      <!-- /REPEAT:entity -->
+    </div>
+  </section>
+
+  <!-- ======================================================== BUSINESS LOGIC -->
+  <section class="region" id="region-business-logic" role="tabpanel" aria-labelledby="tab-business-logic" hidden>
+    <h2>Business logic</h2>
+    <figure class="diagram">
+      <figcaption>Rule / decision flowchart</figcaption>
+      <div class="diagram__scroll"><pre class="mermaid">{{BUSINESS_LOGIC_MERMAID}}</pre></div>
+    </figure>
+    <div class="cards" id="rule-cards">
+      <!-- REPEAT:rule -->
+      <article class="card rule" data-domain="{{rule.domain}}">
+        <header class="card__head">
+          <h3 class="card__title">{{rule.name}}</h3>
+          <span class="pill">{{rule.domain}}</span>
+          <span class="anchor mono">{{rule.anchor}}</span>
+        </header>
+        <div class="wcol">
+          <div class="w"><span class="w__k">what</span><p>{{rule.what}}</p></div>
+          <div class="w"><span class="w__k">why</span><p>{{rule.why}}</p></div>
+          <div class="w"><span class="w__k">where</span><p class="mono">{{rule.anchor}}</p></div>
+        </div>
+      </article>
+      <!-- /REPEAT:rule -->
+    </div>
+  </section>
+
+  <!-- ======================================================== DATA FLOW -->
+  <section class="region" id="region-data-flow" role="tabpanel" aria-labelledby="tab-data-flow" hidden>
+    <h2>Data flow</h2>
+    <figure class="diagram">
+      <figcaption>Data-flow diagram</figcaption>
+      <div class="diagram__scroll"><pre class="mermaid">{{DATA_FLOW_MERMAID}}</pre></div>
+    </figure>
+    <div class="cards">
+      <!-- REPEAT:flowEdge -->
+      <article class="card edge" data-kind="{{flowEdge.kind}}" data-cross-module="{{flowEdge.crossModule}}">
+        <div class="edge__flow">
+          <span class="edge__node mono">{{flowEdge.from}}</span>
+          <span class="edge__arrow">&rarr;</span>
+          <span class="edge__node mono">{{flowEdge.to}}</span>
+        </div>
+        <div class="edge__foot">
+          <span class="kind-chip">{{flowEdge.kind}}</span>
+          <span class="xm-chip">cross-module</span>
+          <span class="anchor mono">{{flowEdge.anchor}}</span>
+        </div>
+      </article>
+      <!-- /REPEAT:flowEdge -->
+    </div>
+  </section>
+
+  <!-- ======================================================== USER STORIES -->
+  <section class="region" id="region-user-stories" role="tabpanel" aria-labelledby="tab-user-stories" hidden>
+    <h2>User stories</h2>
+    <div class="filterbar">
+      <input type="search" id="usecase-filter" class="filter-input" placeholder="Filter use cases by keyword&hellip;" aria-label="Filter use cases by keyword" autocomplete="off">
+    </div>
+    <p class="empty-note" id="usecase-empty" hidden>No use cases match that keyword.</p>
+    <div class="usecases">
+      <!-- REPEAT:useCase -->
+      <details class="usecase card">
+        <summary>
+          <span class="usecase__goal">{{useCase.goal}}</span>
+          <span class="usecase__actor">{{useCase.actor}}</span>
+          <span class="anchor mono">{{useCase.anchor}}</span>
+        </summary>
+        <div class="usecase__body">
+          <div class="kv"><span class="kv__k">trigger</span><span class="kv__v">{{useCase.trigger}}</span></div>
+          <div class="kv"><span class="kv__k">steps</span><span class="kv__v">{{useCase.steps}}</span></div>
+          <div class="kv"><span class="kv__k">data touched</span><span class="kv__v mono">{{useCase.dataTouched}}</span></div>
+          <figure class="diagram diagram--seq">
+            <figcaption>Sequence</figcaption>
+            <div class="diagram__scroll"><pre class="mermaid">{{useCase.mermaid}}</pre></div>
+          </figure>
+        </div>
+      </details>
+      <!-- /REPEAT:useCase -->
+    </div>
+  </section>
+
+  <!-- ======================================================== METRICS -->
+  <section class="region" id="region-metrics" role="tabpanel" aria-labelledby="tab-metrics" hidden>
+    <h2>Metrics</h2>
+    <div class="metrics">
+      <!-- REPEAT:metric -->
+      <div class="metric" data-value="{{metric.value}}" data-max="{{metric.max}}">
+        <div class="metric__head">
+          <span class="metric__label">{{metric.label}}</span>
+          <span class="metric__value mono">{{metric.value}}</span>
+        </div>
+        <div class="metric__track"><div class="metric__fill"></div></div>
+      </div>
+      <!-- /REPEAT:metric -->
+    </div>
+  </section>
+
+  <!-- ======================================================== APPENDIX -->
+  <section class="region" id="region-appendix" role="tabpanel" aria-labelledby="tab-appendix" hidden>
+    <h2>Appendix</h2>
+
+    <details class="acc" open>
+      <summary>Dependency index</summary>
+      <div class="acc__body">
+        <div class="cards cards--compact">
+          <!-- REPEAT:dependency -->
+          <article class="card dep">
+            <div class="dep__row">
+              <span class="dep__name mono">{{dependency.name}}</span>
+              <span class="tag">{{dependency.kind}}</span>
+            </div>
+            <span class="anchor mono">{{dependency.anchor}}</span>
+          </article>
+          <!-- /REPEAT:dependency -->
+        </div>
+      </div>
+    </details>
+
+    <details class="acc">
+      <summary>Glossary</summary>
+      <div class="acc__body">
+        <dl class="glossary">
+          <!-- REPEAT:glossaryTerm -->
+          <div class="glossary__item">
+            <dt>{{glossaryTerm.term}} <span class="anchor mono">{{glossaryTerm.anchor}}</span></dt>
+            <dd>{{glossaryTerm.definition}}</dd>
+          </div>
+          <!-- /REPEAT:glossaryTerm -->
+        </dl>
+      </div>
+    </details>
+
+    <details class="acc">
+      <summary>File index</summary>
+      <div class="acc__body">
+        <div class="table-wrap">
+          <table class="ftable">
+            <thead><tr><th>Path</th><th>Role</th></tr></thead>
+            <tbody>
+              <!-- REPEAT:fileIndex -->
+              <tr><td class="mono">{{fileIndex.path}}</td><td>{{fileIndex.role}}</td></tr>
+              <!-- /REPEAT:fileIndex -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </details>
+
+    <details class="acc">
+      <summary>Analysis units &amp; completeness</summary>
+      <div class="acc__body">
+        <div class="table-wrap">
+          <table class="ftable">
+            <thead><tr><th>Unit</th><th>Modules</th><th>Files</th><th>Grouped</th><th>Status</th><th>Skipped / reason</th></tr></thead>
+            <tbody>
+              <!-- REPEAT:analysisUnit -->
+              <tr>
+                <td class="mono">{{analysisUnit.name}}</td>
+                <td>{{analysisUnit.modules}}</td>
+                <td class="mono">{{analysisUnit.files}}</td>
+                <td>{{analysisUnit.grouped}}</td>
+                <td>{{analysisUnit.status}}</td>
+                <td>{{analysisUnit.skipped}}</td>
+              </tr>
+              <!-- /REPEAT:analysisUnit -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </details>
+
+    <footer class="analysis-foot">
+      <p>Analysis provenance</p>
+      <dl>
+        <div><dt>commit</dt><dd class="mono">{{COMMIT_SHA}}</dd></div>
+        <div><dt>generated</dt><dd class="mono">{{GENERATED_DATE}}</dd></div>
+        <div><dt>subagents</dt><dd class="mono">{{SUBAGENT_COUNT}}</dd></div>
+        <div><dt>coverage</dt><dd class="mono">{{ANALYSIS_COMPLETE}}</dd></div>
+      </dl>
+    </footer>
+  </section>
+
+</main>
+
+<!-- MERMAID_RUNTIME -->
+<script>
+/* ============================================================
+   Explain Codebase report — interaction (vanilla JS only)
+   Tabs, <details> collapsibles, use-case keyword filter,
+   metric-bar renderer, theme toggle. No libraries, no network.
+   ============================================================ */
+(function () {
+  "use strict";
+
+  function $(sel, root) { return (root || document).querySelector(sel); }
+  function $$(sel, root) {
+    return Array.prototype.slice.call((root || document).querySelectorAll(sel));
+  }
+
+  /* ---------- tab switching ---------- */
+  function initTabs() {
+    var tabs = $$(".tab");
+    var panels = $$(".region");
+    if (!tabs.length) return;
+
+    function activate(id, focusTab) {
+      tabs.forEach(function (t) {
+        var on = t.getAttribute("aria-controls") === id;
+        t.setAttribute("aria-selected", String(on));
+        t.tabIndex = on ? 0 : -1;
+        if (on && focusTab) t.focus();
+      });
+      panels.forEach(function (p) { p.hidden = p.id !== id; });
+      renderMermaidIn(document.getElementById(id));  // lazy: diagrams can't lay out while hidden
+      if (("#" + id) !== location.hash) {
+        try { history.replaceState(null, "", "#" + id); } catch (e) {}
+      }
+    }
+
+    tabs.forEach(function (t, i) {
+      t.addEventListener("click", function () {
+        activate(t.getAttribute("aria-controls"), false);
+      });
+      t.addEventListener("keydown", function (e) {
+        var n = tabs.length, next = -1;
+        if (e.key === "ArrowRight" || e.key === "ArrowDown") next = (i + 1) % n;
+        else if (e.key === "ArrowLeft" || e.key === "ArrowUp") next = (i - 1 + n) % n;
+        else if (e.key === "Home") next = 0;
+        else if (e.key === "End") next = n - 1;
+        if (next >= 0) {
+          e.preventDefault();
+          activate(tabs[next].getAttribute("aria-controls"), true);
+        }
+      });
+    });
+
+    var initial = (location.hash || "").replace(/^#/, "");
+    var known = panels.some(function (p) { return p.id === initial; });
+    activate(known ? initial : (panels[0] && panels[0].id), false);
+  }
+
+  /* ---------- metric bars (width = value / max) ---------- */
+  function initMetrics() {
+    $$(".metric").forEach(function (m) {
+      var fill = $(".metric__fill", m);
+      if (!fill) return;
+      var v = parseFloat(m.getAttribute("data-value"));
+      var max = parseFloat(m.getAttribute("data-max"));
+      if (isFinite(v) && isFinite(max) && max > 0) {
+        fill.style.width = Math.max(0, Math.min(100, (v / max) * 100)) + "%";
+      } else {
+        fill.style.width = "0%"; // unfilled template placeholder → empty bar
+      }
+    });
+  }
+
+  /* ---------- use-case keyword filter ---------- */
+  function initFilter() {
+    var input = $("#usecase-filter");
+    if (!input) return;
+    var cards = $$("#region-user-stories .usecase");
+    var empty = $("#usecase-empty");
+    function apply() {
+      var q = input.value.trim().toLowerCase();
+      var shown = 0;
+      cards.forEach(function (c) {
+        var hit = !q || c.textContent.toLowerCase().indexOf(q) !== -1;
+        c.hidden = !hit;
+        if (hit) shown++;
+      });
+      if (empty) empty.hidden = !(cards.length && shown === 0);
+    }
+    input.addEventListener("input", apply);
+  }
+
+  /* ---------- theme toggle (overrides prefers-color-scheme) ---------- */
+  function initTheme() {
+    var btn = $("#theme-toggle");
+    if (!btn) return;
+    btn.addEventListener("click", function () {
+      var root = document.documentElement;
+      var cur = root.getAttribute("data-theme");
+      var systemDark = window.matchMedia &&
+        window.matchMedia("(prefers-color-scheme: dark)").matches;
+      var effectiveDark = cur ? cur === "dark" : systemDark;
+      root.setAttribute("data-theme", effectiveDark ? "light" : "dark");
+      resetMermaid();
+      renderMermaidIn(visibleRegion());
+    });
+  }
+
+  /* ---------- mermaid diagrams (offline; runtime inlined by the skill) ----------
+     Rendered LAZILY, per tab: Mermaid cannot lay out a diagram inside a hidden
+     (display:none) panel, so each region's diagrams render the first time its tab is
+     shown (see activate()), and re-render on theme change. If the runtime is absent
+     (e.g. the unfilled template) the styled diagram source stays visible as a
+     graceful fallback. */
+  var mermaidSrc = typeof WeakMap === "function" ? new WeakMap() : null;
+  function mermaidTheme() {
+    var cur = document.documentElement.getAttribute("data-theme");
+    var dark = cur ? cur === "dark"
+      : (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    return dark ? "dark" : "neutral";
+  }
+  function renderMermaidIn(container) {
+    if (!window.mermaid || !container) return;
+    var nodes = $$("pre.mermaid", container).filter(function (n) {
+      return n.getAttribute("data-rendered") !== "1";
+    });
+    if (!nodes.length) return;
+    nodes.forEach(function (n) {
+      if (mermaidSrc && !mermaidSrc.has(n)) mermaidSrc.set(n, n.textContent);
+    });
+    try {
+      window.mermaid.initialize({
+        startOnLoad: false, securityLevel: "strict", theme: mermaidTheme(),
+      });
+      var done = function () {
+        nodes.forEach(function (n) { n.setAttribute("data-rendered", "1"); });
+      };
+      var p = window.mermaid.run({ nodes: nodes });
+      if (p && p.then) { p.then(done).catch(function () {}); } else { done(); }
+    } catch (e) { /* leave raw source visible on any render failure */ }
+  }
+  function resetMermaid() {   // restore original sources + clear flags so a new theme re-renders
+    if (!mermaidSrc) return;
+    $$("pre.mermaid").forEach(function (n) {
+      if (!mermaidSrc.has(n)) return;
+      n.removeAttribute("data-processed");
+      n.removeAttribute("data-rendered");
+      n.innerHTML = "";
+      n.textContent = mermaidSrc.get(n);
+    });
+  }
+  function visibleRegion() {
+    return $$(".region").filter(function (p) { return !p.hidden; })[0] || null;
+  }
+
+  /* Group business-rule cards under a deterministic per-domain heading (design contract:
+     rules grouped by domain, not a flat grid). Domains appear in first-seen order; a card
+     with no domain falls under "General". Idempotent (guarded by data-grouped). */
+  function groupRulesByDomain() {
+    var host = document.getElementById("rule-cards");
+    if (!host || host.getAttribute("data-grouped") === "1") return;
+    var cards = $$(".card.rule", host);
+    if (!cards.length) return;
+    var order = [], byDomain = Object.create(null);   // null proto: domains like
+    // "constructor"/"toString"/"__proto__" are plain keys, not inherited members (bug-5).
+    cards.forEach(function (c) {
+      var d = (c.getAttribute("data-domain") || "").trim() || "General";
+      if (!byDomain[d]) { byDomain[d] = []; order.push(d); }
+      byDomain[d].push(c);
+    });
+    if (order.length < 1) return;
+    host.setAttribute("data-grouped", "1");
+    host.textContent = "";
+    order.forEach(function (d) {
+      var h = document.createElement("h3");
+      h.className = "domain-head";
+      h.textContent = d;
+      host.appendChild(h);
+      var group = document.createElement("div");
+      group.className = "cards domain-group";
+      byDomain[d].forEach(function (c) { group.appendChild(c); });
+      host.appendChild(group);
+    });
+  }
+
+  function init() {
+    initTabs();      // activates the initial tab → renders its diagrams
+    initMetrics();
+    initFilter();
+    initTheme();
+    groupRulesByDomain();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+})();
+</script>
+</body>
+</html>

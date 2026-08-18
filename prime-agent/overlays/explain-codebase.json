@@ -1,0 +1,17 @@
+{
+  "skill": "explain-codebase",
+  "dropFrontmatterKeys": [
+    "allowed-tools"
+  ],
+  "replacements": [
+    {
+      "find": "':(exclude).claude'",
+      "replace": "':(exclude).claude' ':(exclude).prime'",
+      "count": 1,
+      "why": "Prime Agent writes host-runtime scaffolding into .prime/; without the exclude the tree reads permanently dirty."
+    }
+  ],
+  "insertAfterFrontmatter": [
+    "preamble.md"
+  ]
+}

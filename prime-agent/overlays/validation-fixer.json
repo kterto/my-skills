@@ -1,0 +1,9 @@
+{
+  "skill": "validation-fixer",
+  "dropFrontmatterKeys": [
+    "allowed-tools"
+  ],
+  "insertAfterFrontmatter": [
+    "preamble.md"
+  ]
+}

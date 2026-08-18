@@ -1,0 +1,6 @@
+{
+  "skill": "design-to-code",
+  "insertAfterFrontmatter": [
+    "preamble.md"
+  ]
+}

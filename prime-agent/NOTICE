@@ -1,0 +1,21 @@
+my-skills — Prime Agent distribution
+Copyright (c) Kainã Terto
+Licensed under the MIT License (see LICENSE), with the exception below.
+
+--------------------------------------------------------------------------------
+Third-party content bundled in this package
+--------------------------------------------------------------------------------
+
+skills/spec-driven-eval/
+    Author:  Waldemar Neto — https://github.com/waldemarnt
+    Source:  @tech-leads-club/agent-skills
+             https://github.com/tech-leads-club/agent-skills
+    Version: 1.0.0
+    License: CC-BY-4.0 — https://creativecommons.org/licenses/by/4.0/
+
+    Not covered by this package's MIT license. Redistributed with host
+    adaptations only: a "Prime Agent compatibility" preamble is prepended, and
+    the Claude-only `disable-model-invocation` frontmatter key is dropped. The
+    methodology, rubric, and scoring text are unchanged from upstream. The
+    attribution in the skill's frontmatter (`license`, `metadata.author`) must be
+    preserved in any further redistribution.

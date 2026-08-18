@@ -1,0 +1,6 @@
+{
+  "skill": "clean-code-gates",
+  "insertAfterFrontmatter": [
+    "preamble.md"
+  ]
+}

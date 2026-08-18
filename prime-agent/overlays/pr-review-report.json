@@ -1,0 +1,6 @@
+{
+  "skill": "pr-review-report",
+  "insertAfterFrontmatter": [
+    "preamble.md"
+  ]
+}

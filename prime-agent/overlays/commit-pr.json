@@ -1,0 +1,14 @@
+{
+  "skill": "commit-pr",
+  "replacements": [
+    {
+      "find": "':(exclude).claude'",
+      "replace": "':(exclude).claude' ':(exclude).prime'",
+      "count": 4,
+      "why": "Prime Agent writes host-runtime scaffolding into .prime/; without the exclude the tree reads permanently dirty."
+    }
+  ],
+  "insertAfterFrontmatter": [
+    "preamble.md"
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "skill": "simplify",
+  "insertAfterFrontmatter": [
+    "preamble.md"
+  ]
+}
