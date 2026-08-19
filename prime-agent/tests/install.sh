@@ -129,10 +129,31 @@ if MV_CALLS="$tmp/mv-calls" MV_FAIL_AT=4 PATH="$tmp/fakebin:$PATH" \
   echo "installer reported success despite a failed mv on a fresh install" >&2
   exit 1
 fi
-fresh_skills="$(find "$tmp/fresh/.prime/agent/skills" -name SKILL.md | wc -l | tr -d ' ')"
+# The destination may now be gone entirely, which is the stronger outcome the
+# next assertion pins; these two count what survived if anything did, so they
+# must not themselves fail merely because there is nothing left to search.
+fresh_skills="$(find "$tmp/fresh" -name SKILL.md 2>/dev/null | wc -l | tr -d ' ')"
 test "$fresh_skills" = 0 \
   || { echo "a failed fresh install left $fresh_skills skills behind" >&2; exit 1; }
-test "$(find "$tmp/fresh/.prime/agent/skills" -mindepth 1 -maxdepth 1 -name '.*' | wc -l | tr -d ' ')" = 0
+test "$(find "$tmp/fresh/.prime/agent/skills" -mindepth 1 -maxdepth 1 -name '.*' 2>/dev/null | wc -l | tr -d ' ')" = 0
+
+# "Restored to its previous state" has to mean the whole destination, not only
+# its contents: before a fresh install there was no .prime chain at all, so
+# leaving the empty directories behind makes the message on stderr false.
+test ! -e "$tmp/fresh/.prime" \
+  || { echo "a failed fresh install left the destination chain behind: $(find "$tmp/fresh/.prime")" >&2; exit 1; }
+
+# ...while a directory that predates the install is never pruned, even when it
+# is left empty by the rollback.
+mkdir -p "$tmp/pre-existing/.prime/agent/skills"
+printf '0' > "$tmp/mv-calls"
+if MV_CALLS="$tmp/mv-calls" MV_FAIL_AT=4 PATH="$tmp/fakebin:$PATH" \
+   HOME="$tmp/home" "$root/install.sh" --project "$tmp/pre-existing" >/dev/null 2>&1; then
+  echo "installer reported success despite a failed mv on a pre-existing destination" >&2
+  exit 1
+fi
+test -d "$tmp/pre-existing/.prime/agent/skills" \
+  || { echo "rollback removed a destination directory that predated the install" >&2; exit 1; }
 
 # The message is only worth pinning now that the fix makes it true.
 grep -q 'Install failed — the destination was restored to its previous state\.' "$tmp/fresh-err" \

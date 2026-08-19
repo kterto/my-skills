@@ -150,3 +150,51 @@ test('G5 skips files that are not source files of the detected stack', () => {
   assert.deepStrictEqual(report.gates.find((g) => g.gate === 'G5').findings, []);
   assert.strictEqual(exitCode, 0);
 });
+
+// --- template interpolation state (FR-60) -------------------------------
+// A backtick was closed by the next backtick regardless of `${}`, so a nested
+// template ended the outer one early: the code after it was rescanned as source
+// and its string content read as a comment, while the real trailing comment sat
+// past the scanner's stopping point and was never seen.
+
+test('a nested template literal does not end the outer one', () => {
+  const f = scan(pad(['const s = `a ${`b // c`} d`; // real']));
+  assert.strictEqual(f.length, 1, JSON.stringify(f));
+  assert.strictEqual(f[0].message, 'disallowed comment: // real');
+});
+
+test('a comment inside an interpolation is code-position and is flagged', () => {
+  const f = scan(pad(['const s = `${a /* why */}`;']));
+  assert.strictEqual(f.length, 1, JSON.stringify(f));
+});
+
+test('an object literal inside an interpolation does not close it early', () => {
+  const f = scan(pad(['const s = `${ { a: 1 } } tail`; // real']));
+  assert.strictEqual(f.length, 1, JSON.stringify(f));
+  assert.match(f[0].message, /\/\/ real/);
+});
+
+test('a url in template text after an interpolation is not a comment', () => {
+  assert.deepStrictEqual(scan(pad(['const s = `${a} https://example.com/x`;'])), []);
+});
+
+test('an interpolation spanning lines keeps template state across them', () => {
+  const f = scan(pad(['const s = `a ${', 'b', '} c`; // real']));
+  assert.strictEqual(f.length, 1, JSON.stringify(f));
+  assert.strictEqual(f[0].line, 8);
+});
+
+test('a // inside an interpolation comments out only that line', () => {
+  const f = scan(pad(['const s = `a ${ b // why', '} c`;']));
+  assert.strictEqual(f.length, 1, JSON.stringify(f));
+  assert.strictEqual(f[0].line, 6);
+});
+
+// A Dart raw string processes no escapes, so a trailing backslash closes it.
+// Treating `\'` as escaped ran the scanner past the real close and swallowed
+// the comment that followed.
+test('a Dart raw string ending in a backslash does not swallow the next comment', () => {
+  const f = scan(pad([String.raw`var p = r'C:\'; // real`]), 'lib/x.dart');
+  assert.strictEqual(f.length, 1, JSON.stringify(f));
+  assert.match(f[0].message, /\/\/ real/);
+});

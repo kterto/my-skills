@@ -23,16 +23,26 @@ function findClose(raw, close, from, escapes) {
   return -1;
 }
 
-/** A string literal opening at `i`, or null. Triple quotes and backticks span lines. */
+/**
+ * A string literal opening at `i`, or null. Triple quotes span lines. Backticks
+ * are absent deliberately: a template is not a flat span, because `${…}` returns
+ * to code position, so it is tracked on the scanner's stack instead.
+ */
 function quoteAt(raw, i) {
   const ch = raw[i];
-  if (ch === "'" || ch === '"') {
-    const triple = ch.repeat(3);
-    if (raw.startsWith(triple, i)) return { close: triple, spansLines: true };
-    return { close: ch, spansLines: false };
-  }
-  if (ch === '`') return { close: '`', spansLines: true };
-  return null;
+  if (ch !== "'" && ch !== '"') return null;
+  const triple = ch.repeat(3);
+  if (raw.startsWith(triple, i)) return { close: triple, spansLines: true };
+  return { close: ch, spansLines: false };
+}
+
+/**
+ * A Dart raw string processes no escapes, so a trailing backslash closes it
+ * rather than escaping the quote. Reading `r'C:\'` as an escaped quote runs the
+ * scanner past the real close and swallows whatever follows on the line.
+ */
+function isRawString(raw, i) {
+  return raw[i - 1] === 'r' && !/[\w$]/.test(raw[i - 2] || '');
 }
 
 /**
@@ -61,15 +71,6 @@ function record(raw, idx, i, out) {
   });
 }
 
-/** A comment opens at `i`. Returns the carried state for the next line, or null. */
-function openComment(raw, idx, i, out) {
-  record(raw, idx, i, out);
-  if (raw[i + 1] === '/') return null;
-  const end = findClose(raw, '*/', i + 2, false);
-  if (end === -1) return { close: '*/', escapes: false };
-  return scanCode(raw, idx, end, out);
-}
-
 function commentAt(raw, i) {
   return raw[i] === '/' && (raw[i + 1] === '/' || raw[i + 1] === '*');
 }
@@ -78,9 +79,10 @@ function commentAt(raw, i) {
 function skipQuoted(raw, i) {
   const quote = quoteAt(raw, i);
   if (!quote) return null;
-  const end = findClose(raw, quote.close, i + quote.close.length, true);
+  const escapes = !isRawString(raw, i);
+  const end = findClose(raw, quote.close, i + quote.close.length, escapes);
   if (end !== -1) return { next: end };
-  return { done: true, carry: quote.spansLines ? { close: quote.close, escapes: true } : null };
+  return { done: true, carry: quote.spansLines ? { close: quote.close, escapes } : null };
 }
 
 function skipRegex(raw, i) {
@@ -89,10 +91,48 @@ function skipRegex(raw, i) {
   return { next: end === -1 ? i + 1 : end };
 }
 
-function scanCode(raw, idx, start, out) {
+/** Template text: only an escape, the closing backtick, and `${` mean anything. */
+function stepTemplate(raw, i, stack) {
+  if (raw[i] === '\\') return i + 2;
+  if (raw[i] === '`') { stack.pop(); return i + 1; }
+  if (raw[i] === '$' && raw[i + 1] === '{') { stack.push({ kind: 'interp', braces: 0 }); return i + 2; }
+  return i + 1;
+}
+
+/**
+ * Inside `${…}` the scanner is back in code position, so a brace must be
+ * balanced before the matching `}` returns it to template text — otherwise an
+ * object literal ends the interpolation early and the rest of the template is
+ * rescanned as source.
+ */
+function stepInterp(top, raw, i, stack) {
+  if (raw[i] === '{') { top.braces++; return i + 1; }
+  if (raw[i] !== '}') return null;
+  if (top.braces === 0) stack.pop(); else top.braces--;
+  return i + 1;
+}
+
+/**
+ * Scan one line from `start`. `stack` carries template/interpolation nesting
+ * across lines and is mutated in place; the return value is the block comment or
+ * multi-line string still open at end of line, or null.
+ */
+function scanLine(raw, idx, start, out, stack) {
   let i = start;
   while (i < raw.length) {
-    if (commentAt(raw, i)) return openComment(raw, idx, i, out);
+    const top = stack[stack.length - 1];
+    if (top && top.kind === 'template') { i = stepTemplate(raw, i, stack); continue; }
+    if (commentAt(raw, i)) {
+      record(raw, idx, i, out);
+      if (raw[i + 1] === '/') return null;
+      const end = findClose(raw, '*/', i + 2, false);
+      if (end === -1) return { close: '*/', escapes: false };
+      i = end;
+      continue;
+    }
+    if (raw[i] === '`') { stack.push({ kind: 'template' }); i++; continue; }
+    const closed = top ? stepInterp(top, raw, i, stack) : null;
+    if (closed !== null) { i = closed; continue; }
     const quoted = skipQuoted(raw, i);
     if (quoted && quoted.done) return quoted.carry;
     const step = quoted || skipRegex(raw, i);
@@ -103,15 +143,17 @@ function scanCode(raw, idx, start, out) {
 
 function scanSource(content) {
   const out = [];
-  let carry = null;
+  const stack = [];
+  let pending = null;
   content.split('\n').forEach((raw, idx) => {
-    if (carry) {
-      const resumed = findClose(raw, carry.close, 0, carry.escapes);
+    let start = 0;
+    if (pending) {
+      const resumed = findClose(raw, pending.close, 0, pending.escapes);
       if (resumed === -1) return;
-      carry = scanCode(raw, idx, resumed, out);
-      return;
+      pending = null;
+      start = resumed;
     }
-    carry = scanCode(raw, idx, 0, out);
+    pending = scanLine(raw, idx, start, out, stack);
   });
   return out;
 }

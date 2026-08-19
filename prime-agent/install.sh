@@ -68,6 +68,12 @@ contained() {
 # overwrite, must be caught here — after the first `cp` it is too late to leave
 # the destination untouched.
 
+# `created_dirs` records, shallowest first, the components that do NOT already
+# exist — the ones `mkdir -p` below will bring into being. A rollback has to
+# unwind those too: before a fresh install there was no .prime chain at all, so
+# leaving it behind contradicts the message the failure path prints. Components
+# that predate the run are never listed, and so are never pruned.
+created_dirs=()
 current="$install_root"
 for component in .prime agent skills; do
   current="$current/$component"
@@ -75,6 +81,8 @@ for component in .prime agent skills; do
   if [[ -e "$current" ]]; then
     [[ -d "$current" ]] || refuse "destination path component is not a directory: $current"
     contained "$current" || refuse "destination resolves outside $install_root: $current"
+  else
+    created_dirs+=("$current")
   fi
 done
 
@@ -124,13 +132,27 @@ rollback() {
   done
 }
 
+# Deepest first, and only while each one is empty: `rmdir` refusing a populated
+# directory is the signal to stop, since anything left inside it is not ours to
+# remove and its parents are non-empty by definition.
+prune_created_dirs() {
+  local i
+  for ((i = ${#created_dirs[@]} - 1; i >= 0; i--)); do
+    rmdir "${created_dirs[i]}" 2>/dev/null || break
+  done
+}
+
+# Ordering is load-bearing: `rollback` reads the moved-aside copies out of
+# staging, and staging itself sits inside `$destination`, so the directories can
+# only be pruned once it is gone.
 cleanup() {
   local status=$?
+  ((status == 0)) || rollback
+  rm -rf "$staging"
   if ((status != 0)); then
-    rollback
+    prune_created_dirs
     echo "Install failed — the destination was restored to its previous state." >&2
   fi
-  rm -rf "$staging"
   exit "$status"
 }
 trap cleanup EXIT
