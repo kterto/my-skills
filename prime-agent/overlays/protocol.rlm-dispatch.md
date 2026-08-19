@@ -27,8 +27,10 @@ value to read the work off, so any step that consumes "the child's output" on th
 the `rlm()` call is consuming a result that has not arrived yet. Keep the handle — it is how
 this child is addressed later.
 
-Admit a whole wave at once — where `jobs` is one `(name, prompt)` pair per child, built before the
-call — **binding the handles as you go** so each one stays reachable:
+Admit a whole wave at once — where `jobs` is a **list** of `(name, prompt)` pairs, one per child, built
+before the call — a list, not a generator, because the fence reads it twice and a generator would
+be exhausted by the `gather`, leaving `by_name` empty and the retry below raising instead of
+reaching the fallback — **binding the handles as you go** so each one stays reachable:
 
 ```python
 handles = await asyncio.gather(*(rlm(prompt, name=name) for name, prompt in jobs))

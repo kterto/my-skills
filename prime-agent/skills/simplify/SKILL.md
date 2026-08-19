@@ -1,6 +1,6 @@
 ---
 name: simplify
-description: Review changed code for reuse, simplification, efficiency, and altitude cleanups, then apply the fixes. Quality only — it does not hunt for correctness bugs. Use when the user invokes `/simplify`, says "clean this up", "simplify the diff", "tidy the changed code", or when a pipeline needs a pre-review simplification pass over a scope of changes. Dual-host (Claude Code + opencode).
+description: Review changed code for reuse, simplification, efficiency, and altitude cleanups, then apply the fixes. Quality only — it does not hunt for correctness bugs. Use when the user invokes `/simplify`, says "clean this up", "simplify the diff", "tidy the changed code", or when a pipeline needs a pre-review simplification pass over a scope of changes. Prime Agent port: angles are admitted as RLM children.
 ---
 
 ## Prime Agent compatibility
@@ -40,8 +40,10 @@ value to read the work off, so any step that consumes "the child's output" on th
 the `rlm()` call is consuming a result that has not arrived yet. Keep the handle — it is how
 this child is addressed later.
 
-Admit a whole wave at once — where `jobs` is one `(name, prompt)` pair per child, built before the
-call — **binding the handles as you go** so each one stays reachable:
+Admit a whole wave at once — where `jobs` is a **list** of `(name, prompt)` pairs, one per child, built
+before the call — a list, not a generator, because the fence reads it twice and a generator would
+be exhausted by the `gather`, leaving `by_name` empty and the retry below raising instead of
+reaching the fallback — **binding the handles as you go** so each one stays reachable:
 
 ```python
 handles = await asyncio.gather(*(rlm(prompt, name=name) for name, prompt in jobs))
@@ -132,7 +134,7 @@ When a `CLAUDE.md` / `AGENTS.md` governs the changed paths — the user-level fi
 
 ### How to run the angles
 
-**Fan out when the session can.** Build `jobs` as one `(angle_name, prompt)` pair per angle — the angle's own name (`reuse`, `simplification`, `efficiency`, `altitude`, `conventions`) as `angle_name`, and a prompt carrying the resolved scope, the diff, exactly one angle, and the completion contract. Then admit all five together and **bind the wave**, per the Prime Agent child-dispatch protocol above:
+**Fan out when the session can.** Build `jobs` as a **list** of `(angle_name, prompt)` pairs, one per angle — the angle's own name (`reuse`, `simplification`, `efficiency`, `altitude`, `conventions`) as `angle_name`, and a prompt carrying the resolved scope, the diff, exactly one angle, and the completion contract. Then admit all five together and **bind the wave**, per the Prime Agent child-dispatch protocol above:
 
 ```python
 handles = await asyncio.gather(*(rlm(prompt, name=name) for name, prompt in jobs))
