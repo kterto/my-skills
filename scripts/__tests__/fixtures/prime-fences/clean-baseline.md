@@ -8,10 +8,16 @@ contract, and a retry addressed off a bound handle. Its only job is to fail the
 suite the moment a rule starts rejecting correct text — the false-positive
 failure mode that gets a gate disabled.
 
+The section heading is a protocol heading, and that is load-bearing rather than
+decorative: PF06 asserts that a file which dispatches RLM children carries the
+block defining what its dispatch means. A "correct" baseline that dispatched
+under a plain `## Dispatch` heading was itself an instance-1-shaped file, and
+said so the moment PF06 existed.
+
 EXPECTED RULE IDS: none. This file must lint clean.
 -->
 
-## Dispatch
+## Prime Agent child-dispatch protocol
 
 Quote the completion contract into every child prompt:
 

@@ -19,7 +19,10 @@ zero findings, and still reported itself as a five-angle fan-out. That is a
 claim about what an agent would DO with the text. The gate catches the binding
 defect that caused it and certifies nothing about the consequence.
 
-EXPECTED RULE IDS: PF01 and PF03, and no others.
+EXPECTED RULE IDS: PF01, PF03 and PF06. PF06 is incidental for the same reason as
+in instance 2 — an excerpt with no protocol block. PF03 is the rule under test,
+and it fires here per OCCURRENCE: the file-scoped version of that rule missed
+this defect in the real file it was found in.
 -->
 
 ## Fan out over the angles

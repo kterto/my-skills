@@ -12,13 +12,19 @@ simple assignment targets turns two shipped skills red.
 Deliberately, "prompt" and "handles" appear in NO backticked span anywhere in
 this file. Their only definition is fence binding: a comprehension target in the
 wave fence, and a tuple-unpacking target in the single-job fence. The wave fence
-also reads "prompt" one fence EARLIER than it is bound, so the name model must
-be file-scoped rather than line-ordered.
+also reads "prompt" one fence EARLIER than it is bound. That is what a strictly
+ORDER-ed name model breaks on: forward reference is the emitted corpus's normal
+shape, not a defect, and the same shape ships in all four real skills. The model
+is SECTION-scoped rather than line-ordered for exactly that reason, and the
+deviation from the review that ordered it is recorded in the checker's header.
+
+The section heading is a protocol heading for the reason clean-baseline.md gives:
+a file that dispatches must carry the block that defines dispatch (PF06).
 
 EXPECTED RULE IDS: none. This file must lint clean.
 -->
 
-## Dispatch
+## Prime Agent child-dispatch protocol
 
 Admit one child with:
 

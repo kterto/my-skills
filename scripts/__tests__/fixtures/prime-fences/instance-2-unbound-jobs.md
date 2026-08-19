@@ -14,7 +14,9 @@ SKILL.md carried none of the dispatch vocabulary at all. A reconstruction the
 gate catches is WEAKER EVIDENCE than a git-recovered one; that asymmetry is
 recorded here rather than hidden.
 
-EXPECTED RULE IDS: PF01, and no other.
+EXPECTED RULE IDS: PF01 and PF06. PF06 is incidental here rather than the point:
+this reconstruction is a fence excerpt carrying no protocol block, so a file that
+dispatches without its contract is exactly what it is.
 -->
 
 ## Wave admission

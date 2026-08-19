@@ -10,6 +10,13 @@ must_fix_count: 10
 should_fix_count: 8
 ---
 
+> **Resolution (2026-08-19T18:45Z):** all 10 Must Fix and all 8 Should Fix items are
+> closed by [FIX-20260819T184500Z-7c21](FIX-20260819T184500Z-7c21-emitted-fence-linter-name-model.md),
+> which records one measured deviation from Ruling 1 (section-scoped rather than
+> strictly order-ed) and two acceptance criteria deliberately superseded (AC-3, AC-14).
+> This record's status is left at REQUEST_CHANGES: it is the review that was written,
+> and the next review cycle owns the verdict on the fix.
+
 **Related:** [FEAT-20260819T150641Z-10df](../feat/FEAT-20260819T150641Z-10df-prime-agent-emitted-fence-linter.md) · [SPEC-20260819T145710Z-b345](../specs/SPEC-20260819T145710Z-b345-prime-agent-emitted-fence-linter.md) · [TEST-20260819T154708Z-246c](../test/TEST-20260819T154708Z-246c-prime-agent-emitted-fence-linter.md)
 
 ## Summary

@@ -30,7 +30,12 @@ received — and it is what separates instance 1 from instance 2: PF01 reaches
 names read inside fences, PF02 reaches a file's own use of the watched vocabulary
 anywhere it is code.
 
-EXPECTED RULE IDS: PF02, and no other.
+EXPECTED RULE IDS: PF02 and PF06, and no others. PF06 is the rule that actually
+reaches this defect class on a REAL file: the emitted skill this instance was
+taken from is internally consistent — it binds every name it uses — and is
+missing only the contract, so no name-binding rule can see it. This
+hand-reconstructed form additionally dangles "handle", which is what PF02 sees;
+the real file did not.
 -->
 
 ## Returning results

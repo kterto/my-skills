@@ -7,16 +7,24 @@
 // (prime-agent/overlays/<skill>.json). Hand-editing prime-agent/skills/ is a bug —
 // the next build overwrites it.
 //
-//   node scripts/build-prime-agent.mjs           # write the distribution
+//   node scripts/build-prime-agent.mjs           # write the distribution, then lint it
 //   node scripts/build-prime-agent.mjs --check   # verify it matches, exit 1 on drift
 //
 // Every skill MUST have an overlay file, and every declared replacement MUST match
 // its declared occurrence count. Both are hard failures: they are how a plugin-side
 // edit that invalidates a Prime adaptation gets caught instead of silently shipping.
+//
+// A third assertion joins them after write: scripts/lint-prime-fences.mjs must find
+// the tree clean. `--check` is deliberately NOT changed — it keeps answering "is the
+// committed tree this builder's output" and nothing else, so a red run stays
+// unambiguous about which property broke. The defects this catches are a property of
+// the source-overlay UNION and are invisible in either input, so the build is the
+// first moment they exist at all.
 
 import { readdirSync, readFileSync, writeFileSync, mkdirSync, rmSync, statSync, chmodSync } from "node:fs"
 import { dirname, join, relative, sep } from "node:path"
 import { fileURLToPath } from "node:url"
+import { lint, coverageFailure, formatFinding } from "./lint-prime-fences.mjs"
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)))
 const srcRoot = join(repoRoot, "plugins", "my-skills", "skills")
@@ -196,3 +204,26 @@ for (const [rel, { content, mode }] of generated) {
   chmodSync(path, mode)
 }
 console.log(`wrote prime-agent/skills with ${skills.length} skills (${generated.size} files)`)
+
+// The emitted-fence gate, on its own exit path. `--check` proved green on a
+// distribution carrying an unbound identifier; this is the assertion that would
+// not have.
+const { findings, errors: readErrors, counts } = lint(destRoot)
+const uncovered = coverageFailure(counts)
+if (readErrors.length) {
+  for (const message of readErrors) console.error(`error: unreadable: ${message}`)
+  console.error(`\nthe distribution was written but could not be fully read back — it is NOT certified.`)
+  process.exit(1)
+}
+if (uncovered) {
+  console.error(`error: emitted-fence lint ${uncovered}`)
+  console.error(`\nthe distribution was written but nothing was checked — it is NOT certified.`)
+  process.exit(1)
+}
+if (findings.length) {
+  for (const finding of findings) console.error(formatFinding(finding))
+  console.error(`\n${findings.length} emitted-fence finding(s). The distribution was written and is DEFECTIVE:`)
+  console.error(`fix the overlay in prime-agent/overlays/ (never prime-agent/skills/) and rebuild.`)
+  process.exit(1)
+}
+console.log(`emitted-fence lint ok: ${counts.files} files, ${counts.fences} python fences, ${counts.spans} inline spans`)

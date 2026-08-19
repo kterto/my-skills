@@ -157,3 +157,47 @@ Floors re-run and green (no regression): `clean-code-gates` 250 pass / 0 fail; `
 `cd prime-agent && npm test` 0; census 15.
 
 Invoke /architect with plans/code-review/CR-20260819T160202Z-8479-prime-agent-emitted-fence-linter.md to create FIX plan.
+
+### 2026-08-19T18:45:00Z | FIX (main agent, no pipeline roles)
+
+CR-20260819T160202Z-8479 closed: 10/10 Must Fix, 8/8 Should Fix.
+FIX plan: plans/code-review/FIX-20260819T184500Z-7c21-emitted-fence-linter-name-model.md
+
+The review's root-cause call held — one modeling decision, five ways. The name model
+is now SECTION-scoped with the protocol block visible file-wide, PF03's fence sites
+are occurrence-scoped, and PF06 (positive presence of the protocol block) reaches
+instance 1, which no name-binding rule can: such a file is internally consistent and
+missing only its contract.
+
+ONE DEVIATION, measured rather than argued: the CR's strictly ORDER-ed model
+(bound earlier in the same fence, then by an earlier fence) was implemented and
+rejected — it reports PF01 on `prompt` in all four shipped skills and in the pinned
+false-positive fixture, because the single-child fence sits one fence ABOVE the wave
+fence that binds `prompt`. Forward reference is the corpus's normal shape. Section
+scoping delivers the occurrence-scoping the review actually needed; every
+reproduction the CR used against the file-global model is now caught, each re-run
+and tabled in the FIX plan.
+
+Every CR reproduction re-run: instance 1 (protocol block deleted) → PF06; instance 3
+(wave binding dropped in simplify AND orchestrator) → PF03 at both fence sites;
+prose-that-forbids and HTML-comment mentions → PF01; python3/py/untagged → PF01;
+`handles: list = await …` and `(a, b) = jobs[0]` → clean; `_ = await gather(…)` →
+PF03; instance-4 phrasing restored inside the protocol block → PF04; empty directory
+→ exit 2; `--allowlist` with a target → exit 2; unreadable file → findings kept,
+exit 2. The 15-file corpus is pinned by count, each assertion checks its fixture
+exists, and the new multi-section fixture is the discriminator: zero findings under
+the old checker, PF01+PF03 under this one.
+
+Builder hook landed last, per the review's sequencing: `node scripts/build-prime-agent.mjs`
+lints the tree it wrote and fails the build with rule-id output on its own exit path;
+`--check` still answers parity alone; proved against a deliberately defective
+scaffold in parity section 3's idiom.
+
+AC-3 superseded (six rules now, PF06 carries its own fixture). AC-14 deliberately
+unmet: a false invariant cannot be corrected by appending to it, and it was false in
+five places in PROJECT-CONTEXT.md, not one — `pr-review-report` (11 test files) and
+`explain-codebase` (9 + a shell test) are authoring skills with real suites that
+predate this branch. Reason recorded in the FIX plan.
+
+Floors: lint 0 (54 files / 15 fences / 8967 spans) · build + post-write lint ok ·
+`--check` 0 · `cd prime-agent && npm test` 0 · clean-code-gates 250 pass / 0 fail.
