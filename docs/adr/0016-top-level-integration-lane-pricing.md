@@ -187,3 +187,14 @@ Recorded rather than left silently different, per the repository's `mirror machi
   per-sub-lane conditions, containment, and the cost side's `A`/`J`/`I` charges are untouched except
   where the top-level term had to be named alongside them. ADR-0012, ADR-0013, and ADR-0014 stand
   unamended.
+- **Superseded in framing only, and now filed:** the derivation framing above — *The `g`/`c`
+  interaction — derived, not asserted*'s `span_base = M + X` / `span_max = S + X` block, and §3's
+  assertion that the exclusion applies at both evaluation sites or at neither. See **ADR-0017 — One
+  span rule over any slice set, at any depth** — **Accepted** (2026-08-19), which states the
+  concurrent-`max`-plus-serial-remainder shape **once** over an arbitrary slice set and derives
+  `span(L)`, `span_max`, `M_flat`'s span term, and the viable-flat `span_base` from it. Under one
+  rule the shared `+ X` is a consequence to read off rather than an observation about two
+  separately-written formulas, and the both-sites-or-neither symmetry §3 had to *mandate* becomes
+  unstatable rather than asserted. **Every decision and every figure in this ADR stands** — §1, §2,
+  §4, §5, §6, and §7 unchanged; the three-branch old-model comparison and the `min(S, X)` sequential
+  result unchanged; no worked-example numeral moved. This ADR's `Status:` is unchanged: **Accepted**.
