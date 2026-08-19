@@ -1,6 +1,39 @@
 {
   "skill": "simplify",
   "insertAfterFrontmatter": [
-    "preamble.md"
+    "preamble.md",
+    "protocol.rlm-dispatch.md"
+  ],
+  "replacements": [
+    {
+      "why": "FIX-20260819T135107Z-3895 / CR MF-2: the previous replacement discarded the `gather` result and then referenced `handle.name`, an identifier bound in no scope, so the emitted text was literally unexecutable and a literal reading shipped an empty review labelled `Mode: 5-angle fan-out`. The wave is now bound (`handles` / `by_angle`), each angle carries the completion contract so its findings have a return path at all — restoring in substance the \"they report findings\" bound that `Agent`/`task` used to supply via the host return value — and the pointer now resolves to protocol.rlm-dispatch.md, inserted in this same file. One angle per child, the resolved scope + diff, and the read-only prohibition are preserved.",
+      "count": 1,
+      "find": "**Fan out when the host can.** Dispatch the angles as independent subagents via the host's subagent tool — `Agent` in Claude Code (`subagent_type: general-purpose`), `task` in opencode — **emitted together in a single message** so they run concurrently. Pass each one the resolved scope, the diff, and exactly one angle. They report findings; they do not edit.",
+      "replace": "**Fan out when the session can.** Build `jobs` as one `(angle_name, prompt)` pair per angle — the angle's own name (`reuse`, `simplification`, `efficiency`, `altitude`, `conventions`) as `angle_name`, and a prompt carrying the resolved scope, the diff, exactly one angle, and the completion contract. Then admit all five together and **bind the wave**, per the Prime Agent child-dispatch protocol above:\n\n```python\nhandles = await asyncio.gather(*(rlm(prompt, name=name) for name, prompt in jobs))\nby_angle = dict(zip((name for name, _ in jobs), handles))\n```\n\nEach angle **returns its findings by message** — `await agent_message.send(\"STATUS: <status>\\nSUMMARY: <its findings>\", receiver_role=\"parent\")`, quoted into its prompt — and that message is the only path those findings take, because `rlm()` returns an admission handle and never the child's work. Because `by_angle` is bound above, an angle that comes back empty or unusable can be re-asked once with `agent_message.send(..., receiver_role=\"child\", receiver_name=by_angle[\"reuse\"].name)` — any angle's name in place of `reuse`. These children are **read-only**: they report findings; they do not edit — carry that prohibition in each prompt rather than assuming it."
+    },
+    {
+      "why": "SPEC-20260819T125322Z-51a9 concern B: the inline-fallback TRIGGER tested for a host subagent tool. Only the trigger is restated for Prime; this skill's own single-pass inline answer — including \"Do not drop an angle for lack of fan-out\" and the summary-disclosure requirement — is preserved verbatim. simplify does NOT inherit the orchestrator's inline-scan fallback wording. FIX-20260819T135107Z-3895 / CR MF-2: the trigger additionally names the admitted-but-never-reported angle, because Phase 2's join rule now routes that state here; the preserved sentences are unchanged.",
+      "count": 1,
+      "find": "**Otherwise run them inline.** When the host has no subagent tool, or cannot issue several tool calls in one message, work through all the angles yourself in this same context, in one pass. **Do not drop an angle for lack of fan-out** — and say plainly in the summary that this was a single-pass review, so nobody reads it as the full fan-out.",
+      "replace": "**Otherwise run them inline.** When the session cannot admit RLM children, cannot admit them concurrently, or an admitted angle never reports back (see Phase 2), work through all the angles yourself in this same context, in one pass. **Do not drop an angle for lack of fan-out** — and say plainly in the summary that this was a single-pass review, so nobody reads it as the full fan-out."
+    },
+    {
+      "why": "FIX-20260819T135107Z-3895 / CR MF-2: \"Wait for every angle\" had no mechanism behind it once dispatch became rlm(). `asyncio.gather` resolves on admission, so the literal instruction was satisfiable with zero findings in hand — the silent-empty-review path. This states the join rule concretely and routes an un-joinable angle to this skill's own single-pass fallback AND its disclosure line, so the `Mode:` label can never overstate what ran. The dedup sentence is preserved verbatim.",
+      "count": 1,
+      "find": "1. **Wait for every angle**, then **dedup** findings that point at the same line or the same mechanism. Four angles looking at one diff routinely converge.",
+      "replace": "1. **Wait for every angle** — meaning all five completion messages have arrived and been read, not that `asyncio.gather` returned. `gather` resolves on **admission**, so joining on it hands Phase 2 a set of findings that does not exist yet. If an angle still has not reported after its one re-ask, do **not** proceed as a fan-out: run that work inline in this same context, in one pass, and say plainly in the summary that this was a single-pass review — the same disclosure **Otherwise run them inline** above requires — so `Mode: 5-angle fan-out` never labels a fan-out that did not deliver. Then **dedup** findings that point at the same line or the same mechanism. Four angles looking at one diff routinely converge."
+    },
+    {
+      "why": "SPEC-20260819T125322Z-51a9 concern B: the summary's mode label carried a host-mechanism parenthetical (\"no subagent fan-out available\") that names a tool Prime Agent does not have.",
+      "count": 1,
+      "find": "Mode: 5-angle fan-out | single-pass inline (no subagent fan-out available)",
+      "replace": "Mode: 5-angle fan-out | single-pass inline (no concurrent RLM children)"
+    },
+    {
+      "why": "FIX-20260819T135107Z-3895 / CR SF-4: the port asserted \"it runs identically in Claude Code and opencode\" — false of the Prime Agent port, which is neither host and whose dispatch mechanism differs. Same defect class as MF-1 (a port asserting something untrue of its target); rewritten in the \"**Host.** This is the Prime Agent port…\" shape explain-codebase.json already uses for this exact sentence class. The plugins/ source keeps its dual-host sentence unchanged.",
+      "count": 1,
+      "find": "The skill is **project-agnostic** and **host-agnostic**: it runs identically in Claude Code and opencode, and it is the callable `simplify` that the `orchestrator` pipeline invokes at its pre-review step (sequential Step 3) and at its outer join (Step 3j).",
+      "replace": "The skill is **project-agnostic**. **Host.** This is the Prime Agent port of a skill whose source serves several hosts from one `SKILL.md` — the source says it runs identically across them, which is a claim about those hosts, not about this port. Where the body below names a host construct, use the Prime equivalent: ask the user normally in the conversation, and admit an RLM child with `rlm()` per the child-dispatch protocol above. It is the callable `simplify` that the `orchestrator` pipeline invokes at its pre-review step (sequential Step 3) and at its outer join (Step 3j)."
+    }
   ]
 }

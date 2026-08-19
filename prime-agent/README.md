@@ -39,8 +39,10 @@ MIT like the rest of this package — see [NOTICE](./NOTICE).
 matching marketplace skill in `plugins/my-skills/skills/` with a declarative Prime
 adaptation applied from `../prime-agent/overlays/<skill>.json`: a compatibility
 preamble to insert, Claude-only frontmatter keys to drop, and exact-string
-replacements (`':(exclude).prime'` in git plumbing, the Prime RLM dispatch protocol
-in `orchestrator`). From a repository checkout:
+replacements (`':(exclude).prime'` in git plumbing, and the Prime RLM dispatch
+protocol in every skill that would otherwise resolve a Claude Code / opencode agent
+type — the overlays themselves are the source of truth for which skills those are).
+From a repository checkout:
 
 ```bash
 node ../scripts/build-prime-agent.mjs           # rebuild skills/

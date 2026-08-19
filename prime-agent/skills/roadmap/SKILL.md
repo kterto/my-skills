@@ -11,6 +11,74 @@ the conversation; invoke another installed workflow as `/skill:<name>`; and use
 normal shell/Python tools rather than a host-specific tool name. Instructions
 about the project, artifacts, safety, and verification remain unchanged.
 
+## Prime Agent child-dispatch protocol (supersedes host-specific dispatch below)
+
+Under Prime Agent, every unit of dispatched work runs as a real RLM child — **never** map one
+onto a host dispatch tool, and never resolve an agent-type name for it. There is no agent-type
+registry to resolve against; there never is under Prime Agent. Wherever the text below reaches
+for a host's dispatch mechanism, admit an RLM child instead, exactly as described here.
+
+Build a **self-contained prompt** for each child: everything it needs to do the job, the
+shape of the answer expected back, and this completion contract, quoted into the prompt so
+the child carries it rather than being assumed to know it:
+
+```python
+await agent_message.send(
+    "STATUS: <status>\nSUMMARY: <concise result>",
+    receiver_role="parent",
+)
+```
+
+**A child's result comes back only in that message.** Admit one child with:
+
+```python
+handle = await rlm(prompt, name="<stable-name>")
+```
+
+`rlm()` returns **only an admission handle, never the child's result**. There is no return
+value to read the work off, so any step that consumes "the child's output" on the line after
+the `rlm()` call is consuming a result that has not arrived yet. Keep the handle — it is how
+this child is addressed later.
+
+Admit a whole wave at once — where `jobs` is one `(name, prompt)` pair per child, built before the
+call — **binding the handles as you go** so each one stays reachable:
+
+```python
+handles = await asyncio.gather(*(rlm(prompt, name=name) for name, prompt in jobs))
+by_name = dict(zip((name for name, _ in jobs), handles))
+```
+
+**`gather` resolves on admission, not on completion.** Join only after **every** child's
+`agent_message` has arrived and been read. A `gather` that has returned proves the children
+started and nothing more; treating it as the join point is exactly how a wave reports success
+while delivering an empty answer.
+
+Retry a child that errored, was rejected, or came back with nothing usable — **once** — by
+messaging it on its own name, where `handle` is that child's admission handle (the one
+`rlm()` returned, or the one taken out of `by_name` for a wave):
+
+```python
+await agent_message.send(
+    "<what was missing, and exactly what to return>",
+    receiver_role="child",
+    receiver_name=handle.name,
+)
+```
+
+If a child still has not delivered after that retry, **do not report its work as done.** Take
+the skill's own documented fallback path below and disclose it wherever that path says to.
+A result that never arrived is never silently treated as an empty result.
+
+**Read-only clause (load-bearing).** A child that only reads and reports is explicitly
+forbidden from writes and from mutating commands: it reads the files it was pointed at, writes
+nothing into the target repository, produces no artifact, and never runs a command that changes
+the target tree, its index, or its history. Carry that prohibition **in the child's prompt**
+rather than assuming it of the child.
+
+These Prime rules replace only the **dispatch mechanism**. Everything else below still applies
+unchanged: which work is split out, what each child is given, the bounds on what it may do,
+every gate and disclosure rule, and the skill's own fallback for when fan-out is unavailable.
+
 # roadmap
 
 **Doc-only constraint.** This skill writes `/roadmap/` documentation. It never runs code, never invokes the orchestrator pipeline, and never commits. Every action it takes is a file write or an interactive question. If you are looking for a skill that executes tasks, use the `orchestrator` skill.
@@ -55,7 +123,7 @@ Check whether `.orchestrator/PROJECT-CONTEXT.md` exists.
 
 - **If it exists:** read it as the base context. Do not edit it — it is orchestrator-owned. When `/roadmap/CONTEXT.md` is written later, write it as a **roadmap addendum** (milestones, sequencing decisions, release targets, and what "done" means per milestone) — not a full duplicate of the base context.
 - **If it is absent:** run the own gate:
-  1. Spawn an `Explore`/`explore` subagent: `"Scan this repo and return a structured digest of stack, build/test/lint commands, directory layout, naming conventions, documented domain rules, and any existing specs or PRD files. Read CLAUDE.md, AGENTS.md, README, and config/manifest files."`
+  1. Admit a read-only **scan child** — `handle = await rlm(prompt, name="context-scan")`, per the Prime Agent child-dispatch protocol above — with this brief: `"Scan this repo and return a structured digest of stack, build/test/lint commands, directory layout, naming conventions, documented domain rules, and any existing specs or PRD files. Read CLAUDE.md, AGENTS.md, README, and config/manifest files."` **That brief also carries the completion contract** — the child returns the digest with `await agent_message.send("STATUS: <status>\nSUMMARY: <the digest>", receiver_role="parent")`, which is the only way the digest ever reaches you, because `rlm()` returns an admission handle and never the child's work. There is no host agent type to resolve; there never is under Prime Agent. The child is **forbidden from writes and from mutating commands** — it reads and reports, produces no artifact, and never creates, edits, or deletes a file — and that prohibition is carried in its prompt, not assumed of it. **Wait for that message before step 2 below**: the `rlm()` call returning means the child started, not that a digest exists, so do not read "the digest" until one has actually arrived. If what arrives is unusable, re-ask that child once with `agent_message.send(..., receiver_role="child", receiver_name=handle.name)`. **Never let this fail the run:** if no child can be admitted, or a child was admitted but never returned a usable digest even after that one re-ask, stop retrying — perform the same scan **inline** in this context with your own read tools, note that the digest was gathered inline, and continue to the question rounds below. Steps 3–4's confidence loop and the `context_threshold` gate are unchanged either way.
   2. Using the digest, run structured user-question rounds (`AskUserQuestion` in Claude Code, `question` in opencode) to fill gaps the scan left ambiguous. Do not re-ask what the scan already covered.
   3. After each round, self-rate holistic confidence (0–1) that the context is complete across all required sections.
   4. Loop until confidence ≥ `context_threshold`. If the user ends the loop early, record the achieved confidence as-is.

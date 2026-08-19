@@ -1,9 +1,16 @@
 {
   "skill": "roadmap",
   "insertAfterFrontmatter": [
-    "preamble.md"
+    "preamble.md",
+    "protocol.rlm-dispatch.md"
   ],
   "replacements": [
+    {
+      "why": "FIX-20260819T135107Z-3895 / CR MF-3: the scan child had no return path at all. `rlm()` yields an admission handle, never the child's work, so the brief now carries the completion contract and the parent explicitly waits for that message before step 2's \"Using the digest\" — previously the emitted text moved straight from admission to consuming a digest that had never arrived. The fallback trigger is widened to the admitted-but-never-returned state, which the old \"if no child can be admitted\" wording left unhandled because admission had in fact succeeded. The pointer now resolves to protocol.rlm-dispatch.md, inserted in this same file. The read-only prohibition, the inline-scan fallback, the confidence loop, and the context_threshold gate are preserved as written.",
+      "count": 1,
+      "find": "  1. Spawn an `Explore`/`explore` subagent: `\"Scan this repo and return a structured digest of stack, build/test/lint commands, directory layout, naming conventions, documented domain rules, and any existing specs or PRD files. Read CLAUDE.md, AGENTS.md, README, and config/manifest files.\"`",
+      "replace": "  1. Admit a read-only **scan child** — `handle = await rlm(prompt, name=\"context-scan\")`, per the Prime Agent child-dispatch protocol above — with this brief: `\"Scan this repo and return a structured digest of stack, build/test/lint commands, directory layout, naming conventions, documented domain rules, and any existing specs or PRD files. Read CLAUDE.md, AGENTS.md, README, and config/manifest files.\"` **That brief also carries the completion contract** — the child returns the digest with `await agent_message.send(\"STATUS: <status>\\nSUMMARY: <the digest>\", receiver_role=\"parent\")`, which is the only way the digest ever reaches you, because `rlm()` returns an admission handle and never the child's work. There is no host agent type to resolve; there never is under Prime Agent. The child is **forbidden from writes and from mutating commands** — it reads and reports, produces no artifact, and never creates, edits, or deletes a file — and that prohibition is carried in its prompt, not assumed of it. **Wait for that message before step 2 below**: the `rlm()` call returning means the child started, not that a digest exists, so do not read \"the digest\" until one has actually arrived. If what arrives is unusable, re-ask that child once with `agent_message.send(..., receiver_role=\"child\", receiver_name=handle.name)`. **Never let this fail the run:** if no child can be admitted, or a child was admitted but never returned a usable digest even after that one re-ask, stop retrying — perform the same scan **inline** in this context with your own read tools, note that the digest was gathered inline, and continue to the question rounds below. Steps 3–4's confidence loop and the `context_threshold` gate are unchanged either way."
+    },
     {
       "why": "bug-9: a marketplace path that does not exist in this distribution.",
       "count": 1,
