@@ -14,11 +14,21 @@ await agent_message.send(
 ```
 
 Admit it with `handle = await rlm(prompt, name="<stable-unit-name>")`. `rlm()`
-returns only an admission handle, never the child's result. Admit a whole wave
-with `await asyncio.gather(*(rlm(prompt, name=name) for name, prompt in jobs))`,
-then join only after every child's `agent_message` has arrived and its named
+returns only an admission handle, never the child's result. Admit a whole wave at
+once — where `jobs` is a **list** of `(name, prompt)` pairs, one per unit, built
+before the call, a list and not a generator because the fence reads it twice —
+**binding the handles as you go** so each unit stays reachable:
+
+```python
+handles = await asyncio.gather(*(rlm(prompt, name=name) for name, prompt in jobs))
+by_name = dict(zip((name for name, _ in jobs), handles))
+```
+
+Then join only after every child's `agent_message` has arrived and its named
 return file has been validated. Retry an errored or rejected unit once with
-`agent_message.send(..., receiver_role="child", receiver_name=handle.name)`.
+`agent_message.send(..., receiver_role="child", receiver_name=handle.name)`,
+where `handle` is that unit's admission handle — the one `rlm()` returned, or the
+one taken out of `by_name` for a wave.
 
 **Read-only clause (load-bearing).** A scan child is explicitly forbidden from
 writes and from mutating commands: it reads only the files in its allowlist

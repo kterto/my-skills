@@ -21,9 +21,20 @@ Start it with `handle = await rlm(prompt, name="<stable-role-or-lane-name>")`.
 `rlm()` returns only an admission handle, never the child result. The parent waits
 for the child's `agent_message`, validates its named artifact, and retries an
 incomplete child with `agent_message.send(..., receiver_role="child",
-receiver_name=handle.name)`. For independent lanes/waves, admit all children
-with `await asyncio.gather(*(rlm(prompt, name=name) for name, prompt in jobs))`,
-then join only after every required completion message and artifact validation.
+receiver_name=handle.name)`, where `handle` is that child's admission handle —
+the one `rlm()` returned, or the one taken out of `by_name` for a wave.
+
+For independent lanes/waves, admit all children at once — where `jobs` is a
+**list** of `(name, prompt)` pairs, one per child, built before the call, a list
+and not a generator because the fence reads it twice — **binding the handles as
+you go** so each one stays reachable:
+
+```python
+handles = await asyncio.gather(*(rlm(prompt, name=name) for name, prompt in jobs))
+by_name = dict(zip((name for name, _ in jobs), handles))
+```
+
+Then join only after every required completion message and artifact validation.
 
 For a clarification, a child messages its parent with `STATUS: QUESTION`; the
 parent asks the user in the normal conversation and sends the answer back to that
