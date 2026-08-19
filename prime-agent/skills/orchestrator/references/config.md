@@ -71,6 +71,8 @@ So, normatively:
 
 - **On `lanes`** — all six conditions are evaluated over lanes at 2p.3, unchanged.
 - **On `full`, and on `ask`** (which may resolve to `full`) — conditions 1 and 2 do **not** end the run at 2p.3. Their outcome is recorded as the run's **flat verdict** (`viable` / `non-viable — {reason}`) and the two conditions are **re-applied over the adopted leaf set** at 2p.3n (*Leaf-level re-application*, below).
+> **Both conditions exclude the run's declared top-level integration lane, at every level they are evaluated — because they measure concurrency and it has none.** This is the same exclusion *Per-sub-lane re-application of the existing viability conditions* applies one level down, stated here because the top-level lane is evaluated here. Counting it would read `{backend: 20, integration: 4}` as *"2 lanes carry work, largest holds 83%"* — passing for concurrency a split that is not a split at all — and would equally pass `{a: 3, b: 3, integration: 18}` on both counts while that plan is 75% serial. The exclusion is from **these two conditions only**: the lane counts in **full** in `span_base`, `span_max`, `M_flat`, and `T`. A run whose `integration` field is `none` has nothing to exclude, and both conditions read exactly as they did before the field existed. (ADR-0016, mirroring ADR-0014.)
+
 - **Conditions 3, 4, 5, and 6 are unchanged at both levels.** They are properties of the lane set and of the host — path ownership that cannot be made disjoint, more frozen interface rows than the run has tasks, an unscopable gate command, a host that cannot fan out — and none of them is repaired by slicing a lane further. They end the run at 2p.3 as before.
 
 **A non-viable flat verdict is not a failure state; it is an input.** It selects the baseline the inner gate prices against (*The makespan model*), it omits option 2 from the `ask` ladder (`SKILL.md` → Step 2p.5), and it changes what `full` degrades to when nothing is adopted (*Degradation*). It never, on its own, ends a `full` run.
@@ -225,18 +227,31 @@ This is the normative definition of every number the `full` level's gate compute
   > **`tasks(integration)` is read from the split's declared `integration` field, and a declared `none` is `0`.** The field is a **first-class part of the digest**, required of every proposed split and validated with the same strict shape as any other slice (`SKILL.md` → Step 2p.1): the literal `none`, or a named slice carrying mapped requirement IDs, candidate globs, and an **integer** task count. This is what makes the term reachable at all. While the split declared its integration work only as prose, the acceptance rule discarded it as *"prose outside those fields"* and `tasks(integration)` was **always** `0` — so `span(L)` collapsed to the concurrent `max`, `g = span_base − span_max` was overstated by exactly the serial work, and `g > c` adopted candidates whose real critical path was longer than the one they were priced on. A split that **omits** the field is rejected outright rather than defaulted to `0`, because "not declared" and "declared none" are different claims and only the second is safe to price. Integration-slice globs satisfy the same **containment** rule as ordinary sub-lane globs (*Containment*, above), and the slice is excluded from the two work-concentration conditions (*Per-sub-lane re-application of the existing viability conditions*, below) — but from **those two conditions only**: it counts in full here, and in full toward `T`. (ADR-0014, following ADR-0012.)
 
   > **The integration sub-lane is serial and must be modelled as serial.** `SKILL.md` → Step 3s dispatches it *"through a single sequential coder invocation — after its sibling sub-lanes are DONE, never concurrently with them"*, because it is the one sub-lane that legitimately touches several sub-lanes' outputs. A `max` taken over all sub-lanes including that one would model an execution order the skill forbids, and would do so **optimistically** — inflating the very figure option 3 of the `ask` ladder shows the user. Unlike the interface-point and comparand defects, this one overstates the **gain** rather than understating the cost; it is the same class of error and is corrected in the same direction: the model follows the machine. (ADR-0012.)
-- **`span_max`** — `max` over all lanes `L` of `span(L)`. This is the bare critical-path term, carrying **no** overhead. It is the only term a sub-split actually shortens, and therefore the term the marginal gain is measured over.
+- **`tasks(integration)` at the top level — the run's own integration lane** — read from the **lane-level** split's declared `integration` field, with a declared `none` read as `0`. The field is a first-class part of the lane-level digest, required of every lane-level split and validated with the same strict shape as any other slice (`SKILL.md` → Step 2p.1): the literal `none`, or a named slice carrying mapped requirement IDs, candidate globs, and an **integer** task count. A lane-level split that **omits** the field is **rejected outright** rather than defaulted to `0` — "not declared" and "declared none" are different claims, and only the second is safe to price. The declared slice is a slice in its own right: its requirement IDs and globs are **disjoint from every lane's**, it does **not** also appear as a lane row, and its globs satisfy the full *Owned-glob rejection* list (`lanes` → *Owned-glob rejection*, above) — with containment reading against the repository root rather than a parent lane, since the top-level lane has no containment parent. (ADR-0016, extending ADR-0014 one level up.)
+
+  > **The top-level integration lane is serial and must be modelled as serial — the same defect, one level up.** `SKILL.md` → Step 3j runs it at the outer join after **every other lane is DONE, never concurrently with them**, because it is the one lane that legitimately touches multiple lanes' outputs; and `SKILL.md` → Step 3L dispatches **no** integration lane in the concurrent wave, at either level. A `max` taken over all lanes including that one therefore models an execution order the skill forbids, and does so **optimistically** — understating the critical path by exactly the serial work, in the same direction and for the same reason as the sub-lane case above. It counts in **full** in `span_base`, `span_max`, `M_flat`, and `T`; it is excluded from the two work-concentration conditions and from **those conditions only** (*The two work-concentration conditions are evaluated at leaf granularity* and *Leaf-level re-application*, both below). (ADR-0016.)
+
+  > **The top-level integration lane is never a sub-split candidate**, so `span(integration) = tasks(integration)` is a **run constant** — `SKILL.md` → Step 2p.3n evaluates candidates over the non-integration lanes only. That constancy is load-bearing rather than incidental: the same `+ tasks(integration)` term sits in **both** `span_base` and `span_max`, so on a viable flat baseline it cancels identically in `g = span_base − span_max`, and pricing the lane corrects the makespan figures without perturbing any marginal gain. This is a **deliberate divergence** from the sub-lane shape, where an integration slice belongs to a lane that was itself a split candidate; it is recorded rather than left silently different. (ADR-0016.)
+- **`span_max`** — `max` over all **non-integration** lanes `L` of `span(L)`, **plus** `tasks(integration)`, the top-level integration lane the run waits for after every other lane is DONE. This is the bare critical-path term, carrying **no** overhead. It is the only term a sub-split actually shortens, and therefore the term the marginal gain is measured over.
 - **`makespan`** — `span_max`, **plus the overhead term defined immediately below**. The overhead is never dropped from the number: the whole point of the gate is that the cost is visible, not hidden. Keeping `span_max` and `makespan` as two named quantities is what lets the gain be measured over one and the cost over the other, so that no task-equivalent is counted on both sides of the same comparison.
-- **`M_flat`** — the makespan with **no** lane split (the `lanes` plan): `max` over lanes of `tasks(L)`, plus `A` for the single parent contract, plus `J` for the single outer join, plus the parent contract's interface-point count.
-- **`M_seq`** — the sequential makespan (the `off` plan): the run's **total** task count `T` = sum over lanes of `tasks(L)`, with **no** overhead term at all. An `off` run authors no contract and runs no join, so it has nothing to charge.
-- **`M_nested`** — the makespan under the **adopted** nested plan, per the overhead split below.
+- **`M_flat`** — the makespan with **no** lane split (the `lanes` plan): the flat `span_base` — `max` over **non-integration** lanes of `tasks(L)`, **plus** `tasks(integration)` — plus `A` for the single parent contract, plus `J` for the single outer join, plus the parent contract's interface-point count.
+- **`M_seq`** — the sequential makespan (the `off` plan): the run's **total** task count `T` = sum over lanes of `tasks(L)`, **counting the top-level integration lane in full** alongside every other lane, with **no** overhead term at all. An `off` run authors no contract and runs no join, so it has nothing to charge — and it implements the integration work like any other work, one task at a time, so **`T` and therefore `M_seq` are unchanged by this correction**. Only the two concurrent baselines were ever wrong.
+- **`M_nested`** — the makespan under the **adopted** nested plan, per the overhead split below. It needs **no** separate top-level integration term of its own: it is built on `span_max`, which already carries `+ tasks(integration)`. Adding one here would charge the same serial work twice.
 
 **The baseline — what the nested plan is priced against.** The gate always prices a candidate against **the plan that would run if it adopted nothing**, and which plan that is follows from the flat verdict (*The two work-concentration conditions*, above):
 
 | Flat verdict | Baseline | `span_base` (the baseline's critical-path term) | Baseline overhead |
 | ------------ | -------- | --------------------------------------------- | ----------------- |
-| viable | `M_flat` | `max` over lanes of `tasks(L)` | `A + J +` parent interface points |
-| non-viable | `M_seq` | `T`, the total task count | `0` |
+| viable | `M_flat` | `max` over **non-integration** lanes of `tasks(L)` **plus** `tasks(integration)` | `A + J +` parent interface points |
+| non-viable | `M_seq` | `T`, the total task count (integration lane included in full) | `0` |
+
+**The `+ tasks(integration)` term appears in the viable row's `span_base` and in `span_max`, and in both for the same reason** — the run waits for the top-level integration lane on either plan, flat or nested, because nothing about a sub-split makes it concurrent (it is never a sub-split candidate; *The makespan model*, above). It therefore **cancels identically** on a viable flat baseline. Writing `X = tasks(integration)`, `M` for the `max` of `tasks(L)` over the non-integration lanes, and `S` for the `max` of `span(L)` over those same lanes:
+
+```
+span_base = M + X          span_max = S + X          g = (M + X) − (S + X) = M − S
+```
+
+The cancellation is exact because `X` is a **run constant**, and it is what makes pricing the lane a correction to the *makespan figures* rather than a perturbation of every marginal gain. On a **sequential** baseline there is nothing to cancel — `span_base` is `T`, which already counts the integration work as ordinary work — so `g = T − (S + X)` there. The `M_flat − M_nested = g − c` reconciliation holds on both baselines, unchanged. (ADR-0016; the old-model comparison and the direction each figure moved are recorded there, not here.)
 
 **Pricing against a plan that cannot run is the defect this table exists to prevent — in both directions.** Pricing a nested plan against `M_flat` when the flat split was ruled non-viable would refund it the `A + J` the flat plan pays — 4 task-equivalents at the defaults — quoting a candidate as cheaper than an alternative the run does not have; and it would measure the gain from a critical path (`max` over lanes) that no plan on offer achieves. Conversely, pricing against `M_seq` whenever flat *is* viable would make every nested plan look good regardless of what it buys over the flat split the user could have had for free — the failure this model names two paragraphs below, under *Never print a wall-clock ETA*.
 
@@ -308,7 +323,7 @@ A sub-split is adopted **only when its marginal gain exceeds that cost**. **Equa
 
 #### Worked example — the gate verdict and the ladder figure must agree
 
-A **sanity check**, recorded here because an earlier form of this model failed it. Two lanes with task counts `{12, 6}`; the candidate splits the 12-lane into sub-lanes `{6, 6}` and declares **`integration: none`**, so `tasks(integration) = 0`; `k = 1`; defaults `A = 2`, `J = 2`; no interface points on either contract.
+A **sanity check**, recorded here because an earlier form of this model failed it. Two lanes with task counts `{12, 6}`; the lane-level split declares **`integration: none`**, so the top-level `tasks(integration) = 0`; the candidate splits the 12-lane into sub-lanes `{6, 6}` and likewise declares **`integration: none`**, so that split's `tasks(integration) = 0` too; `k = 1`; defaults `A = 2`, `J = 2`; no interface points on either contract.
 
 | | flat (`lanes`) | nested (candidate adopted) |
 | --- | --- | --- |
@@ -324,7 +339,7 @@ Under the pre-correction arithmetic they did not. The cost side billed `A` for t
 
 #### Worked example — one lane carries all the work (sequential baseline)
 
-The shape the leaf-granularity rule exists for. Lane set `{mobile, backend, web, admin, landing, shared}`; the spec maps **every** requirement to `mobile`, so `tasks(mobile) = 24` and every other lane is `0`. The candidate splits `mobile` into `{ui: 8, data: 8, services: 8}` and declares **`integration: none`**, so `tasks(integration) = 0`; `k = 1`; defaults `A = 2`, `J = 2`; the parent contract has **0** interface points (one lane carries work, so there is no cross-lane row to freeze) and the sub-contract has **2**.
+The shape the leaf-granularity rule exists for. Lane set `{mobile, backend, web, admin, landing, shared}`; the spec maps **every** requirement to `mobile`, so `tasks(mobile) = 24` and every other lane is `0`. The lane-level split declares **`integration: none`**, so the top-level `tasks(integration) = 0`. The candidate splits `mobile` into `{ui: 8, data: 8, services: 8}` and likewise declares **`integration: none`**, so that split's `tasks(integration) = 0`; `k = 1`; defaults `A = 2`, `J = 2`; the parent contract has **0** interface points (one lane carries work, so there is no cross-lane row to freeze) and the sub-contract has **2**.
 
 Outer gate: conditions 3–6 pass; condition 1 fails — `only 1 lane carries work`. On `lanes` that ends the run. On `full` it is recorded as **flat verdict: non-viable**, so the baseline is `M_seq`.
 
@@ -344,7 +359,7 @@ Had the sub-split instead come out `{20, 4}`, `span_max` = 20, `g` = 4, `c` = 8.
 
 #### Worked example — a split carrying an integration sub-lane
 
-The third regression check, covering the two terms the examples above do not exercise: a serial integration sub-lane and a non-trivial interface-point count. Same shape as the example above — one lane carries everything — with `tasks(mobile) = 24` split into **5 concurrent sub-lanes** whose largest is `5`, **plus a declared `integration` slice of 6** (`tasks(integration) = 6`). `k = 1`; defaults `A = 2`, `J = 2`; parent contract **0** interface points, sub-contract **8**.
+The third regression check, covering the two terms the examples above do not exercise: a serial integration sub-lane and a non-trivial interface-point count. Same shape as the example above — one lane carries everything — with `tasks(mobile) = 24` split into **5 concurrent sub-lanes** whose largest is `5`, **plus a declared `integration` slice of 6** (`tasks(integration) = 6`). The **lane-level** split declares **`integration: none`**, so the top-level `tasks(integration) = 0` — the serial work in this example is all one level down. `k = 1`; defaults `A = 2`, `J = 2`; parent contract **0** interface points, sub-contract **8**.
 
 | | baseline (`off`) | nested (candidate adopted) |
 | --- | --- | --- |
@@ -364,7 +379,7 @@ The aggregate payback rule passes here — `8 ≤ T = 24`. Under the superseded 
 
 #### Worked example — `k = 2`, the case the overlap exists for
 
-The regression check for ADR-0013, and the only example here with `k > 1` — the three above are all `k = 1`, where the serialized and concurrent readings of the inner-join level coincide and nothing can distinguish them. Lane set `{A: 24, B: 10, C: 4}`; `T` = **38**. The flat verdict is **viable** (3 lanes carry work; the largest holds `24/38` = **63%** ≤ 70%), so the baseline is `M_flat`. The parent contract has **0** interface points; each adopted sub-contract has **2**. Defaults `A = 2`, `J = 2`.
+The regression check for ADR-0013, and the only example here with `k > 1` — the three above are all `k = 1`, where the serialized and concurrent readings of the inner-join level coincide and nothing can distinguish them. Lane set `{A: 24, B: 10, C: 4}` with a lane-level **`integration: none`**, so the top-level `tasks(integration) = 0`; `T` = **38**. The flat verdict is **viable** (3 lanes carry work; the largest holds `24/38` = **63%** ≤ 70%), so the baseline is `M_flat`. The parent contract has **0** interface points; each adopted sub-contract has **2**. Defaults `A = 2`, `J = 2`.
 
 **Baseline.** `span_base = max(24, 10, 4)` = **24**; flat overhead `A + J + I(0×0.25=0)` = **4**; `M_flat` = `24 + 4` = **28**.
 
@@ -399,9 +414,41 @@ The regression check for ADR-0013, and the only example here with `k > 1` — th
 
 Re-check this example whenever either side of the model is edited.
 
+#### Worked example — a declared top-level integration lane (`tasks(integration) > 0`)
+
+The regression check for ADR-0016, and the only example here with a **non-zero top-level** `tasks(integration)` — the four above all declare `integration: none` at the lane level, where `X = 0` and the correction is invisible by construction.
+
+Lane set `{backend: 20, frontend: 12, admin: 6}`, plus a declared top-level integration lane `wiring` with `tasks(integration) = 4` — its requirement IDs and globs disjoint from all three lanes', and no lane-map row of its own. `T` = `20 + 12 + 6 + 4` = **42**. Parent contract **4** interface points; the one adopted sub-contract **2**. Defaults `A = 2`, `J = 2`. Write `X = 4`.
+
+**Flat verdict.** The two work-concentration conditions exclude `wiring`: **3** non-integration lanes carry work (≥ 2), and the largest holds `20/42` = **48%** (≤ 70%). Conditions 3–6 pass. **Viable** — so the baseline is `M_flat`.
+
+**Baseline.** `M` = `max(20, 12, 6)` = 20, so `span_base` = `M + X` = `20 + 4` = **24**; flat overhead `A + J + I(4×0.25=1.0)` = **5**; `M_flat` = `24 + 5` = **29**. (`M_seq` = `T` = **42**, shown for reference only — the flat plan is on offer, so it is not the baseline.)
+
+**Adoption — the critical lane `backend`**, split into `{8, 8}` with `integration: none`, so `span(backend)` = `max(8, 8) + 0` = 8.
+
+| | flat (`lanes`) | nested (candidate adopted) |
+| --- | --- | --- |
+| non-integration term | `max(20, 12, 6)` = **20** | `max(span(backend)=8, 12, 6)` = **12** |
+| `+ tasks(integration)` | `+ 4` | `+ 4` |
+| `span_base` / `span_max` | **24** | **16** |
+| overhead | `A + J + I(4×0.25=1.0)` = **5** | `A + A + J + J + I((4+2)×0.25=1.5)` = **9.5** |
+| makespan | `M_flat` = **29** | `M_nested` = **25.5** |
+
+`g` = `24 − 16` = **8**. Via the cancellation identity, `g` = `M − S` = `20 − 12` = **8** — the same number, as it must be. `c` = `A(2) + J(2) + I(2×0.25=0.5)` = **4.5**, the first adoption on a flat baseline. `g > c` (`8 > 4.5`) → **adopted**.
+
+**Reconciliation.** `M_flat − M_nested` = `29 − 25.5` = **3.5** = `g − c` = `8 − 4.5` = **3.5**. Exact.
+
+**Lanes left flat, both for reasons the model produces rather than asserts.** `frontend`'s proposed sub-split `{11, 1}` fails the re-applied condition 2 — one sub-lane holds `11/12` = 92% of the lane's tasks — so `sub-split rejected: lane frontend`. `admin` is not on the critical path: splitting it leaves `span_max` at 16, so `g = 0`, and `0 > 0` is false. `wiring` is **not a candidate at all** — the top-level integration lane is never sub-split.
+
+**The remaining gates pass**, checked rather than assumed: the aggregate interface count `4 + 2` = **6** ≤ `T` = 42; the adopted leaf set `{backend/a: 8, backend/b: 8, frontend: 12, admin: 6}` has **4** non-integration leaves carrying work (≥ 2) and its largest holds `12/42` = **29%** (≤ 70%), both with `wiring` excluded from the conditions and included in the `T` denominator; and **4** concurrent leaves is within the `max_parallel_lanes` default of **6** — `wiring` is not counted against the ceiling, because Step 3L never dispatches it in the concurrent wave.
+
+**What this example is actually pinning.** Under the uncorrected model — which took a bare `max` over lanes, folding `wiring` in rather than charging it after them — `span_base` read `max(20, 4)` = 20 and `span_max` read `max(12, 4)` = 12. **`g` came out 8 either way**, and `M_flat − M_nested = g − c` reconciled either way (`25 − 21.5` = 3.5). The gate and the ladder never disagreed, so nothing in the transcript contradicted the figures. What was wrong is that **both** makespans were understated by exactly `X = 4` — `M_flat` 25 against the true 29, `M_nested` 21.5 against the true 25.5 — so the `ask` ladder quoted the user two wall-clock figures that no run could achieve, and the `Estimated speedup:` line divided `T` by a denominator missing the serial tail. Re-check this example whenever either side of the model is edited, and read it as the case that shows why a passing reconciliation is not by itself evidence the model is right.
+
 #### Greedy, recomputed adoption
 
 Evaluate candidates **critical-lane first**. After each adoption, **recompute the makespan** and re-evaluate every remaining candidate against the **new** critical path. Stop when no remaining candidate's marginal gain exceeds its cost, or when the leaf-width ceiling (`max_parallel_lanes`) is reached.
+
+**The candidate set is the run's non-integration lanes.** The top-level integration lane is **never** a sub-split candidate at 2p.3n, so `span(integration) = tasks(integration)` holds for the whole run and no adoption changes it (*The makespan model*, above). Splitting it is not merely unprofitable — it is not on offer: the lane exists precisely to be the one serial pass that wires the others' outputs together, and Step 3j dispatches it as one lane after all of them are DONE. (ADR-0016.)
 
 Recomputing after each adoption is what makes *"each split shrinks the next one's payback"* fall out of the model rather than needing a separate heuristic. The **per-adoption** increment to the overhead is `A + J` plus that sub-contract's interface points for the **first** adopted lane, and **that sub-contract's interface points alone** for every lane after it — **both** the Step 2s and the Step 3s level are brought into existence once and paid for once, the first because its architects are spawned concurrently and the second because its joins overlap (*The makespan model*; ADR-0013).
 
@@ -445,8 +492,10 @@ Any failure **rejects that lane's split with a named reason and leaves that lane
 
 After the nested plan is assembled — after greedy adoption, the aggregate payback rule, and the leaf-width ceiling — outer conditions 1 and 2 are re-applied **over the run's adopted leaf set**, which is what *The two work-concentration conditions are evaluated at leaf granularity* defers them to:
 
-1. at least **2 leaves** carry work → otherwise `nested non-viable: only {N} leaf carries work`;
-2. no leaf holds more than **70%** of the run's **total** task count → otherwise `nested non-viable: leaf {qualified name} holds {p}% of tasks — the split would not shorten the critical path`.
+1. at least **2 non-integration leaves** carry work → otherwise `nested non-viable: only {N} leaf carries work`;
+2. no **non-integration** leaf holds more than **70%** of the run's **total** task count → otherwise `nested non-viable: leaf {qualified name} holds {p}% of tasks — the split would not shorten the critical path`.
+
+> **Both conditions exclude the run's top-level integration lane here too, for the reason stated at the deferral site** (*The two work-concentration conditions are evaluated at leaf granularity*, above) and the reason *Per-sub-lane re-application* states one level down: they measure concurrency and it has none. The exclusion applies at **both** evaluation sites or at neither — a lane excluded at 2p.3 and counted again here would let the same `{backend: 20, integration: 4}` shape pass the deferred check it was deferred *because of*. It is an exclusion from **these two conditions only**: the lane counts in full in `span_base`, `span_max`, `M_flat`, and `T`, and the `70%` denominator is still the run's total task count `T`, which includes it. (ADR-0016.)
 
 **These two checks can only ever bite when the flat verdict was non-viable, and that is a property of the arithmetic, not a convention.** A leaf is a lane or a slice of one, so if every lane held ≤ 70% then every leaf does, and if ≥ 2 lanes carried work then ≥ 2 leaves do. On a run whose flat split already passed conditions 1 and 2 this step is a no-op that cannot change a verdict — which is precisely why deferring the two conditions is safe for every run that was already working.
 

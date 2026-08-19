@@ -49,7 +49,7 @@ On first run it auto-creates `.cleancode-gates.json` in the target project root 
 
 ## Reading the report (for agents/orchestrators)
 
-`<out>/report.json` (schema: `schema/report.schema.json` in this skill dir) is the contract. Iterate `report.gates[].findings[]`; each finding carries `{ file, line, rule, message, fixHint, severity }` — enough to fix without re-deriving. `report.summary.status` is `pass | warn | blocked`; `report.summary.gatesMissingTool` lists gates whose tooling is absent. A human-readable `<out>/report.md` mirrors it.
+`<out>/report.json` (schema: `schema/report.schema.json` in this skill dir) is the contract. Iterate `report.gates[].findings[]`; each finding carries `{ file, line, rule, message, fixHint, severity }` — enough to fix without re-deriving. `report.summary.status` is `pass | warn | blocked | error`; `report.summary.gatesMissingTool` lists gates whose tooling is absent, and `report.summary.gatesErrored` lists gates whose run failed outright — those measured nothing, so `error` must never be read as `pass`. A human-readable `<out>/report.md` mirrors it.
 
 ## Example
 

@@ -4,6 +4,11 @@
 - **Date:** 2026-08-14 (proposed) / 2026-08-19 (accepted and implemented)
 - **Skills affected:** `orchestrator` (`SKILL.md` → Step 3s; `references/config.md` → *The makespan model*, *The cost side*)
 - **Depends on:** ADR-0012 (the other three members of the same defect family)
+- **See also:** ADR-0014 (the sub-lane integration slice as a first-class digest field) and
+  **ADR-0016** (the same shape one level up, pricing the top-level integration lane into
+  `span_base`, `span_max`, and `M_flat`). Neither amends this decision: the per-lane inner-join
+  barrier and its `slowest-of-k` = `J` charge stand, and `X = tasks(integration)` enters no overhead
+  term at either level.
 
 ## Context
 

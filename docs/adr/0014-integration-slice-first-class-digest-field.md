@@ -119,11 +119,15 @@ arithmetic.
   That is the intended direction: ADR-0012 corrected three terms that were too strict and one —
   the integration exclusion — that was too loose; this repairs the input to that same too-loose term.
 - **Runs whose splits declare `none` are unchanged in every printed number.**
-- **Not addressed here:** the flat/outer cost model's missing top-level integration lane
-  (`references/config.md` → `M_flat`, and Step 2p.2's flat print block). Same defect family, one
-  level up: `M_flat` takes a bare `max` over lanes and never charges the parent contract's own
-  integration lane, which Step 3j dispatches just as serially. Filed separately — this ADR is scoped
-  to the nested sub-lane split that `arch-1` named.
+- **Addressed separately, and now filed:** the flat/outer cost model's missing top-level integration
+  lane (`references/config.md` → `M_flat`, and Step 2p.2's flat print block). Same defect family, one
+  level up: `M_flat` took a bare `max` over lanes and never charged the parent contract's own
+  integration lane, which Step 3j dispatches just as serially. See **ADR-0016 — The flat/outer cost
+  model never charges the top-level integration lane** — **Accepted** (2026-08-19), which extends
+  this decision one level up without amending it: the lane-level split gains the same first-class
+  `integration` field, `span_base`/`span_max`/`M_flat` gain `+ tasks(integration)`, and the lane is
+  excluded from the two work-concentration conditions at both evaluation sites. This ADR remains
+  scoped to the nested sub-lane split that `arch-1` named.
 - **Not addressed here:** ADR-0013's overlapped inner joins (`k × J`). This decision does not
   touch Step 3s's barrier discipline. (ADR-0013 was subsequently **Accepted and implemented** on
   2026-08-19, independently of this one.)

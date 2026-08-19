@@ -51,12 +51,12 @@
     },
     "summary": {
       "type": "object",
-      "required": ["status", "gatesRun", "gatesMissingTool", "blockers", "warnings"],
+      "required": ["status", "gatesRun", "gatesMissingTool", "gatesErrored", "blockers", "warnings"],
       "additionalProperties": false,
       "properties": {
         "status": {
           "type": "string",
-          "enum": ["pass", "warn", "blocked"]
+          "enum": ["pass", "warn", "blocked", "error"]
         },
         "gatesRun": {
           "type": "array",
@@ -65,6 +65,11 @@
         "gatesMissingTool": {
           "type": "array",
           "items": { "type": "string" }
+        },
+        "gatesErrored": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Gates whose run failed outright, measuring nothing."
         },
         "blockers": {
           "type": "integer",

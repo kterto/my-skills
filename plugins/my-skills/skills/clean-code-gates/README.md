@@ -104,9 +104,10 @@ Full schema at `schema/report.schema.json`. Top-level shape:
   "tool": { "name": "clean-code-gates", "version": "0.1.0" },
   "scope": { "kind": "project|diff|module|files", "files": [...], "stacks": [...] },
   "summary": {
-    "status": "pass|warn|blocked",
+    "status": "pass|warn|blocked|error",
     "gatesRun": [...],
     "gatesMissingTool": [...],
+    "gatesErrored": [...],
     "blockers": 0,
     "warnings": 0
   },
@@ -166,6 +167,11 @@ Read `<out>/report.json`. The canonical iteration pattern:
 
 ```js
 const report = JSON.parse(fs.readFileSync('.cleancode/report.json', 'utf8'));
+if (report.summary.status === 'error') {
+  // One or more gates ran but produced no verdict — see report.summary.gatesErrored
+  // and exit code 4. An errored gate measured nothing, and nothing measured must
+  // never read as pass: escalate rather than proceeding as if the code were clean.
+}
 if (report.summary.status === 'blocked') {
   for (const gate of report.gates) {
     for (const finding of gate.findings) {
@@ -180,7 +186,7 @@ if (report.summary.status === 'blocked') {
 }
 ```
 
-Gates with `status: "missing_tool"` have an `installHint` string on the gate object describing what to install or run. They have an empty `findings` array.
+Gates with `status: "missing_tool"` have an `installHint` string on the gate object describing what to install or run. They have an empty `findings` array. Gates with `status: "error"` also carry an empty `findings` array and are listed in `report.summary.gatesErrored`; the run's `summary.status` is `"error"` (unless a blocker outranks it) and the CLI exits 4.
 
 ---
 

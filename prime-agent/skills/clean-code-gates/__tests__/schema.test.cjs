@@ -5,86 +5,66 @@ const path = require('node:path');
 const fs = require('node:fs');
 const { buildReport } = require('../src/report.cjs');
 
-/** Minimal hand-rolled structural validator against report.schema.json (no external deps). */
+const TYPE_PREDICATES = {
+  object: v => v !== null && typeof v === 'object' && !Array.isArray(v),
+  array: v => Array.isArray(v),
+  string: v => typeof v === 'string',
+  integer: v => Number.isInteger(v),
+  number: v => typeof v === 'number',
+  boolean: v => typeof v === 'boolean',
+  null: v => v === null,
+};
+
+function describeValue(value) {
+  if (value === null) return 'null';
+  if (Array.isArray(value)) return 'array';
+  return typeof value;
+}
+
+function checkType(value, type, path, errs) {
+  if (!type) return true;
+  const allowed = Array.isArray(type) ? type : [type];
+  if (allowed.some(t => TYPE_PREDICATES[t] && TYPE_PREDICATES[t](value))) return true;
+  errs.push(`${path}: expected type ${allowed.join('|')}, got ${describeValue(value)}`);
+  return false;
+}
+
+function checkObject(value, schema, path, errs) {
+  const properties = schema.properties || {};
+  for (const key of schema.required || []) {
+    if (!Object.hasOwn(value, key)) errs.push(`${path}: missing required key "${key}"`);
+  }
+  if (schema.additionalProperties === false) {
+    for (const key of Object.keys(value)) {
+      if (!Object.hasOwn(properties, key)) errs.push(`${path}: unknown key "${key}"`);
+    }
+  }
+  for (const [key, subSchema] of Object.entries(properties)) {
+    if (key in value) checkNode(value[key], subSchema, `${path}.${key}`, errs);
+  }
+}
+
+/** Generic recursive check honouring type, required, additionalProperties, properties, items, enum, const. */
+function checkNode(value, schema, path, errs) {
+  if (!schema || typeof schema !== 'object') return;
+  if (!checkType(value, schema.type, path, errs)) return;
+  if ('const' in schema && value !== schema.const) {
+    errs.push(`${path}: must equal ${JSON.stringify(schema.const)}, got ${JSON.stringify(value)}`);
+  }
+  if (schema.enum && !schema.enum.includes(value)) {
+    errs.push(`${path}: must be one of ${JSON.stringify(schema.enum)}, got ${JSON.stringify(value)}`);
+  }
+  if (Array.isArray(value)) {
+    if (schema.items) value.forEach((item, i) => checkNode(item, schema.items, `${path}[${i}]`, errs));
+    return;
+  }
+  if (TYPE_PREDICATES.object(value)) checkObject(value, schema, path, errs);
+}
+
+/** Structural validator against report.schema.json (no external deps). */
 function validate(report, schema) {
   const errs = [];
-
-  // Top-level required keys
-  for (const key of schema.required || []) {
-    if (!(key in report)) errs.push(`missing top-level key: ${key}`);
-  }
-
-  // schemaVersion const
-  if (report.schemaVersion !== '1.0') errs.push(`schemaVersion must be "1.0", got ${JSON.stringify(report.schemaVersion)}`);
-
-  // generatedAt string
-  if (typeof report.generatedAt !== 'string') errs.push('generatedAt must be a string');
-
-  // tool object
-  if (!report.tool || typeof report.tool !== 'object') {
-    errs.push('tool must be an object');
-  } else {
-    for (const k of ['name', 'version']) {
-      if (typeof report.tool[k] !== 'string') errs.push(`tool.${k} must be a string`);
-    }
-  }
-
-  // scope object
-  const scopeSchema = schema.properties.scope;
-  if (!report.scope || typeof report.scope !== 'object') {
-    errs.push('scope must be an object');
-  } else {
-    for (const key of scopeSchema.required || []) {
-      if (!(key in report.scope)) errs.push(`scope missing key: ${key}`);
-    }
-    const kindEnum = scopeSchema.properties.kind.enum;
-    if (!kindEnum.includes(report.scope.kind)) errs.push(`scope.kind must be one of ${kindEnum}, got ${report.scope.kind}`);
-    if (!Array.isArray(report.scope.files)) errs.push('scope.files must be an array');
-    if (!Array.isArray(report.scope.stacks)) errs.push('scope.stacks must be an array');
-  }
-
-  // summary object
-  const summarySchema = schema.properties.summary;
-  if (!report.summary || typeof report.summary !== 'object') {
-    errs.push('summary must be an object');
-  } else {
-    for (const key of summarySchema.required || []) {
-      if (!(key in report.summary)) errs.push(`summary missing key: ${key}`);
-    }
-    const statusEnum = summarySchema.properties.status.enum;
-    if (!statusEnum.includes(report.summary.status)) errs.push(`summary.status must be one of ${statusEnum}, got ${report.summary.status}`);
-    if (!Array.isArray(report.summary.gatesRun)) errs.push('summary.gatesRun must be an array');
-    if (!Array.isArray(report.summary.gatesMissingTool)) errs.push('summary.gatesMissingTool must be an array');
-    if (typeof report.summary.blockers !== 'number') errs.push('summary.blockers must be a number');
-    if (typeof report.summary.warnings !== 'number') errs.push('summary.warnings must be a number');
-  }
-
-  // gates array
-  const gateItemSchema = schema.properties.gates.items;
-  if (!Array.isArray(report.gates)) {
-    errs.push('gates must be an array');
-  } else {
-    for (const [i, gate] of report.gates.entries()) {
-      for (const key of gateItemSchema.required || []) {
-        if (!(key in gate)) errs.push(`gates[${i}] missing key: ${key}`);
-      }
-      const gateStatusEnum = gateItemSchema.properties.status.enum;
-      if (!gateStatusEnum.includes(gate.status)) errs.push(`gates[${i}].status must be one of ${gateStatusEnum}, got ${gate.status}`);
-      if (!Array.isArray(gate.findings)) errs.push(`gates[${i}].findings must be an array`);
-
-      // Validate each finding
-      const findingSchema = gateItemSchema.properties.findings.items;
-      for (const [j, finding] of (gate.findings || []).entries()) {
-        for (const key of findingSchema.required || []) {
-          if (!(key in finding)) errs.push(`gates[${i}].findings[${j}] missing key: ${key}`);
-        }
-        const sevEnum = findingSchema.properties.severity.enum;
-        if (!sevEnum.includes(finding.severity)) errs.push(`gates[${i}].findings[${j}].severity must be one of ${sevEnum}, got ${finding.severity}`);
-        if (typeof finding.line !== 'number' || finding.line < 1) errs.push(`gates[${i}].findings[${j}].line must be integer >= 1`);
-      }
-    }
-  }
-
+  checkNode(report, schema, '$', errs);
   return errs;
 }
 
@@ -124,9 +104,53 @@ test('schema: scope.kind enum values accepted', () => {
 
 test('schema: summary.status enum values accepted', () => {
   const statusEnum = schema.properties.summary.properties.status.enum;
-  assert.deepStrictEqual(statusEnum, ['pass', 'warn', 'blocked']);
+  assert.deepStrictEqual(statusEnum, ['pass', 'warn', 'blocked', 'error']);
   assert.ok(statusEnum.includes(sampleReport.summary.status));
 });
+
+test('buildReport output with an errored gate conforms to report.schema.json', () => {
+  const errored = buildReport({
+    scope: { kind: 'project', files: ['a.ts'], stacks: ['node-ts'] },
+    gateResults: [
+      { gate: 'G1', name: 'coverage', stack: 'node-ts', status: 'error', tool: 'jest', findings: [] },
+      { gate: 'G5', name: 'no-comments', stack: 'node-ts', status: 'pass', tool: 'builtin', findings: [] },
+    ],
+    now: '2026-05-31T00:00:00Z',
+    version: '0.1.0',
+  });
+  assert.strictEqual(errored.summary.status, 'error');
+  assert.deepStrictEqual(errored.summary.gatesErrored, ['G1']);
+  const errs = validate(errored, schema);
+  assert.deepStrictEqual(errs, [], `schema violations: ${errs.join('; ')}`);
+});
+
+/** Deep clone of the sample report, mutated by `mutate`, so the negative cases stay independent. */
+function corrupt(mutate) {
+  const clone = JSON.parse(JSON.stringify(sampleReport));
+  mutate(clone);
+  return clone;
+}
+
+const negativeCases = [
+  ['unknown key inside summary', r => { r.summary.bogusKey = 1; }],
+  ['unknown key at top level', r => { r.bogusTopLevel = 1; }],
+  ['out-of-enum summary.status', r => { r.summary.status = 'catastrophe'; }],
+  ['out-of-enum per-gate status', r => { r.gates[0].status = 'exploded'; }],
+  ['out-of-enum finding severity', r => { r.gates[0].findings[0].severity = 'nitpick'; }],
+  ['missing required key in summary', r => { delete r.summary.gatesErrored; }],
+  ['missing required key in a finding', r => { delete r.gates[0].findings[0].message; }],
+  ['wrong type for gates', r => { r.gates = {}; }],
+  ['wrong item type inside scope.files', r => { r.scope.files = [7]; }],
+  ['wrong item type inside gates', r => { r.gates = ['not-an-object']; }],
+  ['schemaVersion violating its const', r => { r.schemaVersion = '9.9'; }],
+];
+
+for (const [label, mutate] of negativeCases) {
+  test(`validator rejects an invalid report: ${label}`, () => {
+    const errs = validate(corrupt(mutate), schema);
+    assert.ok(errs.length >= 1, `expected at least one violation for ${label}, got none`);
+  });
+}
 
 test('schema: gate finding required fields and severity enum', () => {
   const finding = sampleReport.gates[0].findings[0];
