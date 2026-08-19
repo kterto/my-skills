@@ -149,7 +149,10 @@ That is Amdahl's law reported accurately, and it is what item 5 attacks upstream
 - Both worked examples in `references/config.md` are recomputed; they remain the regression check.
 - **Not addressed here:** `k × J` — inner joins are serialized, so a `k`-way plan pays `k` full
   join passes. Same defect family (a term that scales with slice count), but fixing it changes
-  Step 3s's barrier discipline rather than a constant. See **ADR-0013**.
+  Step 3s's barrier discipline rather than a constant. See **ADR-0013** — now **Accepted and
+  implemented** (2026-08-19): Step 3s's global leaf barrier is replaced by a per-lane one, the
+  inner joins overlap, and the level is repriced to slowest-of-`k` = `J`, charged once on the
+  first adoption.
 - **Not addressed here:** a re-slice retry when the gate rejects a badly-shaped split. Rejected
   because `SKILL.md` → Step 2p.1 is emphatic that the analysis is one pass — *"this is a
   decision, not an economy"* — and a retry loop on the step whose job is keeping cost visible

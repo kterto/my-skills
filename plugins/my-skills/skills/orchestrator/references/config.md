@@ -242,10 +242,10 @@ This is the normative definition of every number the `full` level's gate compute
 
 The consequence for the cost side is mechanical and is stated once, in *The cost side*: with a sequential baseline **the first adoption carries the whole nested overhead**, because none of it — not the parent contract, not the outer join — exists in the baseline.
 
-**The overhead term is split by shape, because the two levels have opposite shapes.** Summing them as one flat quantity is what made an earlier form of this model optimistic:
+**The overhead term is split by level, and each level is concurrent for its own reason.** Both levels cost `slowest-of-k`, so they no longer have opposing shapes — but they are still charged as **two** terms, because *why* each one is `slowest-of-k` differs at each level. Reading them as interchangeable is how a later edit would break one while "simplifying" it into the other:
 
-- **Contract-authoring passes at one level are issued concurrently.** Step 2s spawns its `k` sub-contract architects together, so `k` of them cost `slowest-of-k` — which, under the equal-effort assumption, is `A`, not `k × A`.
-- **Inner-join passes are serialized after the leaf barrier.** Step 3s reconciles each sub-split lane in turn, in lane-map row order, and every one of them sits on the critical path — so `k` of them cost the **sum of k**, i.e. `k × J`.
+- **Contract-authoring passes at one level are issued concurrently.** Step 2s spawns its `k` sub-contract architects together, so `k` of them cost `slowest-of-k` — which, under the equal-effort assumption, is `A`, not the sum of `k`. The concurrency here is a property of the **dispatch**: the architects are spawned in one wave.
+- **Inner-join passes overlap, because each lane's join is gated only on its own sub-lanes.** Step 3s begins a lane's inner join as soon as **that lane's own** sub-lanes are DONE, concurrently with leaves still running in other lanes, so the `k` inner joins overlap rather than queueing behind one global leaf barrier — and `k` of them cost `slowest-of-k`, which under the equal-effort assumption is `J`. The concurrency here is a property of the **barrier**, not the dispatch: the joins are never spawned together and do not start together; nothing serializes them. (`SKILL.md` → Step 3s; ADR-0013.)
 
 For a nested plan adopting `k` lanes:
 
@@ -253,7 +253,7 @@ For a nested plan adopting `k` lanes:
 M_nested = span_max
          + A        parent contract          (Step 2c)
          + A        k sub-contracts          (Step 2s — concurrent, so slowest-of-k)
-         + k × J    k inner joins            (Step 3s — serialized after the leaf barrier)
+         + J        k inner joins            (Step 3s — per-lane barrier, so slowest-of-k)
          + J        the outer join           (Step 3j)
          + I        aggregate interface points, parent contract plus every adopted
                     sub-contract (0.25 task-equivalents each — the same reconciliation
@@ -261,6 +261,8 @@ M_nested = span_max
 ```
 
 Charging the two levels as one undifferentiated overhead makes `M_nested` optimistic by roughly `(k − 1) × J`. Since `M_nested` is exactly the number option 3 of the `ask` ladder shows the user, and since `full`'s whole claim is wall-clock, a systematically optimistic figure is a defect in a decision input — not a rounding concern.
+
+> **Recorded history — the superseded serialized inner-join charge (ADR-0012 era; superseded by ADR-0013).** Under the barrier discipline in force when ADR-0012 was written, Step 3s waited on a **global** leaf barrier and then reconciled each sub-split lane in turn, so every one of the `k` inner joins sat on the critical path. The level was therefore charged **once per adopted lane, serialized behind the leaf barrier** — an aggregate `(k − 1) × J` above what the concurrent reading charges. **That charge was correct for the machine it described**, and is kept on record rather than deleted: charging `slowest-of-k` against a Step 3s that genuinely serialized would have priced a cost the implementation did not have, which is the alternative ADR-0013 rejects on sight. ADR-0013 supersedes it by **changing the machine** — the per-lane barrier is what makes `slowest-of-k` true — never by re-reading the same machine more favourably. That is the whole reason the barrier and the charge had to move in one change: either half alone puts the gate and the ladder back on two accounts.
 
 > **Assumption (state it inline every single time a number derived from it is shown):** leaves run concurrently, **task counts proxy wall-clock effort equally**, *and* the three conversions above hold — an architect pass, a join pass, and an interface point are each worth the stated number of tasks. The conversion is the load-bearing half of this disclosure: concurrency alone says nothing about how a *pass* or an *interface point* becomes a number, and it is the unstated conversion, not the concurrency, that would let two identical runs adopt different plans.
 
@@ -292,15 +294,15 @@ A candidate's cost `c` is the **marginal makespan delta** it causes **against th
 
 For the candidate under evaluation:
 
-- one **inner-join pass** (Step 3s) — `J` task-equivalents, charged on **every** adoption. Because inner joins are **serialized**, a `k`-way nested plan carries `k × J` in aggregate, never `J`: the second adopted lane's join does not overlap the first's, so it is a full additional cost and not a shared one;
+- one **inner-join pass** (Step 3s) — `J` task-equivalents, charged on the **first** adoption only. Step 3s's per-lane barrier begins a lane's inner join as soon as that lane's own sub-lanes are DONE, so the `k` inner joins overlap and that whole level costs `slowest-of-k` = `J` no matter how many lanes are adopted — the same claim `M_nested` is built on. Charging `J` once per candidate would bill an aggregate of `k` full join passes for a level `M_nested` prices at `J`, which is precisely how the gate and the ladder drifted onto two accounts — the identical failure the sub-contract architect bullet below already names, one level up. The first adopted candidate is what brings the Step 3s level into existence, so it carries the charge; every later one rides it at no extra cost. (ADR-0013.)
 - the sub-contract's **interface-point count** — 0.25 task-equivalents each, as reconciliation units, matching the `I` term in `M_nested`;
 - the **sub-contract architect pass** (Step 2s) — `A` task-equivalents, charged on the **first** adoption only. Step 2s spawns its `k` sub-contract architects concurrently, so that whole level costs `slowest-of-k` = `A` no matter how many lanes are adopted — the same claim `M_nested` is built on. Charging `A` once per candidate would bill `k × A` for a level `M_nested` prices at `A`, which is precisely how the gate and the ladder drifted onto two accounts. The first adopted candidate is what brings the Step 2s level into existence, so it carries the charge; every later one rides it at no extra cost.
 
 > **Why there is no separate barrier charge.** An earlier form of this list carried a fourth item: a further `A` for the architect round-trip the Step 2s barrier imposes on every lane, on the grounds that `full` pays three serial architect round-trips where `lanes` pays two. That is a double-charge of the pass the bullet above already prices. `M_nested` carries `+ A` for Step 2c and `+ A` for Step 2s against `M_flat`'s single `+ A` for Step 2c, so the difference between the two plans **already is** exactly one extra architect round-trip; billing it a second time is what let `c` exceed `g` on candidates whose own `M_nested` was strictly below `M_flat`. The underlying observation is still true and still worth knowing — an unsplit lane's architect does wait on sub-contracts it will never read (see `SKILL.md` → Step 2L) — but it is an argument for why the Step 2s `A` sits on the critical path at all, not a second charge on top of it.
 
-**Under a sequential baseline the first adoption additionally carries the flat plan's own overhead** — `A` for the parent contract (Step 2c), `J` for the outer join (Step 3j), and the **parent** contract's interface points — because a non-viable flat verdict means none of that exists in the baseline. The list above charges the marginal delta against `M_flat`; when the baseline is `M_seq` the delta is against zero, so those three terms are charged too, once, on the first adoption. Every adoption after the first is charged exactly as it is above: `J` plus that sub-contract's interface points.
+**Under a sequential baseline the first adoption additionally carries the flat plan's own overhead** — `A` for the parent contract (Step 2c), `J` for the outer join (Step 3j), and the **parent** contract's interface points — because a non-viable flat verdict means none of that exists in the baseline. The list above charges the marginal delta against `M_flat`; when the baseline is `M_seq` the delta is against zero, so those three terms are charged too, once, on the first adoption. Every adoption after the first is charged exactly as it is above: **that sub-contract's interface points alone** — by then the Step 2s and Step 3s levels both exist, and both are `slowest-of-k`.
 
-Concretely, on a sequential baseline the first adoption costs `A + A + J + J + I` — parent contract, sub-contract level, its inner join, the outer join, and the aggregate interface points — which is exactly `M_nested`'s whole overhead term for `k = 1`. That is the correct number: it is the entire price of leaving `off`, and it is the price the ladder's option 3 quotes.
+Concretely, on a sequential baseline the first adoption costs `A + A + J + J + I` — parent contract, sub-contract level, the inner-join level, the outer join, and the aggregate interface points — which is exactly `M_nested`'s whole overhead term for `k = 1`. That is the correct number: it is the entire price of leaving `off`, and it is the price the ladder's option 3 quotes. **This figure is unchanged by ADR-0013**, and necessarily so: at `k = 1` the inner-join level's `slowest-of-k` and its superseded serialized charge are the same quantity.
 
 A sub-split is adopted **only when its marginal gain exceeds that cost**. **Equal is not enough** — a wash means paying contract overhead for zero wall-clock. Both sides are already in task-equivalents, so the test is ordinary arithmetic and needs no conversion at the comparison site.
 
@@ -311,12 +313,14 @@ A **sanity check**, recorded here because an earlier form of this model failed i
 | | flat (`lanes`) | nested (candidate adopted) |
 | --- | --- | --- |
 | `span_max` | `max(12, 6)` = **12** | `max(span(L)=max(6, 6) + 0, 6)` = **6** |
-| overhead | `A + J` = **4** | `A` + `A` + `1 × J` + `J` = **8** |
+| overhead | `A + J` = **4** | `A` + `A` + `J` + `J` = **8** |
 | makespan | `M_flat` = **16** | `M_nested` = **14** |
 
 Gain `g` is the reduction in `span_max`: `12 − 6` = **6**. Cost `c` is the marginal overhead delta: `8 − 4` = **4** — the first adoption's `A`, plus its one inner join's `J`, plus zero interface points. `g > c` (`6 > 4`), so the candidate is **adopted**, and `M_nested` (14) is indeed below `M_flat` (16). Verdict and figure agree.
 
-Under the pre-correction arithmetic they did not. The cost side billed `A` for the sub-contract pass **and** a second `A` for the barrier round-trip, giving `c = 6` against the same `g = 6` — and *"equal is not enough"* rejected the candidate, while the ladder went on printing `M_nested = 14` against `M_flat = 16`, telling the user that the plan the gate had just refused was two task-equivalents cheaper than the one it recommended. A gate and a ladder computed from different overhead accounts can disagree about the same candidate; keeping `c` defined as a delta of `M_nested` is what makes that structurally impossible. Re-check this example whenever either side of the model is edited.
+Under the pre-correction arithmetic they did not. The cost side billed `A` for the sub-contract pass **and** a second `A` for the barrier round-trip, giving `c = 6` against the same `g = 6` — and *"equal is not enough"* rejected the candidate, while the ladder went on printing `M_nested = 14` against `M_flat = 16`, telling the user that the plan the gate had just refused was two task-equivalents cheaper than the one it recommended. A gate and a ladder computed from different overhead accounts can disagree about the same candidate; keeping `c` defined as a delta of `M_nested` is what makes that structurally impossible.
+
+**Re-derived by hand under ADR-0013's concurrent inner-join charge, every figure above is unchanged** — only the notation moved, from `1 × J` to `J`. At `k = 1` the two readings are the same quantity: one adopted lane is one inner join, and slowest-of-one is `J`. `span_max` **6**, nested overhead `A + A + J + J` = **8**, `M_nested` **14** against `M_flat` **16**, `g` **6**, `c` **4**, **adopted**. Re-check this example whenever either side of the model is edited.
 
 #### Worked example — one lane carries all the work (sequential baseline)
 
@@ -327,7 +331,7 @@ Outer gate: conditions 3–6 pass; condition 1 fails — `only 1 lane carries wo
 | | baseline (`off`) | nested (candidate adopted) |
 | --- | --- | --- |
 | `span_base` / `span_max` | `T` = **24** | `max(8, 8, 8) + 0` = **8** |
-| overhead | **0** | `A` + `A` + `1 × J` + `J` + `I((0 + 2) × 0.25)` = **8.5** |
+| overhead | **0** | `A` + `A` + `J` + `J` + `I((0 + 2) × 0.25)` = **8.5** |
 | makespan | `M_seq` = **24** | `M_nested` = **16.5** |
 
 Gain `g` = `24 − 8` = **16**. Cost `c` = `8.5 − 0` = **8.5** — the first adoption on a sequential baseline, so it carries the parent contract, the sub-contract level, its inner join, the outer join, and the aggregate interface points. `g > c` (`16 > 8.5`), so the candidate is **adopted**, and `M_nested` (16.5) is below `M_seq` (24). The leaf-level re-application then passes: **3** leaves carry work (≥ 2), and the largest holds `8/24` = **33%** (≤ 70%).
@@ -336,6 +340,8 @@ The run is `full` with a **one-lane parent contract** whose single row carries `
 
 Had the sub-split instead come out `{20, 4}`, `span_max` = 20, `g` = 4, `c` = 8.5, and the candidate would be **rejected**; with no other candidate, `full` would degrade to **`off`** (not to `lanes` — the flat split was already non-viable), printing both reasons.
 
+**Re-derived by hand under ADR-0013's concurrent inner-join charge, every figure above is unchanged** — only `1 × J` became `J`, and at `k = 1` those are the same quantity. `span_max` **8**, nested overhead `A + A + J + J + I(2×0.25)` = **8.5**, `M_nested` **16.5** against `M_seq` **24**, `g` **16**, `c` **8.5**, **adopted**. Re-check this example whenever either side of the model is edited.
+
 #### Worked example — a split carrying an integration sub-lane
 
 The third regression check, covering the two terms the examples above do not exercise: a serial integration sub-lane and a non-trivial interface-point count. Same shape as the example above — one lane carries everything — with `tasks(mobile) = 24` split into **5 concurrent sub-lanes** whose largest is `5`, **plus a declared `integration` slice of 6** (`tasks(integration) = 6`). `k = 1`; defaults `A = 2`, `J = 2`; parent contract **0** interface points, sub-contract **8**.
@@ -343,7 +349,7 @@ The third regression check, covering the two terms the examples above do not exe
 | | baseline (`off`) | nested (candidate adopted) |
 | --- | --- | --- |
 | `span_base` / `span_max` | `T` = **24** | `max(concurrent) + integration` = `5 + 6` = **11** |
-| overhead | **0** | `A` + `A` + `1 × J` + `J` + `I((0 + 8) × 0.25)` = **10** |
+| overhead | **0** | `A` + `A` + `J` + `J` + `I((0 + 8) × 0.25)` = **10** |
 | makespan | `M_seq` = **24** | `M_nested` = **21** |
 
 Gain `g` = `24 − 11` = **13**; cost `c` = **10**; `g > c` (`13 > 10`), so the candidate is **adopted** — at a margin of 3, on a 12.5% improvement.
@@ -354,11 +360,58 @@ Gain `g` = `24 − 11` = **13**; cost `c` = **10**; `g > c` (`13 > 10`), so the 
 
 The aggregate payback rule passes here — `8 ≤ T = 24`. Under the superseded `min(leaf)` comparand it did **not**: aggregate `8` against a smallest leaf of `3` rejected the whole plan, and with a non-viable flat verdict the run degraded to `off`, discarding a plan that more than halved the critical path. That regression is what this example exists to prevent.
 
+**Re-derived by hand under ADR-0013's concurrent inner-join charge, every figure above is unchanged** — only `1 × J` became `J`, and at `k = 1` those are the same quantity. `span_max` **11**, nested overhead `A + A + J + J + I(8×0.25)` = **10**, `M_nested` **21** against `M_seq` **24**, `g` **13**, `c` **10**, **adopted**. Re-check this example whenever either side of the model is edited.
+
+#### Worked example — `k = 2`, the case the overlap exists for
+
+The regression check for ADR-0013, and the only example here with `k > 1` — the three above are all `k = 1`, where the serialized and concurrent readings of the inner-join level coincide and nothing can distinguish them. Lane set `{A: 24, B: 10, C: 4}`; `T` = **38**. The flat verdict is **viable** (3 lanes carry work; the largest holds `24/38` = **63%** ≤ 70%), so the baseline is `M_flat`. The parent contract has **0** interface points; each adopted sub-contract has **2**. Defaults `A = 2`, `J = 2`.
+
+**Baseline.** `span_base = max(24, 10, 4)` = **24**; flat overhead `A + J + I(0×0.25=0)` = **4**; `M_flat` = `24 + 4` = **28**.
+
+**Adoption 1 — the critical lane `A`**, split into `{8, 8, 8}` with `integration: none`, so `span(A)` = `max(8, 8, 8) + 0` = 8.
+
+| | before | after adoption 1 |
+| --- | --- | --- |
+| `span_max` | `max(24, 10, 4)` = **24** | `max(8, 10, 4)` = **10** |
+| accumulated overhead | `A + J` = **4** | `A + A + J + J + I(2×0.25=0.5)` = **8.5** |
+| makespan | `M_flat` = **28** | `M_nested` = **18.5** |
+
+`g₁` = `24 − 10` = **14**. `c₁` = `A(2) + J(2) + I(2×0.25=0.5)` = **4.5** — the first adoption on a flat baseline, so it carries the Step 2s level, the Step 3s level, and its own sub-contract's interface points. `14 > 4.5` → **adopted**.
+
+**Adoption 2 — recompute, and the critical lane is now `B`** = 10, split into `{5, 5}` with `integration: none`, so `span(B)` = 5.
+
+| | before | after adoption 2 |
+| --- | --- | --- |
+| `span_max` | `max(8, 10, 4)` = **10** | `max(8, 5, 4)` = **8** |
+| accumulated overhead | **8.5** | `A + A + J + J + I(4×0.25=1.0)` = **9** |
+| makespan | `M_nested` = **18.5** | `M_nested` = **17** |
+
+`g₂` = `10 − 8` = **2**. `c₂` = `I(2×0.25=0.5)` = **0.5** — **no `A`**, because the Step 2s level already exists and its architects run concurrently, and **newly no `J`**, because the Step 3s level already exists and its joins now overlap. `2 > 0.5` → **adopted**.
+
+**The behavior change this example pins.** Under the superseded serialized charge, adoption 2 cost `J(2) + I(0.5)` = **2.5** against the same `g₂` = **2**, so `g > c` **rejected** it. That rejection was **self-consistent at the time**, and that is the point: the serialized plan's own `M_nested` would have been `span_max(8) + A(2) + A(2) + 2 join passes(4) + J(2) + I(4×0.25=1)` = **19** — *worse* than the **18.5** of leaving `B` flat — so the gate and the ladder agreed then, on the machine that then existed. Under the overlapped machine they agree again, in the other direction: the adopted plan's `M_nested` is **17**, strictly better than 18.5, and the gate adopts it. **Agreement on both sides of the change is what this example checks** — a candidate whose verdict flips is exactly where a half-landed change (barrier without charge, or charge without barrier) would show a gate and a ladder disagreeing about the same plan.
+
+**Both reconciliations.** They are stated because either one failing means the two accounts have drifted apart again:
+
+- **Cost.** `M_nested`'s overhead (**9**) − `M_flat`'s overhead (**4**) = **5** = `c₁`(4.5) + `c₂`(0.5). Every task-equivalent the gate charged is visible in the figure the ladder prints, and nothing else is.
+- **Gain.** Total span reduction `24 → 8` = **16** = `g₁`(14) + `g₂`(2). Every task-equivalent of span the gate credited is span the adopted plan actually removes.
+
+**The remaining gates all pass**, and are checked here rather than assumed: the 6 leaves `{8, 8, 8, 5, 5, 4}` sum to `T` = **38**; at least 2 leaves carry work; the largest leaf holds `8/38` = **21%** ≤ 70%; the aggregate interface-point count (0 parent + 2 + 2) = **4** ≤ `T` = 38; and 6 leaves is exactly within the `max_parallel_lanes` default of **6**.
+
+Re-check this example whenever either side of the model is edited.
+
 #### Greedy, recomputed adoption
 
 Evaluate candidates **critical-lane first**. After each adoption, **recompute the makespan** and re-evaluate every remaining candidate against the **new** critical path. Stop when no remaining candidate's marginal gain exceeds its cost, or when the leaf-width ceiling (`max_parallel_lanes`) is reached.
 
-Recomputing after each adoption is what makes *"each split shrinks the next one's payback"* fall out of the model rather than needing a separate heuristic — and the corrected arithmetic **strengthens** that property rather than disturbing it. The **per-adoption** increment to the overhead is `A + J` plus that sub-contract's interface points for the **first** adopted lane, and `J` plus interface points for every lane after it — the Step 2s level is brought into existence once and paid for once, because its architects run concurrently. Every adoption therefore lowers `span_max` while adding a strictly positive amount to the accumulated overhead, so the `n`-th adoption is evaluated against a smaller remaining gain *and* a strictly larger accumulated cost. Adoption terminates on its own; the leaf-width ceiling is a second, independent stop, not the only one.
+Recomputing after each adoption is what makes *"each split shrinks the next one's payback"* fall out of the model rather than needing a separate heuristic. The **per-adoption** increment to the overhead is `A + J` plus that sub-contract's interface points for the **first** adopted lane, and **that sub-contract's interface points alone** for every lane after it — **both** the Step 2s and the Step 3s level are brought into existence once and paid for once, the first because its architects are spawned concurrently and the second because its joins overlap (*The makespan model*; ADR-0013).
+
+**Termination does not rest on a strictly positive cost, and must not be argued as though it did.** A later adoption whose sub-contract freezes no interface rows costs exactly **0**, so the accumulated overhead can stay flat across an adoption. Three things still terminate the loop, and they are the honest replacement for that argument:
+
+- **Greedy critical-lane-first evaluation shrinks the gain side monotonically.** Each adoption lowers `span_max`, so the `n`-th adoption is measured against a strictly smaller remaining gain than the one before it.
+- **`g > c` still rejects a wash, even a free one.** `0 > 0` is false, so a zero-gain candidate is rejected at zero cost — a split off the critical path buys nothing and is refused whether or not it is cheap.
+- **The lane set is finite.** There are only so many lanes to adopt.
+
+**Three independent guards additionally bound a cheap later adoption**, so "it costs nothing" never means "adopt it freely": the **leaf-width ceiling** (`max_parallel_lanes`, below) caps the adopted leaf set outright; the **aggregate diminishing-payback rule** rejects the whole nested plan once the aggregate interface-point count exceeds `T`; and the **per-sub-lane re-application of the viability conditions** rejects any split that is not a real one. A cheap adoption is bounded by all three, and by `g > c` on the gain side — never by the price of its own contract.
 
 **Partial adoption is the normal outcome.** `full` routinely sub-splits some lanes and leaves others flat, and the printed plan says which lanes were split, with their marginal gain and cost, and which were left flat, with the reason.
 
@@ -381,7 +434,7 @@ Every per-lane viability condition is re-applied at **sub-lane granularity** for
 
    > **Both conditions exclude the split's declared integration slice, because they measure concurrency and it has none.** Counting it would read `{work: 20, integration: 4}` as *"2 sub-lanes carry work, largest holds 83%"* — rejecting for concentration a candidate whose real defect is that it was never a split at all — and, worse, would pass `{a: 3, b: 3, integration: 18}` on both counts while that plan is 75% serial. The integration sub-lane still counts in full toward `span(L)` (*The makespan model*) and toward `T`; it is excluded from **these two conditions only**. A split whose `integration` field is `none` has nothing to exclude and these conditions read exactly as they did before the field existed. (ADR-0012; field made first-class by ADR-0014.)
 3. sub-lane globs are **bounded, contained, and mutually disjoint** (the rejection list above, cases 1–6);
-4. the project's gate commands from `PROJECT-CONTEXT.md` → **Commands** can be **scoped to a sub-lane's paths** — otherwise that gate defers to the inner join;
+4. the project's gate commands from `PROJECT-CONTEXT.md` → **Commands** can be **scoped to a sub-lane's paths** — otherwise that gate defers to the inner join, which records it for the outer join rather than running it (`SKILL.md` → Step 3j item 4 is the single run site for every deferred gate, at either depth; ADR-0013);
 5. the **host can fan out at the resulting leaf width**.
 
 > **There is no per-sub-lane interface-point condition, deliberately.** This list once carried a sixth entry, at position 4 — *the sub-contract's interface points do not exceed the smallest sub-lane's task count* — with the same self-defeating `min` comparand the *Aggregate diminishing-payback rule* documents above, one level down. It is deleted rather than repaired: interface points are charged per candidate by `g > c` (*The cost side*), and the absurd-case backstop is the aggregate rule. A third check on the same quantity could only contradict one of the other two. (ADR-0012.)
@@ -425,7 +478,7 @@ Three lanes × three sub-lanes is nine concurrent coders in one shared workspace
 - **Host concurrency.** Not every host sustains an arbitrary fan-out; the viability conditions' host check is the hard fallback, and this key is the soft, configurable one.
 - **Blast radius.** Path globs are the only isolation between concurrent coders, so widening the leaf set widens the blast radius of a bad glob.
 
-**Enforcement is at the dispatch sites the key names.** Steps 2L and 3L issue the leaf set in **waves of at most `max_parallel_lanes`** — issue a wave, await it, issue the next. Nothing is dropped and nothing is narrowed; only in-flight width is bounded. Enforcing there rather than inside the `full` gate is what makes the key bind in **both** modes and at **both** depths: a `lanes` run declaring 20 lanes is capped too, which a `full`-only rule could never do, since dropping a *lane* would mean dropping work.
+**Enforcement is at the dispatch sites the key names.** Steps 2L and 3L issue the leaf set in **waves of at most `max_parallel_lanes`** — issue a wave, await it, issue the next. Nothing is dropped and nothing is narrowed; only in-flight width is bounded. **At most `max_parallel_lanes` coder subagents are in flight at any time, counting each inner join's integration sub-lane coder**, and Step 3L's wave sizing subtracts the integration coders currently running. That counting rule exists because Step 3s begins a lane's inner join as soon as **that lane's own** sub-lanes are DONE (`SKILL.md` → Step 3s; ADR-0013), so an integration coder genuinely runs alongside other lanes' leaves; both of the reasons above apply to it exactly as they apply to a leaf coder, and leaving it uncounted would let the joins push a run past the ceiling. It **tightens nothing that was previously allowed** — before overlap, an integration coder could not run concurrently with a leaf coder at all, so no configuration that fitted the ceiling then stops fitting it now. `SKILL.md` → Step 3L states this in the same terms. Enforcing there rather than inside the `full` gate is what makes the key bind in **both** modes and at **both** depths: a `lanes` run declaring 20 lanes is capped too, which a `full`-only rule could never do, since dropping a *lane* would mean dropping work.
 
 **Planning preference, on top of enforcement.** When an adopted nested plan would exceed the ceiling, the inner gate additionally **drops the lowest-marginal-gain sub-splits** (those lanes run flat), printing each drop with its lane name and the ceiling. Waves would already keep such a plan safe, so this is not what makes it correct — it avoids paying a sub-contract for a split that would only have queued behind a wave anyway. Dropping by lowest marginal gain — rather than by array order or lane size — keeps that choice consistent with the cost model instead of arbitrary.
 

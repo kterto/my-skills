@@ -1,7 +1,7 @@
 # ADR-0013 — Overlap inner joins so `k × J` stops scaling with slice count
 
-- **Status:** Proposed
-- **Date:** 2026-08-14
+- **Status:** Accepted
+- **Date:** 2026-08-14 (proposed) / 2026-08-19 (accepted and implemented)
 - **Skills affected:** `orchestrator` (`SKILL.md` → Step 3s; `references/config.md` → *The makespan model*, *The cost side*)
 - **Depends on:** ADR-0012 (the other three members of the same defect family)
 
@@ -61,28 +61,109 @@ own sub-lanes return.
 The barrier is therefore described by the skill itself as a **simplicity choice** buying a
 single deterministic reconciliation order and one join state machine.
 
-## What must be resolved before implementing
+## What must be resolved before implementing — resolved, 2026-08-19
 
 The containment proof covers **file paths**. It does not obviously cover the three pieces of
-shared state Step 3s touches. Each needs an answer before this ships:
+shared state Step 3s touches. Each question is answered below, in place; the answers are what
+was implemented.
 
-1. **Deferred-gate de-duplication.** `SKILL.md` → Step 3s step 3 collects gate deferrals across
-   a lane's sub-lanes, de-duplicates them, and runs each once over the settled lane union.
+1. **Deferred-gate de-duplication.** *Question as filed:* Step 3s step 3 collects gate deferrals
+   across a lane's sub-lanes, de-duplicates them, and runs each once over the settled lane union.
    With overlapping joins, two lanes may defer the same unscopable gate and race to run it over
-   *different* unions. Options: run deferred gates only at the outer join when more than one
-   lane deferred the same one; or serialize just the gate-running sub-step behind a lock while
-   overlapping the rest. Note the gates are project commands — they may not be concurrency-safe
-   even over disjoint paths (shared build dirs, lockfiles, ports).
-2. **Parent contract lane-status writes.** Step 3s step 5 marks the lane DONE in the *parent*
-   contract's status table. Concurrent inner joins write the same table. The orchestrator owns
-   these writes (`SKILL.md` → "Never let a subagent write a `PACT`"), so this is likely fine —
-   confirm the writes are orchestrator-side and ordered.
-3. **Reconciliation determinism.** The barrier guaranteed lane-map row order across runs.
-   Overlapping joins complete in wall-clock order. Determinism must be re-established where it
-   is actually observable — artifact write order, printed `SUBJOIN` line order — rather than
-   assumed lost. Two runs over the same contract should still produce the same artifacts.
-4. **`PARTIAL` routing.** A lane routed to `PARTIAL` mid-run while other leaves are still
-   in flight. Confirm 3j's classification still sees a consistent picture.
+   *different* unions.
+
+   **Answered: option A, generalized.** Step 3s runs **no** deferred gate at all — it collects
+   and records them, and **Step 3j item 4 is the single de-duplicated run site** for every
+   deferred gate at either depth. The filed option A ("run deferred gates only at the outer join
+   *when more than one lane deferred the same one*") is generalized to *always*, because the
+   conditional form is non-deterministic: it places the same gate at 3s in one run and at 3j in
+   another, depending on what other lanes happened to defer.
+
+   **Option B (lock the gate-running sub-step) is rejected.** A lock serializes the *invocation*
+   without settling the *workspace* the unscopable gate reads — the gate still runs while other
+   lanes' leaves are writing, which is the actual defect — and it does nothing about this ADR's
+   own warning that project gate commands may not be concurrency-safe even over disjoint paths
+   (shared build dirs, lockfiles, ports). The outer join is the only point at which nothing else
+   is in flight. A third option, "run at 3s only when no other lane happens to be in flight", is
+   rejected on the same determinism ground as the conditional form of A.
+
+   **This ADR's framing of question 1 was narrower than the defect.** It presented the problem as
+   a *race between two lanes deferring the same gate*, which suggested de-duplication or a lock
+   as the fix. The real invalidator is definitional and applies to a **single** deferred gate in a
+   **single** lane: a deferred gate is by definition one with **no path-scoped form**, so it reads
+   paths outside the lane, and containment — which only ever proves things about a lane's own
+   globs — proves nothing whatever about it. Option B is not merely less convenient than option A;
+   it is unsound, and it would have been unsound with only one lane deferring.
+
+   **Consequence, knowingly accepted:** a `SUBJOIN` reconciliation of a lane no longer implies
+   that lane's deferred gates passed, and the narrower-scope benefit the deferral used to buy
+   ("the smallest scope on which an unscopable gate is meaningful") is given up. It was resting on
+   a settled-union premise the overlap falsifies. Step 3j item 4's failure output names the
+   **lane(s) that deferred** the failing gate, so de-duplication costs no attribution.
+
+2. **Parent contract lane-status writes.** *Answered: confirmed safe, and now stated explicitly.*
+   The writes are orchestrator-side — `SKILL.md` → 3s.1 already makes the orchestrator the sole
+   writer of every contract's status table at both levels — so overlapping inner joins add **no
+   second writer**: only the leaf and integration coders the orchestrator spawns run concurrently,
+   and none of them writes a `PACT` or a sub-contract. Ordering is not required either, because the
+   writes are disjoint: the parent lane-status table has one pre-existing row per lane, frozen when
+   Step 2c authored the lane map, and each lane's inner join sets **its own row's status cell
+   alone**. Setting disjoint cells of a pre-existing table is order-independent. 3s.1 now carries
+   the claim in one sentence rather than leaving it inferable.
+
+3. **Reconciliation determinism.** *Answered: re-established at the two observable surfaces, not
+   assumed lost.* **Execution** order is now wall-clock; **observable** order is pinned, and they
+   are separated explicitly in Step 3s. (a) *Artifacts:* each sub-contract's sub-lane-status table
+   is written by exactly one lane's inner join, and the parent table's cells are disjoint per
+   lane — so the settled artifacts are identical regardless of completion order. (b) *Transcript:*
+   `SUBJOIN` blocks are emitted **in lane-map row order, at a single point, once every inner join
+   has completed**, immediately before Step 3j — the orchestrator holds each result rather than
+   printing it as that join finishes. Printing is not on the critical path, so ordering the
+   emission costs nothing the overlap was bought for. **Net claim:** two runs over the same
+   contract produce the same artifacts and the same printed `SUBJOIN` sequence; only wall-clock
+   completion order differs, and nothing reads it.
+
+4. **`PARTIAL` routing.** *Answered: recorded at the inner join, taken at the outer join.* An
+   inner join that routes its lane to `PARTIAL` **records** the routing and marks the lane
+   accordingly **without halting the run**; the `PARTIAL` halt (3j.1) is taken at Step 3j after
+   both of that step's waits hold. A mid-run halt is forbidden by the existing *"never abandon a
+   running leaf"* rule — halting while other lanes' leaves are still writing abandons them
+   mid-write into a shared workspace, which is exactly what 3j.1's "completed lanes stay DONE"
+   guarantee depends on not happening. Deferring the halt is also what keeps 3j's classification
+   consistent under overlap: 3j classifies **one settled set** of lanes with every inner join's
+   verdict already recorded, rather than a set still changing underneath it.
+
+## Three hazards this ADR did not name, resolved in the same change
+
+Implementation surfaced three further hazards the four questions above do not cover. Each is a
+race the barrier change would otherwise have shipped, so each landed in the same change:
+
+5. **Step 3j needed a second barrier.** Step 3j asserted that *"every inner join (Step 3s) has
+   already completed"* by the time it begins — true only because the global leaf barrier put every
+   inner join strictly before it. Once inner joins overlap still-running leaves, a leaf returning
+   is no longer evidence the joins are finished, so the assertion becomes unsupported. Step 3j's
+   opening wait now names **both** conditions explicitly: every in-flight leaf returned **and**
+   every inner join complete. The outer join gains a wait; it loses none.
+
+6. **The contract-amendment loop's entry point had to move to Step 3j.** 3j.2 partitions the leaf
+   set and re-dispatches the invalidated part; entering it from an inner join while other lanes'
+   leaves are still in flight would invalidate a leaf **mid-write**, which the loop's own
+   atomic-transaction rule forbids. The inner join therefore **records** the amendment routing
+   exactly as it records a `PARTIAL` one, and the loop is entered at Step 3j once both waits hold,
+   with recorded requests evaluated in lane-map row order. Amendment **scoping** is unchanged — a
+   sub-contract row still amends that sub-contract alone, an inherited parent row still escalates —
+   and `max_contract_amendments` remains one budget shared across both levels, consumed by one
+   writer in a deterministic order. Only the entry point moves.
+
+7. **`max_parallel_lanes` stopped binding.** A lane's integration sub-lane coder now runs while
+   other lanes' leaves are still in flight, so it is genuinely concurrent with them and must be
+   counted on the same ledger. The ceiling now reads: at most `max_parallel_lanes` **coder
+   subagents** in flight at any time, **counting each inner join's integration sub-lane coder**,
+   with Step 3L's wave sizing subtracting the integration coders currently running. Both of the
+   key's stated reasons — host concurrency and blast radius — apply to an integration coder exactly
+   as they do to a leaf coder. This tightens nothing previously allowed: before overlap, an
+   integration coder could not run concurrently with a leaf coder at all. Step 2L's bound is
+   untouched — an architect fan-out never overlaps an inner join.
 
 ## Expected effect
 

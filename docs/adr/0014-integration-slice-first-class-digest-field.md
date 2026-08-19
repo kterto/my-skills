@@ -124,5 +124,6 @@ arithmetic.
   level up: `M_flat` takes a bare `max` over lanes and never charges the parent contract's own
   integration lane, which Step 3j dispatches just as serially. Filed separately — this ADR is scoped
   to the nested sub-lane split that `arch-1` named.
-- **Not addressed here:** ADR-0013's overlapped inner joins (`k × J`). Still `Proposed`; this
-  decision does not touch Step 3s's barrier discipline.
+- **Not addressed here:** ADR-0013's overlapped inner joins (`k × J`). This decision does not
+  touch Step 3s's barrier discipline. (ADR-0013 was subsequently **Accepted and implemented** on
+  2026-08-19, independently of this one.)
