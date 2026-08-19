@@ -30,7 +30,7 @@ Minimum holistic confidence score (0–1) the roadmap skill must reach before pr
 
 ### `systems`
 
-The **declared set of systems** — the source of truth for the `system` band (a second orthogonal classification axis alongside `release`; see `item-schema.md` → `system`). The decision to model systems as config-owned orthogonal metadata rather than directory structure, and the referential-integrity + namespace obligations it carries, is recorded in [ADR-0001](../../../../../docs/adr/0001-orthogonal-system-band.md). A monorepo project typically comprises several distinct deployable systems (e.g. `backend`, `landing`, `admin`, `app`) that all advance toward a shared release; `systems` names them so roadmap work can be scoped by system and a `release × system` readiness matrix can be derived.
+The **declared set of systems** — the source of truth for the `system` band (a second orthogonal classification axis alongside `release`; see `item-schema.md` → `system`). The decision to model systems as config-owned orthogonal metadata rather than directory structure, and the referential-integrity + namespace obligations it carries, is recorded in [ADR-0001 — Model systems as an orthogonal roadmap band](https://github.com/kterto/my-skills/blob/main/docs/adr/0001-orthogonal-system-band.md). A monorepo project typically comprises several distinct deployable systems (e.g. `backend`, `landing`, `admin`, `app`) that all advance toward a shared release; `systems` names them so roadmap work can be scoped by system and a `release × system` readiness matrix can be derived.
 
 Type: `array of {name: string, path?: string}`. Default `[]` (no systems declared). There is **no CLI flag** — the set is declared only in `/roadmap/roadmap.config.json`.
 

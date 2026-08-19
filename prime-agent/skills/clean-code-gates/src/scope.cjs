@@ -2,6 +2,7 @@
 const cp = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
+const { assertBaseRefShape } = require('./baseref.cjs');
 
 /**
  * Repo-relative paths are compared and matched across the pipeline (scope vs
@@ -39,6 +40,44 @@ function isExcluded(file, cfg) {
 }
 
 /**
+ * Every Git call goes through an argv array with no shell, so nothing in
+ * `baseRef` — or in `root` — can be read as a command. `git` fails loudly by
+ * default; only the two probes that fail as part of normal operation
+ * (`merge-base` with no upstream, `update-index --refresh` on a stat-dirty
+ * index) are tolerated, and they are the only calls whose failure carries no
+ * information about the scope.
+ */
+function git(root, args) {
+  try {
+    return cp.execFileSync('git', ['-C', root, ...args], {
+      encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
+    }).split('\n');
+  } catch (e) {
+    throw new Error(`git ${args.join(' ')} failed: ${String(e.stderr || e.message).trim()}`);
+  }
+}
+
+function gitProbe(root, args) {
+  try {
+    return git(root, args);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * A base ref the repository cannot resolve must stop the run. Left unchecked it
+ * degrades into an empty file list, and an empty scope reports `pass` having
+ * gated nothing — a vacuous green rather than a passing gate.
+ */
+function assertBaseRefResolves(root, baseRef) {
+  const resolved = gitProbe(root, ['rev-parse', '--verify', '--quiet', baseRef])[0];
+  if (!resolved || !resolved.trim()) {
+    throw new Error(`invalid base ref — "${baseRef}" does not resolve in this repository`);
+  }
+}
+
+/**
  * Files changed since `baseRef`, including work that is not committed yet.
  *
  * Deliberately compares the base to the WORKING TREE rather than using
@@ -50,24 +89,23 @@ function isExcluded(file, cfg) {
  */
 function realGitDiff(root) {
   return (baseRef) => {
-    const run = (cmd) => {
-      try {
-        return cp.execSync(cmd, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).split('\n');
-      } catch {
-        return [];
-      }
-    };
     // Resolve the base ref in Node rather than via `$(...)` shell substitution:
     // cmd.exe on Windows has no `$(...)`, `2>/dev/null`, or `echo` fallback, so
-    // the whole command would fail there. `stdio` suppresses stderr portably.
-    const base = baseRef || run(`git -C "${root}" merge-base HEAD origin/main`)[0]?.trim() || 'HEAD';
+    // the whole command would fail there.
+    let base;
+    if (baseRef === null || baseRef === undefined) {
+      base = gitProbe(root, ['merge-base', 'HEAD', 'origin/main'])[0]?.trim() || 'HEAD';
+    } else {
+      base = assertBaseRefShape(baseRef);
+      assertBaseRefResolves(root, base);
+    }
     // Refresh first: build tooling (flutter/dart/jest) rewrites mtimes, leaving
     // stat-dirty index entries. Without this the same tree yields a different
     // file set run to run, so the scope — and therefore the verdict — is not
     // reproducible.
-    run(`git -C "${root}" update-index --refresh`);
-    const tracked = run(`git -C "${root}" diff --name-only "${base}"`);
-    const untracked = run(`git -C "${root}" ls-files --others --exclude-standard`);
+    gitProbe(root, ['update-index', '--refresh']);
+    const tracked = git(root, ['diff', '--name-only', base]);
+    const untracked = git(root, ['ls-files', '--others', '--exclude-standard']);
     return [...new Set([...tracked, ...untracked].map(s => s.trim()).filter(Boolean))];
   };
 }

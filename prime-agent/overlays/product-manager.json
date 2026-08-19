@@ -5,10 +5,26 @@
       "find": "':(exclude).claude'",
       "replace": "':(exclude).claude' ':(exclude).prime'",
       "count": 2,
-      "why": "Prime Agent writes host-runtime scaffolding into .prime/; without the exclude the tree reads permanently dirty."
+      "why": "Prime Agent writes host-runtime scaffolding into .prime/; without the exclude the tree reads permanently dirty. Deliberately shared across every occurrence — the replacement appends the same pathspec regardless of site, so it carries no site-specific text."
+    },
+    {
+      "why": "bug-9: a marketplace path that does not exist in this distribution.",
+      "count": 1,
+      "find": "All normative details live in these files (relative to `plugins/my-skills/skills/product-manager/`):",
+      "replace": "All normative details live in these files (relative to this skill directory):"
     }
   ],
   "insertAfterFrontmatter": [
     "preamble.md"
-  ]
+  ],
+  "fileReplacements": {
+    "references/scope-resolution.md": [
+      {
+        "why": "bug-13: relative ADR link out of the marketplace tree.",
+        "count": 1,
+        "find": "[ADR-0001](../../../../../docs/adr/0001-orthogonal-system-band.md)",
+        "replace": "[ADR-0001 — Model systems as an orthogonal roadmap band](https://github.com/kterto/my-skills/blob/main/docs/adr/0001-orthogonal-system-band.md)"
+      }
+    ]
+  }
 }

@@ -33,6 +33,16 @@ for skill_md in "$prime_dir"/skills/*/SKILL.md; do
   grep -qE '^allowed-tools:' "$skill_md" && fail "$(basename "$(dirname "$skill_md")"): Claude-only allowed-tools survived into the Prime port"
 done
 
+# 2b. File modes survive the build. An executable test script that arrives
+#     non-executable is a script the consumer cannot run, and nothing else in
+#     the pipeline would notice.
+while IFS= read -r src; do
+  rel="${src#"$repo_root/plugins/my-skills/skills/"}"
+  built="$prime_dir/skills/$rel"
+  [[ -f "$built" ]] || fail "executable source file missing from the distribution: $rel"
+  [[ -x "$built" ]] || fail "executable source file lost its mode in the distribution: $rel"
+done < <(find "$repo_root/plugins/my-skills/skills" -type f -perm -u+x)
+
 # 3. The builder's guard rails actually fire. Each case runs against a throwaway
 #    repo so a real regression here cannot be mistaken for a passing run.
 tmp="$(mktemp -d)"

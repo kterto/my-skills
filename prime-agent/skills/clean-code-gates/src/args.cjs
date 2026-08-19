@@ -1,11 +1,12 @@
 'use strict';
+const { assertBaseRefShape } = require('./baseref.cjs');
 
 function parseScope(raw) {
   if (!raw) return { kind: 'project' };
   const [kind, rest] = splitOnce(raw, ':');
   switch (kind) {
     case 'project': return { kind: 'project' };
-    case 'diff': return { kind: 'diff', baseRef: rest || null };
+    case 'diff': return { kind: 'diff', baseRef: rest ? assertBaseRefShape(rest) : null };
     case 'module': return { kind: 'module', target: rest };
     case 'files': return { kind: 'files', files: rest.split(',').map(s => s.trim()).filter(Boolean) };
     default: throw new Error(`unknown scope kind: ${kind}`);

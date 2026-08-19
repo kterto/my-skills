@@ -1,7 +1,9 @@
 ## Prime Agent orchestration protocol (supersedes host-specific dispatch below)
 
-Under Prime Agent, run every role and scan as a real RLM child — **never** map a
-role to `subagent_type`, `Agent`, `task`, `Explore`, or a file in `.claude`/`.opencode`.
+Under Prime Agent, run every **role** as a real RLM child — **never** map a role
+to `subagent_type`, `Agent`, `task`, or a file in `.claude`/`.opencode`. The
+read-only scan agent's resolution is unchanged in this port and is tracked
+separately; a scan child still obeys the read-only rule stated below.
 Materialize the role templates and runtime resources under `.orchestrator/` as
 described here; role files belong in `.orchestrator/roles/{role}.md`. For each
 dispatch, build a self-contained prompt containing: the role body, user task,

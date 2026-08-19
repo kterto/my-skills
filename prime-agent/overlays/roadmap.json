@@ -2,5 +2,51 @@
   "skill": "roadmap",
   "insertAfterFrontmatter": [
     "preamble.md"
-  ]
+  ],
+  "replacements": [
+    {
+      "why": "bug-9: a marketplace path that does not exist in this distribution.",
+      "count": 1,
+      "find": "All normative details live in these files (relative to `plugins/my-skills/skills/roadmap/`):",
+      "replace": "All normative details live in these files (relative to this skill directory):"
+    },
+    {
+      "why": "bug-13: a relative link out of the marketplace tree resolves to nothing once the skill is installed standalone.",
+      "count": 1,
+      "find": "recorded in [ADR-0001](../../../../docs/adr/0001-orthogonal-system-band.md). See `references/config.md`",
+      "replace": "recorded in [ADR-0001 — Model systems as an orthogonal roadmap band](https://github.com/kterto/my-skills/blob/main/docs/adr/0001-orthogonal-system-band.md). See `references/config.md`"
+    },
+    {
+      "why": "bug-13: same, for the ADR-0010 citation.",
+      "count": 1,
+      "find": "(arch-1, [ADR-0010](../../../../docs/adr/0010-versioned-gate-runtime-dependencies.md))",
+      "replace": "(arch-1, [ADR-0010 — Version materialized gate runtime dependencies](https://github.com/kterto/my-skills/blob/main/docs/adr/0010-versioned-gate-runtime-dependencies.md))"
+    }
+  ],
+  "fileReplacements": {
+    "references/config.md": [
+      {
+        "why": "bug-13: relative ADR link out of the marketplace tree.",
+        "count": 1,
+        "find": "recorded in [ADR-0001](../../../../../docs/adr/0001-orthogonal-system-band.md)",
+        "replace": "recorded in [ADR-0001 — Model systems as an orthogonal roadmap band](https://github.com/kterto/my-skills/blob/main/docs/adr/0001-orthogonal-system-band.md)"
+      }
+    ],
+    "references/item-schema.md": [
+      {
+        "why": "bug-13: relative ADR link out of the marketplace tree.",
+        "count": 1,
+        "find": "The orthogonal-band decision is recorded in [ADR-0001](../../../../../docs/adr/0001-orthogonal-system-band.md).",
+        "replace": "The orthogonal-band decision is recorded in [ADR-0001 — Model systems as an orthogonal roadmap band](https://github.com/kterto/my-skills/blob/main/docs/adr/0001-orthogonal-system-band.md)."
+      }
+    ],
+    "references/mutation-ops.md": [
+      {
+        "why": "bug-13: relative ADR link out of the marketplace tree.",
+        "count": 1,
+        "find": "[ADR-0001 — Model systems as an orthogonal roadmap band](../../../../../docs/adr/0001-orthogonal-system-band.md)",
+        "replace": "[ADR-0001 — Model systems as an orthogonal roadmap band](https://github.com/kterto/my-skills/blob/main/docs/adr/0001-orthogonal-system-band.md)"
+      }
+    ]
+  }
 }

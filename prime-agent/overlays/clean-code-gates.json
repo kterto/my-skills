@@ -2,5 +2,23 @@
   "skill": "clean-code-gates",
   "insertAfterFrontmatter": [
     "preamble.md"
+  ],
+  "fileReplacements": {
+    "README.md": [
+      {
+        "why": "bug-9: the README's install command hard-codes a Claude Code personal-install path that does not exist under Prime Agent; SKILL.md already uses the host-neutral <skill-dir> form.",
+        "count": 1,
+        "find": "node ~/.claude/skills/clean-code-gates/bin/gates.cjs [flags]\n```\n",
+        "replace": "node <skill-dir>/bin/gates.cjs [flags]\n```\n\n`<skill-dir>` is this skill's own directory in the installed Prime Agent skill tree: `.prime/agent/skills/clean-code-gates` for a project install, `~/.prime/agent/skills/clean-code-gates` for a global one.\n"
+      }
+    ]
+  },
+  "replacements": [
+    {
+      "why": "bug-9: the skill-dir note named two hosts this distribution is not, and a marketplace path that does not ship with it.",
+      "count": 1,
+      "find": "- Common skill dirs: Claude Code personal install `~/.claude/skills/clean-code-gates`; opencode local installer `~/.config/opencode/my-skills/plugins/my-skills/skills/clean-code-gates`; opencode remote install cache location is shown in the loaded skill's location.",
+      "replace": "- `<skill-dir>` is this skill's own directory in the installed Prime Agent skill tree: `.prime/agent/skills/clean-code-gates` for a project install, `~/.prime/agent/skills/clean-code-gates` for a global one."
+    }
   ]
 }

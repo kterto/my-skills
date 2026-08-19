@@ -237,7 +237,7 @@ When a story is system-scoped, PM reads that system's `path` from `config.system
 
 ## References
 
-All normative details live in these files (relative to `plugins/my-skills/skills/product-manager/`):
+All normative details live in these files (relative to this skill directory):
 
 | File | Content |
 |---|---|

@@ -384,7 +384,7 @@ object so they never diverge. The per-finding `state`/`thread` are only a lossy
 projection; without `reviewState` a browser "Save review state" rebuilds a
 `version: 1` file with empty history and no orphans, erasing the audit trail. See
 `references/review-data-schema.md` §Embedded review-state envelope and
-`docs/adr/0002-review-state-authoritative-writer.md`.
+[ADR-0002 — Authoritative review-state writer & merge protocol](https://github.com/kterto/my-skills/blob/main/docs/adr/0002-review-state-authoritative-writer.md).
 
 **Carry the read-only signal (bug-1).** Set `meta.stateVersion` to the on-disk state
 file's `version` and `meta.stateReadOnly: true` whenever that version is newer/unknown

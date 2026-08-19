@@ -171,7 +171,7 @@ So containment is enforced on **canonical** paths, not on strings:
 
 This is what makes the disjointness proof above hold against the filesystem rather than only against the path strings.
 
-**Containment (case 6, load-bearing).** Every sub-lane's owned globs must be a **strict partition of its parent lane's owned globs**: their union is contained within the parent's globs, and they are mutually disjoint. No sub-lane may claim a path outside its parent lane.
+**Containment (case 6, load-bearing).** Every sub-lane's owned globs must be a **strict partition of its parent lane's owned globs**: their union is contained within the parent's globs, and they are mutually disjoint. No sub-lane may claim a path outside its parent lane. **The declared integration slice is a sub-lane for this rule** — its globs are contained within the parent lane and disjoint from its siblings' exactly as any other sub-lane's are. It is excluded from the two work-concentration conditions because it has no concurrency, never from containment or disjointness; a slice that could reach outside its parent lane would break the disjointness proof the rest of this section rests on.
 
 **What containment buys — state this wherever the rule is weakened or reviewed.** Top-level lane globs are already mutually disjoint by construction (case 5). Containment plus intra-lane disjointness therefore **proves** global disjointness across the entire leaf set, without ever comparing a sub-lane of one lane against a sub-lane of another. The two-level check collapses to **two local checks** — *is this lane disjoint from its siblings?* and *are this lane's sub-lanes contained and disjoint?* — instead of an **n-way global check** across every leaf pair. It is also what makes the flat leaf dispatch at Step 3L safe. A future editor who weakens containment does not lose a tidy constraint; they lose the disjointness proof and the flat dispatch that rests on it.
 
@@ -220,7 +220,9 @@ This is the normative definition of every number the `full` level's gate compute
 `span`, `makespan`, `M_flat`, `M_nested`, every marginal gain, and every cost are computed in this single unit, so the adoption test `g > c` is **ordinary arithmetic** over two numbers of the same kind. Print both `{g}` and `{c}` with the unit named — `gain 4 task-equivalents does not exceed cost 5 task-equivalents` — never as two bare numbers.
 
 - **`tasks(X)`** — the estimated task count of leaf or lane `X`, from the Step 2p digest. One task **is** one task-equivalent by definition; that is the anchor the other two conversions are stated against.
-- **`span(L)`** — for an **unsplit** lane, `tasks(L)`. For a **split** lane, `max` over its **non-integration** sub-lanes `s` of `tasks(s)`, **plus** `tasks(integration sub-lane)` if the split declared one — because its ordinary sub-lanes run concurrently, but its integration sub-lane does **not**.
+- **`span(L)`** — for an **unsplit** lane, `tasks(L)`. For a **split** lane, `max` over its **non-integration** sub-lanes `s` of `tasks(s)`, **plus** `tasks(integration)` — because its ordinary sub-lanes run concurrently, but its integration sub-lane does **not**.
+
+  > **`tasks(integration)` is read from the split's declared `integration` field, and a declared `none` is `0`.** The field is a **first-class part of the digest**, required of every proposed split and validated with the same strict shape as any other slice (`SKILL.md` → Step 2p.1): the literal `none`, or a named slice carrying mapped requirement IDs, candidate globs, and an **integer** task count. This is what makes the term reachable at all. While the split declared its integration work only as prose, the acceptance rule discarded it as *"prose outside those fields"* and `tasks(integration)` was **always** `0` — so `span(L)` collapsed to the concurrent `max`, `g = span_base − span_max` was overstated by exactly the serial work, and `g > c` adopted candidates whose real critical path was longer than the one they were priced on. A split that **omits** the field is rejected outright rather than defaulted to `0`, because "not declared" and "declared none" are different claims and only the second is safe to price. Integration-slice globs satisfy the same **containment** rule as ordinary sub-lane globs (*Containment*, above), and the slice is excluded from the two work-concentration conditions (*Per-sub-lane re-application of the existing viability conditions*, below) — but from **those two conditions only**: it counts in full here, and in full toward `T`. (ADR-0014, following ADR-0012.)
 
   > **The integration sub-lane is serial and must be modelled as serial.** `SKILL.md` → Step 3s dispatches it *"through a single sequential coder invocation — after its sibling sub-lanes are DONE, never concurrently with them"*, because it is the one sub-lane that legitimately touches several sub-lanes' outputs. A `max` taken over all sub-lanes including that one would model an execution order the skill forbids, and would do so **optimistically** — inflating the very figure option 3 of the `ask` ladder shows the user. Unlike the interface-point and comparand defects, this one overstates the **gain** rather than understating the cost; it is the same class of error and is corrected in the same direction: the model follows the machine. (ADR-0012.)
 - **`span_max`** — `max` over all lanes `L` of `span(L)`. This is the bare critical-path term, carrying **no** overhead. It is the only term a sub-split actually shortens, and therefore the term the marginal gain is measured over.
@@ -304,11 +306,11 @@ A sub-split is adopted **only when its marginal gain exceeds that cost**. **Equa
 
 #### Worked example — the gate verdict and the ladder figure must agree
 
-A **sanity check**, recorded here because an earlier form of this model failed it. Two lanes with task counts `{12, 6}`; the candidate splits the 12-lane into sub-lanes `{6, 6}`; `k = 1`; defaults `A = 2`, `J = 2`; no interface points on either contract.
+A **sanity check**, recorded here because an earlier form of this model failed it. Two lanes with task counts `{12, 6}`; the candidate splits the 12-lane into sub-lanes `{6, 6}` and declares **`integration: none`**, so `tasks(integration) = 0`; `k = 1`; defaults `A = 2`, `J = 2`; no interface points on either contract.
 
 | | flat (`lanes`) | nested (candidate adopted) |
 | --- | --- | --- |
-| `span_max` | `max(12, 6)` = **12** | `max(max(6, 6), 6)` = **6** |
+| `span_max` | `max(12, 6)` = **12** | `max(span(L)=max(6, 6) + 0, 6)` = **6** |
 | overhead | `A + J` = **4** | `A` + `A` + `1 × J` + `J` = **8** |
 | makespan | `M_flat` = **16** | `M_nested` = **14** |
 
@@ -318,13 +320,13 @@ Under the pre-correction arithmetic they did not. The cost side billed `A` for t
 
 #### Worked example — one lane carries all the work (sequential baseline)
 
-The shape the leaf-granularity rule exists for. Lane set `{mobile, backend, web, admin, landing, shared}`; the spec maps **every** requirement to `mobile`, so `tasks(mobile) = 24` and every other lane is `0`. The candidate splits `mobile` into `{ui: 8, data: 8, services: 8}`; `k = 1`; defaults `A = 2`, `J = 2`; the parent contract has **0** interface points (one lane carries work, so there is no cross-lane row to freeze) and the sub-contract has **2**.
+The shape the leaf-granularity rule exists for. Lane set `{mobile, backend, web, admin, landing, shared}`; the spec maps **every** requirement to `mobile`, so `tasks(mobile) = 24` and every other lane is `0`. The candidate splits `mobile` into `{ui: 8, data: 8, services: 8}` and declares **`integration: none`**, so `tasks(integration) = 0`; `k = 1`; defaults `A = 2`, `J = 2`; the parent contract has **0** interface points (one lane carries work, so there is no cross-lane row to freeze) and the sub-contract has **2**.
 
 Outer gate: conditions 3–6 pass; condition 1 fails — `only 1 lane carries work`. On `lanes` that ends the run. On `full` it is recorded as **flat verdict: non-viable**, so the baseline is `M_seq`.
 
 | | baseline (`off`) | nested (candidate adopted) |
 | --- | --- | --- |
-| `span_base` / `span_max` | `T` = **24** | `max(8, 8, 8)` = **8** |
+| `span_base` / `span_max` | `T` = **24** | `max(8, 8, 8) + 0` = **8** |
 | overhead | **0** | `A` + `A` + `1 × J` + `J` + `I((0 + 2) × 0.25)` = **8.5** |
 | makespan | `M_seq` = **24** | `M_nested` = **16.5** |
 
@@ -336,7 +338,7 @@ Had the sub-split instead come out `{20, 4}`, `span_max` = 20, `g` = 4, `c` = 8.
 
 #### Worked example — a split carrying an integration sub-lane
 
-The third regression check, covering the two terms the examples above do not exercise: a serial integration sub-lane and a non-trivial interface-point count. Same shape as the example above — one lane carries everything — with `tasks(mobile) = 24` split into **5 concurrent sub-lanes** whose largest is `5`, **plus an integration sub-lane of 6**. `k = 1`; defaults `A = 2`, `J = 2`; parent contract **0** interface points, sub-contract **8**.
+The third regression check, covering the two terms the examples above do not exercise: a serial integration sub-lane and a non-trivial interface-point count. Same shape as the example above — one lane carries everything — with `tasks(mobile) = 24` split into **5 concurrent sub-lanes** whose largest is `5`, **plus a declared `integration` slice of 6** (`tasks(integration) = 6`). `k = 1`; defaults `A = 2`, `J = 2`; parent contract **0** interface points, sub-contract **8**.
 
 | | baseline (`off`) | nested (candidate adopted) |
 | --- | --- | --- |
@@ -345,6 +347,8 @@ The third regression check, covering the two terms the examples above do not exe
 | makespan | `M_seq` = **24** | `M_nested` = **21** |
 
 Gain `g` = `24 − 11` = **13**; cost `c` = **10**; `g > c` (`13 > 10`), so the candidate is **adopted** — at a margin of 3, on a 12.5% improvement.
+
+**This is the example the declared-field rule exists for.** Before `integration` was a first-class digest field, the acceptance rule discarded the slice as prose and `tasks(integration)` read as `0`: `span_max` came out `5` instead of `11`, `g` came out `24 − 5 = 19` instead of `13`, and the candidate cleared its cost of `10` by a margin of 9 rather than 3. The plan is still adopted either way here — but the number the `ask` ladder showed the user was wrong by 6 task-equivalents, and on a split whose integration slice is larger relative to its concurrent work the same error adopts a candidate that does not clear its cost at all. Re-check this example whenever either side of the model is edited.
 
 **Read the thin margin as a finding, not as noise.** The integration sub-lane (6) is larger than the critical concurrent leaf (5), so more than half this lane's span is serial and no amount of further slicing touches that half. The model is reporting Amdahl's law accurately. The lever is the **slice axis**, not the thresholds: 8 interface points across 6 sub-lanes is the signature of a layer-wise split, where every slice touches every other. `SKILL.md` → Step 2p.1 therefore asks the analysis to minimize cross-slice rows and to **name the axis it used**, so this shape is visible on the same screen as the margin it produced.
 
@@ -375,7 +379,7 @@ Every per-lane viability condition is re-applied at **sub-lane granularity** for
 1. at least **2 non-integration sub-lanes** carry work;
 2. no **non-integration** sub-lane holds more than **70%** of the lane's tasks;
 
-   > **Both conditions exclude the integration sub-lane, because they measure concurrency and it has none.** Counting it would read `{work: 20, integration: 4}` as *"2 sub-lanes carry work, largest holds 83%"* — rejecting for concentration a candidate whose real defect is that it was never a split at all — and, worse, would pass `{a: 3, b: 3, integration: 18}` on both counts while that plan is 75% serial. The integration sub-lane still counts in full toward `span(L)` (*The makespan model*) and toward `T`; it is excluded from **these two conditions only**. (ADR-0012.)
+   > **Both conditions exclude the split's declared integration slice, because they measure concurrency and it has none.** Counting it would read `{work: 20, integration: 4}` as *"2 sub-lanes carry work, largest holds 83%"* — rejecting for concentration a candidate whose real defect is that it was never a split at all — and, worse, would pass `{a: 3, b: 3, integration: 18}` on both counts while that plan is 75% serial. The integration sub-lane still counts in full toward `span(L)` (*The makespan model*) and toward `T`; it is excluded from **these two conditions only**. A split whose `integration` field is `none` has nothing to exclude and these conditions read exactly as they did before the field existed. (ADR-0012; field made first-class by ADR-0014.)
 3. sub-lane globs are **bounded, contained, and mutually disjoint** (the rejection list above, cases 1–6);
 4. the project's gate commands from `PROJECT-CONTEXT.md` → **Commands** can be **scoped to a sub-lane's paths** — otherwise that gate defers to the inner join;
 5. the **host can fan out at the resulting leaf width**.

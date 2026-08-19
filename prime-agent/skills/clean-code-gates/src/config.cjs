@@ -12,15 +12,30 @@ function deepMerge(base, over) {
   return out;
 }
 
-function buildDefaults(stacks) {
+/**
+ * `detected` is either the historical array of stack names or the richer
+ * `{ stack, dir }` package list from `detectPackages`. Both are accepted so an
+ * existing caller — and an existing config written by one — keeps working.
+ */
+function packagesByStack(detected) {
+  const byStack = new Map();
+  for (const d of detected || []) {
+    const { stack, dir } = typeof d === 'string' ? { stack: d, dir: '' } : d;
+    if (!byStack.has(stack)) byStack.set(stack, []);
+    byStack.get(stack).push(dir);
+  }
+  return byStack;
+}
+
+function buildDefaults(detected) {
   const stacksCfg = {};
-  for (const s of stacks) stacksCfg[s] = defaultStackConfig(s);
+  for (const [stack, dirs] of packagesByStack(detected)) stacksCfg[stack] = defaultStackConfig(stack, dirs);
   return { schemaVersion: '1.0', stacks: stacksCfg };
 }
 
-function loadConfig(root, stacks) {
+function loadConfig(root, detected) {
   const file = path.join(root, CONFIG_NAME);
-  const defaults = buildDefaults(stacks);
+  const defaults = buildDefaults(detected);
   if (!fs.existsSync(file)) {
     fs.writeFileSync(file, JSON.stringify(defaults, null, 2) + '\n');
     return { ...defaults, created: true };

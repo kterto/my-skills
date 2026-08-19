@@ -242,7 +242,9 @@ Every file the change needs that **no lane glob matches** is assigned here expli
 
 Name the one lane plan that performs cross-lane wiring. It is executed **sequentially at the join, after every other lane is DONE** — never concurrently with them, because it is the one lane that legitimately touches multiple lanes' outputs. State its owned scope and the interface rows it wires.
 
-**`none` is a valid value, with its reason stated** — a single-lane parent contract (see the exception under *Path ownership*) has no cross-lane wiring to sequence. Write `none — single lane; intra-lane wiring is reconciled at the inner join`. The join reads this region and runs the integration lane only if one is declared, so `none` is handled, not skipped.
+**In a sub-contract, this region is bound, not authored.** The `=== PRIOR SLICING ANALYSIS ===` envelope carries that split's declared `integration` field — `none`, or the slice's name, mapped requirement IDs, globs, and task count. That declared slice **is** the integration sub-lane: it is the one `span(L)` was priced against, so verify it against the real spec and tree and freeze it verbatim. Do not re-derive it, rename it, or re-size it. A slice priced at 6 tasks and frozen at 12 silently invalidates the pricing the split was adopted on. If verification shows the declared slice is wrong, that is a `contract violation` BLOCKED stop, not a quiet correction.
+
+**`none` is a valid value, with its reason stated.** In a **parent** contract, `none` means a single lane (see the exception under *Path ownership*) with no cross-lane wiring to sequence: write `none — single lane; intra-lane wiring is reconciled at the inner join`. In a **sub-contract**, `none` means the envelope declared `integration: none` for this split — the sub-lanes need no wiring pass of their own: write `none — declared by the adopted split; sub-lane wiring is reconciled at the inner join`. Either way the join reads this region and runs the integration lane only if one is declared, so `none` is handled, not skipped.
 
 ### 6. Per-lane definition of done
 

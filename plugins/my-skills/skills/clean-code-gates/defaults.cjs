@@ -14,9 +14,21 @@ const GENERATED_EXCLUDES = {
   'dart-flutter': ['**/*.g.dart', '**/*.freezed.dart', '**/*.gql.dart', '**/*.config.dart', '**/__generated__/**'],
   'node-ts': ['**/*.d.ts', '**/__generated__/**', '**/generated/**', '**/prisma/**'],
 };
-function defaultStackConfig(stack) {
+/**
+ * Source roots for every package of a stack. A single package at the project
+ * root yields the historical `['src']` / `['lib']` byte-for-byte; a monorepo
+ * yields one root per detected package, so the scope actually reaches the code.
+ */
+function packageRoots(roots, packageDirs) {
+  const dirs = packageDirs && packageDirs.length ? packageDirs : [''];
+  const out = [];
+  for (const dir of dirs) for (const r of roots) out.push(dir ? `${dir}/${r}` : r);
+  return [...new Set(out)];
+}
+
+function defaultStackConfig(stack, packageDirs) {
   if (stack === 'node-ts') return {
-    roots: ['src'],
+    roots: packageRoots(['src'], packageDirs),
     exclude: GENERATED_EXCLUDES['node-ts'],
     gates: {
       G1: { tool: 'auto', thresholds: THRESHOLDS.G1 },
@@ -29,7 +41,7 @@ function defaultStackConfig(stack) {
     baseline: '.eslint-baseline.json',
   };
   if (stack === 'dart-flutter') return {
-    roots: ['lib'],
+    roots: packageRoots(['lib'], packageDirs),
     exclude: GENERATED_EXCLUDES['dart-flutter'],
     gates: {
       G1: { tool: 'flutter', thresholds: THRESHOLDS.G1 },
@@ -43,4 +55,4 @@ function defaultStackConfig(stack) {
   };
   return { roots: [], gates: {} };
 }
-module.exports = { THRESHOLDS, G1_EXEMPTIONS, GENERATED_EXCLUDES, defaultStackConfig };
+module.exports = { THRESHOLDS, G1_EXEMPTIONS, GENERATED_EXCLUDES, defaultStackConfig, packageRoots };

@@ -14,7 +14,7 @@
 // its declared occurrence count. Both are hard failures: they are how a plugin-side
 // edit that invalidates a Prime adaptation gets caught instead of silently shipping.
 
-import { readdirSync, readFileSync, writeFileSync, mkdirSync, rmSync, statSync } from "node:fs"
+import { readdirSync, readFileSync, writeFileSync, mkdirSync, rmSync, statSync, chmodSync } from "node:fs"
 import { dirname, join, relative, sep } from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -87,14 +87,22 @@ function applyReplacements(body, replacements, skill) {
 
 function renderSkillMd(skill, source, overlay) {
   const { frontmatter, body } = splitFrontmatter(source, skill)
-  const kept = dropFrontmatterKeys(frontmatter, overlay.dropFrontmatterKeys ?? [], skill)
+  // The frontmatter is the discovery blurb, so a host claim in it is as visible
+  // as one in the body — and `replacements` only ever sees the body. Rewrites
+  // are applied through the same matcher, so an anchor that stops matching
+  // hard-fails the build here exactly as it does there.
+  const kept = applyReplacements(
+    dropFrontmatterKeys(frontmatter, overlay.dropFrontmatterKeys ?? [], skill).join("\n"),
+    overlay.frontmatterReplacements ?? [],
+    skill,
+  )
   const blocks = (overlay.insertAfterFrontmatter ?? []).map((name) => {
     const path = join(overlayRoot, name)
     if (!existsFile(path)) throw new Error(`${skill}: overlay block not found: ${relative(repoRoot, path)}`)
     return readFileSync(path, "utf8").replace(/\n+$/, "")
   })
   const rewritten = applyReplacements(body.replace(/^\n+/, ""), overlay.replacements ?? [], skill)
-  const head = ["---", ...kept, "---"].join("\n")
+  const head = ["---", kept, "---"].join("\n")
   return [head, ...blocks, rewritten].join("\n\n")
 }
 
@@ -120,6 +128,13 @@ const skills = readdirSync(srcRoot, { withFileTypes: true })
   .map((e) => e.name)
   .sort()
 
+// The executable bit is part of the file. A test script that ships
+// non-executable is a script the consumer cannot run, so the mode travels with
+// the content and `--check` compares both.
+function fileMode(file) {
+  return statSync(file).mode & 0o777
+}
+
 const generated = new Map()
 for (const skill of skills) {
   const overlay = loadOverlay(skill)
@@ -130,13 +145,14 @@ for (const skill of skills) {
     const inSkill = relative(join(srcRoot, skill), file).split(sep).join("/")
     const rel = join(skill, relative(join(srcRoot, skill), file))
     const source = readFileSync(file)
+    const mode = fileMode(file)
     if (inSkill === "SKILL.md") {
-      generated.set(rel, Buffer.from(renderSkillMd(skill, source.toString("utf8"), overlay)))
+      generated.set(rel, { content: Buffer.from(renderSkillMd(skill, source.toString("utf8"), overlay)), mode })
     } else if (fileReplacements[inSkill]) {
       unusedFileReplacements.delete(inSkill)
-      generated.set(rel, Buffer.from(applyReplacements(source.toString("utf8"), fileReplacements[inSkill], `${skill}/${inSkill}`)))
+      generated.set(rel, { content: Buffer.from(applyReplacements(source.toString("utf8"), fileReplacements[inSkill], `${skill}/${inSkill}`)), mode })
     } else {
-      generated.set(rel, source)
+      generated.set(rel, { content: source, mode })
     }
   }
   for (const missing of unusedFileReplacements) {
@@ -155,11 +171,12 @@ if (check) {
     walk(destRoot).map((file) => relative(destRoot, file)),
   )
   const drift = []
-  for (const [rel, content] of generated) {
+  for (const [rel, { content, mode }] of generated) {
     onDisk.delete(rel)
     const path = join(destRoot, rel)
     if (!existsFile(path)) drift.push(`missing: prime-agent/skills/${rel}`)
     else if (!readFileSync(path).equals(content)) drift.push(`stale:   prime-agent/skills/${rel}`)
+    else if (fileMode(path) !== mode) drift.push(`mode:    prime-agent/skills/${rel} (${fileMode(path).toString(8)} != ${mode.toString(8)})`)
   }
   for (const rel of onDisk) drift.push(`extra:   prime-agent/skills/${rel}`)
   if (drift.length) {
@@ -172,9 +189,10 @@ if (check) {
 }
 
 rmSync(destRoot, { recursive: true, force: true })
-for (const [rel, content] of generated) {
+for (const [rel, { content, mode }] of generated) {
   const path = join(destRoot, rel)
   mkdirSync(dirname(path), { recursive: true })
   writeFileSync(path, content)
+  chmodSync(path, mode)
 }
 console.log(`wrote prime-agent/skills with ${skills.length} skills (${generated.size} files)`)

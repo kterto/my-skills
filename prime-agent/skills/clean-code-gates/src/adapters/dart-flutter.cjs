@@ -197,6 +197,22 @@ function fileMetrics(entry) {
   };
 }
 
+/**
+ * A scoped source file with no entry in the lcov report was never measured by
+ * `flutter test --coverage`. Skipping it reports the gate as pass having scored
+ * nothing, so it is scored as 0 % against every threshold instead — same finding
+ * shape, same vocabulary, no new exemption mechanism. Files that are not Dart
+ * source are genuinely unmeasurable and stay unscored.
+ */
+const ZERO_LCOV_ENTRY = { lh: 0, lf: 1, fnh: 0, fnf: 1, brh: 0, brf: 1 };
+
+function fileCoverageFindings(rel, entry, thresholds, stackCfg) {
+  if (!DART_FILE_RE.test(rel)) return [];
+  if (isExempt(rel, stackCfg, 'G1')) return [];
+  if (entry) return coverageFindings(rel, entry, thresholds);
+  return coverageFindings(rel, ZERO_LCOV_ENTRY, thresholds);
+}
+
 function coverageFindings(rel, entry, thresholds) {
   const metrics = fileMetrics(entry);
   const findings = [];
@@ -275,10 +291,7 @@ function runG1(files, stackCfg, io) {
 
   const findings = [];
   for (const rel of files) {
-    if (!DART_FILE_RE.test(rel) || isExempt(rel, stackCfg, 'G1')) continue;
-    const entry = byRel.get(rel);
-    if (!entry) continue;
-    findings.push(...coverageFindings(rel, entry, thresholds));
+    findings.push(...fileCoverageFindings(rel, byRel.get(rel), thresholds, stackCfg));
   }
 
   return gateResult('G1', failed ? 'error' : findings.length ? 'fail' : 'pass', {
@@ -758,6 +771,8 @@ function runG7(_files, stackCfg, io) {
 module.exports = {
   resolvePackageDir,
   lcovKeyToRepoRel,
+  DART_FILE_RE,
+  SOURCE_FILE_RE: DART_FILE_RE,
   supports(gate) {
     return ['G1', 'G2', 'G4', 'G6', 'G7'].includes(gate);
   },
@@ -774,6 +789,7 @@ module.exports = {
     parseLcov,
     fileMetrics,
     coverageFindings,
+    fileCoverageFindings,
     parseDclJson,
     g2Findings,
     parseAnalyzeLine,

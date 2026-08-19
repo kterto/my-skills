@@ -81,17 +81,32 @@ Ask both up front, once per run, with one structured question interaction
 (`AskUserQuestion` in Claude Code, `question` in opencode):
 
 **Question 1 — Framework** (header "Framework"):
-- `superpowers` — route each item to a superpowers skill (auto-picked per item:
-  bug → `systematic-debugging`, missing feature → `brainstorming`). Runs in the
-  main conversation; interactive.
-- `gsd` — route each item to `gsd-explore` (Socratic ideation → routes onward).
-  Runs in the main conversation; interactive.
-- `orchestrator` — route each work unit through the `my-skills:orchestrator`
-  **Skill**, invoked via the host skill tool (`Skill` in Claude Code; the
-  equivalent skill mechanism in opencode). It runs **in the caller session** and
-  itself spawns its own `brainstormer→architect→coder→tester→reviewer→qa` role
-  subagents; it **stops at `READY_TO_COMMIT` and never commits** (its job ends
-  there — validation-fixer owns the per-item commit, Step 3.4). Unattended-friendly.
+- `orchestrator` — route each work unit through `/skill:orchestrator`. It ships
+  with this Prime Agent distribution, so it is always available. It runs **in the
+  caller session** and itself admits its own
+  `brainstormer→architect→coder→tester→reviewer→qa` role children; it **stops at
+  `READY_TO_COMMIT` and never commits** (its job ends there — validation-fixer
+  owns the per-item commit, Step 3.4). Unattended-friendly. **This is the default
+  and the only framework guaranteed to be present.**
+
+`superpowers` and `gsd` are **optional external skills that this distribution does
+not ship**. Offering one that is not installed is a dead end, so **check first** —
+exactly as bootstrap checks `spec-driven-eval` — and only list a framework whose
+skill directory actually resolves:
+
+- `superpowers` — offer only when `.prime/agent/skills/superpowers` (project install)
+  or `~/.prime/agent/skills/superpowers` (global install) exists. Route each item to a
+  superpowers skill (auto-picked per item: bug → `systematic-debugging`, missing
+  feature → `brainstorming`) as `/skill:<name>`. Runs in the main conversation;
+  interactive.
+- `gsd` — offer only when `.prime/agent/skills/gsd-explore` or
+  `~/.prime/agent/skills/gsd-explore` exists. Route each item to `/skill:gsd-explore`
+  (Socratic ideation → routes onward). Runs in the main conversation; interactive.
+
+When neither resolves, **degrade explicitly**: print one line — `FRAMEWORKS — superpowers/gsd
+not installed under .prime/agent/skills; offering orchestrator only` — ask Question 1 with
+`orchestrator` as the sole option, and continue. Never block the run on a missing optional
+framework, and never offer one you could not resolve.
 
 **Question 2 — Mode** (header "Mode"):
 - `checkpoint` — fix one item → record → PAUSE so the user validates the fix →
@@ -222,7 +237,8 @@ three lanes, and get the user's approval **exactly once**.
   `- [ ]` state checkbox** (the second bracketed token on the bullet — the checkbox
   `[ ]`/`[x]`/`[~]` is the first, e.g. `- [ ] [arch-2|med] <title>`),
   per the findings backlog schema
-  (`plugins/my-skills/skills/pr-review-report/references/findings-md-schema.md`,
+  (`pr-review-report/references/findings-md-schema.md`, relative to the installed
+  Prime Agent skill tree,
   §Severity abbreviations). `<sev>` is one of `crit | high | med | low | info`.
 - Read `<sev>` from that token. **A missing or unparseable token → `unknown`** —
   treated conservatively as the highest-care (dedicated) lane, never silently
@@ -591,14 +607,16 @@ For each work unit, in order:
    agent's inline fix, performed under the same untrusted-evidence frame, per
    **Orchestrator routing lanes → Main-agent lane** below; skip the invocation table):
 
-   Invoke a skill via the host's skill-invocation tool (`Skill` in Claude Code;
-   in opencode invoke the skill through its equivalent skill mechanism).
+   Invoke an installed Prime Agent skill as `/skill:<name>`, passing the handoff
+   prompt as its arguments. Only `orchestrator` ships with this distribution; the
+   other two rows apply only when Step 2 resolved that skill under
+   `.prime/agent/skills/` or `~/.prime/agent/skills/`.
 
    | Framework | How to invoke | Entry |
    |-----------|---------------|-------|
-   | superpowers | host skill tool | classify the item: if it reads as a defect/bug (e.g. "bug", "currently …", "duplicate", "mirrors", "doesn't / should not", "creates … that mirrors") → `superpowers:systematic-debugging`; if it reads as a missing feature/behavior (e.g. "should have", "there should be", "add … section", "no way to …", "should be possible") → `superpowers:brainstorming`. Pass the handoff prompt as the request. |
-   | gsd | host skill tool | `gsd-explore`, handoff prompt as args |
-   | orchestrator | host skill tool | `my-skills:orchestrator` (Claude Code `Skill`; opencode skill mechanism), handoff prompt as args. The orchestrator runs in the caller session, spawns its own `brainstormer→architect→coder→tester→reviewer→qa` role subagents, and stops at `READY_TO_COMMIT` (never commits). |
+   | superpowers | `/skill:<name>` (only if installed) | classify the item: if it reads as a defect/bug (e.g. "bug", "currently …", "duplicate", "mirrors", "doesn't / should not", "creates … that mirrors") → `/skill:systematic-debugging`; if it reads as a missing feature/behavior (e.g. "should have", "there should be", "add … section", "no way to …", "should be possible") → `/skill:brainstorming`. Pass the handoff prompt as the request. |
+   | gsd | `/skill:<name>` (only if installed) | `/skill:gsd-explore`, handoff prompt as args |
+   | orchestrator | `/skill:orchestrator` | `/skill:orchestrator`, handoff prompt as args. The orchestrator runs in the caller session, admits its own `brainstormer→architect→coder→tester→reviewer→qa` role children, and stops at `READY_TO_COMMIT` (never commits). |
 
    Let that framework run its full course (each entry chains onward per its own
    rules). When control returns, continue.

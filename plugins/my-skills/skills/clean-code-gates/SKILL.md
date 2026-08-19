@@ -30,13 +30,13 @@ node <skill-dir>/bin/gates.cjs [flags]
 - `--scaffold` — advice mode: detect stacks and print the exact install commands for any missing gate tooling, then exit 0 (read-only, changes nothing)
 
 ### Exit codes
-`0` pass · `1` blockers found · `2` missing tools (with `--require-tools`) · `3` usage/config error
+`0` pass · `1` blockers found · `2` missing tools (with `--require-tools`) · `3` usage/config error, including a scope that resolved to zero gateable files (nothing measured, so no verdict) · `4` a gate errored and produced no verdict (independent of `--require-tools`)
 
 ## Capability
 
 All gates G1–G7 are implemented for both stacks:
 
-- **G5 (no-comments)** — built-in, **zero external tooling**.
+- **G5 (no-comments)** — built-in, **zero external tooling**. Detects comments at **any column**, not only at the start of a line, and is string-aware (delimiters inside string, template, triple-quoted, and regex literals are not comments). It scans only source files of the detected stack (`.ts`/`.tsx`, `.dart`). Allowances are position-sensitive: `///` and `/** */` doc comments must lead the line; plan-ID citations, `TODO(REF)`, and Dart analyzer directives are allowed anywhere on the line; an unindented licence banner is allowed in the first 5 lines. **Deliberate strictness increase:** a repo that passed G5 on inline trailing comments will now report them as blockers.
 - **node-ts** — G1 coverage (jest **or** vitest), G2 complexity + G4 naming (ESLint + typescript-eslint), G6 mutation (Stryker, jest/vitest runner), G7 dependency-structure (dependency-cruiser).
 - **dart-flutter** — G1 coverage (flutter), G2 complexity + G4 naming (dart_code_linter), G6 mutation (external `dart_mutant`), G7 dependency-structure (built-in).
 - **G3 (length/nesting)** is folded into G2 (same thresholds and tools) — it is not a separate runtime gate.

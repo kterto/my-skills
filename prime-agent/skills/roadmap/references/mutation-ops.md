@@ -4,7 +4,7 @@ This document is the single source of truth for the doc-only **mutation operatio
 
 These ops are the mutation engine invoked by the `product-manager` skill's management verbs (see `product-manager/references/roadmap-management.md`). The roadmap skill applies the mutation; the PM skill resolves the selection, cuts a branch, and commits/pushes/PRs. **Exactly one skill (`roadmap`) writes `/roadmap/`.**
 
-The `system`-band ops below (`set-system`, `system`, `migrate-systems`) and their orphan-handling / namespace guards implement the obligations of [ADR-0001 — Model systems as an orthogonal roadmap band](../../../../../docs/adr/0001-orthogonal-system-band.md); keep them consistent with it.
+The `system`-band ops below (`set-system`, `system`, `migrate-systems`) and their orphan-handling / namespace guards implement the obligations of [ADR-0001 — Model systems as an orthogonal roadmap band](https://github.com/kterto/my-skills/blob/main/docs/adr/0001-orthogonal-system-band.md); keep them consistent with it.
 
 ---
 

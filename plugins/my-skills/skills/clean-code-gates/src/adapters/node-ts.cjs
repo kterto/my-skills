@@ -233,6 +233,22 @@ function runCoverage(root, runner) {
   return readSummary(outDir, failed);
 }
 
+/**
+ * A scoped source file with no entry in the coverage report was never measured
+ * by the runner. Skipping it reports the gate as pass having scored nothing, so
+ * it is scored as 0 % against every threshold instead — same finding shape, same
+ * vocabulary, no new exemption mechanism. Files that are not stack source (a
+ * JSON fixture under `src/`) are genuinely unmeasurable and stay unscored.
+ */
+const ZERO_COVERAGE_ENTRY = Object.fromEntries(COVERAGE_METRICS.map((m) => [m, { pct: 0 }]));
+
+function fileCoverageFindings(rel, entry, thresholds, stackCfg) {
+  if (!entry && !TS_FILE_RE.test(rel)) return [];
+  if (isExempt(rel, stackCfg, 'G1')) return [];
+  if (entry) return coverageFindings(rel, entry, thresholds);
+  return coverageFindings(rel, ZERO_COVERAGE_ENTRY, thresholds);
+}
+
 function coverageFindings(rel, entry, thresholds) {
   const findings = [];
   for (const metric of COVERAGE_METRICS) {
@@ -290,10 +306,7 @@ function runG1(files, stackCfg, io) {
 
   const findings = [];
   for (const rel of files) {
-    if (isExempt(rel, stackCfg, 'G1')) continue;
-    const entry = byRel.get(rel);
-    if (!entry) continue;
-    findings.push(...coverageFindings(rel, entry, thresholds));
+    findings.push(...fileCoverageFindings(rel, byRel.get(rel), thresholds, stackCfg));
   }
 
   return gateResult('G1', failed ? 'error' : findings.length ? 'fail' : 'pass', {
@@ -711,7 +724,10 @@ module.exports = {
   detectRunner,
   resolveRunner,
   isExempt,
+  fileCoverageFindings,
   TEST_FILE_RE,
+  TS_FILE_RE,
+  SOURCE_FILE_RE: TS_FILE_RE,
   supports(gate) {
     return ['G1', 'G2', 'G4', 'G6', 'G7'].includes(gate);
   },
