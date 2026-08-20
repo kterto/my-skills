@@ -311,13 +311,14 @@ my-skills/
 ├── prime-agent/               # self-contained Prime Agent distribution
 │   ├── skills/                 # generated — the eleven Prime-compatible skill directories
 │   ├── overlays/               # per-skill Prime adaptations the generator applies
-│   ├── tests/                  # install + build-parity tests (npm test)
-│   ├── install.sh              # project/global installer
+│   ├── tests/                  # install + bootstrap + build-parity tests (npm test)
+│   ├── install.sh              # project/global installer (runs from a checkout)
 │   └── README.md
 ├── scripts/
 │   ├── build-prime-agent.mjs     # build prime-agent/skills from the marketplace skills
 │   ├── generate-opencode-skill-index.mjs
 │   ├── install-opencode.sh
+│   ├── install-prime-agent.sh    # one-command Prime install (fetches, then delegates)
 │   └── sync-agents.sh            # refresh a project's orchestrator agent copies
 ├── .opencode/
 │   ├── commands/                 # opencode-specific slash command templates
@@ -349,7 +350,33 @@ from `~/.prime/agent/skills/`. The self-contained Prime distribution preserves
 all of each skill's templates, scripts, and references, including the runtime
 protocol needed by multi-agent workflows.
 
-From a checkout of this repository:
+No checkout needed — run this from inside the project you want the skills in:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kterto/my-skills/main/scripts/install-prime-agent.sh | bash
+```
+
+Or make them available to every Prime Agent project for this user:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kterto/my-skills/main/scripts/install-prime-agent.sh | bash -s -- --global
+```
+
+The bootstrap clones (or updates) a managed checkout at `~/.cache/my-skills` and
+then hands off to that checkout's `prime-agent/install.sh`, which owns every
+containment, collision, and rollback guarantee. Flags go after `bash -s --`:
+`--project [PATH]` (the default; `PATH` defaults to the current directory),
+`--global`, `--force`, and `--ref REV` to pin a branch, tag, or commit.
+`MY_SKILLS_PRIME_CHECKOUT_DIR` moves the managed checkout; `MY_SKILLS_REPO_URL`
+changes the clone source.
+
+> Prime Agent discovers skills from `.prime/agent/skills/` and
+> `~/.prime/agent/skills/` directories and has no plugin registry to register a
+> marketplace with, so this bootstrap is the counterpart of Claude Code's
+> `/plugin install`.
+
+With a checkout already on disk, call the installer directly — same code path,
+minus the fetch:
 
 ```bash
 # Make the skills available only in this project.
@@ -359,7 +386,7 @@ From a checkout of this repository:
 ./prime-agent/install.sh --global
 ```
 
-The installer copies the eleven skills and refuses to replace an existing skill
+Either way the eleven skills are copied, and an existing skill is never replaced
 unless `--force` is passed. Restart Prime Agent or run `/reload`, then invoke a
 skill with `/skill:<name>` — for example `/skill:orchestrator`.
 
@@ -452,9 +479,20 @@ To auto-refresh at startup: `/plugin` → Marketplaces tab → enable auto-updat
 
 ## Updating (Prime Agent)
 
-The Prime installer is deliberately local: it copies the checked-out distribution
-rather than fetching a remote version. To ship an update, first merge or pull the
-latest `main` into the checkout, then rerun the installer with `--force`:
+Rerun the bootstrap with `--force`. It updates the managed checkout to the latest
+default-branch revision before reinstalling, so that is the whole update:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kterto/my-skills/main/scripts/install-prime-agent.sh | bash -s -- --force
+# or: … | bash -s -- --global --force
+```
+
+The managed checkout is left detached at the fetched revision, and the bootstrap
+refuses to touch it when it has uncommitted changes — keep a development clone
+somewhere other than `~/.cache/my-skills`.
+
+`prime-agent/install.sh` itself is deliberately local: it copies the checked-out
+distribution rather than fetching one. Driving it by hand means pulling first:
 
 ```bash
 git -C /path/to/my-skills pull --ff-only
