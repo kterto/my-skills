@@ -186,6 +186,15 @@
       ]
     },
     {
+      "name": "spec-driven-eval",
+      "files": [
+        "references/quickstart.md",
+        "references/reference.md",
+        "SKILL.md",
+        "UPSTREAM.md"
+      ]
+    },
+    {
       "name": "validation-fixer",
       "files": [
         "SKILL.md"

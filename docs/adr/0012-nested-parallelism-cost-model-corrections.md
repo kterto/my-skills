@@ -149,7 +149,16 @@ That is Amdahl's law reported accurately, and it is what item 5 attacks upstream
 - Both worked examples in `references/config.md` are recomputed; they remain the regression check.
 - **Not addressed here:** `k × J` — inner joins are serialized, so a `k`-way plan pays `k` full
   join passes. Same defect family (a term that scales with slice count), but fixing it changes
-  Step 3s's barrier discipline rather than a constant. See **ADR-0013**.
+  Step 3s's barrier discipline rather than a constant. See **ADR-0013** — now **Accepted and
+  implemented** (2026-08-19): Step 3s's global leaf barrier is replaced by a per-lane one, the
+  inner joins overlap, and the level is repriced to slowest-of-`k` = `J`, charged once on the
+  first adoption.
+- **Not addressed here:** the *top-level* integration lane. This ADR establishes that an integration
+  slice is serial and is added to the concurrent `max` rather than folded into it, but states that
+  rule only for a split lane's sub-lanes. The run's own integration lane — the one Step 3j dispatches
+  after every other lane is DONE — went on being folded into a bare `max` over lanes in `span_base`,
+  `span_max`, and `M_flat`. See **ADR-0014** for the sub-lane digest field and **ADR-0016** — now
+  **Accepted** (2026-08-19) — for the same shape applied one level up.
 - **Not addressed here:** a re-slice retry when the gate rejects a badly-shaped split. Rejected
   because `SKILL.md` → Step 2p.1 is emphatic that the analysis is one pass — *"this is a
   decision, not an economy"* — and a retry loop on the step whose job is keeping cost visible

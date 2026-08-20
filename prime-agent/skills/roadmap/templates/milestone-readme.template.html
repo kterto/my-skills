@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Milestone — {{id}}</title>
+<style>
+/* ============================================================
+   EDITORIAL DESIGN SYSTEM v1 — Color tokens
+   ============================================================ */
+:root {
+  --bg-page:        #faf9f7;
+  --bg-surface:     #f3f1ee;
+  --bg-overlay:     #ece9e4;
+
+  --text-primary:   #1a1917;
+  --text-secondary: #4a4844;
+  --text-muted:     #8a8680;
+
+  --accent:         #3730a3;
+  --accent-subtle:  #e0e7ff;
+  --accent-focus:   #4f46e5;
+
+  --rule:           #d6d2cb;
+  --rule-heavy:     #b5b0a8;
+
+  --status-success: #166534;
+  --status-success-bg: #dcfce7;
+  --status-active:  #92400e;
+  --status-active-bg: #fef3c7;
+  --status-warning: #9a3412;
+  --status-warning-bg: #ffedd5;
+  --status-danger:  #991b1b;
+  --status-danger-bg: #fee2e2;
+  --status-muted:   #374151;
+  --status-muted-bg: #f3f4f6;
+
+  --font-serif: Georgia, "Times New Roman", serif;
+  --font-sans:  -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                "Helvetica Neue", Arial, sans-serif;
+  --font-mono:  ui-monospace, "SF Mono", "Cascadia Code", "Fira Mono",
+                Menlo, Consolas, monospace;
+
+  --text-xs:   0.75rem;
+  --text-sm:   0.875rem;
+  --text-base: 1rem;
+  --text-lg:   1.125rem;
+  --text-xl:   1.25rem;
+  --text-2xl:  1.5rem;
+  --text-3xl:  2rem;
+
+  --sp-1:  0.25rem;
+  --sp-2:  0.5rem;
+  --sp-3:  0.75rem;
+  --sp-4:  1rem;
+  --sp-6:  1.5rem;
+  --sp-8:  2rem;
+  --sp-12: 3rem;
+  --sp-16: 4rem;
+
+  --measure: 70ch;
+  --line-height-body: 1.65;
+  --line-height-heading: 1.2;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-page:        #141312;
+    --bg-surface:     #1e1c1a;
+    --bg-overlay:     #272420;
+
+    --text-primary:   #f0ece6;
+    --text-secondary: #b8b3ab;
+    --text-muted:     #7a7570;
+
+    --accent:         #818cf8;
+    --accent-subtle:  #1e1b4b;
+    --accent-focus:   #a5b4fc;
+
+    --rule:           #2e2b28;
+    --rule-heavy:     #3d3a36;
+
+    --status-success: #86efac;
+    --status-success-bg: #14532d;
+    --status-active:  #fcd34d;
+    --status-active-bg: #451a03;
+    --status-warning: #fb923c;
+    --status-warning-bg: #431407;
+    --status-danger:  #fca5a5;
+    --status-danger-bg: #450a0a;
+    --status-muted:   #9ca3af;
+    --status-muted-bg: #1f2937;
+  }
+}
+
+/* ============================================================
+   Base reset
+   ============================================================ */
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--line-height-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main {
+  max-width: 58rem;
+  margin: 0 auto;
+  padding: var(--sp-16) var(--sp-8);
+}
+
+@media (max-width: 640px) {
+  main { padding: var(--sp-12) var(--sp-6); }
+}
+
+::selection { background: var(--accent-subtle); color: var(--accent); }
+a { color: var(--accent); }
+
+/* ============================================================
+   Masthead
+   ============================================================ */
+.masthead { margin-bottom: var(--sp-8); }
+
+.masthead__kicker {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--text-muted);
+  margin: 0 0 var(--sp-4);
+}
+
+h1 {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: clamp(2rem, 5vw, 3rem);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  margin: 0;
+  color: var(--text-primary);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-4);
+  text-wrap: balance;
+}
+
+h1 .h1__id {
+  font-family: var(--font-mono);
+  font-size: 0.5em;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--accent);
+  background: var(--accent-subtle);
+  padding: 0.15em 0.5em;
+  border-radius: 6px;
+  align-self: center;
+}
+
+h1 .h1__pill { align-self: center; display: inline-flex; gap: var(--sp-2); align-items: center; }
+
+/* ID / meta header block */
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  padding: var(--sp-4) 0;
+  margin-top: var(--sp-6);
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+
+.meta__id { color: var(--text-secondary); font-weight: 600; }
+
+.meta__fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-left: auto;
+}
+
+.meta__sep { color: var(--rule-heavy); }
+.meta__key { color: var(--text-muted); }
+.meta__val { color: var(--text-secondary); }
+
+.badge {
+  font-family: var(--font-mono);
+  background: var(--accent-subtle);
+  color: var(--accent);
+  font-size: var(--text-xs);
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+/* Release band badge — derived on a milestone: shared band, or [mixed] when
+   descendants differ, hidden when untiered/legacy. Shared tokens → light + dark. */
+.release-badge {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+  background: var(--bg-overlay);
+  color: var(--text-secondary);
+  border: 1px solid var(--rule-heavy);
+  padding: 1px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.release-badge--backlog { color: var(--status-muted); background: var(--status-muted-bg); border-color: transparent; }
+.release-badge--mixed   { color: var(--status-warning); background: var(--status-warning-bg); border-color: transparent; }
+
+/* System band badge — derived on a milestone: shared system, or [cross-cutting] when
+   descendants differ, hidden when untagged/legacy. Orthogonal to the release badge (both
+   may render together). Shared tokens → readable light + dark. */
+.system-badge {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+  background: var(--accent-subtle);
+  color: var(--accent);
+  border: 1px solid var(--rule-heavy);
+  padding: 1px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.system-badge--cross-cutting { color: var(--status-warning); background: var(--status-warning-bg); border-color: transparent; }
+.system-badge[hidden] { display: none; }  /* stay hidden pre-JS (avoids a flash of the empty badge) */
+
+/* Per-release progress + grouping view */
+.release-progress { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-top: var(--sp-4); font-family: var(--font-mono); font-size: var(--text-sm); color: var(--text-secondary); }
+.release-progress__item { display: inline-flex; gap: var(--sp-2); align-items: baseline; }
+.release-progress__band { color: var(--text-muted); }
+.release-group { margin-top: var(--sp-6); }
+.release-group__head { font-family: var(--font-mono); font-size: var(--text-sm); text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin: 0 0 var(--sp-2); }
+
+/* ============================================================
+   Dependency field
+   ============================================================ */
+.depends {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  margin-top: var(--sp-6);
+  font-size: var(--text-sm);
+}
+
+.depends__label {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+}
+
+.depends__val {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+/* ============================================================
+   Section scaffolding
+   ============================================================ */
+.section { margin-top: var(--sp-12); }
+
+/* ============================================================
+   Status pill
+   ============================================================ */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+  line-height: 1.6;
+}
+
+.pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+.pill--success { background: var(--status-success-bg); color: var(--status-success); }
+.pill--active  { background: var(--status-active-bg);  color: var(--status-active);  }
+.pill--warning { background: var(--status-warning-bg); color: var(--status-warning); }
+.pill--danger  { background: var(--status-danger-bg);  color: var(--status-danger);  }
+.pill--muted   { background: var(--status-muted-bg);   color: var(--status-muted);   }
+
+/* ============================================================
+   Collapsible <details>
+   ============================================================ */
+details { border-top: 1px solid var(--rule); }
+
+summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-4) 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: var(--text-primary);
+  user-select: none;
+}
+
+summary::-webkit-details-marker { display: none; }
+
+summary::before {
+  content: "\25B6";
+  font-size: 0.7em;
+  color: var(--accent);
+  transition: transform 0.18s ease;
+  flex: none;
+}
+
+details[open] > summary::before { transform: rotate(90deg); }
+
+summary:focus-visible {
+  outline: 2px solid var(--accent-focus);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+summary .summary__meta {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.details__body {
+  border-left: 3px solid var(--accent);
+  padding-left: var(--sp-6);
+  margin: 0 0 var(--sp-6) 2px;
+}
+
+details[open] > .details__body { animation: detailsfade 0.22s ease both; }
+
+@keyframes detailsfade {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   Phase list
+   ============================================================ */
+.phases { list-style: none; margin: 0; padding: 0; }
+
+.phase {
+  display: grid;
+  grid-template-columns: 2.5rem 1fr auto;
+  align-items: baseline;
+  gap: var(--sp-4);
+  padding: var(--sp-4) 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.phase:last-child { border-bottom: none; }
+
+.phase__seq {
+  font-family: var(--font-serif);
+  font-size: var(--text-2xl);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  line-height: 1;
+}
+
+.phase__body { min-width: 0; }
+
+.phase__id {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+.phase__title {
+  font-family: var(--font-serif);
+  font-size: var(--text-xl);
+  color: var(--text-primary);
+  margin-top: 1px;
+  text-wrap: pretty;
+}
+
+.phase[data-status="superseded"] .phase__title {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+.phase__status { align-self: center; }
+
+/* Empty state */
+.empty {
+  text-align: center;
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: var(--text-lg);
+  color: var(--text-muted);
+  padding: var(--sp-12) var(--sp-4);
+  margin: 0;
+}
+
+/* ============================================================
+   Audit-log table
+   ============================================================ */
+.audit-wrap { overflow-x: auto; }
+
+.audit {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.audit thead th {
+  text-align: left;
+  background: var(--bg-surface);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: var(--sp-2) var(--sp-4);
+  border-bottom: 1px solid var(--rule-heavy);
+  white-space: nowrap;
+}
+
+.audit tbody td {
+  padding: var(--sp-2) var(--sp-4);
+  border-bottom: 1px solid var(--rule);
+  vertical-align: baseline;
+  color: var(--text-secondary);
+}
+
+.audit tbody tr:nth-child(odd)  td { background: var(--bg-page); }
+.audit tbody tr:nth-child(even) td { background: var(--bg-surface); }
+
+.audit tbody tr:last-child td { border-bottom: none; }
+
+.audit .col-when { font-family: var(--font-mono); color: var(--text-muted); white-space: nowrap; }
+.audit .col-who  { font-family: var(--font-mono); color: var(--text-secondary); }
+.audit .col-evidence code { font-size: 0.85em; }
+
+/* ============================================================
+   Inline code / path
+   ============================================================ */
+code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--bg-overlay);
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: var(--text-secondary);
+}
+
+/* ============================================================
+   Breadcrumb nav
+   ============================================================ */
+.crumbs { font-size: 0.85rem; margin: 0 0 1.25rem; color: var(--text-muted, #6b6b6b); }
+.crumbs a { color: var(--accent); text-decoration: none; }
+.crumbs a:hover { text-decoration: underline; }
+.crumbs .sep { opacity: 0.5; margin: 0 0.4em; }
+</style>
+</head>
+<body>
+<main data-id="{{id}}" data-kind="milestone" data-status="{{rollup_status}}" data-release="{{release_derived}}" data-system-state="{{system_state}}" data-system="{{system_derived}}"
+      data-created-at="{{created_at}}" data-updated-at="{{updated_at}}">
+
+  <nav class="crumbs"><a href="../README.html">Roadmap</a><span class="sep">/</span><span>{{id}}</span></nav>
+
+  <!-- ============================================================
+       1. Page header
+       ============================================================ -->
+  <header class="masthead">
+    <p class="masthead__kicker">
+      <span>Milestone</span>
+      <span class="meta__sep">·</span>
+      <span class="badge">cycle 3</span>
+    </p>
+    <h1>
+      <span class="h1__id">{{id}}</span>
+      <span>{{title}}</span>
+      <span class="h1__pill"><span class="pill pill--active">{{rollup_status}}</span></span>
+      <span class="h1__pill"><span class="release-badge" data-release="{{release_derived}}" hidden>[{{release_derived}}]</span></span>
+      <span class="h1__pill"><span class="system-badge" data-system-state="{{system_state}}" data-system="{{system_derived}}" hidden>[{{system_derived}}]</span></span>
+    </h1>
+
+    <!-- 2. ID / meta header block -->
+    <div class="meta">
+      <span class="meta__id">{{id}}</span>
+      <span class="meta__fields">
+        <span><span class="meta__key">created:</span> <span class="meta__val">{{created_at}}</span></span>
+        <span class="meta__sep">·</span>
+        <span><span class="meta__key">updated:</span> <span class="meta__val">{{updated_at}}</span></span>
+        <span class="meta__sep">·</span>
+        <span><span class="meta__key">sequence:</span> <span class="meta__val">{{sequence}}</span></span>
+      </span>
+    </div>
+
+    <!-- 3. Dependencies -->
+    <div class="depends">
+      <span class="depends__label">Depends on</span>
+      <span class="depends__val">{{depends_on}}</span>
+    </div>
+
+    <!-- 3b. Progress: rollup + per-release. One .release-progress__item per band
+         (named bands in releases[] order, then backlog, then untiered).
+         The block is omitted for legacy/untiered milestones. -->
+    <div class="depends">
+      <span class="depends__label">Progress</span>
+      <span class="depends__val">{{done_count}}/{{total_count}} done ({{pct}}%)</span>
+    </div>
+    <div class="release-progress" data-role="per-release-progress">
+      <!-- e.g. <span class="release-progress__item"><span class="release-progress__band">mvp</span> 4/6</span> -->
+      {{per_release_progress}}
+    </div>
+  </header>
+
+  <!-- ============================================================
+       4. Phase list (collapsible, open by default)
+       ============================================================ -->
+  <section class="section">
+    <details open>
+      <summary>Phases <span class="summary__meta">by sequence</span></summary>
+      <div class="details__body">
+        <ol class="phases">
+          <!-- each phase row carries its derived release badge AND its derived system badge
+               (<span class="system-badge">[backend]</span>, "cross-cutting" variant) alongside
+               its status pill; each omitted when untiered/untagged respectively -->
+          {{phase_list_ordered_by_sequence}}
+        </ol>
+      </div>
+    </details>
+  </section>
+
+  <!-- ============================================================
+       4b. Phases by release (grouping / filter view)
+       Rendered only when the milestone has ≥1 tiered story; omitted for
+       legacy/untiered milestones. Groups emitted in releases[] order, then
+       backlog, then an "(untiered)" group.
+       ============================================================ -->
+  <section class="section" data-role="release-grouping">
+    <details>
+      <summary>Phases <span class="summary__meta">by release</span></summary>
+      <div class="details__body">
+        <!-- one .release-group per band: <div class="release-group">
+             <p class="release-group__head">mvp — 4/6</p><ol class="phases">…</ol></div> -->
+        {{phase_groups_by_release}}
+      </div>
+    </details>
+  </section>
+
+  <!-- ============================================================
+       5. Audit log (collapsible, open by default)
+       ============================================================ -->
+  <section class="section">
+    <details open>
+      <summary>Audit log</summary>
+      <div class="details__body">
+        <div class="audit-wrap">
+          <table class="audit">
+            <thead>
+              <tr>
+                <th>when (ISO-8601)</th>
+                <th>status</th>
+                <th>who</th>
+                <th>evidence</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="col-when">{{created_at}}</td>
+                <td><span class="pill">{{rollup_status}}</span></td>
+                <td class="col-who">roadmap-skill</td>
+                <td class="col-evidence">/roadmap plan</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </details>
+  </section>
+
+</main>
+
+<script>
+/* Editorial Design System v1 — milestone
+   Vanilla JS only. No libraries, no inline handlers.
+   Maps the rendered {{rollup_status}} to the correct pill class
+   on the header pill, in case the server injects a literal status. */
+(function () {
+  "use strict";
+
+  var STATUS_TO_TOKEN = {
+    todo: "muted",
+    in_progress: "active",
+    done: "success",
+    blocked: "danger",
+    superseded: "muted"
+  };
+
+  function syncHeaderPill() {
+    var root = document.querySelector('main[data-kind="milestone"]');
+    if (!root) return;
+    var status = root.getAttribute("data-status");
+    var token = STATUS_TO_TOKEN[status];
+    if (!token) return; // unresolved {{rollup_status}} token — leave default
+    var pill = document.querySelector(".h1__pill .pill");
+    if (pill) {
+      pill.className = "pill pill--" + token;
+      pill.textContent = status;
+    }
+  }
+
+  function syncReleaseBadge() {
+    var root = document.querySelector('main[data-kind="milestone"]');
+    if (!root) return;
+    var release = root.getAttribute("data-release"); // derived band or "mixed"
+    var badge = document.querySelector(".release-badge");
+    if (!badge) return;
+    // null / absent / unresolved token → untiered milestone, show no badge (legacy-safe)
+    if (!release || release === "null" || release === "untiered" || release === "{{" + "release_derived}}") {
+      badge.hidden = true;
+      return;
+    }
+    badge.hidden = false;
+    badge.textContent = "[" + release + "]";
+    if (release === "backlog") badge.classList.add("release-badge--backlog");
+    else if (release === "mixed") badge.classList.add("release-badge--mixed");
+  }
+
+  function syncSystemBadge() {
+    var root = document.querySelector('main[data-kind="milestone"]');
+    if (!root) return;
+    var badge = document.querySelector(".system-badge");
+    if (!badge) return;
+    // State is carried SEPARATELY from the configured name so a real system named
+    // "cross-cutting"/"null"/"untagged" is never mistaken for a synthetic state.
+    // data-system-state ∈ none | named | cross-cutting; data-system holds the raw
+    // configured name (meaningful only when state === "named"). Never infer state
+    // from the name string.
+    var state = root.getAttribute("data-system-state");
+    if (state === "named") {
+      badge.hidden = false;
+      badge.textContent = "[" + root.getAttribute("data-system") + "]"; // textContent = injection-safe
+    } else if (state === "cross-cutting") {
+      badge.hidden = false;
+      badge.textContent = "[cross-cutting]";
+      badge.classList.add("system-badge--cross-cutting");
+    } else {
+      // none / absent / unresolved template token → untagged, no badge (legacy-safe)
+      badge.hidden = true;
+    }
+  }
+
+  function init() { syncHeaderPill(); syncReleaseBadge(); syncSystemBadge(); }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+})();
+</script>
+</body>
+</html>

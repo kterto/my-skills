@@ -24,3 +24,5 @@
 # The committed _sample-report.html fixture (used by scripts/validate-pr-review-skill.sh) stays.
 /docs/reviews/*.html
 !/docs/reviews/_sample-report.html
+
+notes.md

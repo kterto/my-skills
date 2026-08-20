@@ -1,12 +1,13 @@
 # my-skills
 
-Authored agent skills for [Claude Code](https://code.claude.com) and [opencode](https://opencode.ai), packaged so the same skill bodies can be shared across projects, with colleagues, and the community.
+Authored agent skills for [Claude Code](https://code.claude.com), [opencode](https://opencode.ai), and [Prime Agent](https://github.com/PrimeIntellect-ai/prime-agent), packaged so the same workflows can be shared across projects, with colleagues, and the community.
 
 ## Skills
 
 | Skill | What it does |
 |---|---|
 | `clean-code-gates` | Runs Clean Code quality gates (G1–G7: coverage, complexity, length/nesting, naming, no-comments, mutation, dependency-structure) and emits an agnostic JSON + Markdown report. Portable across stacks (node-ts, dart-flutter). |
+| `spec-driven-eval` | Scores a spec-driven implementation requirement by requirement, with separately evidenced implementation and test coverage grades. |
 | `commit-pr` | Stage, commit, push the current branch, and open a PR targeting `main`. Confirms before any remote mutation. |
 | `validation-fixer` | Routes recorded user-validation bugs through a chosen framework (superpowers / gsd / orchestrator) and tracks each fix in-file; orchestrator items are severity-routed (fixed inline, batched, or run dedicated). |
 | `simplify` | Reviews changed code across five cleanup angles (reuse, simplification, efficiency, altitude, quotable convention violations) and applies the fixes in the working tree. Quality only — it does not hunt for correctness bugs. Fans the angles out as concurrent subagents when the host allows, single-pass inline otherwise. Never commits. |
@@ -106,7 +107,7 @@ Stored in `.orchestrator/config.json`; overridable per-run via CLI args.
 
 ### Dependencies
 
-- **spec-driven-eval** skill — used at `READY_TO_COMMIT` to evaluate the deliverable against the original spec. Bootstrap checks availability and offers to install it. The pipeline degrades gracefully if the skill is absent (eval step is skipped with a warning).
+- **spec-driven-eval** skill — used at `READY_TO_COMMIT` to evaluate the deliverable against the original spec. It ships in this marketplace (vendored, CC-BY-4.0 — see [its `UPSTREAM.md`](./plugins/my-skills/skills/spec-driven-eval/UPSTREAM.md)), so installing the plugin satisfies it on all three hosts. Bootstrap B2 resolves the bundled copy first, then any separately installed one, and only offers the upstream `npx` install when neither resolves. The pipeline degrades gracefully if the skill is absent (eval step is skipped with a warning).
 - **simplify** skill — the mandatory pre-review cleanup pass at sequential Step 3 (scoped `--plan <FEAT-id>`) and at the parallel outer join Step 3j (scoped to the union diff, once per run). It ships in this marketplace, so installing the plugin satisfies it on both hosts; a host-provided `simplify` satisfies it equally. Bootstrap B2 records availability, and both steps degrade explicitly — printing `SIMPLIFY skipped — no simplify skill available` — rather than skipping silently or having the orchestrator do the pass itself.
 
 The two scan steps (Bootstrap B1's context digest, Step 2p.1's slicing analysis) spawn a **read-only scan subagent**, resolved per host in order: `Explore` → `explore` → `general-purpose` / `general`. If none exists, the scan runs inline in the orchestrator's own context rather than failing — a scan-subagent failure is never a parallelization verdict.
@@ -305,8 +306,16 @@ my-skills/
 │           ├── roadmap/SKILL.md
 │           ├── product-manager/SKILL.md
 │           ├── pr-review-report/SKILL.md
-│           └── explain-codebase/SKILL.md
+│           ├── explain-codebase/SKILL.md
+│           └── spec-driven-eval/    # vendored, CC-BY-4.0 — see its UPSTREAM.md
+├── prime-agent/               # self-contained Prime Agent distribution
+│   ├── skills/                 # generated — the eleven Prime-compatible skill directories
+│   ├── overlays/               # per-skill Prime adaptations the generator applies
+│   ├── tests/                  # install + build-parity tests (npm test)
+│   ├── install.sh              # project/global installer
+│   └── README.md
 ├── scripts/
+│   ├── build-prime-agent.mjs     # build prime-agent/skills from the marketplace skills
 │   ├── generate-opencode-skill-index.mjs
 │   ├── install-opencode.sh
 │   └── sync-agents.sh            # refresh a project's orchestrator agent copies
@@ -332,6 +341,27 @@ A local checkout works too:
 ```
 
 Skills are then invocable as `/my-skills:clean-code-gates`, `/my-skills:commit-pr`, `/my-skills:orchestrator`, `/my-skills:roadmap`, `/my-skills:product-manager`, etc.
+
+## Install (Prime Agent)
+
+Prime Agent loads project skills from `.prime/agent/skills/` and personal skills
+from `~/.prime/agent/skills/`. The self-contained Prime distribution preserves
+all of each skill's templates, scripts, and references, including the runtime
+protocol needed by multi-agent workflows.
+
+From a checkout of this repository:
+
+```bash
+# Make the skills available only in this project.
+./prime-agent/install.sh --project .
+
+# Or make them available to every Prime Agent project for this user.
+./prime-agent/install.sh --global
+```
+
+The installer copies the eleven skills and refuses to replace an existing skill
+unless `--force` is passed. Restart Prime Agent or run `/reload`, then invoke a
+skill with `/skill:<name>` — for example `/skill:orchestrator`.
 
 ## Install (opencode)
 
@@ -420,6 +450,23 @@ This plugin **omits `version`** in `plugin.json`, so each pushed commit is treat
 
 To auto-refresh at startup: `/plugin` → Marketplaces tab → enable auto-update (off by default for third-party marketplaces).
 
+## Updating (Prime Agent)
+
+The Prime installer is deliberately local: it copies the checked-out distribution
+rather than fetching a remote version. To ship an update, first merge or pull the
+latest `main` into the checkout, then rerun the installer with `--force`:
+
+```bash
+git -C /path/to/my-skills pull --ff-only
+/path/to/my-skills/prime-agent/install.sh --global --force
+# or: /path/to/my-skills/prime-agent/install.sh --project /path/to/project --force
+```
+
+Restart Prime Agent or run `/reload` after updating. Existing sessions retain
+already-loaded skill instructions until reloaded. The package in `prime-agent/`
+can also be published as `@kterto/my-skills-prime-agent`; it includes the
+`skills/` directory for package-based Prime skill discovery.
+
 ## Updating (opencode)
 
 The installer is a **global, machine-wide** wire-up (`~/.config/opencode/`), not per-project — run it once and every opencode project on the machine sees the skills. It installs from the **remote**, not your local working copy, so a skill change reaches opencode only after it lands on the remote default branch. To ship an edit:
@@ -463,10 +510,24 @@ Edit skills here and have changes live in Claude Code immediately, with no reins
 
 This symlinks each `plugins/my-skills/skills/<name>` into `~/.claude/skills/<name>` (backing up any existing real directory to `<name>.bak-<timestamp>` — never deleting). After running, `/reload-plugins` in Claude Code.
 
-Regenerate the opencode remote index whenever skill files are added, removed, or renamed:
+Regenerate the derived trees whenever skill files are added, removed, or renamed:
 
 ```bash
-node scripts/generate-opencode-skill-index.mjs
+node scripts/generate-opencode-skill-index.mjs   # opencode remote index
+node scripts/build-prime-agent.mjs               # prime-agent/skills
+```
+
+`prime-agent/skills/` is **generated**, never hand-edited: the builder copies each
+marketplace skill and applies its Prime adaptation from `prime-agent/overlays/<skill>.json`
+(a preamble to insert, Claude-only frontmatter keys to drop, and exact-string
+replacements with the occurrence count each one expects). A skill with no overlay,
+a replacement whose count no longer matches, or a hand-edited file under
+`prime-agent/skills/` is a **hard build failure** — that is how a plugin-side edit
+that invalidates a Prime adaptation gets caught. Verify with:
+
+```bash
+node scripts/build-prime-agent.mjs --check
+cd prime-agent && npm test    # install + parity tests
 ```
 
 While symlinked for development, **do not also `/plugin install` this marketplace on the same machine** — you'd load each skill twice (personal `/name` and namespaced `/my-skills:name`).
@@ -484,3 +545,15 @@ claude --plugin-dir ./plugins/my-skills
 ## License
 
 [MIT](./LICENSE) © Kainã Terto
+
+### Third-party skills
+
+`spec-driven-eval` is **not** authored here. It is vendored from
+[`@tech-leads-club/agent-skills`](https://github.com/tech-leads-club/agent-skills)
+by [Waldemar Neto](https://github.com/waldemarnt) under
+[CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/). The marketplace plugin
+carries it verbatim; the opencode override port and the generated Prime Agent port
+carry it with host adaptations only — a compatibility preamble prepended and
+Claude-only frontmatter keys dropped, both recorded in the ports themselves. The
+MIT license above does not cover it; see [`plugins/my-skills/skills/spec-driven-eval/UPSTREAM.md`](./plugins/my-skills/skills/spec-driven-eval/UPSTREAM.md)
+for provenance and the re-sync procedure.

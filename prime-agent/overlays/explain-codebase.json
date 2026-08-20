@@ -1,0 +1,30 @@
+{
+  "skill": "explain-codebase",
+  "dropFrontmatterKeys": [
+    "allowed-tools"
+  ],
+  "replacements": [
+    {
+      "find": "':(exclude).claude'",
+      "replace": "':(exclude).claude' ':(exclude).prime'",
+      "count": 1,
+      "why": "Prime Agent writes host-runtime scaffolding into .prime/; without the exclude the tree reads permanently dirty."
+    },
+    {
+      "why": "bug-11: the Phase 2 fan-out named Claude/opencode subagent tools; only the dispatch mechanism changes, every bound and contract below is preserved.",
+      "count": 1,
+      "find": "Dispatch **one subagent per fan-out unit** — `Agent` (Claude, `subagent_type: Explore` or\n`general-purpose`) / `task` (opencode) — but **in bounded waves, never all at once**:",
+      "replace": "Dispatch **one RLM child per fan-out unit** — `handle = await rlm(prompt, name=\"<unit>\")`,\nper the Prime Agent fan-out protocol above — but **in bounded waves, never all at once**:"
+    },
+    {
+      "why": "bug-11: the dual-host paragraph named the wrong hosts, and its final sentence about allowed-tools is false in the Prime port (the overlay drops the key).",
+      "count": 1,
+      "find": "**Dual-host.** This single `SKILL.md` serves both Claude Code and opencode via the\nin-place dual-host pattern — there is **no** `.opencode/skills/explain-codebase/` override\nport (a read-only, host-agnostic skill needs none). Where a host construct differs, both\nvariants are named inline: `AskUserQuestion` (Claude) / `question` (opencode);\n`Agent` (Claude) / `task` (opencode) with a `subagent_type`. The `allowed-tools`\nfrontmatter lists both host variants of every tool the body uses.",
+      "replace": "**Host.** This is the Prime Agent port of a skill whose source serves several hosts from\none `SKILL.md`. Where the body below names a host construct, use the Prime equivalent:\nask the user normally in the conversation instead of `AskUserQuestion`/`question`, and\nadmit an RLM child with `rlm()` instead of `Agent`/`task` with a `subagent_type`, per the\nfan-out protocol above. This port carries **no** `allowed-tools` frontmatter — Prime Agent\ndoes not read one — so the tools the body uses are the ordinary shell, file, and Python\ntools the session already has. The skill stays read-only on the target either way."
+    }
+  ],
+  "insertAfterFrontmatter": [
+    "preamble.md",
+    "protocol.explain-codebase.md"
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "skill": "pr-review-report",
+  "insertAfterFrontmatter": [
+    "preamble.md"
+  ],
+  "replacements": [
+    {
+      "why": "bug-13: a bare repo-relative ADR path that resolves to nothing in an installed skill tree.",
+      "count": 1,
+      "find": "`docs/adr/0002-review-state-authoritative-writer.md`.",
+      "replace": "[ADR-0002 — Authoritative review-state writer & merge protocol](https://github.com/kterto/my-skills/blob/main/docs/adr/0002-review-state-authoritative-writer.md)."
+    }
+  ]
+}

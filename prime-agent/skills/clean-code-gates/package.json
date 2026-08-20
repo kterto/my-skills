@@ -1,0 +1,8 @@
+{
+  "name": "clean-code-gates",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "bin": { "clean-code-gates": "bin/gates.cjs" },
+  "scripts": { "test": "node --test" }
+}

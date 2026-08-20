@@ -1,0 +1,82 @@
+// Immutable-snapshot materialization tests (arch-1). The snapshot must copy working-tree
+// bytes ONCE, refuse a symlink at copy time (no-follow), and refuse containment escapes — so
+// subagents read frozen bytes the analyzed repo cannot ABA-swap.
+// Run: node --test   (or: node __tests__/snapshot-scope.test.cjs)
+const { test } = require("node:test");
+const assert = require("node:assert");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const { execFileSync } = require("node:child_process");
+const { materializeSnapshot, gitBlobId, verifyAgainstHead } = require("../references/snapshot-scope.cjs");
+
+function tmpTree() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "snap-root-"));
+  const dest = fs.mkdtempSync(path.join(os.tmpdir(), "snap-dest-"));
+  fs.mkdirSync(path.join(root, "src"));
+  fs.writeFileSync(path.join(root, "src", "a.ts"), "export const a = 1;\n");
+  fs.writeFileSync(path.join(root, "src", "with space.ts"), "spaced\n");
+  return { root, dest };
+}
+
+test("copies vetted file bytes into the snapshot (paths with spaces survive)", () => {
+  const { root, dest } = tmpTree();
+  const res = materializeSnapshot(root, ["src/a.ts", "src/with space.ts"], dest);
+  assert.deepStrictEqual(res.skipped, []);
+  assert.strictEqual(fs.readFileSync(path.join(dest, "src/a.ts"), "utf8"), "export const a = 1;\n");
+  assert.strictEqual(fs.readFileSync(path.join(dest, "src/with space.ts"), "utf8"), "spaced\n");
+});
+
+test("a symlink is refused at copy time (no-follow)", () => {
+  const { root, dest } = tmpTree();
+  fs.writeFileSync(path.join(os.tmpdir(), "snap-secret-target"), "SECRET");
+  fs.symlinkSync(path.join(os.tmpdir(), "snap-secret-target"), path.join(root, "src", "evil.ts"));
+  const res = materializeSnapshot(root, ["src/evil.ts"], dest);
+  assert.deepStrictEqual(res.copied, [], "symlink must not be copied");
+  assert.ok(res.skipped.some((s) => s.path === "src/evil.ts"), "symlink must be skipped");
+  assert.ok(!fs.existsSync(path.join(dest, "src/evil.ts")), "no snapshot file for a symlink");
+});
+
+test("a symlinked PARENT directory is refused, not followed (sec-1)", () => {
+  const { root, dest } = tmpTree();
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), "snap-outside-"));
+  fs.writeFileSync(path.join(outside, "secret.ts"), "OUTSIDE SECRET");
+  fs.symlinkSync(outside, path.join(root, "linkdir")); // symlinked ancestor
+  const res = materializeSnapshot(root, ["linkdir/secret.ts"], dest);
+  assert.deepStrictEqual(res.copied, [], "must not read through a symlinked parent");
+  assert.ok(res.skipped.some((s) => s.path === "linkdir/secret.ts"));
+  assert.ok(!fs.existsSync(path.join(dest, "linkdir/secret.ts")));
+});
+
+test("absolute / parent-traversal paths are refused", () => {
+  const { root, dest } = tmpTree();
+  const res = materializeSnapshot(root, ["/etc/passwd", "../outside.ts"], dest);
+  assert.deepStrictEqual(res.copied, []);
+  assert.strictEqual(res.skipped.length, 2);
+  for (const s of res.skipped) assert.strictEqual(s.reason, "escapes containment");
+});
+
+test("snapshot copies are read-only regular files (immutable)", () => {
+  const { root, dest } = tmpTree();
+  materializeSnapshot(root, ["src/a.ts"], dest);
+  const st = fs.statSync(path.join(dest, "src/a.ts"));
+  assert.ok(st.isFile());
+  assert.strictEqual(st.mode & 0o200, 0, "snapshot copy must not be writable");
+});
+
+test("gitBlobId matches git hash-object", () => {
+  const buf = Buffer.from("hello world\n");
+  const real = execFileSync("git", ["hash-object", "--stdin"], { input: buf }).toString().trim();
+  assert.strictEqual(gitBlobId(buf), real);
+});
+
+test("verifyAgainstHead: clean when bytes equal HEAD, dirty when they differ (arch-1)", () => {
+  const { root, dest } = tmpTree();
+  materializeSnapshot(root, ["src/a.ts"], dest);
+  const headMatch = { "src/a.ts": gitBlobId(fs.readFileSync(path.join(dest, "src/a.ts"))) };
+  assert.deepStrictEqual(verifyAgainstHead(dest, ["src/a.ts"], headMatch), { clean: true, dirty: [] });
+  // A HEAD map that does not contain this path (or a different blob) → dirty.
+  const res = verifyAgainstHead(dest, ["src/a.ts"], { "src/a.ts": "0".repeat(40) });
+  assert.strictEqual(res.clean, false);
+  assert.deepStrictEqual(res.dirty, ["src/a.ts"]);
+});
