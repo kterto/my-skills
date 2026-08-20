@@ -31,6 +31,6 @@
     "my-skills"
   ],
   "scripts": {
-    "test": "bash tests/install.sh && bash tests/parity.sh"
+    "test": "bash tests/install.sh && bash tests/bootstrap.sh && bash tests/parity.sh"
   }
 }

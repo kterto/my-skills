@@ -5,7 +5,22 @@ the bundled scripts, templates, tests, and references required by each skill.
 
 ## Install
 
-From a checkout of this repository:
+No checkout required — run this from inside the project you want the skills in:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kterto/my-skills/main/scripts/install-prime-agent.sh | bash
+
+# or for every Prime Agent project of this user
+curl -fsSL https://raw.githubusercontent.com/kterto/my-skills/main/scripts/install-prime-agent.sh | bash -s -- --global
+```
+
+`scripts/install-prime-agent.sh` clones or updates a managed checkout at
+`~/.cache/my-skills` (override with `MY_SKILLS_PRIME_CHECKOUT_DIR`) and then runs
+the installer below from it. It accepts `--project [PATH]` (the default, with
+`PATH` defaulting to the current directory), `--global`, `--force`, and
+`--ref REV`; rerun it with `--force` to update.
+
+From a checkout of this repository, call the installer directly instead:
 
 ```bash
 # install for the current project
@@ -47,7 +62,7 @@ From a repository checkout:
 ```bash
 node ../scripts/build-prime-agent.mjs           # rebuild skills/
 node ../scripts/build-prime-agent.mjs --check   # fail if skills/ is out of date
-npm test                                        # installer + build-parity tests
+npm test                                        # installer + bootstrap + build-parity tests
 ```
 
 Editing a file under `skills/` directly is a bug: the next build overwrites it,
