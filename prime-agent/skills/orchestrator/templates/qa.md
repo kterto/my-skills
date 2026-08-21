@@ -104,15 +104,72 @@ G2, G4, G5, G7, and format-check commands may be wired as bake-in coder-loop gat
 
 G1 (coverage) and G6 (mutation) remain full QA-owned gates with no carve-out — they need full-feature surface and aggregate scoring that per-phase runs can't produce.
 
+### Gate configuration — where the numbers come from (normative)
+
+**Every numeric gate threshold a plan, a role prompt, or a report may cite comes from a
+`.cleancode-gates.json`, and from nowhere else. The governing file is the one in the directory the
+gate command runs in** — the runner loads it from its working directory, not by walking up to the repo
+root. So in a monorepo with per-package configs (`apps/*/.cleancode-gates.json`), run each gate once
+per package **from that package's directory**, against that package's own file, with its `roots`,
+`exclude` and `baseline` read relative to that directory. **A repo-root aggregate sitting beside
+per-package files governs nothing**: its `roots` describe a layout that does not exist at the root, so
+every changed file matches nothing, every gate scopes to an empty set, and the report renders green —
+the exact false pass these gates exist to prevent. Check the project's `PROJECT-CONTEXT.md`, which
+records which config is authoritative when more than one exists. This file is written and owned by the `clean-code-gates` skill; this template never restates a
+threshold, and neither does any plan, any role prompt, or any report. A number written in prose is a
+number that drifts from the one the tool enforces — that is how the same diff came to hold a passing
+tester report, a blocking reviewer finding, and a failing QA gate at the same time.
+
+Resolve it like this, per gate:
+
+1. **Pick the stack.** `stacks` is keyed by stack name (`node-ts`, `dart-flutter`, …). A changed file
+   belongs to the stack whose `roots` prefix it — the path **equals** a root, or **starts with**
+   `root + '/'` — evaluated relative to the config's own directory; on overlapping roots the longest
+   match wins. A plan touching two stacks runs each gate once per stack, over that stack's own changed
+   files, against that stack's own thresholds.
+   **A changed file that prefixes no stack's `roots` is out of scope for every gate.** That is a
+   legitimate outcome for a config file, a script, or a manifest — but it must be **stated**: list
+   those paths in the report under *ungated (outside all configured roots)*. Never let them pass as
+   gated. If the whole changed set lands there, the gates ran over nothing: report that as
+   `MISSING_TOOL` with the resolved config path, not as a pass.
+2. **Apply the whole exemption filter before any gate runs — there are two mechanisms and they are
+   not interchangeable.** `stacks.<stack>.exclude` is **stack-wide**: a pattern there leaves *every*
+   gate's scope, and it is only for files no gate should ever see (generated, vendored, test files).
+   `gates.<id>.exempt` is the **per-gate** carve-out, and it is what the live configs actually use for
+   grandfathered files — one of them exempts 47 files from `G2` alone while those files stay fully
+   gated by `G1`. A changed file is gated by gate `<id>` only if it survives both. Putting a
+   grandfathered file in `exclude` silently drops it from coverage, mutation, and dependency checks
+   too, which is a far larger hole than the one it was meant to close.
+3. **Read `gates.<id>.thresholds`.** Use the keys **exactly as written for that stack** — they are the
+   underlying tool's own option names and they differ between stacks (node-ts G2 uses `complexity`,
+   `maxDepth`, `maxLinesPerFunction`, `maxParams`, `maxStatements`; dart-flutter G2 uses
+   `cyclomatic-complexity`, `maximum-nesting-level`, `number-of-parameters`, `source-lines-of-code`).
+   Never translate a key. **And never read an absent key, gate, or `thresholds` object as
+   "ungated":** `clean-code-gates` deep-merges its own built-in defaults *underneath* this file, so
+   anything the file omits is still enforced by the tool, at the tool's default value. Report such a
+   gate `MISSING_TOOL` with the note *threshold not configured — tool default applies*, never as a
+   pass, and never publish a number for it.
+4. **`baseline`** names that stack's grandfather manifest, if any (see the baseline mechanism below).
+   Note it is consumed by **the project's own lint command**, not by the gate runner — a plausible
+   path in that key is not evidence the mechanism is wired. Confirm against `PROJECT-CONTEXT.md`.
+
+`PROJECT-CONTEXT.md` remains authoritative for the **commands** — what to run for each gate on each
+layer. `.cleancode-gates.json` is authoritative for the **thresholds, roots, exclusions, and
+baseline**. Neither restates the other.
+
+**If `.cleancode-gates.json` is absent or unreadable, report every numeric gate as `MISSING_TOOL` and
+stop.** Do not fall back to remembered defaults: a gate enforcing a number nobody configured is worse
+than a gate that reports it cannot run, because it looks authoritative.
+
 ### G1 — Test coverage threshold (F.I.R.S.T. — `Self-Validating`)
 
-Parse coverage output from the test suite commands. Require **statements ≥ 85%, branches ≥ 80%** for files changed in this plan (compute changed file list via `git diff --name-only $(git merge-base HEAD origin/main)..HEAD`). Untested changed file = automatic fail.
+Parse coverage output from the test suite commands. Require the stack's `G1.thresholds`, whatever keys it defines, for files changed in this plan. **A threshold whose metric the coverage tool does not emit is `UNMEASURED`, not a failure** — `flutter test --coverage` writes line records and zero branch records, so `branches` cannot be scored on `dart-flutter` from that instrument. Report the key as `UNMEASURED` with its stack, and gate on the keys that were actually measured; scoring an absent denominator as a miss fails every plan on that stack forever, which reads as a broken gate rather than a real signal. (compute changed file list via `git diff --name-only $(git merge-base HEAD origin/main)..HEAD`). Untested changed file = automatic fail.
 
-Exempt from G1's per-file gate: generated code, bootstrap/entrypoint files, static declaration-only files (no runtime branches), and test story files — as listed in the Commands section of `PROJECT-CONTEXT.md` or by file-pattern convention. The list is bounded — adding files to it requires an architect plan, not a comment. Note any carve-outs in the gate report.
+Exempt from G1's per-file gate: whatever the stack's `exclude` globs remove, plus whatever `gates.G1.exempt` lists. A file that needs a G1 carve-out belongs in `gates.G1.exempt` — not in `exclude`, which would drop it from every other gate as well. The list is bounded — widening it requires an architect plan, not a comment. Note any carve-outs in the gate report.
 
 ### G2 — Cyclomatic complexity
 
-Run complexity analysis using the linting tool configured for each app layer (per Commands section of `PROJECT-CONTEXT.md`). Gate: cyclomatic complexity ≤ 8, max nesting depth ≤ 2, max function length ≤ 30 lines, max params ≤ 4, max statements ≤ 15. Report `MISSING_TOOL` if the complexity rules are not yet configured.
+Run complexity analysis using the linting tool configured for each app layer (per Commands section of `PROJECT-CONTEXT.md`). Gate: the stack's `G2.thresholds`, every key it defines, at the values it defines. Report `MISSING_TOOL` if the complexity rules are not yet configured.
 
 #### Baseline grandfather mechanism (G2 + G4, all stacks)
 
@@ -127,9 +184,10 @@ Files that violated G2/G4 prior to a gate landing may be tracked in a baseline m
 
 The mechanism unblocks gate landing while debt is tracked + ratcheted back to zero over time. It is not a permanent escape hatch.
 
-### G3 — Method/function length & nesting (≤ 2 indents)
+### G3 — Method/function length & nesting
 
-Subsumed by G2 rules above. Any function exceeding the configured length or depth = fail.
+Subsumed by G2 — reported under G2, no separate verdict. Naming a "length" or "depth" threshold here
+would require translating G2's per-stack key names, which the resolution rule forbids.
 
 ### G4 — Naming convention (intent-revealing)
 
@@ -157,9 +215,9 @@ Any non-allow-listed match = fail with file:line list.
 
 ### G6 — Mutation testing (test-quality verification)
 
-Run only on files changed in this plan (avoid full-suite cost). Use the mutation testing tool configured for the project (per Commands section of `PROJECT-CONTEXT.md`). Gate: mutation score ≥ 70% aggregate across the changed-file set. Report `MISSING_TOOL` if mutation testing is not yet wired. Skip a stack's mutation run if no changed files exist for it.
+Run only on files changed in this plan (avoid full-suite cost). Use the mutation testing tool configured for the project (per Commands section of `PROJECT-CONTEXT.md`). Gate: the stack's `G6.thresholds.mutationScore`, aggregate across the changed-file set. Report `MISSING_TOOL` if mutation testing is not yet wired. Skip a stack's mutation run if no changed files exist for it.
 
-Mutation threshold is aggregate across the changed-file set, not per-file. Per-file scores are advisory; aggregate ≥ 70% is the gate.
+The mutation threshold is aggregate across the changed-file set, not per-file. Per-file scores are advisory; the aggregate is the gate.
 
 ### G7 — Dependency structure (depend on abstractions)
 
@@ -191,6 +249,19 @@ Result: {PASS | FAIL | MISSING_TOOL | WARN} — {metric value vs threshold, or v
 ## Step 5 — Create the QA report file
 
 Emit the artifact per `.orchestrator/artifact-format.md`. **Always write the `.md`** (canonical, frontmatter below). Include the **Related** region in the `.md` body — a relative link to the plan, per `.orchestrator/artifact-format.md` → Related navigation. When `output_format=html`, render the paired view by running `node .orchestrator/render-artifact.cjs plans/qa/QA-{NNN}-{slug}.md` (it carries the Related links into the `.html`) — do NOT hand-write HTML. The stdout summary below is identical regardless of format.
+
+**Filling the gate table.** The `Threshold` column renders from `.cleancode-gates.json`, per stack —
+print the configured values, never remembered ones, and name the stack in the row when a plan spans
+two. A `Metric` cell must paste back into the config unchanged: write the config's own key names,
+never `fn-len`, `stmts`, or `depth`. A filled row looks like:
+
+```
+| G2 Complexity (dart-flutter) | cyclomatic-complexity / maximum-nesting-level / number-of-parameters / source-lines-of-code | 8 / 2 / 4 / 30 | ✅ |
+```
+
+G8 is the one row whose threshold is stated in this template: it is a plan-level signal computed from
+the plans tree, not a code gate, so it has no config home. G5's `≤ 5 lines` banner rule is the same
+deliberate exception — `G5` carries a tool and no `thresholds` object in either stack.
 
 Canonical path: `plans/qa/QA-{NNN}-{slug}.md`
 
@@ -227,11 +298,11 @@ type_errors: {N}
 
 | Gate | Metric | Threshold | Result |
 |------|--------|-----------|--------|
-| G1 Coverage (changed files) | stmts / branches | ≥85% / ≥80% | ✅ / ❌ / MISSING_TOOL |
-| G2 Complexity | cyclomatic / depth / fn-len / params / stmts | ≤8 / ≤2 / ≤30 / ≤4 / ≤15 | ✅ / ❌ / MISSING_TOOL |
+| G1 Coverage (changed files) | stmts / branches | {rendered from `G1.thresholds`} | ✅ / ❌ / MISSING_TOOL |
+| G2 Complexity | {the keys this stack's `G2.thresholds` defines} | {their configured values} | ✅ / ❌ / MISSING_TOOL |
 | G4 Naming | intent-revealing | 0 violations | ✅ / ❌ |
 | G5 No comments | inline comment audit | 0 violations | ✅ / ❌ |
-| G6 Mutation score (changed files) | killed / total | ≥70% | ✅ / ❌ / MISSING_TOOL |
+| G6 Mutation score (changed files) | killed / total | {rendered from `G6.thresholds.mutationScore`} | ✅ / ❌ / MISSING_TOOL |
 | G7 Dependency structure | layering, cycles | 0 violations | ✅ / ❌ / MISSING_TOOL |
 | G8 Rework ratio | (REQUEST_CHANGES + FIX/QAF) / total CR | ≤0.5 | ✅ / ⚠️ HIGH_REWORK |
 

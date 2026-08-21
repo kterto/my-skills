@@ -100,6 +100,25 @@ skill gracefully. Do **not** try to install a skill from an external marketplace
 
 Record availability for the current run.
 
+**Check for a `.cleancode-gates.json` governing this project.** It is the single source of every
+numeric gate threshold — the tester reads `G1` from it, QA reads `G1`/`G2`/`G6` from it, and neither
+the architect nor any plan may author a threshold anywhere else. Look at the repo root **and at each
+package root** (`apps/*/`, `packages/*/`): the runner loads the config from the directory it runs in,
+so a monorepo whose packages each carry one is the normal case, and a repo-root aggregate sitting
+beside per-package files governs nothing. Record which file governs which package in
+`PROJECT-CONTEXT.md`.
+
+It is written and owned by the `clean-code-gates` skill, and its **first ordinary run writes it** from
+the stacks it detects. `--scaffold` is advice-only and creates nothing — never cite it as the way to
+get the file. If none is found, say so and offer to run `clean-code-gates` once against the project to
+materialize one.
+
+Do **not** block bootstrap and do **not** hand-write a default file: the roles degrade explicitly on
+its absence (the tester reports `BELOW_FLOOR` naming the path it looked for, QA reports every numeric
+gate `MISSING_TOOL`), which is the honest outcome — a threshold nobody configured looks authoritative
+and is not. When a config **is** present and `PROJECT-CONTEXT.md` also states a coverage, complexity,
+or mutation number, print those lines and say the config supersedes them.
+
 Check for a resolvable **`simplify`** skill the same way, and record its availability too. It ships with this Prime Agent distribution, so `install.sh` already satisfies it; a session that provides its own `simplify` satisfies it equally. When none resolves, print one line saying the pre-review simplification pass will be skipped — do **not** offer to install anything and do **not** block bootstrap. Steps 3 and 3j degrade explicitly on it.
 
 ### B3 — Materialize
@@ -1273,7 +1292,7 @@ Read the test report file at `test_report_path` (expect `.md` or `.html` extensi
 
   If `output_format=html`, run Step 7c (progress timeline render).
 
-- If `BELOW_FLOOR` → surface a soft warning to the user (coverage floor is advisory, not a hard stop — reviewer and qa still run), then continue to Step 4 (Reviewer):
+- If `BELOW_FLOOR` → surface a soft warning to the user (the tester's floor is not a hard stop here — reviewer and qa still run — but since P3 it is the **same** measurement QA hard-fails on, so a BELOW_FLOOR run is now expected to reach a G1 block at Step 5 rather than merely at risk of one), then continue to Step 4 (Reviewer):
 
   ```
   ORCHESTRATOR — tester BELOW_FLOOR (soft warning)
@@ -1799,7 +1818,7 @@ ORCHESTRATOR — pipeline complete
 Spec: {spec_path}
 Final plan: {plan_id}
 Final report: plans/final/FINAL-{NNN}-{slug}.md
-Tester: {tester_status} (coverage {after}%)
+Tester: {tester_status} (coverage {after} — stmts/branches per stack)
 QA report: {qa_report_path}
 Spec eval: {PASS | ISSUES | SKIPPED}{, graded before {qa_cycle} QA remediation(s) — see Step 4e}
 Deferred by decision: {criterion — reason, one per line, or "none"}
