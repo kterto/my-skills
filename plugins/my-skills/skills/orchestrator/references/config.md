@@ -10,6 +10,7 @@
 | `automation_level` | string (`autonomous` \| `manual`) | `"manual"` | `--mode` |
 | `max_review_cycles` | integer | `10` | `--max-review` |
 | `max_qa_cycles` | integer | `5` | `--max-qa` |
+| `max_eval_cycles` | integer | `2` | — |
 | `agent_sync_targets` | array of strings | `[]` | — (tooling-only) |
 | `parallelism` | string (`off` \| `ask` \| `lanes` \| `full`) | `"off"` | `--parallel` |
 | `lanes` | array of `{name: string, path: string, sublanes?: [{name, path}]}` | `[]` | — |
@@ -19,6 +20,8 @@
 `automation_level` governs whether the brainstormer stops to interview the user. `manual` (default) runs the full interview loop and confirmation gate. `autonomous` resolves every open question with the brainstormer's own stated default (recorded under "Decisions resolved by Brainstormer default") and produces a `READY_FOR_PLANNING` spec with no prompts. Only the brainstormer acts on this key; all other roles ignore it.
 
 `clarity_threshold` is the brainstormer's per-spec interview target in `manual` mode: it keeps asking the user questions — one answer at a time, re-rating clarity after each reply — until its self-rated spec clarity reaches this value, with **no cap on the number of questions**. Distinct from `context_threshold`, which gates only the bootstrap PROJECT-CONTEXT interview. Ignored in `autonomous` mode (no interview) and by all non-brainstormer roles.
+
+`max_eval_cycles` bounds how many times the in-loop spec eval (SKILL.md Step 4e) may fire in one run. The eval runs on every reviewer `APPROVED` and, on `ISSUES`, remediates through the ordinary review loop — so it shares and consumes `max_review_cycles`, and this key exists only to stop the eval itself from becoming the thing that never converges. Reaching it is a `STALLED` stop reported to the user, not a silent ship: repeated `ISSUES` on the same criteria means the spec and the implementation disagree in a way no further remediation run will settle. The default of `2` is deliberately tight — one eval, one chance to remediate. Raise it only with evidence that a third pass converges.
 
 `agent_sync_targets` is **tooling-only** — the pipeline never reads it. `scripts/sync-agents.sh` uses it to decide which agent dirs to refresh in a consumer project: a non-empty array of relative dir paths (e.g. `[".claude/agents", ".agents/agents"]`) is synced verbatim (created if missing); an absent or empty array falls back to auto-detecting existing agent dirs. No CLI arg — edit `.orchestrator/config.json` directly.
 
@@ -551,22 +554,23 @@ Three lanes × three sub-lanes is nine concurrent coders in one shared workspace
 
 ### Bounds — the numeric keys fail closed
 
-Declaring a key "integer" constrains its **type**, not its **usability**, and both parallel limits have values that are well-typed and still unusable:
+Declaring a key "integer" constrains its **type**, not its **usability**, and both parallel limits — plus the eval cap — have values that are well-typed and still unusable:
 
 | Key | Accepted | Why the boundary is there |
 | --- | -------- | ------------------------- |
 | `max_parallel_lanes` | a **finite integer ≥ 1** | It caps in-flight dispatch width as a wave size (Steps 2L/3L). A wave of **0** dispatches nothing and the run cannot progress; a **negative** width has no meaning at all. `1` is the honest floor — it degrades the fan-out to fully serial, which is a legitimate configuration. |
+| `max_eval_cycles` | a **finite integer ≥ 0** | `0` is meaningful and supported: the in-loop spec eval (Step 4e) is disabled for the project and the step resolves straight to `SKIPPED`, which is how a project without `spec-driven-eval` installed already behaves. A **negative** cap makes the `eval_cycle` comparison undefined — past the cap before the first eval — so the intent it expresses is already `0`'s, but without `0`'s explicit `SKIPPED` status and its report line. |
 | `max_contract_amendments` | a **finite integer ≥ 0** | `0` is meaningful and supported: amendment is disabled, and the first `contract violation` falls straight back to sequential. A **negative** cap makes the `amendment_count` comparison undefined — already at or past the cap before any amendment is attempted — so the intent it expresses is already `0`'s. |
 
 Non-integers, non-finite values (`NaN`, `Infinity`), and non-numeric types are rejected the same way an out-of-range integer is.
 
-**Validation happens at config resolution (Step 0b), before any dispatch, and fails closed.** A value outside its range does **not** halt the run and is **never clamped silently** — it resolves to the key's **canonical default** (`6` / `2`) with the reason printed:
+**Validation happens at config resolution (Step 0b), before any dispatch, and fails closed.** A value outside its range does **not** halt the run and is **never clamped silently** — it resolves to the key's **canonical default** (`6` / `2` / `2`) with the reason printed:
 
 ```
 config: max_parallel_lanes {value} out of range (finite integer ≥ 1) — using default 6
 ```
 
-Failing closed rather than halting keeps a malformed config from bricking a run, and printing rather than clamping quietly keeps the operator aware that the value they wrote is not the value in force. This matters more than usual for these two keys: they load from the **merge-base** (see *Precedence*), so an out-of-range value may well come from a file the invoking user is not currently looking at.
+Failing closed rather than halting keeps a malformed config from bricking a run, and printing rather than clamping quietly keeps the operator aware that the value they wrote is not the value in force. This matters more than usual for `max_parallel_lanes` and `max_contract_amendments`: they load from the **merge-base** (see *Precedence*), so an out-of-range value may well come from a file the invoking user is not currently looking at.
 
 ### `max_contract_amendments`
 
@@ -577,7 +581,7 @@ A lane coder may never unilaterally change the contract: discovering a frozen in
 ## Canonical Default Object
 
 ```json
-{ "context_threshold": 0.95, "clarity_threshold": 0.99, "output_format": "md", "automation_level": "manual", "max_review_cycles": 10, "max_qa_cycles": 5, "agent_sync_targets": [], "parallelism": "off", "lanes": [], "max_parallel_lanes": 6, "max_contract_amendments": 2 }
+{ "context_threshold": 0.95, "clarity_threshold": 0.99, "output_format": "md", "automation_level": "manual", "max_review_cycles": 10, "max_qa_cycles": 5, "max_eval_cycles": 2, "agent_sync_targets": [], "parallelism": "off", "lanes": [], "max_parallel_lanes": 6, "max_contract_amendments": 2 }
 ```
 
 `sublanes` does not appear in the default object because it is a **property of a `lanes[]` entry**, not a top-level key, and `lanes` defaults to `[]` — so there is no entry to carry it. `templates/config.template.json` is byte-identical to the object above in key set and defaults.
@@ -598,7 +602,7 @@ A lane coder may never unilaterally change the contract: discovering a frozen in
 
 `--resume` is a per-invocation intent, not a setting — like `--setup`, it maps to **no config key** and cannot be made sticky in `.orchestrator/config.json`. Its detection, opt-in, and re-entry semantics are normative in `SKILL.md` → Step 0.
 
-`lanes`, `sublanes`, `max_parallel_lanes`, and `max_contract_amendments` have **no CLI arg** — set them in `.orchestrator/config.json` directly.
+`lanes`, `sublanes`, `max_parallel_lanes`, `max_contract_amendments`, and `max_eval_cycles` have **no CLI arg** — set them in `.orchestrator/config.json` directly.
 
 ## Precedence
 

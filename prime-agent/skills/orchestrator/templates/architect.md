@@ -12,6 +12,7 @@ You will receive one of:
 
 - A feature request → type `feat`, directory `plans/feat/`, prefix `FEAT`
 - A reviewer's CR file path (REQUEST_CHANGES) → type `fix`, directory `plans/code-review/`, prefix `FIX`
+- An `EVAL` report path (spec eval returned `ISSUES`, orchestrator Step 4e) → also type `fix`, same directory, same prefix. There is **no** new type, prefix, or directory for it.
 - A QA report file path (BLOCKED) → type `qa`, directory `plans/qa/`, prefix `QAF`
 - A spec path plus `Type: contract` (parallel mode, orchestrator Step 2c) → type `contract`, directory `plans/feat/`, prefix `PACT`
 
@@ -148,7 +149,7 @@ G1 (coverage) and G6 (mutation, when scaffolded) are NOT emitted here — they r
 
 ## Step 3R — Build the requirement coverage map (type `feat` with a source spec)
 
-**The reviewer gates on this map, and it is the only channel by which a spec requirement reaches the reviewer at all.** The reviewer evaluates against the plan, not against the spec; a requirement you leave out of the map is invisible to every downstream role until spec-driven-eval runs, and by then remediating it costs a whole new run. Compressing the spec is your job — dropping it silently is not.
+**The reviewer gates on this map, and it is the only channel by which a spec requirement reaches the reviewer at all.** The reviewer evaluates against the plan, not against the spec; a requirement you leave out of the map is invisible to the reviewer, and only the spec eval at the end of the review loop can still catch it — one more turn of a loop that is already open, but a turn that the map would have made unnecessary. Compressing the spec is your job — dropping it silently is not.
 
 1. **Read the source spec's `## Functional requirements` section and count its numbered items.** That count is the exact number of rows the map has. If the spec has no such section, or its requirements are unnumbered, stop and report the spec as unusable rather than inventing a numbering.
 2. **Emit one row per requirement, in spec order**, with the requirement restated in 5–10 words *from the spec's own wording* — not your paraphrase of what you decided to build.
@@ -366,6 +367,7 @@ Status: PLANNED. Ready for coder.
 
 - Read `.orchestrator/PROJECT-CONTEXT.md` before writing any plan to extract relevant constraints.
 - For `fix` plans: read the referenced CR file fully. Every "Must Fix" becomes a task pair (test + implementation). Every "Should Fix" becomes an optional task pair annotated `(optional)`.
+- For a `fix` plan sourced from an **`EVAL` report** instead of a CR: your prompt carries `Source eval report:`, `root_plan=`, an `Actionable items:` list and a `Deferred-by-decision (do NOT plan):` list. **Those two lists are authoritative — the eval file itself is persisted verbatim and carries no such markings**, so never re-derive the split by reading the eval's gap list yourself. Turn each **actionable** item into one task pair. **Deferred-by-decision** — the orchestrator's term for an eval finding that grades a requirement the root plan's coverage map already marked `Deferred`, i.e. a gap the run chose on purpose rather than a defect — **is not a task**: the root plan's `## Requirement Coverage` map deferred those requirements on purpose, and planning them would re-open a decision the run already recorded — and the reviewer, which treats a `Deferred` row as not-a-finding, will not catch it. **List the deferred-by-decision items verbatim, with their stated reasons, in the plan's `## Overview`** — that is the only on-disk trace the reconciliation leaves, and it is what tells the reviewer their absence from the diff is a recorded decision rather than a gap. If the actionable list is empty, report the mismatch and stop rather than authoring an empty plan. `related_to` names the `EVAL` and the `root_plan` ID from the prompt.
 - For `qa` plans: read the referenced QA report fully. Each BLOCKED item becomes a task.
 - Tasks must be independently completable and ordered: tests always precede implementation.
 - Never modify existing plan files — create new ones only.

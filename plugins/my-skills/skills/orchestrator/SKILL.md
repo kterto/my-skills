@@ -14,7 +14,8 @@ On invocation with a plain-language task description (and optional `--setup`):
 1. Resolve config (see `references/config.md`): CLI args > `.orchestrator/config.json` > defaults.
 2. If `--setup` is present OR `.orchestrator/config.json` does not exist → run **Bootstrap** (Steps B1–B3), then continue.
 3. Run **Pipeline** (Steps 0–6).
-4. On `READY_TO_COMMIT` → run **Spec eval + report** (Step 7).
+4. Spec eval runs inside the review loop (Step 4e), before the QA exit gate.
+5. On `READY_TO_COMMIT` → run **Final report** (Step 7).
 
 ## Bootstrap
 
@@ -42,7 +43,7 @@ Resolve the `spec-driven-eval` skill in this order, stopping at the first hit:
 2. **A host-provided or separately installed copy** — anything the skills registry or the installed skill paths resolve under that name.
 3. **Nothing resolved** — the plugin is installed partially or the skill was invoked outside it. Offer the user `npx @tech-leads-club/agent-skills install --skill spec-driven-eval` as a fallback, and confirm with the user before executing. If the user declines, instruct them to run the command manually later.
 
-Record availability in memory for the current run. Do **not** block bootstrap when nothing resolves or the user declines — the eval stage (Step 7) degrades explicitly, exactly as the `simplify` step below does.
+Record availability in memory for the current run. Do **not** block bootstrap when nothing resolves or the user declines — the eval stage (Step 4e) degrades explicitly, exactly as the `simplify` step below does.
 
 Check for a resolvable **`simplify`** skill the same way, and record its availability too. It ships in this marketplace, so a plugin install already satisfies it on both hosts; a host-provided `simplify` satisfies it equally. When none resolves, print one line saying the pre-review simplification pass will be skipped — do **not** offer to install anything and do **not** block bootstrap. Steps 3 and 3j degrade explicitly on it.
 
@@ -69,10 +70,11 @@ Check for a resolvable **`simplify`** skill the same way, and record its availab
 ### Pipeline overview
 
 ```
-brainstormer → architect → coder → tester → reviewer ──(APPROVED)──→ qa ──(READY_TO_COMMIT)──→ DONE
-                             ↑                          │                   ↑        │
-                             └──(REQUEST_CHANGES: architect→coder→[tester?]→reviewer)┘        └──(BLOCKED: architect→coder→reviewer→qa)
-                                [max_review_cycles review cycles]                            [max_qa_cycles QA cycles]
+brainstormer → architect → coder → tester → reviewer ──(APPROVED)──→ 4e spec eval ──(PASS)──→ qa ──(READY_TO_COMMIT)──→ DONE
+                             ↑                          │                    │                      ↑        │
+                             └──(REQUEST_CHANGES: architect→coder→[tester?]→reviewer)┘              │        └──(BLOCKED: architect→coder→reviewer→qa)
+                             └──(ISSUES: architect→coder→[tester?]→reviewer, same loop)─────────────┘
+                                [max_review_cycles review cycles] [max_eval_cycles eval cycles]     [max_qa_cycles QA cycles]
 ```
 
 Brainstormer runs once at the start of every pipeline. It produces a spec, which the architect turns into a plan. The fix and QA-remediation loops do not re-run brainstormer — they reuse the original spec via the plan's `related_to` field.
@@ -82,7 +84,7 @@ Brainstormer runs once at the start of every pipeline. It produces a spec, which
 ```
                                   ┌ 2L arch(app) ────────→ 3L coder(app) ─────────────────────────┐
                                   │        [unsplit lane — one leaf, no sub-contract]             │
-brainstormer → 2p ───→ 2c ────────┤                                                               ├─ 3j ─→ tester → reviewer → qa → DONE
+brainstormer → 2p ───→ 2c ────────┤                                                               ├─ 3j ─→ tester → reviewer → 4e → qa → DONE
   (spec)    analysis  PACT        │              ┌ 2L arch(backend/api) → 3L coder(backend/api) ┐ │  outer
              │      parent        └ 2s ──────────┤                                              ├─3s┘  join
              │      contract    sub-contract     └ 2L arch(backend/data)→ 3L coder(backend/data)┘ inner
@@ -104,7 +106,7 @@ brainstormer → 2p ───→ 2c ────────┤                 
 
 **The joins compose bottom-up:** per-lane sub-lane barrier → that lane's inner join (3s), overlapping other lanes' still-running leaves → the all-leaves **and** all-inner-joins barrier → the outer join (3j). `simplify` and the full test suite run **exactly once per run**, at the outer join — never per lane and never per sub-lane, at any depth.
 
-Steps 4, 5, and 7 — the review loop, the QA loop, both cycle caps, and the eval/final-report/gates machinery — are **identical in both branches and at both depths**.
+Steps 4, 4e, 5, and 7 — the review loop, the in-loop spec eval, the QA loop, all three cycle caps, and the report/final-report/gates machinery — are **identical in both branches and at both depths**.
 
 ### How to spawn a subagent
 
@@ -274,7 +276,7 @@ Base: {base_sha}
 Strategy: {use-current | new-branch | new-worktree | commit+... | stash+...}
 ```
 
-**Record `base_sha` here** — `git rev-parse HEAD` on the resolved workspace, after the branch/worktree choice is applied. It is the run's fixed comparison point: everything the pipeline produces is a delta from it. It is what the reviewer diffs its working-tree snapshot against (`MAESTRO_REVIEW_BASE`), what Step 7a's eval measures, and what the run manifest binds a resumable run to (Step 0r). Capture it once; never re-derive it later from a moved `HEAD`.
+**Record `base_sha` here** — `git rev-parse HEAD` on the resolved workspace, after the branch/worktree choice is applied. It is the run's fixed comparison point: everything the pipeline produces is a delta from it. It is what the reviewer diffs its working-tree snapshot against (`MAESTRO_REVIEW_BASE`), what Step 4e's eval measures, and what the run manifest binds a resumable run to (Step 0r). Capture it once; never re-derive it later from a moved `HEAD`.
 
 #### 0b — Initialise counters
 
@@ -282,11 +284,13 @@ Read cycle caps from config:
 
 - `max_review_cycles` — from `.orchestrator/config.json`; default 10 if absent.
 - `max_qa_cycles` — from `.orchestrator/config.json`; default 5 if absent.
+- `max_eval_cycles` — from `.orchestrator/config.json`; default 2 if absent.
 
 Set:
 
 - `review_cycle = 0`
 - `qa_cycle = 0`
+- `eval_cycle = 0`
 
 Log to your running status output:
 
@@ -295,6 +299,7 @@ ORCHESTRATOR — pipeline started
 Input: {input summary}
 max_review_cycles: {max_review_cycles}
 max_qa_cycles: {max_qa_cycles}
+max_eval_cycles: {max_eval_cycles}
 ```
 
 **Resolve `parallelism`** with the standard precedence — CLI `--parallel` > `.orchestrator/config.json` > default `off`. Also read `max_contract_amendments` (default `2`) and set `amendment_count = 0`, and read `max_parallel_lanes` (default `6`). Every key's values, semantics, and absent-key tolerance are normative in **`references/config.md`** — read them there; they are deliberately not restated here.
@@ -304,7 +309,7 @@ max_qa_cycles: {max_qa_cycles}
 - Read the three keys from **`$mb:.orchestrator/config.json`** — the pinned merge-base copy — never from the working-tree file.
 - **A CLI flag outranks the merge-base**, because a flag is *the invoking user's* authority expressed at run time, not branch-authored content. `--parallel` therefore still wins.
 - When the merge-base has no `.orchestrator/config.json`, or the file is absent/unparseable there, fall back to the **defaults** (`off` / `6` / `2`) — never to the working-tree copy.
-- **Validate the numeric values before any dispatch**, per `references/config.md` → *Bounds* (`max_parallel_lanes` a finite integer ≥ 1, `max_contract_amendments` a finite integer ≥ 0); an out-of-range value fails closed to the key's canonical default with the reason printed, rather than dispatching a wave of zero or comparing against an undefined cap.
+- **Validate the numeric values before any dispatch**, per `references/config.md` → *Bounds* (`max_parallel_lanes` a finite integer ≥ 1, `max_contract_amendments` a finite integer ≥ 0, `max_eval_cycles` a finite integer ≥ 0); an out-of-range value fails closed to the key's canonical default with the reason printed, rather than dispatching a wave of zero or comparing against an undefined cap.
 
 Every other key (`output_format`, `automation_level`, the thresholds) keeps reading from the working tree as before — they are presentation and interview preferences, not concurrency authority, and none of them widens a branch's blast radius.
 
@@ -823,7 +828,7 @@ Parse the architect's output to extract `pact_id` (from `ARCHITECT — {ID} crea
 
 **File verification (mandatory before continuing)** — mirroring Step 2's: read the `PACT` at `pact_path` and its paired `.progress.md`. If either is missing or empty, re-invoke the architect once with the same prompt; if still missing after the retry, stop and report. Confirm its `related_to` references `spec_id`, and that its lane map, path-ownership, interface-points, unowned-files, integration-lane, and per-lane-definition-of-done regions are all present. A `PACT` missing a region is not usable — re-invoke once, then stop.
 
-**Requirement-coverage check (mandatory, same pass) — the parallel twin of Step 2's.** Count the numbered items in the spec's `## Functional requirements` and confirm every number appears in at least one lane-map `Spec requirements` cell, or is recorded in the path-ownership region as explicitly deferred with a reason. If any number is unaccounted for, re-invoke the architect once with the same prompt quoting those numbers; if still incomplete, stop and report. **This is the only point in a parallel run at which a requirement no lane owns is detectable** — Step 2L and the join both compare the leaf maps against the *assignment*, not against the spec, so a hole in the assignment itself passes every later gate and surfaces only at spec eval, after the terminal state.
+**Requirement-coverage check (mandatory, same pass) — the parallel twin of Step 2's.** Count the numbered items in the spec's `## Functional requirements` and confirm every number appears in at least one lane-map `Spec requirements` cell, or is recorded in the path-ownership region as explicitly deferred with a reason. If any number is unaccounted for, re-invoke the architect once with the same prompt quoting those numbers; if still incomplete, stop and report. **This is the only point in a parallel run at which a requirement no lane owns is detectable** — Step 2L and the join both compare the leaf maps against the *assignment*, not against the spec, so a hole in the assignment itself passes every later gate and surfaces only at Step 4e's spec eval, one review-loop turn later.
 
 ### Step 2s — Architect fan-out: one sub-contract per sub-split lane
 
@@ -1172,7 +1177,7 @@ Each resolves the **leaf** plan set from the preamble's `leaves=` line and uses 
 
 **Beyond that one rule these three roles need no depth-recursive logic.** All three templates gained the same two things — a `PACT`-ID input case and a Step 1a saying take `leaves=` as given, falling back to the normative resolution rule only on a legacy run. Each then gained a little more, and not the same little more: the **tester** folds every adopted sub-contract's interface rows into its existing critical-flow triage input; the **reviewer** gained a two-level interface-row lens (when a parent row's producer or consumer lane was sub-split, the sub-contract's *Inherited interface assignments* region names the sub-lane that owns that side) plus a boundary-lens clause making a sub-lane writing into a sibling sub-lane's globs the same violation as a lane writing into another lane's, and lost its `full`-mode per-lane-findings bullet outright, because under the redefined `full` no per-leaf `CR` is ever produced to carry findings from; **QA** likewise lost its per-lane-`CR` reconciliation rule, which is now simply "there are no per-leaf CRs to reconcile". Crucially, **no role recurses past one level, and none has a per-lane or per-sub-lane pass.** Where a role does reach a sub-contract — the reviewer's *Inherited interface assignments* lookup, the tester's sub-contract interface rows — it reads the parent `PACT`'s `Sub-contract` column exactly one level down and stops; `leaves=` carries leaf `FEAT` plan IDs only, so that one hop is the sole way to the sub-contract rows and all three roles legitimately take it. Putting the resolution rule in the shared reference rather than restating it in three role templates is deliberate: three copies would be three places to disagree about the same walk.
 
-**Steps 4, 5, and 7 are unchanged in every mode and at every depth.** The review loop, the QA loop, both cycle caps, `BLOCKED_STALE` handling, and the Step 7 eval/final-report/gates machinery are untouched by parallel mode — they simply operate over the union diff with the parent `PACT` ID where a plan ID would be. This is deliberate: leaving the remediation loops sequential is what keeps the existing cycle-cap machinery valid.
+**Steps 4, 4e, 5, and 7 are unchanged in every mode and at every depth.** The review loop, the in-loop spec eval, the QA loop, all three cycle caps, `BLOCKED_STALE` handling, and the Step 7 final-report/gates machinery are untouched by parallel mode — they simply operate over the union diff with the parent `PACT` ID where a plan ID would be. This is deliberate: leaving the remediation loops sequential is what keeps the existing cycle-cap machinery valid.
 
 ### Step 3b — Tester
 
@@ -1265,7 +1270,7 @@ Parse reviewer's output to extract:
 
 Read the CR file at `cr_path`. If the file does not exist or is empty, re-invoke the reviewer once more with the same plan ID. If still missing after retry, stop and report to user. Also confirm the plan's `.progress.md` has been updated with a `REVIEWER` log entry.
 
-#### If APPROVED → go to Step 5 (QA).
+#### If APPROVED → go to Step 4e (spec eval), then Step 5 (QA).
 
 #### If REQUEST_CHANGES:
 
@@ -1340,6 +1345,175 @@ Apply the same `tester_status` logic: `BLOCKED` → stop; `BELOW_FLOOR` → soft
 
 **4c — Update `plan_id` to `fix_plan_id`**, then loop back to Step 4. **`root_plan_id` is NOT updated** — it stays the run's aggregate (the parent `PACT` on the parallel path, the original `FEAT` on a sequential one), so the next reviewer pass still evaluates the whole change set with `fix_plan_id` as a related input. It is also the reviewer's **requirement-coverage anchor**: Step 4 emits it as `root_plan=` on every cycle, so the run's `## Requirement Coverage` map is re-verified against cycle N's code even though cycle N's active plan is a `FIX` plan that carries no map.
 
+### Step 4e — Spec eval: grade the aggregate against the spec, inside the loop
+
+Runs on **every** reviewer `APPROVED` reached from Step 4's own dispatch, in every mode and at every depth, before QA. A `5c` re-review inside the QA loop is **not** such an entry: its `4a`–`4c` pass returns to Step 5, so a QA-gate remediation never re-fires the eval and never consumes `eval_cycle`.
+
+**Why it is here and not after the exit gate.** The reviewer gates on the plan; this is the only
+role that gates on the **spec**. Run after the pipeline reaches its terminal state, an `ISSUES`
+finding can no longer be remediated — the loop that would have absorbed it has already exited, so
+the only remaining move is to start an entirely new run per finding. Run here, the same finding
+costs one more turn of a loop that is already open and already budgeted. The cost of the move is
+honest and small: the eval grades a diff that has not yet passed the QA gates, so a few of its
+findings may be re-examined after gate fixes. Gate fixes are meant to be behavior-preserving; a
+pipeline restart per finding is not.
+
+Increment `eval_cycle` by 1 **as item 3's first action** — not on entry, so a run that disabled the
+eval or has no `spec-driven-eval` installed does not report cycles it never spent.
+
+1. **If `max_eval_cycles` is `0`** the eval is disabled for this project: set `eval_status = SKIPPED`,
+   note "eval disabled — `max_eval_cycles: 0`" for the report, and go to Step 5. Out-of-range values were already
+   resolved to the canonical default at Step 0b, with the reason printed there — this step reads the
+   validated value and does not re-validate it.
+   **The cycle cap is not tested here.** It is tested at the remediate decision below, so the last
+   eval a run is permitted to spend is always one that actually graded the current code — testing it
+   on entry would let the final remediation run ungraded and then halt on a verdict taken before it.
+2. If spec-driven-eval did not resolve at bootstrap B2 (nothing bundled, nothing installed,
+   and the user declined the fallback install) → set `eval_status = SKIPPED`, note "eval skipped —
+   skill not installed" for the report, and go to Step 5. An absent optional dependency reduces the
+   run's quality, never its correctness.
+3. Else invoke the **complete** `spec-driven-eval` workflow — never a generic evaluator,
+   a one-pass code review, or a summary child. Pass the brainstormer SPEC-{NNN} path and the
+   accumulated diff (`git diff` against the pre-flight base recorded in Step 0). Execute its
+   required acceptance-criterion decomposition, evidence collection, scoring/calibration, and
+   report process. Capture the complete rendered evaluation, including its per-criterion evidence
+   matrix and final grade.
+   NOTE: the SPEC-{NNN} format may not match spec-driven-eval's expected input — verify its
+   expected input shape; if it does not accept SPEC-{NNN} directly, adapt by passing the spec's
+   Functional requirements section as the criteria.
+4. **Persist the complete workflow output verbatim** to the canonical `plans/eval/` directory
+   (allow-listed in `artifact-format.md`); do not replace it with a hand-written PASS/ISSUES
+   summary. Compute the ID with `newid EVAL`, derive the slug from the plan title, and write
+   `plans/eval/EVAL-{NNN}-{slug}.md` (canonical). Prepend only the required canonical
+   frontmatter — `id`, `status: PASS | ISSUES | SKIPPED`, `created_at`, `updated_at`, `cycle`,
+   plus `plan: {root_plan_id}` (the run's aggregate, not the active `FIX` plan) — then retain
+   every workflow report section below it unchanged. A report missing the per-criterion evidence
+   matrix or final grade is incomplete: retry the workflow once, then stop rather than continuing.
+   When `output_format=html`, render the view with
+   `node .orchestrator/render-artifact.cjs plans/eval/EVAL-{NNN}-{slug}.md` (the renderer
+   auto-selects the qa-report scaffold for `plans/eval/` sources). Never create any directory
+   other than `plans/eval/` for eval output.
+   Record `eval_path` and `eval_status`. **Derive `eval_status` by the rule below before you write
+   the frontmatter**, and if the reconciliation below flips it to `PASS`, update the persisted
+   `status:` in place — otherwise the artifact linked from the final report contradicts the run that
+   shipped. (`SKIPPED` never reaches this item: items 1 and 2 both return to Step 5 before any file
+   is written. It stays in the enum for a standalone invocation that writes one.)
+
+**Deriving `eval_status` — the workflow does not emit it.** `spec-driven-eval` reports a numeric
+`Final`, a grade band (`Spec-complete`, `Strong (minor gaps)`, `Partial`, …), per-criterion verdicts,
+and a ranked `## Gaps (ranked) and fixes to reach 1.00` list. It never prints the tokens `PASS` or
+`ISSUES`. Map its output here, **once**, so the frontmatter `status:` and every branch below read the
+same rule: **`eval_status = ISSUES` when the ranked gap list is non-empty or any Engineering Gate is
+a confirmed red `✗`; otherwise `PASS`.** A band alone is not a verdict — `Strong (minor gaps)` names
+gaps, and routing those gaps is the entire purpose of this step. Reading the band as a pass is the
+fail-open ship this step exists to prevent.
+
+**An absent section is not an empty one.** A report with **no** `## Gaps (ranked)` section, or no
+Engineering Gates row, was not produced by this workflow — it is incomplete, not a clean pass. The
+340-byte bare-verdict stub is exactly that shape, and reading "the gap list is not non-empty" off a
+section that does not exist would derive `PASS` from it. Apply item 4's retry instead; never derive
+`PASS` from a missing section.
+
+**A `not-run` gate is a blind spot, not a finding.** `spec-driven-eval` defines three gate values and
+is explicit that only a confirmed `✗` deducts: a `not-run` gate — recorded after a real probe, with
+its error output as evidence — "cannot grant or deduct credit; it is reported as a known blind spot"
+(`spec-driven-eval/SKILL.md` → *Engineering Gates `G`*). Treating it as a failure would derive
+`ISSUES` on **every** run of any project without e2e or mutation tooling, at any score, with nothing
+to remediate. Carry it into Step 7b's `Issues found:` list and never let it set `eval_status`.
+
+**Reconcile `ISSUES` against the run's recorded decisions before acting on it.** The eval grades
+against the **spec**; the root plan's `## Requirement Coverage` map records which spec requirements
+this run deliberately deferred. **Resolve that map the way the reviewer does** (`templates/reviewer.md`
+Step 1 and its join lens): on a `FEAT` root it is the plan's own map; on a `PACT` root — the whole
+parallel path, where `root_plan_id` is the parent contract and a `PACT` carries no map of its own — it
+is the **union of the leaf plans' maps**, resolved through `.orchestrator/artifact-format.md` →
+**`PACT` ID resolution**, in which a requirement counts as `Deferred` only when **every** leaf assigned
+it defers it. Without that resolution the reconciliation finds no map on every parallel run and drops
+nothing — re-opening a lane's recorded deferral, which is precisely the fight this paragraph exists to
+prevent. A deferred requirement will therefore score as unmet **every**
+time, and remediating it is not possible — it was excluded on purpose. So, before branching:
+resolve each `ISSUES` item to the spec requirement it grades, and **drop the item from the
+actionable set when the root plan's map marks that requirement `Deferred`**. Record the dropped
+items into the 4a prompt as deferred-by-decision, with the map's stated reason, and into the Step 7b
+final report. **An item you cannot
+resolve to a numbered requirement stays actionable** — the eval keys its gap rows to its own criterion
+labels and only inherits the spec's numbering when the spec carries stable IDs, so an unresolvable
+item is the expected case, not an anomaly. Dropping what you cannot identify would silently suppress
+real gaps; keeping it costs at most one remediation the architect can reject. **If the actionable set is non-empty and every item in it
+is deferred-by-decision, set `eval_status = PASS`** — normalize the variable, not just the routing, so
+the branches below and Step 7b's `Spec eval:` line do not report a failed eval on a run that shipped
+correctly — and go to Step 5.
+Without this reconciliation the two mechanisms fight: P1's sanctioned deferral becomes a permanent
+eval failure and every deferred requirement spawns a remediation run that cannot succeed.
+
+#### If any Engineering Gate is a confirmed red `✗`:
+
+Stop, whatever the gap list holds. No `FIX` plan authored from the gap list can close a red gate —
+the actionable set is built from gap rows that grade spec requirements, and "the build command exits
+non-zero" is not one of them — and `spec-driven-eval` is forbidden from fixing a red gate itself.
+Sending it round the remediation loop spends a cycle on a plan that cannot address it. If
+`output_format=html`, run Step 7c (progress timeline render) first, then print and stop:
+
+```
+ORCHESTRATOR — spec eval blocked on a red engineering gate
+Last eval: {eval_path}
+Gate: {gate name} — {the exact command recorded in the report}
+Status: STALLED — human intervention required
+```
+
+#### If `eval_status` is `PASS` or `SKIPPED` → go to Step 5 (QA).
+
+#### If `eval_status` is `ISSUES` with a non-empty actionable set:
+
+Check `eval_cycle`. **If `eval_cycle >= max_eval_cycles`, do not remediate** — this eval was the last
+one the run is permitted, and an unremediated finding it just graded is a decision for the user. If
+`output_format=html`, run Step 7c (progress timeline render) first, then print and stop:
+
+```
+ORCHESTRATOR — spec eval cycle limit reached ({max_eval_cycles})
+Last eval: {eval_path}
+Unresolved criteria: {the actionable set, one per line}
+Status: STALLED — human intervention required
+```
+
+Repeated `ISSUES` on the same criteria means the spec and the implementation disagree in a way no
+further remediation run will settle. The cap is tested **here**, before the dispatch below and after
+the eval has graded the current code — not on step entry, which would halt on a verdict taken before
+the last remediation ran, and not after the dispatch, which 4c exits before ever reaching.
+
+Otherwise, remediate through the **existing** review loop — Steps 4a, 4b, 4b2 and 4c, unchanged — **subject to
+the same `max_review_cycles` cap**: apply Step 4's `review_cycle >= max_review_cycles` check before
+4a exactly as its `REQUEST_CHANGES` branch does. If it trips, print that banner with two lines added —
+`Last eval: {eval_path}` and `Unresolved criteria: {the actionable set, one per line}` — and keep its
+`review cycle limit reached` header so the `product-manager` stop rule still matches. Without them the
+banner reports that the reviewer could not converge, on a cycle where the reviewer approved. This
+is the only entry into 4a that does not sit textually under that check, so it has to name it. Two
+substitutions:
+
+- In 4a, the architect's prompt reads `Source eval report: {eval_path}` in place of
+  `Source CR file: {cr_path}`. Input type is still `fix`, the ID is still `newid FIX`, and the plan
+  is still written to `plans/code-review/` per the canonical table. Its `related_to` names the
+  `EVAL` and the `root_plan_id`. Each **actionable** unmet criterion becomes one TDD task pair;
+  deferred-by-decision items are not tasks and must not be planned.
+- In 4b2, treat the eval report as the reviewer CR for the "flagged a test gap" condition.
+
+**The reconciliation result travels in the 4a prompt, not in the artifact.** The `EVAL` file is
+persisted verbatim (item 4), so the actionable/deferred split has nowhere to live in it, and the
+architect's `EVAL` rule acts on markings it can only receive from here. Emit these four lines in
+place of 4a's single `Source CR file:` line:
+
+```
+Source eval report: {eval_path}
+root_plan={root_plan_id}
+Actionable items: {one line per actionable unmet criterion, verbatim from the eval's gap list}
+Deferred-by-decision (do NOT plan): {one line per dropped item — criterion — the map's stated reason}
+```
+
+4c then reassigns `plan_id` to the fix plan and loops to **Step 4**, which re-reviews and, on the
+next `APPROVED`, re-runs this step against the changed code. `review_cycle` is incremented by
+Step 4 as it always is — this step does not increment it a second time — so an eval loop consumes
+the review budget it shares, and `max_eval_cycles` bounds how many times the eval itself may fire.
+
 ### Step 5 — QA: validate the approved plan
 
 Increment `qa_cycle` by 1.
@@ -1371,7 +1545,7 @@ Parse QA's output to extract:
 
 Read the QA report file at `qa_report_path` (expect `.md` or `.html` extension per `output_format` in config). If the file does not exist or is empty, re-invoke the QA subagent once more with the same plan ID. If still missing after retry, stop and report to user. Also confirm the plan's `.progress.md` has been updated with a `QA` log entry.
 
-#### If READY_TO_COMMIT → proceed to Spec eval + report (Step 7).
+#### If READY_TO_COMMIT → proceed to the Final report (Step 7). The spec eval already ran at Step 4e.
 
 #### If READY_WITH_WARNINGS:
 
@@ -1386,7 +1560,7 @@ All blocking gates passed; the plan is safe to commit. This status indicates tha
    ```
 
 2. Carry the warning into the final report (Step 7).
-3. Proceed to Spec eval + report (Step 7).
+3. Proceed to the Final report (Step 7).
 
 #### If BLOCKED_STALE:
 
@@ -1467,7 +1641,7 @@ Follow your full reviewer workflow and print the structured output summary.
 
 **Verify** the new CR file exists at the path reported in reviewer output. If missing, re-invoke reviewer once; if still missing, stop and report.
 
-If `REQUEST_CHANGES`: increment `review_cycle`, apply the review fix loop (steps 4a–4c) with `qaf_plan_id` as the active plan, subject to the same `max_review_cycles` cap. When approved, continue.
+If `REQUEST_CHANGES`: increment `review_cycle`, apply the review fix loop (steps 4a–4c) with `qaf_plan_id` as the active plan, subject to the same `max_review_cycles` cap. **4c's "loop back to Step 4" does not apply on this path** — re-invoke the reviewer here at 5c over the new fix plan instead, so the QA loop never re-enters Step 4 and never re-fires Step 4e. A gate fix must not be able to spend the run's eval budget. When approved, continue.
 
 **5d — Update `plan_id` to `qaf_plan_id`**, then loop back to Step 5. **`root_plan_id` is NOT updated** — the next QA pass runs its gates over the run's aggregate, with `qaf_plan_id` as a related input, so a remediation cycle can never shrink what QA is validating.
 
@@ -1514,36 +1688,7 @@ If an agent output is ambiguous or missing the expected pattern, re-read the rel
 - Never specify a level-specific behavior only in a join step or in ladder option text — every one needs a numbered dispatch step. (This is why the previous `full` never ran: it was described only inside the join and the ladder, so there was nothing to spawn.)
 - Parallel mode changes **what is spawned**, never the never-commit rule: the run still ends at `READY_TO_COMMIT`, and neither join produces a commit.
 
-## Spec eval + report
-
-### Step 7a — Spec-driven-eval invocation
-
-On READY_TO_COMMIT (or READY_WITH_WARNINGS):
-
-1. If spec-driven-eval did not resolve at bootstrap B2 (nothing bundled, nothing installed,
-   and the user declined the fallback install) → skip eval, note "eval skipped — skill not
-   installed" in the report, continue to Step 7b.
-2. Else invoke the **complete** `spec-driven-eval` workflow — never a generic evaluator,
-   a one-pass code review, or a summary child. Pass the brainstormer SPEC-{NNN} path and the
-   accumulated diff (`git diff` against the pre-flight base recorded in Step 0). Execute its
-   required acceptance-criterion decomposition, evidence collection, scoring/calibration, and
-   report process. Capture the complete rendered evaluation, including its per-criterion evidence
-   matrix and final grade.
-   NOTE: the SPEC-{NNN} format may not match spec-driven-eval's expected input — verify its
-   expected input shape; if it does not accept SPEC-{NNN} directly, adapt by passing the spec's
-   Functional requirements section as the criteria.
-3. **Persist the complete workflow output verbatim** to the canonical `plans/eval/` directory
-   (allow-listed in `artifact-format.md`); do not replace it with a hand-written PASS/ISSUES
-   summary. Compute the ID with `newid EVAL`, derive the slug from the plan title, and write
-   `plans/eval/EVAL-{NNN}-{slug}.md` (canonical). Prepend only the required canonical
-   frontmatter — `id`, `status: PASS | ISSUES | SKIPPED`, `created_at`, `updated_at`, `cycle`,
-   plus `plan` — then retain every workflow report section below it unchanged. A report missing
-   the per-criterion evidence matrix or final grade is incomplete: retry the workflow once, then
-   stop rather than printing a completion banner.
-   When `output_format=html`, render the view with
-   `node .orchestrator/render-artifact.cjs plans/eval/EVAL-{NNN}-{slug}.md` (the renderer
-   auto-selects the qa-report scaffold for `plans/eval/` sources). Never create any directory
-   other than `plans/eval/` for eval output.
+## Final report
 
 ### Step 7b — Final report composer
 
@@ -1560,6 +1705,31 @@ those links into the `.html`. When `output_format=html`, render the view with
 directory other than `plans/final/` for the final report.
 
 **File verification (mandatory before printing the banner):**
+
+**The spec eval must have left an artifact.** Unless `eval_status` is `SKIPPED`, confirm the file at
+`eval_path` exists, that its `plan` frontmatter is this run's `root_plan_id`, that its `cycle` equals
+`eval_cycle`, and that its body carries a per-criterion evidence matrix with **one row per numbered
+spec requirement** — the same count as the root plan's `## Requirement Coverage` map — a numeric
+`Final`, and a gates row naming each executed command. Matching any `EVAL-*` for the run would let a
+cycle-1 artifact stand in for a cycle-5 eval that never ran; the count and the gate commands are what
+a hand-written stub cannot fake cheaply. **If no such file exists, the eval
+did not happen** — a `PASS` recorded with nothing on disk is indistinguishable from an eval that was
+never run, which is exactly how a run ships ungraded. If the file exists but is a bare verdict with
+no evidence matrix — the failure mode Step 4e's retry exists to catch — treat it the same way. Do
+not print the banner. Step 4e is a loop step with no return path to here, so do **not** re-enter it:
+re-run only its items 3 and 4 — invoke the eval, persist the artifact — exactly once, without
+incrementing `eval_cycle` and without applying its `ISSUES` branch. Then stop and report, whatever
+status results:
+
+```
+ORCHESTRATOR — spec eval artifact missing or incomplete
+Expected: plans/eval/EVAL-* with `plan: {root_plan_id}`, an evidence matrix, and a final grade
+Last eval: {eval_path, or "none persisted"}
+Status: STALLED — human intervention required
+```
+
+The `Status: STALLED` line is what makes the `product-manager` skill's existing stop rule catch this
+without any change on its side.
 
 Read back `plans/final/FINAL-{NNN}-{slug}.md` (and, when `output_format=html`, the paired
 `.html`). If it does not exist or is empty, re-run this persistence step once. If still missing
@@ -1582,7 +1752,8 @@ Final plan: {plan_id}
 Final report: plans/final/FINAL-{NNN}-{slug}.md
 Tester: {tester_status} (coverage {after}%)
 QA report: {qa_report_path}
-Spec eval: {PASS | ISSUES | SKIPPED}
+Spec eval: {PASS | ISSUES | SKIPPED}{, graded before {qa_cycle} QA remediation(s) — see Step 4e}
+Deferred by decision: {criterion — reason, one per line, or "none"}
 Issues found:
   - {issue} (or "none")
 
@@ -1597,6 +1768,7 @@ Proposed PR message:
 
 Review cycles used: {review_cycle} / {max_review_cycles}
 QA cycles used: {qa_cycle} / {max_qa_cycles}
+Spec eval cycles used: {eval_cycle} / {max_eval_cycles}
 
 Output only — review the diff, then commit and open the PR yourself.
 ```

@@ -1,7 +1,7 @@
 # Upstream provenance
 
 `spec-driven-eval` is **not** authored in this repository. It is vendored verbatim
-so that the `orchestrator` skill's evaluation step (Step 7) works out of the box,
+so that the `orchestrator` skill's evaluation step (Step 4e) works out of the box,
 on every host, without a second install from a different marketplace.
 
 | | |

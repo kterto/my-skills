@@ -88,7 +88,7 @@ The ONLY directories permitted under `plans/`. No role or step may invent any ot
 | test report   | `plans/test/`        | `TEST`  | tester                         |
 | code review   | `plans/code-review/` | `CR`    | reviewer                       |
 | qa report     | `plans/qa/`          | `QA`    | qa                             |
-| spec eval     | `plans/eval/`        | `EVAL`  | orchestrator (Step 7a)         |
+| spec eval     | `plans/eval/`        | `EVAL`  | orchestrator (Step 4e)         |
 | final report  | `plans/final/`       | `FINAL` | orchestrator (Step 7b)         |
 | interface contract | `plans/feat/`   | `PACT`  | architect (type `contract`)    |
 
