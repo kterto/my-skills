@@ -11,10 +11,14 @@ A plan ID (e.g. `FEAT-001`) or path to a plan file. The plan must have `status: 
 
 **Or a `PACT` ID** (e.g. `PACT-20260807T004018Z-c4af`) — the join-level invocation in parallel mode. See Step 1a.
 
+**Plus two preamble lines the orchestrator emits on every review cycle, in both modes: `root_plan={ID}` and `spec={path}`.** `root_plan` names the run's **aggregate under evaluation** — the original `FEAT` on a sequential run, the parent `PACT` on a parallel one. It is immutable for the whole run, while the plan ID you were given is the **active** plan and is reassigned to a `FIX` plan by every remediation cycle. The requirement coverage you gate on (Step 3) always comes from the root plan, never from the active `FIX` plan — a `FIX` plan's acceptance criteria are the previous CR's Must Fixes and carry no coverage map, so reviewing cycle 2 against them alone would silently drop every requirement cycle 1 was gating on. When `root_plan=` is absent — a standalone invocation, or a legacy run predating the line — treat the plan you were given as the root. `spec=` has exactly one use: **quoting** a requirement's full text when you file a finding against a map row. Never re-derive the map from it — the map's completeness was verified at the orchestrator's Step 2 (or 2c/2L) before any coder ran, against a spec that is immutable thereafter.
+
 ## Step 1 — Read all context (mandatory)
 
 0. Read `.orchestrator/config.json` for `output_format` (`md` | `html`; default `md`; an `output_format=` line in your prompt wins) and `.orchestrator/artifact-format.md` for emission rules, the allow-list, and ID allocation.
 1. Locate and fully read the plan file and its `.progress.md`.
+
+   **Then resolve the requirement coverage map.** Read the root plan named by `root_plan=` — the active plan itself when the line is absent — and take its `## Requirement Coverage` map. This is the requirement set you gate on in Step 3, and it does **not** change when a remediation cycle reassigns the active plan. On a `PACT` root the map is the **union of the leaf plans' maps**, resolved through `.orchestrator/artifact-format.md` → **`PACT` ID resolution**, and checked against the contract's lane-map `Spec requirements` column per Step 1a. **If the root plan carries no `## Requirement Coverage` map at all, that is not a Must Fix and never a `REQUEST_CHANGES` on its own.** A `FIX` plan carries no map by design and the architect never rewrites an existing plan, so a missing map is a defect that no remediation cycle can close — blocking on it would re-file the identical finding every cycle until the review budget is exhausted and the run STALLS, on a change set that may well be complete. Say so in the CR Summary, omit the `## Requirement Coverage Check` section, print `Requirements: n/a`, and gate on the acceptance criteria alone. On an orchestrated run this case does not arise: Steps 2, 2c and 2L guarantee the map exists before any coder starts. Do not reconstruct the map yourself from the spec: an architect-authored map is a decision record, and one you invent is a guess the next cycle will contradict.
 2. Read `.orchestrator/PROJECT-CONTEXT.md`, plus any project files it points to. Extract: stack, code-style guardrails, load-bearing invariants, out-of-scope list, and working principles.
 3. Get the changed code as a **complete working-tree snapshot** — see *Building the review snapshot* below. `$MAESTRO_REVIEWER_DIFF_PATHSPEC` defaults to `. ':(exclude)plans/'` if unset. The `plans/` directory is excluded by default because plan files, progress logs, FIX files, and CR files are orchestration metadata that you already read directly in Step 1.1, and including them in the diff bloats input without adding review signal.
 
@@ -42,6 +46,9 @@ When the ID you were given carries the `PACT-` prefix, you were invoked **at the
 
 Your additions on top of that:
 
+- **A third join-only lens: requirement coverage is checked as a union.** Each leaf plan's `## Requirement Coverage` map covers only the requirements its lane was assigned. Take the union of the leaf maps and compare it to the `Spec requirements` column of the contract's lane map: a requirement the contract assigned that appears in no leaf map is recorded in the Requirement Coverage Check and called out in the Summary — **not** filed as a Must Fix, because no `FIX` plan can amend a frozen contract or an existing leaf plan, and Step 2L already gated this before any coder ran. The same holds for a leaf map row naming a requirement the contract assigned to a *different* lane. This is still the only point in a parallel run where the leaf maps are compared whole — no single leaf can see the gap, by construction.
+
+  **When two leaves are both assigned the same requirement**, the union row is `Met-by-plan` if **any** assigned leaf claims it: verify that leaf's share and note the deferring leaf's reason. The row is `Deferred` only when **every** leaf assigned it defers it. Without this rule the two claims carry opposite force under Step 5 and a cycle can reverse a verdict with no code change.
 - **Two review lenses that only exist at the join:** every interface row satisfied on both sides at its frozen shape, and no leaf wrote outside its owned globs. A boundary crossing is a Must Fix regardless of how good the code is, because path ownership is the only isolation mechanism between concurrent coders. Under a nested split this applies at **both** levels — a sub-lane writing into a sibling sub-lane's globs is the same violation as a lane writing into another lane's.
 - **You run exactly once, at the outer join, in every mode and at every depth.** There is no per-lane and no per-sub-lane reviewer pass to reconcile, and no per-leaf `CR` exists. Remediation follows the existing sequential Step 4 loop over the union — one `FIX` plan, as today. This is what keeps the review-cycle machinery untouched by parallel mode.
 - **Interface rows live at two levels.** A parent-contract row is cross-lane; a sub-contract row is intra-lane by construction. When a parent row's producer or consumer lane was sub-split, the sub-contract's **Inherited interface assignments** region names the sub-lane that owns that side — verify it there rather than guessing which leaf was responsible.
@@ -68,6 +75,7 @@ CR file path: `plans/code-review/CR-{NNN}-{slug}.md`
 
 Evaluate the changes against:
 - Plan's **Acceptance Criteria** (each must be met)
+- Root plan's **Requirement Coverage** map (Step 1) — for every row, confirm it is genuinely `Met-by-plan` in the code you reviewed, or carries a `Deferred` reason. **A spec requirement that is neither met nor explicitly deferred is a Must Fix against the plan**, filed against the requirement rather than against any one file, because the defect is that the plan never committed to it. A `Deferred` row is *not* a finding — it is a decision the architect recorded and you are honoring; re-litigating it costs a cycle and changes nothing. On a remediation cycle this map is the run's, not the `FIX` plan's, so a requirement met in cycle 1 that a later fix broke surfaces here as unmet. **One unmet criterion files one finding, not one per requirement**: since a criterion may serve several requirements, an unmet criterion mechanically makes each of them unmet — file the criterion finding once and name the affected requirement numbers inside it. File a requirement-level Must Fix only when every criterion the requirement maps to is met and the requirement still is not.
 - Plan's **Technical Notes** (constraints must be respected)
 - **Load-bearing invariants** from `.orchestrator/PROJECT-CONTEXT.md` — apply every invariant listed there
 - **Code style** from `.orchestrator/PROJECT-CONTEXT.md` — conventions, identifier casing, test file naming, format cleanliness
@@ -78,7 +86,7 @@ Categorize every finding:
 
 | Category | Meaning |
 |----------|---------|
-| **Must Fix** | Blocks approval. Functional bug, missing acceptance criterion, security issue, architectural violation (any invariant from PROJECT-CONTEXT.md breached), missing tests, scope creep into out-of-scope items, silent commitment on an open product decision. |
+| **Must Fix** | Blocks approval. Functional bug, missing acceptance criterion, **unmet spec requirement that the coverage map claims is `Met-by-plan`**, security issue, architectural violation (any invariant from PROJECT-CONTEXT.md breached), missing tests, scope creep into out-of-scope items, silent commitment on an open product decision. |
 | **Should Fix** | Non-blocking warning. Style issue, minor inefficiency, naming inconsistency, optional improvement, missing edge-case test. |
 
 ## Step 4 — Create the CR file
@@ -97,8 +105,10 @@ created_at: {ISO 8601 datetime}
 updated_at: {ISO 8601 datetime}
 reviewer: reviewer-agent
 cycle: 0
+root_plan: {ROOT-PLAN-ID, or the reviewed plan ID when no root_plan= line was given}
 must_fix_count: {N}
 should_fix_count: {N}
+requirements_unmet: {U}
 ---
 
 ## Summary
@@ -111,6 +121,15 @@ should_fix_count: {N}
 |---|-----------|------|-------|
 | 1 | {criterion text} | ✅ / ❌ | {notes or "—"} |
 
+## Requirement Coverage Check
+
+{Omit this section when — and only when — the root plan carries no `## Requirement Coverage` map, per Step 1. Rows are the root plan's map, not the active plan's.}
+
+| Spec req # | Requirement | Claimed | Verified | Notes |
+|-----------|-------------|---------|----------|-------|
+| 1 | {copy the root map's `Requirement (short)` cell verbatim} | Met-by-plan | ✅ / ❌ | {where in the diff it is satisfied, or why it is not} |
+| 2 | {…} | Deferred — {reason} | ⏭️ | Honored; not re-litigated |
+
 ## Must Fix (Blockers)
 
 {If none: write "None — no blockers found."}
@@ -120,6 +139,8 @@ should_fix_count: {N}
 **File**: `{path/to/file}:{line}`
 **Problem**: {What is wrong and why it matters.}
 **Fix**: {Specific, actionable fix. Include code snippet if helpful.}
+
+A Must Fix filed against a requirement rather than a file writes `**File**: —` and adds `**Requirement**: {spec req #} — {text, verbatim from the root map}` above `**Problem**`, so the FIX architect — which receives the CR path and nothing else — can read what the requirement says without resolving the spec.
 
 ---
 
@@ -151,8 +172,10 @@ should_fix_count: {N}
 
 ## Step 5 — Set status
 
-- **APPROVED**: All acceptance criteria met AND zero Must Fix items.
-- **REQUEST_CHANGES**: Any acceptance criterion unmet OR any Must Fix item present.
+- **APPROVED**: All acceptance criteria met AND every `Met-by-plan` requirement verified AND zero Must Fix items.
+- **REQUEST_CHANGES**: Any acceptance criterion unmet OR any `Met-by-plan` requirement unverified OR any Must Fix item present.
+
+A `Deferred` requirement never blocks approval — that is the whole point of recording it. Neither does a *document-level* coverage defect (a missing map, a requirement no leaf claims, a leaf claiming another lane's requirement): those are reported, not looped on, because the remediation loop produces code and cannot amend a plan or a frozen contract.
 
 ## Step 6 — Update plan and progress files
 
@@ -181,9 +204,12 @@ Must Fix: {N} | Should Fix: {N}
 REVIEWER — CR-{NNN} created
 Plan reviewed: {PLAN-ID}
 Status: APPROVED | REQUEST_CHANGES
+Requirements: {V} verified / {D} deferred / {U} unmet
 Must Fix: {N}
 Should Fix: {N}
 CR file: plans/code-review/CR-{NNN}-{slug}.md
 {If APPROVED}: Next: invoke /qa with plan ID {PLAN-ID}
 {If REQUEST_CHANGES}: Next: invoke /architect with plans/code-review/CR-{NNN}-{slug}.md
 ```
+
+The `Requirements:` line reports the Requirement Coverage Check table: `{V}` rows claimed `Met-by-plan` and verified, `{D}` rows `Deferred` and honored, `{U}` rows claimed `Met-by-plan` but not verified in the code. Print `Requirements: n/a` when the root plan carries no map. `{U}` must be `0` for an `APPROVED` verdict.

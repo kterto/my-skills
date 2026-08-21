@@ -357,7 +357,7 @@ At **Step 2c**, immediately after the parent contract verifies, write `.orchestr
 1. **Validate the manifest against the working tree before trusting a single artifact.** The current branch equals `branch`; the pre-flight base equals `base_sha`; the spec file's SHA-256 equals `spec_sha256`; and every `contract_ids` / `leaf_ids` entry exists on disk with that exact ID in its frontmatter. Recovered artifacts are additionally **schema-validated** — a contract carries its six required regions, a leaf plan its five frontmatter keys and a `related_to` naming its governing contract.
 2. **On any mismatch, missing manifest, or more than one resumable manifest: do NOT resume.** Print what failed and **require explicit selection** — the user names the run to resume, or starts fresh. Never auto-pick. A spec whose bytes changed, a base that moved, a branch that differs, or an artifact absent from the manifest means the on-disk plans are **not** provably this orchestrator's; treating them as authoritative is exactly the escalation this gate exists to stop.
 3. **Only then skip Steps 1, 2p, 2c, 2s, and 2L.** The spec, the parent contract, every sub-contract, and every leaf plan already exist on disk and — **having passed validation** — are authoritative. Re-deriving any of them would produce a different split from the one the completed leaves were written against.
-4. Recover the parent contract by the manifest's `contract_ids` root, never by scanning `plans/feat/`.
+4. Recover the parent contract by the manifest's `contract_ids` root, never by scanning `plans/feat/`. **Bind `root_plan_id` to that contract's ID, and `spec_path` to the spec file the manifest's `spec_id` names** — already located in step 1 to verify `spec_sha256`. Step 2 and Step 2c are the only other binding sites for `root_plan_id` and Step 1 the only one for `spec_path`, and item 3 skips all three, so without this a resumed run reaches Step 4 with both names unbound and emits `root_plan=` / `spec=` as literal placeholders. The reviewer's fallback covers an *absent* line, not a malformed one, so it would silently lose its requirement-coverage anchor on exactly the runs whose leaf maps were authored in a prior session. Same guarantee as `leaves=` below.
 5. **Rebuild the full leaf set from the manifest's `leaf_ids`**, cross-checked against the parent contract's `Sub-contract` column (the one-level resolution rule in `.orchestrator/artifact-format.md` → **`PACT` ID resolution`**). The two must agree; a disagreement is a mismatch under step 2 and stops the resume.
 6. **Re-enter at Step 3L**, with the leaf set **restricted to leaves whose `FEAT` plan is not `DONE`**. A leaf already `DONE` is not re-dispatched and its work is not rolled back.
 7. Proceed through **Step 3s and Step 3j normally**. The coder's existing resume-from-first-unchecked-task semantics carry the rest and are **unchanged** — that is what makes per-leaf resume free.
@@ -718,6 +718,7 @@ ID to use: {computed FEAT-<id>}
 
 Source spec: {spec_path}
 Type: feat — derive scope from the spec's functional requirements and project-context fit.
+Emit the `## Requirement Coverage` map (your Step 3R): one row per numbered requirement in the spec, each `Met-by-plan` with the criteria that verify it or `Deferred` with a reason. It is the reviewer's only view of the spec.
 Follow your full architect workflow and print the structured output summary.
 ```
 
@@ -733,6 +734,10 @@ If the architect reports an error or does not produce a plan ID, stop and report
 **File verification (mandatory before continuing):**
 
 Read the plan file at `plan_path` and the paired `.progress.md` (same path with `.progress.md` suffix replacing `.md`). If either file does not exist or is empty, re-invoke the architect once more with the same prompt. If files still missing after the retry, stop and report to user. Confirm the plan's `related_to` frontmatter references `spec_id`; if not, re-invoke the architect once with the spec path explicitly stated.
+
+**Requirement-coverage check (mandatory, same pass).** Count the numbered items in the spec's `## Functional requirements` section, and count the rows in the plan's `## Requirement Coverage` map. **They must be equal, and every row must carry either a non-empty `Covered by AC #` cell or a `Deferred` status with a reason.** If the map is absent, short, or has an empty cell on a `Met-by-plan` row, re-invoke the architect once, quoting the specific requirement numbers that are missing or unfilled. If it is still incomplete after the retry, stop and report — a plan that does not account for the spec sends the reviewer into the pipeline blind, and every requirement it dropped comes back as a post-approval remediation run. This is the cheapest point in the whole run to catch it: nothing has been written to the workspace yet.
+
+`spec_path` (bound at Step 1) stays live for the rest of the run — Step 4 hands it to the reviewer on every cycle alongside `root_plan_id`.
 
 ### Step 3 — Coder: implement the plan
 
@@ -818,6 +823,8 @@ Parse the architect's output to extract `pact_id` (from `ARCHITECT — {ID} crea
 
 **File verification (mandatory before continuing)** — mirroring Step 2's: read the `PACT` at `pact_path` and its paired `.progress.md`. If either is missing or empty, re-invoke the architect once with the same prompt; if still missing after the retry, stop and report. Confirm its `related_to` references `spec_id`, and that its lane map, path-ownership, interface-points, unowned-files, integration-lane, and per-lane-definition-of-done regions are all present. A `PACT` missing a region is not usable — re-invoke once, then stop.
 
+**Requirement-coverage check (mandatory, same pass) — the parallel twin of Step 2's.** Count the numbered items in the spec's `## Functional requirements` and confirm every number appears in at least one lane-map `Spec requirements` cell, or is recorded in the path-ownership region as explicitly deferred with a reason. If any number is unaccounted for, re-invoke the architect once with the same prompt quoting those numbers; if still incomplete, stop and report. **This is the only point in a parallel run at which a requirement no lane owns is detectable** — Step 2L and the join both compare the leaf maps against the *assignment*, not against the spec, so a hole in the assignment itself passes every later gate and surfaces only at spec eval, after the terminal state.
+
 ### Step 2s — Architect fan-out: one sub-contract per sub-split lane
 
 **Runs only when the resolved `parallelism` is `full` AND at least one lane was adopted for sub-splitting at 2p.3n.** On a `lanes` run, and on a `full` run where the inner gate adopted nothing, **this step does not exist** — go straight from 2c to 2L.
@@ -899,7 +906,7 @@ Spawn **one architect per leaf, concurrently** — all spawns issued together, n
 
 - `description`: `Plan lane {qualified leaf name}`
 - `subagent_type`: `architect`
-- `prompt`: the preamble carrying `ID to use: {the FEAT-<id> allocated for this leaf}`, `lane={qualified leaf name}`, and `contract={the leaf's GOVERNING contract path}` + the source spec + the delimited `LANE METADATA` block.
+- `prompt`: the preamble carrying `ID to use: {the FEAT-<id> allocated for this leaf}`, `lane={qualified leaf name}`, and `contract={the leaf's GOVERNING contract path}` + the source spec + the delimited `LANE METADATA` block. Plus the instruction: `Emit the ## Requirement Coverage map (your Step 3R, lane-plan mode): one row per requirement number the PACT lane map assigns to this lane, verbatim from that cell — each Met-by-plan with the criteria that verify it, or Deferred with a reason. It is the reviewer's only view of the spec.`
 
 **Bounded by `max_parallel_lanes`, exactly as Step 3L is.** When the leaf set is wider than the configured ceiling, dispatch it in **waves of at most `max_parallel_lanes`** — issue a wave, await it, issue the next. Nothing is dropped and nothing is narrowed; only in-flight width is bounded. This is the second of the key's two enforcement sites (`references/config.md` → `max_parallel_lanes`); the rule is stated in full at Step 3L.
 
@@ -918,7 +925,9 @@ Lane: {qualified leaf name} → {FEAT-ID}
 
 **Why this is contention-free:** every leaf plan and its `.progress.md` are owned exclusively by one leaf's architect and later one leaf's coder. No two subagents ever write the same artifact, so no locking is needed — the isolation is structural, and it does not weaken at the second level because a sub-lane plan is an ordinary `FEAT` plan with an ordinary sole owner.
 
-Verify every leaf plan file and its `.progress.md` exist and are non-empty before continuing, exactly as Step 2 does for the single-plan path. Then **update `.orchestrator/run-manifest.json`** with the verified `leaf_ids`, in dispatch order (Step 0r → *The run manifest*) — the manifest is complete at this point, which is what makes a run halting after this step resumable by provenance.
+Verify every leaf plan file and its `.progress.md` exist and are non-empty before continuing, exactly as Step 2 does for the single-plan path.
+
+**Then run Step 2's requirement-coverage check in its parallel form, across the leaf set as a whole.** Each leaf plan's `## Requirement Coverage` map covers only its lane's assigned requirements, so no single plan can be checked against the spec — the union can. Take the union of the leaf maps' requirement numbers and compare it to the `Spec requirements` column of the frozen contract's lane map: **resolve the assignment down to leaves first.** A flat lane's assignment is its own row. A sub-split lane's row (`Lane plan ID` = `—`) resolves through its `Sub-contract` to that sub-contract's sub-lane map, whose `Spec requirements` cells must cover the parent row's cell (`.orchestrator/artifact-format.md` → **`PACT` ID resolution**) — a parent-assigned requirement the sub-contract's cells do not cover is a stop before any leaf is checked. **Every resolved assignment must then appear in every leaf it was assigned to and in no leaf it was not, with a non-empty `Covered by AC #` cell or a `Deferred` reason** — a requirement the contract deliberately assigned to two lanes appears in both leaf maps and is correct (`templates/architect.md` → *1. Lane map*). Re-invoke the specific leaf architects whose rows are missing or unfilled, once, with the identical prompt including that leaf's original `ID to use:` line — never a second `newid FEAT`, per the sole-allocation rule above. If still incomplete, stop and report. This is the same check Step 2 runs, at the same point in the run — before any coder starts, while nothing has been written to the workspace. Then **update `.orchestrator/run-manifest.json`** with the verified `leaf_ids`, in dispatch order (Step 0r → *The run manifest*) — the manifest is complete at this point, which is what makes a run halting after this step resumable by provenance.
 
 ### Step 3L — Coder fan-out: one coder per leaf
 
@@ -1232,6 +1241,8 @@ output_format={resolved output_format}
 Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
 HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
 ID to use: {computed CR-<id>}
+root_plan={root_plan_id}   ← the run's immutable aggregate; the reviewer's requirement-coverage anchor. Emitted on BOTH paths, on every cycle.
+spec={spec_path}   ← the run's source spec; omit the line entirely when the run has no spec
 leaves={comma-separated leaf FEAT IDs, in dispatch order}   ← parallel path ONLY; omit the line entirely on a sequential run
 MAESTRO_REVIEW_BASE={base_sha}   ← the Step 0a pre-flight base; the reviewer snapshots the working tree against it
 
@@ -1240,6 +1251,8 @@ Follow your full reviewer workflow and print the structured output summary.
 ```
 
 > **On the parallel path the reviewer is invoked with `root_plan_id` — the parent `PACT` ID — not the active `plan_id`** (Step 3j.3), so it runs once at the join over the **whole** leaf union, on every review cycle. A remediation pass reassigns `plan_id` (Step 4c) but never `root_plan_id`, so cycle 2 reviews the same aggregate cycle 1 did, with the `FIX` plan supplied as a **related input** rather than as the subject. On an `off` run the two coincide and the block reads exactly as before.
+>
+> **`root_plan=` is emitted on both paths, and it is what keeps requirement coverage alive across remediation cycles.** Step 4c reassigns `plan_id` to the `FIX` plan, whose acceptance criteria are the previous CR's Must Fixes and which carries no `## Requirement Coverage` map by design. Without this line a sequential cycle-2 review would gate on the `FIX` plan alone and silently drop everything cycle 1 was checking — the same leak, one level down. The reviewer resolves the map from `root_plan` and re-verifies it on every cycle, which is also what surfaces a requirement an earlier cycle met and a later fix broke.
 >
 > **`leaves=` is emitted here, on the parallel path only.** The orchestrator dispatched the leaves at Step 3L and still holds the resolved set, so it hands it over rather than making the role rebuild it. The line is **omitted entirely on an `off` run**, exactly as `lane=` and `contract=` are. It is re-emitted on **every** review cycle, so a cycle-10 run re-reads nothing a cycle-1 run already resolved.
 
@@ -1325,7 +1338,7 @@ Follow your full tester workflow and print the structured output summary.
 
 Apply the same `tester_status` logic: `BLOCKED` → stop; `BELOW_FLOOR` → soft warning, continue; `PASS` → continue.
 
-**4c — Update `plan_id` to `fix_plan_id`**, then loop back to Step 4. **`root_plan_id` is NOT updated** — it stays the run's aggregate (the parent `PACT` on the parallel path, the original `FEAT` on a sequential one), so the next reviewer pass still evaluates the whole change set with `fix_plan_id` as a related input.
+**4c — Update `plan_id` to `fix_plan_id`**, then loop back to Step 4. **`root_plan_id` is NOT updated** — it stays the run's aggregate (the parent `PACT` on the parallel path, the original `FEAT` on a sequential one), so the next reviewer pass still evaluates the whole change set with `fix_plan_id` as a related input. It is also the reviewer's **requirement-coverage anchor**: Step 4 emits it as `root_plan=` on every cycle, so the run's `## Requirement Coverage` map is re-verified against cycle N's code even though cycle N's active plan is a `FIX` plan that carries no map.
 
 ### Step 5 — QA: validate the approved plan
 
@@ -1510,17 +1523,23 @@ On READY_TO_COMMIT (or READY_WITH_WARNINGS):
 1. If spec-driven-eval did not resolve at bootstrap B2 (nothing bundled, nothing installed,
    and the user declined the fallback install) → skip eval, note "eval skipped — skill not
    installed" in the report, continue to Step 7b.
-2. Else invoke the `spec-driven-eval` skill, passing the brainstormer SPEC-{NNN} path and the
-   accumulated diff (`git diff` against the pre-flight base recorded in Step 0). Capture its
-   validation result.
+2. Else invoke the **complete** `spec-driven-eval` workflow — never a generic evaluator,
+   a one-pass code review, or a summary child. Pass the brainstormer SPEC-{NNN} path and the
+   accumulated diff (`git diff` against the pre-flight base recorded in Step 0). Execute its
+   required acceptance-criterion decomposition, evidence collection, scoring/calibration, and
+   report process. Capture the complete rendered evaluation, including its per-criterion evidence
+   matrix and final grade.
    NOTE: the SPEC-{NNN} format may not match spec-driven-eval's expected input — verify its
    expected input shape; if it does not accept SPEC-{NNN} directly, adapt by passing the spec's
    Functional requirements section as the criteria.
-3. **Persist the eval artifact** to the canonical `plans/eval/` directory (allow-listed in
-   `artifact-format.md`). Compute the ID with `newid EVAL`, derive the slug from the
-   plan title, and write `plans/eval/EVAL-{NNN}-{slug}.md` (canonical). Its frontmatter MUST
-   carry the five keys the renderer and the pairing gate require —
-   `id`, `status: PASS | ISSUES | SKIPPED`, `created_at`, `updated_at`, `cycle` — plus `plan`.
+3. **Persist the complete workflow output verbatim** to the canonical `plans/eval/` directory
+   (allow-listed in `artifact-format.md`); do not replace it with a hand-written PASS/ISSUES
+   summary. Compute the ID with `newid EVAL`, derive the slug from the plan title, and write
+   `plans/eval/EVAL-{NNN}-{slug}.md` (canonical). Prepend only the required canonical
+   frontmatter — `id`, `status: PASS | ISSUES | SKIPPED`, `created_at`, `updated_at`, `cycle`,
+   plus `plan` — then retain every workflow report section below it unchanged. A report missing
+   the per-criterion evidence matrix or final grade is incomplete: retry the workflow once, then
+   stop rather than printing a completion banner.
    When `output_format=html`, render the view with
    `node .orchestrator/render-artifact.cjs plans/eval/EVAL-{NNN}-{slug}.md` (the renderer
    auto-selects the qa-report scaffold for `plans/eval/` sources). Never create any directory

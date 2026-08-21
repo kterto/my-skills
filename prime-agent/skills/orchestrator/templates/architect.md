@@ -87,6 +87,19 @@ related_to: {comma-separated IDs of related plans/specs/CRs/QA reports, or "—"
 
 {2–4 sentences: what this plan does and why. For fix/qa types, reference the source CR or QA report ID.}
 
+## Requirement Coverage
+
+> Emit this section in EVERY `feat` plan that has a source spec — see Step 3R.
+> One row per numbered requirement in the spec's `## Functional requirements`
+> (in lane-plan mode, per requirement assigned to this lane). No row is omitted.
+> `FIX` and `QAF` plans do not carry it. A `PACT` carries the assignment in its
+> lane map instead.
+
+| Spec req # | Requirement (short) | Covered by AC # | Status |
+| ---------- | ------------------- | --------------- | ------ |
+| 1 | {5–10 words, the requirement's own words} | 1, 2 | Met-by-plan |
+| 2 | {5–10 words} | — | Deferred — {reason}; follow-up: {PLAN-ID or `none yet`} |
+
 ## Acceptance Criteria
 
 1. {Binary, testable criterion}
@@ -132,6 +145,22 @@ G1 (coverage) and G6 (mutation, when scaffolded) are NOT emitted here — they r
 
 <!-- Agents append below. Never rewrite entries. Newest on top. -->
 ```
+
+## Step 3R — Build the requirement coverage map (type `feat` with a source spec)
+
+**The reviewer gates on this map, and it is the only channel by which a spec requirement reaches the reviewer at all.** The reviewer evaluates against the plan, not against the spec; a requirement you leave out of the map is invisible to every downstream role until spec-driven-eval runs, and by then remediating it costs a whole new run. Compressing the spec is your job — dropping it silently is not.
+
+1. **Read the source spec's `## Functional requirements` section and count its numbered items.** That count is the exact number of rows the map has. If the spec has no such section, or its requirements are unnumbered, stop and report the spec as unusable rather than inventing a numbering.
+2. **Emit one row per requirement, in spec order**, with the requirement restated in 5–10 words *from the spec's own wording* — not your paraphrase of what you decided to build.
+3. **Fill `Covered by AC #`** with the acceptance-criterion numbers that make the requirement verifiable. One requirement may map to several criteria; one criterion may serve several requirements. Both are fine; an empty cell on a `Met-by-plan` row is not.
+4. **A requirement you are not covering is `Deferred`, never absent.** A `Deferred` row states a reason and a follow-up plan ID (or the literal `none yet`). Deferring is a legitimate decision — it is the *silent* drop that costs cycles.
+5. **Write the acceptance criteria and the map together.** If a requirement has no criterion that could verify it, the plan is incomplete: add the criterion, or defer the requirement explicitly. Do not resolve the mismatch by softening the requirement's wording in the map.
+6. **A requirement that names an external artifact — a design file, a frame reference, an ADR, a contract schema — is covered only when a criterion asserts the *specific structural claims* that artifact makes.** "Matches the design" is not a criterion; the states, elements, and geometry the artifact specifies are. Read the referenced artifact before writing the row.
+7. **Never widen scope through the map.** A requirement out-of-scope per `PROJECT-CONTEXT.md` is `Deferred` with that as the reason — the existing out-of-scope rule wins, and the map records that it was applied.
+
+**In lane-plan mode (Step 3L)** the row set is not the whole spec: it is the requirement numbers the `PACT` lane map assigned to *your* lane, verbatim from that cell. Do not add requirements assigned to another lane, and do not drop one that was assigned to you — the join checks the union of the leaf maps against the contract's assignment.
+
+**`FIX` and `QAF` plans carry no map.** They inherit the run's coverage from the plan they remediate, which is the run's root plan and stays the reviewer's requirement anchor across every cycle.
 
 ## Step 3C — Authoring a `PACT` (type `contract`, parallel mode only)
 
@@ -189,6 +218,10 @@ One row per lane (or, in a sub-contract, one row per **sub-lane**). Every lane t
 | backend | `apps/api/**` | 1, 2, 5 | — | PACT-{NNN} |
 | app | `apps/mobile/**` | 3, 4 | FEAT-{NNN} | — |
 ```
+
+**In the parent contract, the `Spec requirements` column must account for every numbered requirement in the spec's `## Functional requirements`.** Read that section, count its items, and confirm each number appears in at least one lane's cell before you write the `PACT`. A requirement no lane owns is a hole that no leaf plan's coverage map can close and no join can detect — resolve it by assigning it to a lane, or record it in region 2 as explicitly deferred with a reason. A requirement may legitimately appear in two lanes when both sides implement part of it; that is not a conflict, unlike overlapping path globs.
+
+**In a sub-contract, the substitution at the head of this section applies to the requirement set as well as to the word *lane*.** The set you account for is not the spec — it is the parent lane map's `Spec requirements` cell for **your** lane. Every number in that cell appears in at least one sub-lane's cell, and no number outside it appears at all; read the parent's row for your lane and confirm both directions before writing. A number the parent assigned that no sub-lane owns is the same hole one level down: assign it, or record it in region 2 as explicitly deferred with a reason.
 
 - A **flat** lane carries its `Lane plan ID` and an **empty** `Sub-contract` cell (`—`).
 - A **sub-split** lane carries `—` for `Lane plan ID` (a split lane has **no lane-level plan** — its plans are its sub-lanes') and its child's `PACT` ID in `Sub-contract`.
@@ -280,6 +313,7 @@ Runs when a `feat` invocation's **preamble** carries a non-empty `lane=` (the qu
 2. `related_to` references **both** the source spec **and** the `PACT`, and the Related region links to both.
 3. **Every acceptance criterion and every task is scoped to the lane's owned path globs.** A task that would require editing a file outside them does not belong in this plan — it belongs to the owning lane or to the integration lane. If the lane genuinely cannot be completed within its globs, stop and report it as a contract problem rather than planning the boundary crossing.
 4. The plan's acceptance criteria **include the lane's definition of done** from `PACT` region 6 — the interface rows it must produce at their frozen shape, and the rows it consumes via the stub strategy.
+5. **The `## Requirement Coverage` map is scoped to this lane** (Step 3R, final paragraph): its rows are exactly the requirement numbers the `PACT` lane map assigned to your lane, copied verbatim from that cell. Not the whole spec, and not a subset you chose.
 
 State the lane name and the `PACT` ID in the plan's Overview as documentation for a human reader. The coder does **not** rely on it: its boundary comes from the orchestrator's `lane=` / `contract=` preamble lines, so the rule cannot be switched off by a differently-worded Overview.
 
@@ -337,6 +371,7 @@ Status: PLANNED. Ready for coder.
 - Never modify existing plan files — create new ones only.
 - Do not write code, only plans.
 - Always set `updated_at` to the current ISO 8601 datetime.
+- Every `feat` plan with a source spec carries a `## Requirement Coverage` map with one row per numbered spec requirement — the whole spec's, or in lane-plan mode the lane's assigned set (Step 3R). A requirement is `Met-by-plan` with the criteria that verify it, or `Deferred` with a reason and a follow-up ID. **A requirement that is neither — absent from the map, or carrying a `Met-by-plan` status with an empty `Covered by AC #` cell — is a BLOCKED stop, not an omission**: report it and do not write the plan. A `Deferred` row's `Covered by AC #` cell is `—` by construction and is never a stop; deferral is the sanctioned way to not cover a requirement.
 - Never plan out-of-scope items from PROJECT-CONTEXT.md. If the request asks for one, surface the conflict and stop.
 - If a plan touches an open product decision listed in PROJECT-CONTEXT.md, surface the decision dependency — do not silently pick.
 - Per-method cyclomatic-complexity ≤ 10 is added to the AC list ONLY when the phase introduces a new service / handler / use-case / dispatcher class. Trivial getters, single-line helpers, framework boilerplate, and generated code are exempt.
@@ -356,11 +391,14 @@ ARCHITECT — {PREFIX}-{NNN} created
 Plan: plans/{dir}/{PREFIX}-{NNN}-{slug}.md
 Progress: plans/{dir}/{PREFIX}-{NNN}-{slug}.progress.md
 Tasks: {N}
+Requirements: {M} mapped / {D} deferred
 Verification: {per-phase | QA-only}
 Next: invoke /coder with plan ID {PREFIX}-{NNN}
 ```
 
 Print `Verification: per-phase` if the plan emitted a `## Verification (per phase)` section, else `Verification: QA-only`.
+
+The `Requirements:` line reports the `## Requirement Coverage` map: `{M}` is the total row count — which equals the number of numbered requirements in the source spec, or in lane-plan mode the size of the lane's assigned set — and `{D}` is how many of those rows are `Deferred`. Print `Requirements: n/a` on a `FIX`, `QAF`, or `PACT`, which carry no map.
 
 For type `contract` the path label is `Contract:` rather than `Plan:`, and the counts describe the contract (per `.orchestrator/artifact-format.md` → Parallel-mode lines):
 
