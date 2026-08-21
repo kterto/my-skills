@@ -34,12 +34,22 @@ Using the e2e framework from PROJECT-CONTEXT, write e2e tests for the selected f
 
 ## Step 4 — Test-quality audit + coverage floor
 
-**The floor is the G1 gate, read from `.cleancode-gates.json` — the same numbers, the same metrics, and the same scope QA will use.** **The governing config is the one in the directory the gate runs in**, not necessarily the repo root — in a monorepo with per-package configs, resolve and run per package (`PROJECT-CONTEXT.md` records which file governs which package). Then resolve per stack: a changed file belongs to the stack whose `roots` prefix it — path equals a root, or starts with `root + '/'`, relative to the config's own directory; a changed file matching no root is outside every gate and is reported as such, never counted as covered; then drop the stack's `exclude` globs **and** `gates.G1.exempt`, which is the per-gate carve-out list QA will also honour; that stack's `exclude` globs come out of the changed-file set first; then read `stacks.<stack>.gates.G1.thresholds` and use whatever keys it defines, exactly as written — never a key you remember or translate. Scope is **the files this plan changed**, computed with the same command QA uses —
-`git diff --name-only $(git merge-base HEAD origin/main)..HEAD` — not the whole suite, and not a
-paraphrase of it. A branch carrying more than one plan (every remediation cycle, every parallel run)
+**The floor is the G1 gate, read from `.cleancode-gates.json` — the same numbers, the same metrics, and the same scope QA will use.** **Resolve the config per `.orchestrator/gate-config.md`** — normative here, and the same file the coder and QA read, which is what keeps the three of you measuring one thing. **If `.orchestrator/gate-config.md` is absent, do not improvise the rules from memory** — report the gate step `MISSING_TOOL` naming that path and tell the user to re-run `/orchestrator --setup`; a remembered threshold or a guessed scope is exactly the drift this file exists to end. In particular the governing config is the one in the directory the gate runs in, not necessarily the repo root, and `MISSING_TOOL` / `UNMEASURED` are neither passes nor failures. Then resolve per stack: a changed file belongs to the stack whose `roots` prefix it — path equals a root, or starts with `root + '/'`, relative to the config's own directory; a changed file matching no root is outside every gate and is reported as such, never counted as covered; then drop the stack's `exclude` globs **and** `gates.G1.exempt`, which is the per-gate carve-out list QA will also honour; that stack's `exclude` globs come out of the changed-file set first; then read `stacks.<stack>.gates.G1.thresholds` and use whatever keys it defines, exactly as written — never a key you remember or translate. Scope is **the files this plan changed**, computed with the same command QA uses — the base compared to the
+**working tree**, plus untracked files, never a two-dot range:
+
+```bash
+base="${MAESTRO_REVIEW_BASE:-$(git merge-base HEAD origin/main)}"
+git update-index --refresh >/dev/null 2>&1 || true
+{ git diff --name-only --relative "$base"; git ls-files --others --exclude-standard; } | sort -u
+```
+
+The pipeline never commits, so `base..HEAD` resolves to zero files and would hand you a vacuous pass.
+Not the whole suite, and not a paraphrase of this command. A branch carrying more than one plan (every remediation cycle, every parallel run)
 resolves a different set under any other command, which is exactly the disagreement this rule removes.
 **The rule is per file, not aggregate**: an untested changed file is an automatic miss, however high
 the average. Five files at 95% plus one untested file aggregates above threshold and still fails.
+
+**The coder already ran G1 at each phase exit** against these same thresholds, on that phase's changed files. You are not re-litigating its verdict: your scope is the whole plan's diff rather than one phase's, and your job is the gap the coder could not close from inside a phase — cross-phase paths, integration seams, and the assertion quality no percentage measures. If the coder's gates were honest, you should find little coverage work and spend the step on the test-quality audit. If you find a lot, say so in the report: it means a phase gate was skipped, which is a process finding the reviewer and QA both need.
 
 This is deliberately not a softer, separate floor. A tester floor of its own is how one diff came to carry a passing tester report and a failing QA G1 verdict at the same time — the tester measured whole-suite line coverage against one number while QA measured changed-file statements and branches against another. Measuring what QA measures is the point: a gap found here costs minutes, and the same gap found at QA costs a remediation run.
 

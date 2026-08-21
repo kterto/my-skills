@@ -12,14 +12,14 @@ This skill runs in the caller session and uses the host's subagent tool (`Agent`
 On invocation with a plain-language task description (and optional `--setup`):
 
 1. Resolve config (see `references/config.md`): CLI args > `.orchestrator/config.json` > defaults.
-2. If `--setup` is present OR `.orchestrator/config.json` does not exist → run **Bootstrap** (Steps B1–B3), then continue.
+2. If `--setup` is present OR `.orchestrator/config.json` does not exist OR any file B3 materializes is missing — currently `.orchestrator/artifact-format.md`, `.orchestrator/config.md`, `.orchestrator/gate-config.md` — → run **Bootstrap** (Steps B1–B3), then continue. **A project bootstrapped by an older skill version has `config.json` and none of the files added since**, so keying only on `config.json` would leave every role pointing at a reference that is not there.
 3. Run **Pipeline** (Steps 0–6).
 4. Spec eval runs inside the review loop (Step 4e), before the QA exit gate.
 5. On `READY_TO_COMMIT` → run **Final report** (Step 7).
 
 ## Bootstrap
 
-Bootstrap runs when `--setup` is passed or `.orchestrator/config.json` is absent. It has three steps: B1 context gate, B2 dependency check, B3 materialize.
+Bootstrap runs when `--setup` is passed, when `.orchestrator/config.json` is absent, or when any file B3 materializes is missing from `.orchestrator/`. It has three steps: B1 context gate, B2 dependency check, B3 materialize.
 
 ### B1 — Context gate
 
@@ -73,14 +73,15 @@ Check for a resolvable **`simplify`** skill the same way, and record its availab
 2. **Materialize artifact rules + config reference + html scaffolds + render scripts (load-bearing).** Subagents cannot read the skill's own `references/`, `templates/html/`, or `scripts/` directories — those paths do not exist in the target project. Copy them into `.orchestrator/` so every role can read and run them:
    - `references/artifact-format.md` → `.orchestrator/artifact-format.md`
    - `references/config.md` → `.orchestrator/config.md` (the normative key/lane/glob reference the role templates point at; distinct from `.orchestrator/config.json`, which holds the resolved *values*)
+   - `references/gate-config.md` → `.orchestrator/gate-config.md` (how any role resolves a gate's config, scope, exemptions, and verdict vocabulary — normative for the coder, the tester, and QA alike, which is what stops the three of them drifting apart on the same gate)
    - `templates/html/*.template.html` → `.orchestrator/html-templates/` (all seven: spec, plan, test-report, code-review, qa-report, final-report, progress-timeline)
    - `scripts/render-artifact.cjs`, `scripts/check-artifact-pairing.cjs`, `scripts/check-artifact-links.cjs`, `scripts/gate-scope.cjs` → `.orchestrator/` (the four runtime `.cjs`; do NOT copy the `*.test.cjs` files or `scripts/README.md`). These are zero-dependency Node scripts — no `npm install` needed. The renderer resolves the scaffolds from the sibling `.orchestrator/html-templates/`, so copy step-2 scaffolds and these scripts together.
 
-   Re-copy all four on every bootstrap (including `--setup` re-runs) so they stay in sync with the installed skill version. If the scaffolds/scripts are missing, `output_format=html` silently degrades to md because roles cannot render the `.html`.
+   Re-copy all five on every bootstrap (including `--setup` re-runs) so they stay in sync with the installed skill version. If the scaffolds/scripts are missing, `output_format=html` silently degrades to md because roles cannot render the `.html`.
 
 3. **Write config**: merge `templates/config.template.json` with any CLI overrides (precedence: CLI arg > `.orchestrator/config.json` > default) and write the result to `.orchestrator/config.json`.
 
-4. **Print bootstrap summary**: list all created/updated paths (including `.orchestrator/artifact-format.md`, `.orchestrator/config.md`, `.orchestrator/html-templates/`, and the four `.orchestrator/*.cjs` render/gate scripts) and the achieved context confidence.
+4. **Print bootstrap summary**: list all created/updated paths (including `.orchestrator/artifact-format.md`, `.orchestrator/config.md`, `.orchestrator/gate-config.md`, `.orchestrator/html-templates/`, and the four `.orchestrator/*.cjs` render/gate scripts) and the achieved context confidence.
 
 ## Pipeline
 
@@ -774,6 +775,7 @@ ORCHESTRATOR CONTEXT (authoritative — do not recompute):
 output_format={resolved output_format}
 Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
 HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
+MAESTRO_REVIEW_BASE={base_sha}   ← the Step 0a pre-flight base; your phase gates scope the working tree against it
 
 Implement plan {plan_id}.
 Follow your full coder workflow and print the structured session summary.
@@ -795,12 +797,13 @@ After coder DONE is confirmed, invoke the `simplify` skill on the changes from t
 
 **Whatever executable test suite happens to exist in the repo is not a substitute for the plan's phase gates.** The two answer different questions: a suite covers the code it was written against, while the phase gate is the verification the plan defined for *this* diff. On a doc-authoring plan — where `PROJECT-CONTEXT.md` → Commands has no build, lint, or test command for the touched paths — the phase gate is the **only** verification covering the diff at all, and running an unrelated suite green proves exactly nothing about it. Running a suite is never wrong; accepting it *in place of* the gate is.
 
-**Routing for a red gate.** Exactly two outcomes, and neither is silent:
+**Routing for a red gate.** Exactly three outcomes, and none is silent:
 
-1. **Fix the prose or the code** so the assertion passes as written, or
-2. **Amend the assertion as a recorded plan task**, with its justification and the ID of whatever ruled on it, logged to the plan's `## Progress Log` and its `.progress.md` — the same discipline the plan already requires of the coder.
+1. **Carried, unchanged.** The plan's `.progress.md` already holds a `CODER — GATE` entry for this same gate and file, and the measurement now is no worse than the one recorded there. That is **not** a red for this assertion: re-record it and pass it outward — QA's remediation loop owns it, which is the whole point of the coder recording rather than halting. Only a gate that was green at phase exit, or whose measurement regressed against the carried value, is a red here. `G1` is advisory at this step in every case and never blocks it.
+2. **Fix the prose or the code** so the assertion passes as written, or
+3. **Amend the assertion as a recorded plan task**, with its justification and the ID of whatever ruled on it, logged to the plan's `## Progress Log` and its `.progress.md` — the same discipline the plan already requires of the coder.
 
-**Never rewrite either side silently, and never proceed to the tester on a red gate.** A relaxed assertion that nobody recorded is indistinguishable, one reader later, from a rule that was lost — which is precisely the state a gate exists to prevent.
+**Never rewrite either side silently, and never proceed to the tester on a red gate** — where "red" is outcome 2 or 3's trigger, not a carried finding. A relaxed assertion that nobody recorded is indistinguishable, one reader later, from a rule that was lost — which is precisely the state a gate exists to prevent.
 
 ### Step 2c — Architect: author the interface contract (`PACT`)
 
@@ -1094,11 +1097,11 @@ Then, in order:
 
    **`simplify` and the full test suite run exactly once per run, at this outer join — never per lane, never per sub-lane, at any depth.** Running `simplify` per lane would multiply a pass whose entire value is seeing the union; running the suite anywhere but here would test a workspace other leaves were still mutating.
 
-   **Re-run the leaf plans' own phase gates after `simplify` edits the union diff — mandatory, before the tester.** The rule is identical to Step 3's, one level up in scope: for **every leaf plan in the resolved leaf set**, re-run the gate commands from that plan's `## Verification (per phase)` section for each phase whose touched paths the simplify diff intersects, and **assert exit 0** for every one of them. Each leaf coder verified its own tree; `simplify` then edited across all of them at once, so no leaf's green survives its own diff being rewritten. **Whatever executable suite the repo happens to have is not a substitute for the plan's phase gates** — and on a doc-authoring plan the phase gate is the only verification covering the diff. A red gate routes exactly as at Step 3: fix it, or amend the assertion as a **recorded plan task** with its justification logged to that leaf plan's Progress Log — never a silent rewrite, and **never proceed to the tester on a red gate**.
+   **Re-run the leaf plans' own phase gates after `simplify` edits the union diff — mandatory, before the tester.** The rule is identical to Step 3's, one level up in scope: for **every leaf plan in the resolved leaf set**, re-run the gate commands from that plan's `## Verification (per phase)` section for each phase whose touched paths the simplify diff intersects, and **assert exit 0** for every one of them. Each leaf coder verified its own tree; `simplify` then edited across all of them at once, so no leaf's green survives its own diff being rewritten. **Whatever executable suite the repo happens to have is not a substitute for the plan's phase gates** — and on a doc-authoring plan the phase gate is the only verification covering the diff. A red gate routes exactly as at Step 3 — **all three outcomes, including the first**: a finding already carried in a leaf plan's `.progress.md` at no worse a measurement is **not** a red here and passes outward to the tester and QA; otherwise fix it, or amend the assertion as a **recorded plan task** with its justification logged to that leaf plan's Progress Log — never a silent rewrite, and **never proceed to the tester on a red gate — where "red" excludes a carried finding, and **`G1` is advisory at this step in every case and never blocks it**, exactly as at Step 3.
 
    This does **not** change the cadence rule above: the gates are re-run here because this is where `simplify` runs, and `simplify` still runs exactly once per run.
 
-4. **Run every deferred gate — mandatory, blocking, and the single place any of them runs.** This is the **only** site at which a deferred gate executes, at either depth: Step 3s collects and records its lane's deferrals but runs none of them (Step 3s item 3). So this step collects the deferrals recorded by every **unsplit** lane's coder **and** every deferral each inner join recorded, **de-duplicates them across the whole run**, and runs each **once over the union**. This is the first point at which nothing else is in flight, which is what makes that union a real one. **The de-duplicated set runs in lane-map row order of first deferral**, ties broken by the gate's command string — never analysis order and never completion order, so two runs over the same contract execute the same gates in the same sequence. **A non-zero exit blocks the join** — the run does not proceed to the tester, and routes to `PARTIAL` (3j.1).
+4. **Run every deferred gate — mandatory, blocking, and the single place any of them runs.** This is the **only** site at which a deferred gate executes, at either depth: Step 3s collects and records its lane's deferrals but runs none of them (Step 3s item 3). So this step collects the deferrals recorded by every **unsplit** lane's coder **and** every deferral each inner join recorded, **de-duplicates them across the whole run**, and runs each **once over the union**. This is the first point at which nothing else is in flight, which is what makes that union a real one. **The de-duplicated set runs in lane-map row order of first deferral**, ties broken by the gate's command string — never analysis order and never completion order, so two runs over the same contract execute the same gates in the same sequence. **A non-zero exit blocks the join** — the run does not proceed to the tester, and routes to `PARTIAL` (3j.1) — **except an advisory gate (`G1`), whose union result is recorded and handed to the tester as its coverage input rather than routed to `PARTIAL`.** G1 always reaches this step on the parallel path, because coverage needs the full suite and no lane may run it; blocking the join on it would halt the run in front of the tester, the only role that raises coverage.
 
    **The failure output names the lane(s) that deferred the failing gate**, so de-duplication does not cost attribution: a gate three lanes deferred is run once and reported against all three.
 
@@ -1211,6 +1214,7 @@ Artifact rules: read .orchestrator/artifact-format.md before writing any artifac
 HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
 ID to use: {computed TEST-<id>}
 leaves={comma-separated leaf FEAT IDs, in dispatch order}   ← parallel path ONLY; omit the line entirely on a sequential run
+MAESTRO_REVIEW_BASE={base_sha}   ← the Step 0a pre-flight base; the coverage floor scopes the working tree against it
 
 Run tests for plan {plan_id}.
 Follow your full tester workflow and print the structured output summary.
@@ -1332,6 +1336,7 @@ ORCHESTRATOR CONTEXT (authoritative — do not recompute):
 output_format={resolved output_format}
 Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
 HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
+MAESTRO_REVIEW_BASE={base_sha}   ← the Step 0a pre-flight base; your phase gates scope the working tree against it
 
 Implement plan {fix_plan_id}.
 Follow your full coder workflow and print the structured session summary.
@@ -1355,6 +1360,7 @@ output_format={resolved output_format}
 Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
 HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
 ID to use: {computed TEST-<id>}
+MAESTRO_REVIEW_BASE={base_sha}   ← the Step 0a pre-flight base; the coverage floor scopes the working tree against it
 
 Run tests for plan {fix_plan_id}.
 Follow your full tester workflow and print the structured output summary.
@@ -1545,6 +1551,7 @@ output_format={resolved output_format}
 Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
 HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
 ID to use: {computed QA-<id>}
+MAESTRO_REVIEW_BASE={base_sha}   ← the Step 0a pre-flight base; every gate scopes the working tree against it
 leaves={comma-separated leaf FEAT IDs, in dispatch order}   ← parallel path ONLY; omit the line entirely on a sequential run
 
 Run the QA suite for plan {plan_id}. The plan is DONE and has an APPROVED CR.
@@ -1637,6 +1644,7 @@ ORCHESTRATOR CONTEXT (authoritative — do not recompute):
 output_format={resolved output_format}
 Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
 HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
+MAESTRO_REVIEW_BASE={base_sha}   ← the Step 0a pre-flight base; your phase gates scope the working tree against it
 
 Implement plan {qaf_plan_id}.
 Follow your full coder workflow and print the structured session summary.

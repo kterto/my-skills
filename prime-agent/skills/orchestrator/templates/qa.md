@@ -93,77 +93,34 @@ Result: {PASS | FAIL} — {summary of errors, or "clean"}
 
 ## Step 4b — Clean Code gates (Uncle Bob metrics)
 
-These gates enforce Clean Code principles automatically. Each is BLOCKING — any violation flips the plan to `BLOCKED`. If a tool is not installed or scripted yet for this project, mark the gate `MISSING_TOOL` and surface the install hint in the QA report; missing tooling is itself a BLOCK unless the gate is explicitly tagged `OPTIONAL_UNTIL_TOOL` in the plan's verification section.
+These gates enforce Clean Code principles automatically. A **measured FAIL** flips the plan to `BLOCKED`. `MISSING_TOOL` and `UNMEASURED` are recorded non-failures that never block on their own — mark the gate, surface the install hint in the report, and continue (Step 6, and `.orchestrator/gate-config.md` → *Gate verdict vocabulary*). Blocking on an unmeasurable gate asks the pipeline to fix something no plan can reach: a stack with no mutation runner does not install one mid-run, and the QAF loop would burn its whole budget to `STALLED` on it.
 
 ### Regression-only carve-out (per-phase bake-in)
 
-G2, G4, G5, G7, and format-check commands may be wired as bake-in coder-loop gates per the plan's `## Verification (per phase)` section. When they are, QA's role on those gates is **regression-only**: QA still runs them, still fails the plan if they regress, but the `Verdict` rationale must distinguish:
+**G2, G4, G5, G7 and format-check commands are wired as asserted bake-in coder-loop gates, and G1 as an advisory one the coder measures but never blocks on** for every phase touching a root covered by `.cleancode-gates.json` (`templates/architect.md` → *Verification (per phase)*). On those gates QA's role is **regression-only**: QA still runs them, still fails the plan if they regress, but the `Verdict` rationale must distinguish:
 
 - **first-time discovery** — QA finds a violation the coder's per-phase block should have caught. This indicates the coder skipped Step 4d and is itself a process violation worth flagging in the report.
 - **regression vs phase-exit baseline** — the gate was green at phase exit but flipped red between then and QA. This is the normal QA signal.
 
-G1 (coverage) and G6 (mutation) remain full QA-owned gates with no carve-out — they need full-feature surface and aggregate scoring that per-phase runs can't produce.
+**G6 (mutation) is the only gate that remains fully QA-owned** — it needs the full-feature surface and aggregate scoring a per-phase run cannot produce. **G1 is the one gate you are the first to assert.** The coder measures and records it per phase and the tester raises it, but neither blocks on it — coverage cannot be a hard phase gate without halting the run in front of the tester, the role that closes it. So a G1 miss here is a genuine first assertion, not a missed catch: attribute it to the tester's floor, not to a skipped coder sub-step.
 
-### Gate configuration — where the numbers come from (normative)
+**Attribute every bake-in finding to its stage before you write the verdict** (`.orchestrator/gate-config.md` → *Attributing a finding*). Read the plan's `.progress.md` for a matching `CODER — GATE` entry:
 
-**Every numeric gate threshold a plan, a role prompt, or a report may cite comes from a
-`.cleancode-gates.json`, and from nowhere else. The governing file is the one in the directory the
-gate command runs in** — the runner loads it from its working directory, not by walking up to the repo
-root. So in a monorepo with per-package configs (`apps/*/.cleancode-gates.json`), run each gate once
-per package **from that package's directory**, against that package's own file, with its `roots`,
-`exclude` and `baseline` read relative to that directory. **A repo-root aggregate sitting beside
-per-package files governs nothing**: its `roots` describe a layout that does not exist at the root, so
-every changed file matches nothing, every gate scopes to an empty set, and the report renders green —
-the exact false pass these gates exist to prevent. Check the project's `PROJECT-CONTEXT.md`, which
-records which config is authoritative when more than one exists. This file is written and owned by the `clean-code-gates` skill; this template never restates a
-threshold, and neither does any plan, any role prompt, or any report. A number written in prose is a
-number that drifts from the one the tool enforces — that is how the same diff came to hold a passing
-tester report, a blocking reviewer finding, and a failing QA gate at the same time.
+- **carried** — a `GATE` entry exists. The coder measured it, could not clear it inside its authorized tasks, and said so. This is the system working: remediate it through the normal loop and do not report a process defect.
+- **first-time discovery** — no `GATE` entry. Either the architect omitted the gate from `## Verification (per phase)` or the coder skipped sub-step 4d. Name which in the rationale; the gate result alone does not distinguish them, the progress log does, and the two need different fixes.
+- **regression** — green at phase exit, red now. The ordinary QA signal.
 
-Resolve it like this, per gate:
+### Gate configuration — where the numbers come from
 
-1. **Pick the stack.** `stacks` is keyed by stack name (`node-ts`, `dart-flutter`, …). A changed file
-   belongs to the stack whose `roots` prefix it — the path **equals** a root, or **starts with**
-   `root + '/'` — evaluated relative to the config's own directory; on overlapping roots the longest
-   match wins. A plan touching two stacks runs each gate once per stack, over that stack's own changed
-   files, against that stack's own thresholds.
-   **A changed file that prefixes no stack's `roots` is out of scope for every gate.** That is a
-   legitimate outcome for a config file, a script, or a manifest — but it must be **stated**: list
-   those paths in the report under *ungated (outside all configured roots)*. Never let them pass as
-   gated. If the whole changed set lands there, the gates ran over nothing: report that as
-   `MISSING_TOOL` with the resolved config path, not as a pass.
-2. **Apply the whole exemption filter before any gate runs — there are two mechanisms and they are
-   not interchangeable.** `stacks.<stack>.exclude` is **stack-wide**: a pattern there leaves *every*
-   gate's scope, and it is only for files no gate should ever see (generated, vendored, test files).
-   `gates.<id>.exempt` is the **per-gate** carve-out, and it is what the live configs actually use for
-   grandfathered files — one of them exempts 47 files from `G2` alone while those files stay fully
-   gated by `G1`. A changed file is gated by gate `<id>` only if it survives both. Putting a
-   grandfathered file in `exclude` silently drops it from coverage, mutation, and dependency checks
-   too, which is a far larger hole than the one it was meant to close.
-3. **Read `gates.<id>.thresholds`.** Use the keys **exactly as written for that stack** — they are the
-   underlying tool's own option names and they differ between stacks (node-ts G2 uses `complexity`,
-   `maxDepth`, `maxLinesPerFunction`, `maxParams`, `maxStatements`; dart-flutter G2 uses
-   `cyclomatic-complexity`, `maximum-nesting-level`, `number-of-parameters`, `source-lines-of-code`).
-   Never translate a key. **And never read an absent key, gate, or `thresholds` object as
-   "ungated":** `clean-code-gates` deep-merges its own built-in defaults *underneath* this file, so
-   anything the file omits is still enforced by the tool, at the tool's default value. Report such a
-   gate `MISSING_TOOL` with the note *threshold not configured — tool default applies*, never as a
-   pass, and never publish a number for it.
-4. **`baseline`** names that stack's grandfather manifest, if any (see the baseline mechanism below).
-   Note it is consumed by **the project's own lint command**, not by the gate runner — a plausible
-   path in that key is not evidence the mechanism is wired. Confirm against `PROJECT-CONTEXT.md`.
-
-`PROJECT-CONTEXT.md` remains authoritative for the **commands** — what to run for each gate on each
-layer. `.cleancode-gates.json` is authoritative for the **thresholds, roots, exclusions, and
-baseline**. Neither restates the other.
-
-**If `.cleancode-gates.json` is absent or unreadable, report every numeric gate as `MISSING_TOOL` and
-stop.** Do not fall back to remembered defaults: a gate enforcing a number nobody configured is worse
-than a gate that reports it cannot run, because it looks authoritative.
+**Read `.orchestrator/gate-config.md` and apply it in full.** **If `.orchestrator/gate-config.md` is absent, do not improvise the rules from memory** — report the gate step `MISSING_TOOL` naming that path and tell the user to re-run `/orchestrator --setup`; a remembered threshold or a guessed scope is exactly the drift this file exists to end. It is normative for this template and
+carries: the config-resolution rule (which `.cleancode-gates.json` governs, per-stack selection, key
+names, the deep-merged defaults), the two-tier exemption filter (`exclude` vs `gates.<id>.exempt`), the
+changed-file command, and the `MISSING_TOOL` / `UNMEASURED` vocabulary. The coder and the tester read
+the same file, which is what keeps the three of you measuring one thing.
 
 ### G1 — Test coverage threshold (F.I.R.S.T. — `Self-Validating`)
 
-Parse coverage output from the test suite commands. Require the stack's `G1.thresholds`, whatever keys it defines, for files changed in this plan. **A threshold whose metric the coverage tool does not emit is `UNMEASURED`, not a failure** — `flutter test --coverage` writes line records and zero branch records, so `branches` cannot be scored on `dart-flutter` from that instrument. Report the key as `UNMEASURED` with its stack, and gate on the keys that were actually measured; scoring an absent denominator as a miss fails every plan on that stack forever, which reads as a broken gate rather than a real signal. (compute changed file list via `git diff --name-only $(git merge-base HEAD origin/main)..HEAD`). Untested changed file = automatic fail.
+Parse coverage output from the test suite commands. Require the stack's `G1.thresholds`, whatever keys it defines, for files changed in this plan. **A threshold whose metric the coverage tool does not emit is `UNMEASURED`, not a failure** — `flutter test --coverage` writes line records and zero branch records, so `branches` cannot be scored on `dart-flutter` from that instrument. Report the key as `UNMEASURED` with its stack, and gate on the keys that were actually measured; scoring an absent denominator as a miss fails every plan on that stack forever, which reads as a broken gate rather than a real signal. Compute the changed-file list with the command in *Gate configuration* above — never a two-dot range. Untested changed file = automatic fail.
 
 Exempt from G1's per-file gate: whatever the stack's `exclude` globs remove, plus whatever `gates.G1.exempt` lists. A file that needs a G1 carve-out belongs in `gates.G1.exempt` — not in `exclude`, which would drop it from every other gate as well. The list is bounded — widening it requires an architect plan, not a comment. Note any carve-outs in the gate report.
 
@@ -204,7 +161,7 @@ Allow only:
 Reject inline comments inside function bodies, region markers, and "what" comments that do not match the allow-list. Run a grep audit on changed files (adjust extensions to match the project's languages):
 
 ```
-git diff --name-only $(git merge-base HEAD origin/main)..HEAD \
+{ git diff --name-only --relative "${MAESTRO_REVIEW_BASE:-$(git merge-base HEAD origin/main)}"; git ls-files --others --exclude-standard; } | sort -u \
   | xargs -I{} sh -c 'awk "
       /^[[:space:]]+\/\/[[:space:]]*(TODO\\(REF\\)|(SPEC|FEAT|FIX|CR|QA|QAF)-([0-9]{8}T[0-9]{6}Z-[0-9a-f]{4}|[0-9]+))/ { next }
       /^[[:space:]]+\/\/[^\/]/ || /^[[:space:]]+\/\*[^*]/ { print FILENAME\":\"NR\": \"\$0 }
@@ -339,8 +296,10 @@ type_errors: {N}
 
 ## Step 6 — Set status
 
-- **READY_TO_COMMIT**: All test suites pass, zero lint errors, zero type/build errors, zero format issues, static analysis clean, **all Clean Code gates G1–G7 PASS**, G8 ≤ 0.5.
-- **BLOCKED**: Any test failure, lint error, type/build error, format issue, **any G1–G7 FAIL or MISSING_TOOL** (unless explicitly OPTIONAL_UNTIL_TOOL).
+- **READY_TO_COMMIT**: All test suites pass, zero lint errors, zero type/build errors, zero format issues, static analysis clean, **every Clean Code gate G1–G7 either PASS or carrying a recorded non-failure verdict** (`MISSING_TOOL`, `UNMEASURED`, or at-or-below a recorded baseline — see `.orchestrator/gate-config.md`), G8 ≤ 0.5.
+- **BLOCKED**: Any test failure, lint error, type/build error, format issue, or **any G1–G7 measured FAIL**.
+
+**A `MISSING_TOOL` or `UNMEASURED` verdict does not block on its own.** It is not a failure and not a pass: it means no value exists to compare, so blocking on it asks the pipeline to fix something no plan can reach — a stack with no mutation runner never installs one mid-run, and `flutter test --coverage` will not start emitting branch records. Report it prominently, name it in the verdict rationale, and let the run proceed on the gates that *were* measured. Adjudicating it case by case is what let two QA reports on the same feature, hours apart, reach opposite verdicts on an identical unmeasured gate.
 - **READY_WITH_WARNINGS**: All blocking checks pass but G8 > 0.5 (HIGH_REWORK). Plan can ship; flag in report so the human investigates root cause.
 
 ## Step 7 — Update plan and progress files

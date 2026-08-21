@@ -40,8 +40,8 @@
     {
       "why": "arch-2: the B3 summary must list the role directory it now creates.",
       "count": 1,
-      "find": "4. **Print bootstrap summary**: list all created/updated paths (including `.orchestrator/artifact-format.md`, `.orchestrator/config.md`, `.orchestrator/html-templates/`, and the four `.orchestrator/*.cjs` render/gate scripts) and the achieved context confidence.",
-      "replace": "4. **Print bootstrap summary**: list all created/updated paths (including `.orchestrator/roles/`, `.orchestrator/artifact-format.md`, `.orchestrator/config.md`, `.orchestrator/html-templates/`, and the four `.orchestrator/*.cjs` render/gate scripts) and the achieved context confidence."
+      "find": "4. **Print bootstrap summary**: list all created/updated paths (including `.orchestrator/artifact-format.md`, `.orchestrator/config.md`, `.orchestrator/gate-config.md`, `.orchestrator/html-templates/`, and the four `.orchestrator/*.cjs` render/gate scripts) and the achieved context confidence.",
+      "replace": "4. **Print bootstrap summary**: list all created/updated paths (including `.orchestrator/roles/`, `.orchestrator/artifact-format.md`, `.orchestrator/config.md`, `.orchestrator/gate-config.md`, `.orchestrator/html-templates/`, and the four `.orchestrator/*.cjs` render/gate scripts) and the achieved context confidence."
     },
     {
       "why": "bug-10: condition 6 tested for a subagent tool Prime does not have, so every Prime run degraded to parallelism: off before the slicing analysis was ever spawned.",

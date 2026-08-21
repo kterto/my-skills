@@ -118,7 +118,7 @@ related_to: {comma-separated IDs of related plans/specs/CRs/QA reports, or "—"
 
 > Tasks are ordered TDD-first: write/update tests before implementation.
 > The coder will check off [ ] → [x] as each task is verified.
-> Each phase ends with a `### Phase N verification` checklist that the coder MUST run + assert green before checking the last task in the phase. The exact commands per phase come from `## Verification (per phase)` below.
+> Each phase ends with a `### Phase N verification` checklist the coder MUST run and RECORD the verdict of before checking the last task in the phase — exit 0, or a carried `CODER — GATE` entry naming the fix it rejected and why. A gate it cannot clear never blocks the phase. The exact commands per phase come from `## Verification (per phase)` below.
 
 - [ ] Write failing test(s) for {first unit of work}
 - [ ] Implement {first unit of work} to pass tests
@@ -130,13 +130,15 @@ related_to: {comma-separated IDs of related plans/specs/CRs/QA reports, or "—"
 
 > Emit this section in EVERY FEAT plan. Before checking off the LAST task in
 > any phase, the coder runs the gate commands from the Commands section of
-> PROJECT-CONTEXT.md that apply to the phase's touched paths and asserts each
-> exits 0. A failure routes through the coder's BLOCKED step, not a silent
-> rewrite.
+> PROJECT-CONTEXT.md that apply to the phase's touched paths and records the
+> verdict of each. A failure it cannot clear inside its authorized tasks is
+> RECORDED as a `CODER — GATE` entry in `.progress.md` and the phase proceeds —
+> never a `BLOCKED` stop, and never a silent rewrite.
 
-Apply the Commands section of `PROJECT-CONTEXT.md` to determine the per-phase gate commands. Run only those whose path condition matches the phase's diff. Phase exit criterion: ALL applicable commands exit 0 on the changed set. No silent rewrites of source to make a gate pass without a corresponding plan task.
+Apply the Commands section of `PROJECT-CONTEXT.md` to determine the per-phase gate commands. Run only those whose path condition matches the phase's diff. Phase exit criterion: EVERY applicable command was run and its verdict recorded — exit 0, or a carried `GATE` entry naming the fix that was rejected and why. No silent rewrites of source to make a gate pass without a corresponding plan task.
 
-G1 (coverage) and G6 (mutation, when scaffolded) are NOT emitted here — they remain QA-only.
+`G1 (advisory — tester closes)` is measured and recorded here, never asserted exit 0.
+
 
 ## Dependencies
 
@@ -146,6 +148,27 @@ G1 (coverage) and G6 (mutation, when scaffolded) are NOT emitted here — they r
 
 <!-- Agents append below. Never rewrite entries. Newest on top. -->
 ```
+
+### Which gates a phase carries (authoring guidance — not emitted into the plan)
+
+**Emit G2, G4, G5 and G7 as asserted phase gates** for every phase touching a root covered by
+`.cleancode-gates.json`. They are no longer QA-first: a gate that only runs at QA is discovered two
+roles after the code was written, and clearing it then costs a whole remediation run, where clearing
+it at phase exit costs the coder minutes on code it still has in mind.
+
+**Emit G1 as an advisory measurement**, tagged `G1 (advisory — tester closes)` — measured and recorded
+by the coder, **never asserted exit 0**. The role that raises coverage to the floor is the **tester**,
+which runs *after* the post-simplify phase-gate re-run and *after* the deferred-gate join. Asserting
+G1 at either point halts the run in front of the only role that could clear it — and normal TDD phase
+output sits below the configured floor until the tester has been. The tester's own below-floor result
+is a soft warning, never a halt; an earlier, harder assertion of the same measurement would be
+strictly worse than leaving G1 to QA.
+
+**Only G6 (mutation) stays QA-owned** — it needs aggregate scoring across the whole feature surface
+that a per-phase run cannot produce.
+
+Scope every emitted gate to the phase's changed files, which is what the gate measures anyway. For a
+phase that touches no covered root, emit no gate and say so.
 
 ## Step 3R — Build the requirement coverage map (type `feat` with a source spec)
 
@@ -377,7 +400,7 @@ Status: PLANNED. Ready for coder.
 - Never plan out-of-scope items from PROJECT-CONTEXT.md. If the request asks for one, surface the conflict and stop.
 - If a plan touches an open product decision listed in PROJECT-CONTEXT.md, surface the decision dependency — do not silently pick.
 - **Never author a gate threshold in a plan.** Every numeric threshold lives in `.cleancode-gates.json` at the project root, per stack, and QA enforces it from there. A gate belongs in `## Verification (per phase)`, **not** in the acceptance-criteria list — the reviewer owns every criterion and runs no gates, so a criterion reading "passes G1" is rubber-stamped or estimated, which is the unowned guessed threshold this rule exists to delete. When a criterion genuinely must reference one, name the gate and the stack and suffix it `(QA-verified)` — "passes G2 for `dart-flutter` (QA-verified)" — never restating a number, because a number written here is a number that can disagree with the one the tool runs. It is exactly how a plan came to demand one complexity limit while the gate enforced a stricter one, and every plan written against the looser number failed QA. Exemptions are likewise not authored here: a per-gate carve-out belongs in that gate's `gates.<id>.exempt` list, which is what the live configs use. Do **not** send it to `exclude` — that is stack-wide and would drop the file from every other gate too.
-- G1 (coverage) and G6 (mutation) remain QA-only — do NOT emit them in `## Verification (per phase)`.
+- **G6 (mutation) is the only QA-only gate — do NOT emit it in `## Verification (per phase)`.** G1, G2, G4, G5 and G7 ARE emitted there for every phase touching a covered root (see *Verification (per phase)*): a gate the coder cannot see is a gate discovered two roles late, and clearing it then costs a full remediation run.
 - FIX and QAF plans inherit `## Verification (per phase)` ONLY when the plan touches production code that the gates cover. Doc-only FIX plans (plan-file reconciliations, README updates, spec rewrites, ADR updates) skip the verification section.
 - A `PACT` carries no `## Tasks` and no `## Verification (per phase)` section — it is a contract, not a plan. The work it governs lives in the lane `FEAT` plans.
 - Never emit a `PACT` with an unvalidated, unbounded, `..`-escaping, or overlapping path glob. Reject and repair before writing; drop and report a lane you cannot bound.
