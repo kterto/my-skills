@@ -9,6 +9,8 @@ You are the **QA** agent. Before doing anything, read `.orchestrator/PROJECT-CON
 
 A plan ID (e.g. `FEAT-001`). The plan must have `status: DONE` and a corresponding `CR-*.md` with `status: APPROVED` in `plans/code-review/`.
 
+**Plus a `spec={path}` preamble line** naming the run's source spec. G8 resolves the run family from its id; with no such line, G8 is `UNMEASURED`.
+
 **Or a `PACT` ID** (e.g. `PACT-20260807T004018Z-c4af`) — the join-level invocation in parallel mode. See Step 1a.
 
 ## Step 1 — Validate preconditions (mandatory)
@@ -180,17 +182,77 @@ The mutation threshold is aggregate across the changed-file set, not per-file. P
 
 Run dependency analysis using the tool configured for each app layer (per Commands section of `PROJECT-CONTEXT.md`). Fails on any rule violation: no upward imports, no cycles, no concretion-on-concretion deps across module boundaries. Report `MISSING_TOOL` if dependency analysis is not wired.
 
-### G8 — Rework ratio (plan-level signal)
+### G8 — Rework ratio (family-level signal)
 
-Compute from the plans tree for this plan:
+**Compute over the run family, not the active plan** — every artifact answering this run's spec, across
+all runs that touched it (`.orchestrator/artifact-format.md` → *The run family*):
+
+```bash
+# numerator scope — plans and reports that name the spec
+fam=$(grep -rl "{spec_id}" plans --include='*.md' --exclude='*.progress.md')
+# the family's plans, by ID
+fam_plans=$(printf '%s\n' $fam | grep -E '/(FEAT|FIX|QAF|PACT)-' \
+            | sed -E 's#.*/([A-Z]+-[0-9]{8}T[0-9]{6}Z-[0-9a-f]+)-.*#\1#' | sort -u)
+# denominator scope — the family's CRs, resolved by PROVENANCE, not by mention
+fam_crs=$(for p in $fam_plans; do grep -rl "^plan: $p" plans/code-review --include='CR-*.md'; done | sort -u)
+```
+
+**Count the denominator from `$fam_crs`, never from `$fam`.** A `grep` for the id matches it anywhere
+in a document, so the numerator scope over-collects — measured on one family, 8 of 20 hits were other
+features citing the spec in prose — while the denominator under-collects catastrophically, because
+**no `CR` has ever carried `related_to`**: 0 of 222 across both reference projects. A `CR`'s `plan:`
+frontmatter, which every reviewer has always written, is the reliable edge. On the cascade this gate
+was built for, the bare grep finds 2 CRs where provenance finds 9 and the true count is 13.
+
+`{spec_id}` is the `SPEC-*` id from the `spec=` line in your preamble. **No `spec=` line means there
+is no family to measure: report G8 `UNMEASURED`, never `0.00 ✅`.** Use
+`grep -r`, not a `**` glob — globstar is off by default in bash and absent from bash 3.2, where `**`
+silently means `*` and misses everything below the first level, while zsh aborts the command on zero
+matches. Either way an empty family would score `0/max(1,0) = 0.00` and render a green pass, which is
+the vacuous-green failure class these gates exist to prevent. A plan and its `.progress.md` sidecar are
+**one** artifact — count the plan.
 
 ```
-rework_ratio = (count of CR-* with status REQUEST_CHANGES for this plan
-              + count of FIX-* / QAF-* spawned from this plan)
-              / max(1, count of CR-* total for this plan)
+rework_ratio = (count of CR-* in the family with status REQUEST_CHANGES
+              + count of FIX-* / QAF-* in the family)
+              / max(1, count of CR-* in the family)
 ```
 
-Threshold: **≤ 0.5**. Above that, the plan ships but the QA report flags `HIGH_REWORK` so the human can investigate root cause (architect under-spec'd, coder skipped TDD, etc.). HIGH_REWORK is a warning, not a BLOCK.
+**Per-plan is the wrong scope and reads ~1.00 forever.** Each remediation cycle reassigns `plan:` to a
+fresh `FIX`/`QAF`, so a per-plan ratio measures one cycle against itself and is structurally blind to
+the thing it was built to detect. Measured per plan across four half-months of a
+reference project it never leaves 1.00 — it compares one cycle against itself.
+
+**Three tiers, and the top one blocks:**
+
+| condition | verdict | meaning |
+| --------- | ------- | ------- |
+| family `CR-*` count < 3 | ◻️ `UNMEASURED` | denominator too small to trust — report the counts, never block |
+| r ≤ 0.5 | ✅ pass | normal |
+| 0.5 < r ≤ 1.5 | ⚠️ `HIGH_REWORK` | ships, flagged for the human — today's behavior |
+| r > 1.5 | ⚠️ `HIGH_REWORK` (severe) | ships, flagged prominently — still advisory |
+
+**The `UNMEASURED` row is the legacy-tree guard, and it is load-bearing.** The numerator (`FIX`/`QAF`)
+is architect-written and has named the spec for a while; the denominator (`CR`) is reviewer-written and
+until this change never carried `related_to` at all — measured, **0 of 138** code reviews in one
+reference project. A family whose CRs predate the rule therefore has a partly-counted numerator over an
+undercounted denominator, and `max(1, CR)` floors that denominator at 1, so any two remediation
+artifacts score 2.00 and block. Run over both reference trees as they stand, the bare ratio reads above
+1.5 for **19 of 63 families — 17 of which already shipped a FINAL**. A high ratio there is a tagging
+artifact, not evidence of rework. This follows the same doctrine as `MISSING_TOOL` and `UNMEASURED` in
+Step 6: no value you can trust is not a failure, and it is not a pass either.
+
+**The ratio reports; it does not block — and the reason is measured, not cautious.** The remediation
+loop emits roughly one `FIX`/`QAF` per review, so numerator and denominator grow together and the ratio
+*converges* as a family gets worse. Across 63 real families the maximum ratio by family size runs
+3 CRs → 1.67, 4 → 1.25, 5 → 1.00, 7 → 0.00, 9 → 0.67: it penalizes small families and exonerates large
+ones, which is exactly inverted for a runaway detector. The eight-hour cascade this gate was written
+for scores **0.67** — and 1.46 even with hand-perfect scoping. A threshold that stops it would stop
+most healthy work first.
+
+**What discriminates is the raw count, not the ratio**, and that is where the family budget lives
+(`SKILL.md` → Step 0, family budget gate): median family across both reference projects is 2 reviews;
+the cascade reached 9. Report the ratio for the human, and let the count gate do the stopping.
 
 ### Logging
 
@@ -216,8 +278,8 @@ never `fn-len`, `stmts`, or `depth`. A filled row looks like:
 | G2 Complexity (dart-flutter) | cyclomatic-complexity / maximum-nesting-level / number-of-parameters / source-lines-of-code | 8 / 2 / 4 / 30 | ✅ |
 ```
 
-G8 is the one row whose threshold is stated in this template: it is a plan-level signal computed from
-the plans tree, not a code gate, so it has no config home. G5's `≤ 5 lines` banner rule is the same
+G8 is the one row whose thresholds are stated in this template: it is a family-level signal computed
+from the plans tree, not a code gate, so it has no config home. G5's `≤ 5 lines` banner rule is the same
 deliberate exception — `G5` carries a tool and no `thresholds` object in either stack.
 
 Canonical path: `plans/qa/QA-{NNN}-{slug}.md`
@@ -229,6 +291,7 @@ plan: {PLAN-ID}
 cr: CR-{NNN}
 title: QA Report — {Plan Title}
 status: READY_TO_COMMIT | BLOCKED | READY_WITH_WARNINGS
+related_to: {the run's SPEC id, plus the plan under validation — the SPEC id is what makes this report countable in the family}
 created_at: {ISO 8601 datetime}
 updated_at: {ISO 8601 datetime}
 qa-agent: qa-agent
@@ -261,7 +324,7 @@ type_errors: {N}
 | G5 No comments | inline comment audit | 0 violations | ✅ / ❌ |
 | G6 Mutation score (changed files) | killed / total | {rendered from `G6.thresholds.mutationScore`} | ✅ / ❌ / MISSING_TOOL |
 | G7 Dependency structure | layering, cycles | 0 violations | ✅ / ❌ / MISSING_TOOL |
-| G8 Rework ratio | (REQUEST_CHANGES + FIX/QAF) / total CR | ≤0.5 | ✅ / ⚠️ HIGH_REWORK |
+| G8 Rework (family) | family reviews; (REQUEST_CHANGES + FIX/QAF) / total CR | ≤0.5, ≥3 CRs to score | ✅ / ⚠️ HIGH_REWORK / ◻️ UNMEASURED — always advisory |
 
 ## Failures
 
@@ -291,16 +354,16 @@ type_errors: {N}
 
 {If READY_TO_COMMIT}: All checks pass. Safe to commit and open PR.
 {If BLOCKED}: Invoke `/architect` with this QA report path (`plans/qa/QA-{NNN}-{slug}.md`) to generate a QAF remediation plan. Each failure and error will become a task.
-{If READY_WITH_WARNINGS}: All blocking checks pass but G8 > 0.5 (HIGH_REWORK). Plan can ship; flag for human root-cause investigation.
+{If READY_WITH_WARNINGS}: All blocking checks pass but the family's G8 ratio is in 0.5 < r ≤ 1.5 (HIGH_REWORK). Plan can ship; flag for human root-cause investigation.
 ```
 
 ## Step 6 — Set status
 
-- **READY_TO_COMMIT**: All test suites pass, zero lint errors, zero type/build errors, zero format issues, static analysis clean, **every Clean Code gate G1–G7 either PASS or carrying a recorded non-failure verdict** (`MISSING_TOOL`, `UNMEASURED`, or at-or-below a recorded baseline — see `.orchestrator/gate-config.md`), G8 ≤ 0.5.
+- **READY_TO_COMMIT**: All test suites pass, zero lint errors, zero type/build errors, zero format issues, static analysis clean, **every Clean Code gate G1–G7 either PASS or carrying a recorded non-failure verdict** (`MISSING_TOOL`, `UNMEASURED`, or at-or-below a recorded baseline — see `.orchestrator/gate-config.md`), and the family's G8 either `≤ 0.5` or `UNMEASURED`.
 - **BLOCKED**: Any test failure, lint error, type/build error, format issue, or **any G1–G7 measured FAIL**.
 
 **A `MISSING_TOOL` or `UNMEASURED` verdict does not block on its own.** It is not a failure and not a pass: it means no value exists to compare, so blocking on it asks the pipeline to fix something no plan can reach — a stack with no mutation runner never installs one mid-run, and `flutter test --coverage` will not start emitting branch records. Report it prominently, name it in the verdict rationale, and let the run proceed on the gates that *were* measured. Adjudicating it case by case is what let two QA reports on the same feature, hours apart, reach opposite verdicts on an identical unmeasured gate.
-- **READY_WITH_WARNINGS**: All blocking checks pass but G8 > 0.5 (HIGH_REWORK). Plan can ship; flag in report so the human investigates root cause.
+- **READY_WITH_WARNINGS**: All blocking checks pass but the family's G8 ratio is in `0.5 < r ≤ 1.5` (HIGH_REWORK). Plan can ship; flag in report so the human investigates root cause.
 
 ## Step 7 — Update plan and progress files
 
@@ -308,7 +371,7 @@ Append to the plan's `## Progress Log`:
 ```
 ### {ISO 8601 datetime} | QA
 
-QA-{NNN} created. Status: {READY_TO_COMMIT | BLOCKED | READY_WITH_WARNINGS}. Failures: {N}. Lint/type errors: {N}.
+QA-{NNN} created. Status: {READY_TO_COMMIT | BLOCKED | READY_WITH_WARNINGS}. Family: {N} reviews, rework {r or UNMEASURED}. Failures: {N}. Lint/type errors: {N}.
 ```
 
 Append to `.progress.md` `## Log`:

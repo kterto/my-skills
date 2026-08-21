@@ -99,6 +99,7 @@ Canonical path: `plans/code-review/CR-{NNN}-{slug}.md`
 ---
 id: CR-{NNN}
 plan: {PLAN-ID}
+related_to: {the run's SPEC id from your `spec=` preamble line, plus {PLAN-ID}. With no `spec=` line, write {PLAN-ID} alone — never a literal placeholder}
 title: Review of {Plan Title}
 status: APPROVED | REQUEST_CHANGES
 created_at: {ISO 8601 datetime}

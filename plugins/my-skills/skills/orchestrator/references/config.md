@@ -11,6 +11,7 @@
 | `max_review_cycles` | integer | `10` | `--max-review` |
 | `max_qa_cycles` | integer | `5` | `--max-qa` |
 | `max_eval_cycles` | integer | `2` | — |
+| `max_family_cycles` | integer | `6` | — |
 | `agent_sync_targets` | array of strings | `[]` | — (tooling-only) |
 | `parallelism` | string (`off` \| `ask` \| `lanes` \| `full`) | `"off"` | `--parallel` |
 | `lanes` | array of `{name: string, path: string, sublanes?: [{name, path}]}` | `[]` | — |
@@ -20,6 +21,8 @@
 `automation_level` governs whether the brainstormer stops to interview the user. `manual` (default) runs the full interview loop and confirmation gate. `autonomous` resolves every open question with the brainstormer's own stated default (recorded under "Decisions resolved by Brainstormer default") and produces a `READY_FOR_PLANNING` spec with no prompts. Only the brainstormer acts on this key; all other roles ignore it.
 
 `clarity_threshold` is the brainstormer's per-spec interview target in `manual` mode: it keeps asking the user questions — one answer at a time, re-rating clarity after each reply — until its self-rated spec clarity reaches this value, with **no cap on the number of questions**. Distinct from `context_threshold`, which gates only the bootstrap PROJECT-CONTEXT interview. Ignored in `autonomous` mode (no interview) and by all non-brainstormer roles.
+
+`max_family_cycles` bounds how many code reviews one **run family** — every artifact answering the same `SPEC-*`, across every run that touched it (`artifact-format.md` → *The run family*) — may accumulate before the orchestrator refuses to start another. It is the only budget that survives a new run: `max_review_cycles`, `max_qa_cycles` and `max_eval_cycles` all reset to zero on a fresh invocation, so work that overflows a run leaves the reach of every one of them. On the run this key was written for, the in-run review counter peaked at 4 of a permitted 10 while the family reached 13 reviews across 11 slugs. Reaching it is a `STALLED` stop with the family's history printed, and `--override-family-budget` continues past it for one invocation, on the record. Calibrated against both reference projects: across 63 real families the median is **2** reviews, while the eight-hour cascade this key exists to stop reached **9**. At `6` the gate fires on 4 of 63 families; at `8`, on the cascade alone. It keys on the raw review **count**, not on G8's rework ratio — the ratio converges as a family worsens (that same cascade scores 0.67) and so cannot discriminate, while the count separates cleanly.
 
 `max_eval_cycles` bounds how many times the in-loop spec eval (SKILL.md Step 4e) may fire in one run. The eval runs on every reviewer `APPROVED` and, on `ISSUES`, remediates through the ordinary review loop — so it shares and consumes `max_review_cycles`, and this key exists only to stop the eval itself from becoming the thing that never converges. Reaching it is a `STALLED` stop reported to the user, not a silent ship: repeated `ISSUES` on the same criteria means the spec and the implementation disagree in a way no further remediation run will settle. The default of `2` is deliberately tight — one eval, one chance to remediate. Raise it only with evidence that a third pass converges.
 
@@ -559,12 +562,13 @@ Declaring a key "integer" constrains its **type**, not its **usability**, and bo
 | Key | Accepted | Why the boundary is there |
 | --- | -------- | ------------------------- |
 | `max_parallel_lanes` | a **finite integer ≥ 1** | It caps in-flight dispatch width as a wave size (Steps 2L/3L). A wave of **0** dispatches nothing and the run cannot progress; a **negative** width has no meaning at all. `1` is the honest floor — it degrades the fan-out to fully serial, which is a legitimate configuration. |
+| `max_family_cycles` | a **finite integer ≥ 0** | `0` disables the family budget gate entirely, which is the pre-P5 behavior and a legitimate choice for a project that would rather ship than stop. A **negative** cap is already at the budget before any review exists, so it expresses `0`'s intent without `0`'s explicit disable. |
 | `max_eval_cycles` | a **finite integer ≥ 0** | `0` is meaningful and supported: the in-loop spec eval (Step 4e) is disabled for the project and the step resolves straight to `SKIPPED`, which is how a project without `spec-driven-eval` installed already behaves. A **negative** cap makes the `eval_cycle` comparison undefined — past the cap before the first eval — so the intent it expresses is already `0`'s, but without `0`'s explicit `SKIPPED` status and its report line. |
 | `max_contract_amendments` | a **finite integer ≥ 0** | `0` is meaningful and supported: amendment is disabled, and the first `contract violation` falls straight back to sequential. A **negative** cap makes the `amendment_count` comparison undefined — already at or past the cap before any amendment is attempted — so the intent it expresses is already `0`'s. |
 
 Non-integers, non-finite values (`NaN`, `Infinity`), and non-numeric types are rejected the same way an out-of-range integer is.
 
-**Validation happens at config resolution (Step 0b), before any dispatch, and fails closed.** A value outside its range does **not** halt the run and is **never clamped silently** — it resolves to the key's **canonical default** (`6` / `2` / `2`) with the reason printed:
+**Validation happens at config resolution (Step 0b), before any dispatch, and fails closed.** A value outside its range does **not** halt the run and is **never clamped silently** — it resolves to the key's **canonical default** (`6` / `2` / `2` / `6`) with the reason printed:
 
 ```
 config: max_parallel_lanes {value} out of range (finite integer ≥ 1) — using default 6
@@ -581,7 +585,7 @@ A lane coder may never unilaterally change the contract: discovering a frozen in
 ## Canonical Default Object
 
 ```json
-{ "context_threshold": 0.95, "clarity_threshold": 0.99, "output_format": "md", "automation_level": "manual", "max_review_cycles": 10, "max_qa_cycles": 5, "max_eval_cycles": 2, "agent_sync_targets": [], "parallelism": "off", "lanes": [], "max_parallel_lanes": 6, "max_contract_amendments": 2 }
+{ "context_threshold": 0.95, "clarity_threshold": 0.99, "output_format": "md", "automation_level": "manual", "max_review_cycles": 10, "max_qa_cycles": 5, "max_eval_cycles": 2, "max_family_cycles": 6, "agent_sync_targets": [], "parallelism": "off", "lanes": [], "max_parallel_lanes": 6, "max_contract_amendments": 2 }
 ```
 
 `sublanes` does not appear in the default object because it is a **property of a `lanes[]` entry**, not a top-level key, and `lanes` defaults to `[]` — so there is no entry to carry it. `templates/config.template.json` is byte-identical to the object above in key set and defaults.
@@ -599,10 +603,12 @@ A lane coder may never unilaterally change the contract: discovering a frozen in
 | `--parallel` | `parallelism` |
 | `--setup` | Force bootstrap (does not map to a config key) |
 | `--resume` | Opt into resuming a prior halted parallel run (does not map to a config key) |
+| `--override-family-budget` | Skip the family budget gate for one invocation. Maps to no config key — a per-invocation intent, like `--resume`. Recorded in the plan's `.progress.md` and in the FINAL report. |
+| `SPEC-*` id or `plans/specs/…` path (positional) | Reuse that spec instead of brainstorming a new one (SKILL.md → Step 1, *Spec reuse*). Maps to no config key. **Required for a re-run to join the prior run's family** — without it every run starts a new family and no family budget can accumulate. |
 
 `--resume` is a per-invocation intent, not a setting — like `--setup`, it maps to **no config key** and cannot be made sticky in `.orchestrator/config.json`. Its detection, opt-in, and re-entry semantics are normative in `SKILL.md` → Step 0.
 
-`lanes`, `sublanes`, `max_parallel_lanes`, `max_contract_amendments`, and `max_eval_cycles` have **no CLI arg** — set them in `.orchestrator/config.json` directly.
+`lanes`, `sublanes`, `max_parallel_lanes`, `max_contract_amendments`, `max_eval_cycles`, and `max_family_cycles` have **no CLI arg** that sets their value (`--override-family-budget` bypasses the budget for one run; it does not change the key) — set them in `.orchestrator/config.json` directly.
 
 ## Precedence
 

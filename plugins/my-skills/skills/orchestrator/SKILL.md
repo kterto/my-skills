@@ -208,7 +208,50 @@ Reviewer/architect-fix runs honor an explicit pre-chosen path env var when set (
 
 This step runs before anything else. Its goal: **always start the pipeline in a clean, isolated workspace** — a fresh feature branch or a git worktree. Never run on a protected branch (`main` / `master` / `dev` / `develop` / `trunk`) and never run with a dirty working tree.
 
-Parse the invocation's arguments here, including **`--resume`** (see 0r). `--resume` maps to no config key — it is a per-invocation intent, like `--setup` (`references/config.md` → Accepted CLI Args).
+Parse the invocation's arguments here, including **`--resume`** (see 0r) and **`--override-family-budget`** (see the family budget gate below). `--resume` maps to no config key — it is a per-invocation intent, like `--setup` (`references/config.md` → Accepted CLI Args).
+
+**Family budget gate — run it before the workspace gate, and before Step 1.** When the invocation names an existing spec — the reuse
+form at Step 1, an explicit `SPEC-*` id or a `plans/specs/` path — resolve that spec's family and count its reviews
+**exactly as `.orchestrator/artifact-format.md` → *The run family* specifies** — the grep finds the
+family's plans, and each plan's reviews resolve by provenance from their `plan:` frontmatter. Do not
+restate the commands here; one normative copy is what stops this gate and QA's G8 drifting apart about
+the same family.
+
+Counting grep hits instead would make this gate inert: no `CR` written before that rule existed carries
+the spec id at all — 0 of 222 across both reference projects — so the cascade family reads **2**
+reviews by grep where provenance resolves **9** and the true lineage is 13. A budget of 6 never fires
+on a 2. **If that count is at or above `max_family_cycles`, do not start.** Print the family
+oldest-first and stop:
+
+```
+ORCHESTRATOR — family budget exhausted before start
+Spec: {spec_path}
+Family reviews to date: {family_cr_count} / {max_family_cycles}
+Most recent: {last 3 family artifacts with dates}
+Status: STALLED — human intervention required
+```
+
+**This gate exists because the in-run counters cannot see the thing that actually runs away.**
+`max_review_cycles`, `max_qa_cycles` and `max_eval_cycles` are scoped to one invocation and start at
+zero every time, so a new run on the same spec — whichever launched it, this orchestrator or a person
+starting it by hand — begins with a clean budget no matter how much rework preceded it. On the run this gate was written for, the in-run counter
+peaked at 4 of a permitted 10 while the family reached 13 reviews across 11 slugs, and every cap held
+the whole time. **The count is what discriminates**: across 63 real families the median is 2 reviews
+and that cascade reached 9. G8's rework *ratio* cannot do this job — it converges as a family worsens,
+scoring the cascade 0.67 — which is why it reports and this gate stops. A budget that only counts inside a run
+cannot bound work that escapes by starting a new one.
+
+`--override-family-budget` skips this gate for one invocation. Record it where every role can see it: append
+`ORCHESTRATOR — family budget overridden ({family_cr_count}/{max_family_cycles})` to the plan's
+`.progress.md` `## Log`, and carry the same line into the FINAL report's Issues-found list. **Do not
+record it only in the run manifest** — that file is written at Step 2c, which does not exist on an
+`off` run, so on the default path the audit trail would not exist at all. Skip the gate only when the invocation names no existing spec — a genuinely new feature has no family
+yet. When it is skipped, `family_cr_count` is `0`; bind it either way, since Step 7's report prints it.
+
+**Bind `family_cr_count` here and keep it for the run.** QA binds `g8_family` when it computes G8 and
+reports it on its `Status:` line; the orchestrator reads it from there. If either is unavailable —
+the gate was skipped, or G8 came back `UNMEASURED` — print `n/a` rather than a placeholder. A literal
+`{g8_family}` in a shipped FINAL report is the artifact defect this pipeline keeps re-learning.
 
 **`--resume` changes what 0a requires — read this before running the clean-tree gate.** A run that halted `PARTIAL` **necessarily** left uncommitted plans and implementation in the tree: leaves wrote code, the pipeline never commits, and the halt is what stopped them being finished. So the ordinary clean-tree requirement would stop a `--resume` invocation **before** 0r could ever offer the resume — resume would be unreachable in exactly the situation it exists for. When `--resume` is passed:
 
@@ -305,6 +348,7 @@ Read cycle caps from config:
 - `max_review_cycles` — from `.orchestrator/config.json`; default 10 if absent.
 - `max_qa_cycles` — from `.orchestrator/config.json`; default 5 if absent.
 - `max_eval_cycles` — from `.orchestrator/config.json`; default 2 if absent.
+- `max_family_cycles` — from `.orchestrator/config.json`; default 6 if absent.
 
 Set:
 
@@ -320,6 +364,7 @@ Input: {input summary}
 max_review_cycles: {max_review_cycles}
 max_qa_cycles: {max_qa_cycles}
 max_eval_cycles: {max_eval_cycles}
+max_family_cycles: {max_family_cycles}
 ```
 
 **Resolve `parallelism`** with the standard precedence — CLI `--parallel` > `.orchestrator/config.json` > default `off`. Also read `max_contract_amendments` (default `2`) and set `amendment_count = 0`, and read `max_parallel_lanes` (default `6`). Every key's values, semantics, and absent-key tolerance are normative in **`references/config.md`** — read them there; they are deliberately not restated here.
@@ -329,7 +374,7 @@ max_eval_cycles: {max_eval_cycles}
 - Read the three keys from **`$mb:.orchestrator/config.json`** — the pinned merge-base copy — never from the working-tree file.
 - **A CLI flag outranks the merge-base**, because a flag is *the invoking user's* authority expressed at run time, not branch-authored content. `--parallel` therefore still wins.
 - When the merge-base has no `.orchestrator/config.json`, or the file is absent/unparseable there, fall back to the **defaults** (`off` / `6` / `2`) — never to the working-tree copy.
-- **Validate the numeric values before any dispatch**, per `references/config.md` → *Bounds* (`max_parallel_lanes` a finite integer ≥ 1, `max_contract_amendments` a finite integer ≥ 0, `max_eval_cycles` a finite integer ≥ 0); an out-of-range value fails closed to the key's canonical default with the reason printed, rather than dispatching a wave of zero or comparing against an undefined cap.
+- **Validate the numeric values before any dispatch**, per `references/config.md` → *Bounds* (`max_parallel_lanes` a finite integer ≥ 1, `max_contract_amendments` a finite integer ≥ 0, `max_eval_cycles` and `max_family_cycles` finite integers ≥ 0); an out-of-range value fails closed to the key's canonical default with the reason printed, rather than dispatching a wave of zero or comparing against an undefined cap.
 
 Every other key (`output_format`, `automation_level`, the thresholds) keeps reading from the working tree as before — they are presentation and interview preferences, not concurrency authority, and none of them widens a branch's blast radius.
 
@@ -424,7 +469,19 @@ If the candidate set is empty after validation **and** Step 2p cannot derive one
 
 ### Step 1 — Brainstormer: capture an unambiguous spec
 
-Compute the spec ID: `newid SPEC`. Invoke the **brainstormer** subagent with the user's raw input, prepending the mandatory role-prompt preamble.
+**Spec reuse — check this before minting anything.** When the invocation names an existing spec — a
+bare `SPEC-*` id, or a path under `plans/specs/` — do **not** mint a new one. Bind `spec_id` and
+`spec_path` from it, read the file to confirm `status: READY_FOR_PLANNING`, print
+`ORCHESTRATOR — reusing {spec_id}`, and go straight to Step 2.
+
+**This is the only way a second run joins the first run's family.** A re-run that mints a fresh
+`SPEC-*` writes every artifact into a brand-new family, so the pre-flight budget and G8 both start from
+zero however much rework preceded them — the budget would measure one invocation and call it a family.
+That is precisely the property the cascade exploited: 11 slugs, every counter reset, nothing ever over
+budget. A brief that merely *resembles* an existing spec is **not** reuse: resemblance is a guess, and
+guessing wrong silently merges two features' histories. Only an explicit id or path counts.
+
+Otherwise compute the spec ID: `newid SPEC`. Invoke the **brainstormer** subagent with the user's raw input, prepending the mandatory role-prompt preamble.
 
 Prompt to send:
 
@@ -1320,6 +1377,7 @@ output_format={resolved output_format}
 Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
 HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
 ID to use: {computed FIX-<id>}
+spec={spec_path}   ← the run's source spec; every artifact you write names its id in `related_to` (family membership). Omit the line entirely when the run has no spec
 
 Fix plan for code review. Input type: fix.
 Source CR file: {cr_path}
@@ -1552,6 +1610,7 @@ Artifact rules: read .orchestrator/artifact-format.md before writing any artifac
 HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
 ID to use: {computed QA-<id>}
 MAESTRO_REVIEW_BASE={base_sha}   ← the Step 0a pre-flight base; every gate scopes the working tree against it
+spec={spec_path}   ← the run's source spec; G8 resolves the run family from it. Omit the line entirely when the run has no spec
 leaves={comma-separated leaf FEAT IDs, in dispatch order}   ← parallel path ONLY; omit the line entirely on a sequential run
 
 Run the QA suite for plan {plan_id}. The plan is DONE and has an APPROVED CR.
@@ -1564,7 +1623,7 @@ Follow your full QA workflow and print the structured output summary.
 
 Parse QA's output to extract:
 
-- `qa_status` — `READY_TO_COMMIT`, `BLOCKED`, or `BLOCKED_STALE`
+- `qa_status` — `READY_TO_COMMIT`, `READY_WITH_WARNINGS`, `BLOCKED`, or `BLOCKED_STALE`
 - `qa_report_path` — e.g. `plans/qa/QA-003-slug.md` (from line `Report: {path}`)
 
 **File verification (mandatory before continuing):**
@@ -1575,14 +1634,14 @@ Read the QA report file at `qa_report_path` (expect `.md` or `.html` extension p
 
 #### If READY_WITH_WARNINGS:
 
-All blocking gates passed; the plan is safe to commit. This status indicates that the G8 rework-risk gate scored > 0.5 (HIGH_REWORK), which is advisory only. Treat this as equivalent to READY_TO_COMMIT for flow purposes:
+All blocking gates passed; the plan is safe to commit. This status indicates that the **family's** G8 rework ratio landed in `0.5 < r ≤ 1.5` (HIGH_REWORK), which is advisory. Above `1.5` it is flagged more prominently; it never blocks — the family budget gate at Step 0 is what stops a runaway family, and it keys on the raw review count, not on this ratio. Treat this as equivalent to READY_TO_COMMIT for flow purposes:
 
 1. Surface the warning to the user:
 
    ```
    ORCHESTRATOR — QA READY_WITH_WARNINGS
    QA report: {qa_report_path}
-   Warning: G8 HIGH_REWORK — rework risk above threshold (non-blocking). Review the QA report before committing.
+   Warning: G8 HIGH_REWORK — family rework ratio {g8_family, or n/a} (advisory; the family budget gate at Step 0 is what stops a runaway family). Review the QA report before committing.
    ```
 
 2. Carry the warning into the final report (Step 7).
@@ -1628,6 +1687,7 @@ output_format={resolved output_format}
 Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
 HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
 ID to use: {computed QAF-<id>}
+spec={spec_path}   ← the run's source spec; every artifact you write names its id in `related_to` (family membership). Omit the line entirely when the run has no spec
 
 QA remediation plan. Input type: qa.
 Source QA report: {qa_report_path}
@@ -1661,6 +1721,7 @@ output_format={resolved output_format}
 Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
 HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
 ID to use: {computed CR-<id>}
+spec={spec_path}   ← the run's source spec; every artifact you write names its id in `related_to` (family membership). Omit the line entirely when the run has no spec
 
 Review plan {qaf_plan_id}. The plan is in DONE status.
 Follow your full reviewer workflow and print the structured output summary.
@@ -1796,6 +1857,7 @@ Proposed PR message:
 Review cycles used: {review_cycle} / {max_review_cycles}
 QA cycles used: {qa_cycle} / {max_qa_cycles}
 Spec eval cycles used: {eval_cycle} / {max_eval_cycles}
+Family reviews to date: {family_cr_count, or n/a} / {max_family_cycles} (rework ratio {g8_family, or n/a})
 
 Output only — review the diff, then commit and open the PR yourself.
 ```
@@ -1819,7 +1881,7 @@ The manifest is the enumeration source precisely because it already holds the ru
 
 The renderer auto-selects the `progress-timeline` scaffold for a `*.progress.md` source, emits one timeline row per log entry (role → action/status → timestamp) with the status→pill mapping, fills the `<main data-*>` shell and the Related link to the plan, and writes `<plan-path-without-.md>.progress.html`. `.progress.md` stays the markdown source-of-truth log; the `.html` is a regenerated read-only view.
 
-This step ALSO runs at the STALLED/BLOCKED stop points (review-cycle limit, qa-cycle limit, tester BLOCKED, qa BLOCKED_STALE) so a halted run still produces a timeline — and there too it renders the **whole** manifest set, since a `PARTIAL` parallel run has exactly the same unpaired-log problem. In `md` mode this step is skipped — `.progress.md` is the only progress artifact.
+This step ALSO runs at the STALLED/BLOCKED stop points (review-cycle limit, qa-cycle limit, spec-eval-cycle limit, family budget exhausted at pre-flight, tester BLOCKED, qa BLOCKED_STALE) so a halted run still produces a timeline — and there too it renders the **whole** manifest set, since a `PARTIAL` parallel run has exactly the same unpaired-log problem. In `md` mode this step is skipped — `.progress.md` is the only progress artifact.
 
 ### Step 7d — Artifact validation gates (html mode — blocking)
 

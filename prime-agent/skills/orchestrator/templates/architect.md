@@ -81,7 +81,7 @@ status: PLANNED
 created_at: {ISO 8601 datetime}
 updated_at: {ISO 8601 datetime}
 cycle: 0
-related_to: {comma-separated IDs of related plans/specs/CRs/QA reports, or "—"}
+related_to: {the run's SPEC id — ALWAYS, when the run has one — plus this artifact's immediate parent (the plan it fixes, the CR or QA report it answers, the contract it belongs to). Comma-separated, or "—" only when there is genuinely no spec and no parent.}
 ---
 
 ## Overview
@@ -395,6 +395,7 @@ Status: PLANNED. Ready for coder.
 - Tasks must be independently completable and ordered: tests always precede implementation.
 - Never modify existing plan files — create new ones only.
 - Do not write code, only plans.
+- **Every artifact you write names the run's `SPEC-*` id in `related_to`**, alongside its immediate parent. Take the id from the `spec=` line in your preamble; when that line is absent, write the immediate parent alone rather than guessing an id or walking a parent chain to find one. That id is the run family's key. An artifact that omits it is invisible to the family — it does not count toward the rework a family has absorbed, and the run it belongs to can restart indefinitely without any budget noticing. The resolution rule lives in one place, `.orchestrator/artifact-format.md` → *The run family*; never restate it in a plan.
 - Always set `updated_at` to the current ISO 8601 datetime.
 - Every `feat` plan with a source spec carries a `## Requirement Coverage` map with one row per numbered spec requirement — the whole spec's, or in lane-plan mode the lane's assigned set (Step 3R). A requirement is `Met-by-plan` with the criteria that verify it, or `Deferred` with a reason and a follow-up ID. **A requirement that is neither — absent from the map, or carrying a `Met-by-plan` status with an empty `Covered by AC #` cell — is a BLOCKED stop, not an omission**: report it and do not write the plan. A `Deferred` row's `Covered by AC #` cell is `—` by construction and is never a stop; deferral is the sanctioned way to not cover a requirement.
 - Never plan out-of-scope items from PROJECT-CONTEXT.md. If the request asks for one, surface the conflict and stop.
