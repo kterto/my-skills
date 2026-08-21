@@ -88,7 +88,7 @@ The ONLY directories permitted under `plans/`. No role or step may invent any ot
 | test report   | `plans/test/`        | `TEST`  | tester                         |
 | code review   | `plans/code-review/` | `CR`    | reviewer                       |
 | qa report     | `plans/qa/`          | `QA`    | qa                             |
-| spec eval     | `plans/eval/`        | `EVAL`  | orchestrator (Step 7a)         |
+| spec eval     | `plans/eval/`        | `EVAL`  | orchestrator (Step 4e)         |
 | final report  | `plans/final/`       | `FINAL` | orchestrator (Step 7b)         |
 | interface contract | `plans/feat/`   | `PACT`  | architect (type `contract`)    |
 
@@ -178,6 +178,46 @@ When the ID you were given carries the `PACT-` prefix:
 The single-plan-ID path is otherwise **unchanged** — same steps, same statuses, same stdout header lines. A `PACT` ID simply appears where a plan ID would.
 
 **This resolution rule is the tester's, reviewer's, and QA's *entire* knowledge of nesting.** All three are still invoked **once each, at the outer join, with the parent `PACT` ID**; they need nothing else. That is deliberate: the rule lives in this one reference all three already follow, rather than in three role templates that could drift apart.
+
+## The run family — every artifact answering one spec
+
+A **run family** is every artifact under `plans/` that answers the same `SPEC-*`, across **all** the
+orchestrator runs that touched it. It is not the same as a run: the cycle caps (`max_review_cycles`,
+`max_qa_cycles`, `max_eval_cycles`) are scoped to one invocation and reset to zero when a new run
+starts on the same spec, so work that overflows a run leaves the reach of every counter that was
+watching it. One measured feature produced 13 code reviews and 8 post-approval runs across 11 distinct
+slugs this way, while no in-run counter ever passed 4 of a permitted 10. The family is the scope at
+which that is visible.
+
+**Membership is one grep, not a graph walk.** Every artifact a run writes names that run's `SPEC-*` id
+in `related_to`, alongside its immediate parent — the plan it fixes, the CR it answers, the contract it
+governs. So the family resolves in a single pass:
+
+```bash
+grep -rl "{spec_id}" plans --include='*.md' --exclude='*.progress.md'
+```
+
+Use `grep -r`, never a `**` glob: globstar is off by default in bash and does not exist in bash 3.2,
+where `**` silently means `*` and misses every artifact below the first level; zsh aborts the command
+outright on zero matches. A plan and its `.progress.md` sidecar are **one** artifact — count the plan.
+
+**The grep resolves the plans; the reviews resolve by provenance.** `grep` matches the id anywhere in
+a file, so it also pulls in artifacts that merely cite the spec in prose, and it misses every `CR`
+written before this rule existed — 0 of 222 code reviews across both reference projects carry
+`related_to` at all. A `CR` belongs to the family when its `plan:` frontmatter names a family plan,
+which every reviewer has always written:
+
+```bash
+grep -rl "^plan: {plan_id}" plans/code-review --include='CR-*.md'
+```
+
+One pass per family plan. Using the bare grep as the denominator scored three already-shipped families
+as blocking and missed a fourth that was genuinely over the line.
+
+**This is why the rule is load-bearing rather than cosmetic.** An artifact that omits the spec id is
+invisible to the family — it does not count toward the rework ratio, it does not count toward the
+family budget, and the run it belongs to can therefore restart indefinitely without any gate noticing.
+When you write an artifact and the run has a spec, its id belongs in `related_to`.
 
 ## ID allocation — timestamp-based, collision-free
 

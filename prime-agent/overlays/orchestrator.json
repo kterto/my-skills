@@ -22,14 +22,14 @@
     {
       "why": "B2 resolves the bundled Prime copy; there is no external marketplace to fall back to.",
       "count": 1,
-      "find": "Resolve the `spec-driven-eval` skill in this order, stopping at the first hit:\n\n1. **The copy bundled with this marketplace** (`plugins/my-skills/skills/spec-driven-eval/`) — `/my-skills:spec-driven-eval` in Claude Code, the `spec-driven-eval` skill in opencode. A plugin install already satisfies this, so on a normal install the check ends here.\n2. **A host-provided or separately installed copy** — anything the skills registry or the installed skill paths resolve under that name.\n3. **Nothing resolved** — the plugin is installed partially or the skill was invoked outside it. Offer the user `npx @tech-leads-club/agent-skills install --skill spec-driven-eval` as a fallback, and confirm with the user before executing. If the user declines, instruct them to run the command manually later.\n\nRecord availability in memory for the current run. Do **not** block bootstrap when nothing resolves or the user declines — the eval stage (Step 7) degrades explicitly, exactly as the `simplify` step below does.\n",
-      "replace": "`spec-driven-eval` ships with this Prime Agent distribution. Check that it is\navailable in the installed Prime skill paths (`.prime/agent/skills/spec-driven-eval`\nfor a project install, `~/.prime/agent/skills/spec-driven-eval` for a global one).\nIf it is absent, report that the Prime Agent installation is incomplete — rerun\n`prime-agent/install.sh` — and continue without blocking: Step 7 handles a missing\nskill gracefully. Do **not** try to install a skill from an external marketplace.\n\nRecord availability for the current run.\n"
+      "find": "Resolve the `spec-driven-eval` skill in this order, stopping at the first hit:\n\n1. **The copy bundled with this marketplace** (`plugins/my-skills/skills/spec-driven-eval/`) — `/my-skills:spec-driven-eval` in Claude Code, the `spec-driven-eval` skill in opencode. A plugin install already satisfies this, so on a normal install the check ends here.\n2. **A host-provided or separately installed copy** — anything the skills registry or the installed skill paths resolve under that name.\n3. **Nothing resolved** — the plugin is installed partially or the skill was invoked outside it. Offer the user `npx @tech-leads-club/agent-skills install --skill spec-driven-eval` as a fallback, and confirm with the user before executing. If the user declines, instruct them to run the command manually later.\n\nRecord availability in memory for the current run. Do **not** block bootstrap when nothing resolves or the user declines — the eval stage (Step 4e) degrades explicitly, exactly as the `simplify` step below does.\n",
+      "replace": "`spec-driven-eval` ships with this Prime Agent distribution. Check that it is\navailable in the installed Prime skill paths (`.prime/agent/skills/spec-driven-eval`\nfor a project install, `~/.prime/agent/skills/spec-driven-eval` for a global one).\nIf it is absent, report that the Prime Agent installation is incomplete — rerun\n`prime-agent/install.sh` — and continue without blocking: Step 4e handles a missing\nskill gracefully. Do **not** try to install a skill from an external marketplace.\n\nRecord availability for the current run.\n"
     },
     {
-      "why": "Step 7a's degrade reason differs: Prime has no fallback install to decline.",
+      "why": "Step 4e's degrade reason differs: Prime has no fallback install to decline.",
       "count": 1,
-      "find": "1. If spec-driven-eval did not resolve at bootstrap B2 (nothing bundled, nothing installed,\n   and the user declined the fallback install) → skip eval, note \"eval skipped — skill not\n   installed\" in the report, continue to Step 7b.",
-      "replace": "1. If spec-driven-eval is unavailable (the Prime Agent installation is incomplete) → skip eval,\n   note \"eval skipped — skill not installed\" in the report, continue to Step 7b."
+      "find": "2. If spec-driven-eval did not resolve at bootstrap B2 (nothing bundled, nothing installed,\n   and the user declined the fallback install) → set `eval_status = SKIPPED`, note \"eval skipped —\n   skill not installed\" for the report, and go to Step 5. An absent optional dependency reduces the\n   run's quality, never its correctness.",
+      "replace": "2. If spec-driven-eval is unavailable (the Prime Agent installation is incomplete) → set\n   `eval_status = SKIPPED`, note \"eval skipped — skill not installed\" for the report, and go to\n   Step 5. An absent optional dependency reduces the run's quality, never its correctness."
     },
     {
       "why": "arch-2: Prime Agent has no .claude/agents/ or .opencode/agent/ registry. Roles are materialized under .orchestrator/roles/ and dispatched as RLM children.",
@@ -40,20 +40,8 @@
     {
       "why": "arch-2: the B3 summary must list the role directory it now creates.",
       "count": 1,
-      "find": "4. **Print bootstrap summary**: list all created/updated paths (including `.orchestrator/artifact-format.md`, `.orchestrator/config.md`, `.orchestrator/html-templates/`, and the four `.orchestrator/*.cjs` render/gate scripts) and the achieved context confidence.",
-      "replace": "4. **Print bootstrap summary**: list all created/updated paths (including `.orchestrator/roles/`, `.orchestrator/artifact-format.md`, `.orchestrator/config.md`, `.orchestrator/html-templates/`, and the four `.orchestrator/*.cjs` render/gate scripts) and the achieved context confidence."
-    },
-    {
-      "why": "bug-10: condition 6 tested for a subagent tool Prime does not have, so every Prime run degraded to parallelism: off before the slicing analysis was ever spawned.",
-      "count": 1,
-      "find": "**How condition 6 is determined (normative — do not guess it).** \"Can the host fan out?\" is a capability question about the *executing session*, so answer it from what that session can observe, in this order:\n\n1. **The subagent tool is absent entirely** → condition 6 holds. Nothing downstream can spawn a role, so parallel and sequential are both impossible-as-written; a sequential run at least degrades to the documented path.\n2. **The session cannot issue more than one tool call in a single assistant message** → condition 6 holds. Concurrency here *is* multiple subagent calls emitted together; a host that serializes tool calls turns every fan-out into a sequence that still pays the full contract-authoring and join cost. That is strictly worse than `off`, which is why this degrades rather than proceeds.\n3. **Otherwise → condition 6 does NOT hold.** Assume the host can fan out and continue. Do not probe for it with a throwaway spawn, and do not infer it from the host's name.",
-      "replace": "**How condition 6 is determined (normative — do not guess it).** \"Can this session fan out?\" is a capability question about the *executing session*, so answer it from what that session can observe. Under Prime Agent a role is never a `subagent_type`/`Agent`/`task` call — it is an RLM child admitted with `rlm()` per the Prime Agent orchestration protocol above — so test **that** mechanism, in this order:\n\n1. **`rlm()` is not available to this session** → condition 6 holds. Nothing downstream can admit a role child, so parallel and sequential are both impossible-as-written; a sequential run at least degrades to the documented path.\n2. **The session cannot admit more than one RLM child concurrently** — the `await asyncio.gather(*(rlm(prompt, name=name) for name, prompt in jobs))` form the protocol defines is unavailable, or it admits children strictly one after another → condition 6 holds. Concurrency here *is* admitting a wave's children together; a session that serializes admission turns every fan-out into a sequence that still pays the full contract-authoring and join cost. That is strictly worse than `off`, which is why this degrades rather than proceeds.\n3. **Otherwise → condition 6 does NOT hold.** Assume the session can fan out and continue. Do not probe for it with a throwaway `rlm()` admission, and do not infer it from the host's name."
-    },
-    {
-      "why": "bug-10: the host-agnostic rationale named opencode's `task` fan-out, which does not exist under Prime.",
-      "count": 1,
-      "find": "Condition 6 is the fallback that keeps this host-agnostic: concurrent `task` fan-out is not guaranteed on every opencode host, and a host that cannot fan out simply runs sequentially rather than failing.",
-      "replace": "Condition 6 is the fallback that keeps this host-agnostic: concurrent RLM admission is not guaranteed in every Prime Agent session, and a session that cannot fan out simply runs sequentially rather than failing. It stays a **static pre-spawn guard** — answered from what the session can already observe, before the slicing analysis is spawned — never a verdict recorded after a failed attempt."
+      "find": "4. **Print bootstrap summary**: list all created/updated paths (including `.orchestrator/artifact-format.md`, `.orchestrator/config.md`, `.orchestrator/gate-config.md`, `.orchestrator/lane-protocol.md`, `.orchestrator/html-templates/`, and the four `.orchestrator/*.cjs` render/gate scripts) and the achieved context confidence.",
+      "replace": "4. **Print bootstrap summary**: list all created/updated paths (including `.orchestrator/roles/`, `.orchestrator/artifact-format.md`, `.orchestrator/config.md`, `.orchestrator/gate-config.md`, `.orchestrator/lane-protocol.md`, `.orchestrator/html-templates/`, and the four `.orchestrator/*.cjs` render/gate scripts) and the achieved context confidence."
     },
     {
       "why": "bug-10: the pipeline preamble named the Claude/opencode subagent tools as the dispatch mechanism.",
@@ -74,30 +62,6 @@
       "replace": "### How to spawn a role child\n\nEvery role invocation admits a real RLM child, per the Prime Agent orchestration protocol above:\n\n```python\nhandle = await rlm(prompt, name=\"brainstormer\")  # or architect | coder | tester | reviewer | qa\n```\n\nFor a wave of independent children, admit the whole wave together rather than one at a time:\n\n```python\nhandles = await asyncio.gather(*(rlm(prompt, name=name) for name, prompt in jobs))\n```\n\n`rlm()` returns only an admission handle, never the child's result. Wait for each child's `agent_message` completion contract, validate the artifact it names, and only then join. `name` is the stable role-or-lane name this skill uses throughout — it is what a retry addresses with `receiver_name=handle.name`. Where a step below lists a `description`, use it as that child's `name` when no lane-qualified name is given.\n\nThe child prompt MUST be self-contained: it does not see this conversation. Build it from that role's `.orchestrator/roles/{role}.md` body and include the user's raw input, the spec/plan path or ID, and any locked decisions."
     },
     {
-      "why": "bug-10: the cross-reference to the renamed call-shape section. Deliberately shared across all three sites — the replacement text is a section title and is site-independent, unlike the dispatch parameters below, which must differ per site.",
-      "count": 3,
-      "find": "the call shape from *How to spawn a subagent*",
-      "replace": "the call shape from *How to spawn a role child*"
-    },
-    {
-      "why": "bug-10 + MF-4: role dispatch parameters name an RLM child, not a subagent_type. Step 2s.2 issues its spawns as one wave, so every child in it needs a distinct name — `name` is the retry address (`receiver_name=handle.name`). Anchored on this site's own `description` line: a shared replacement across dispatch sites is what gave a whole wave one name.",
-      "count": 1,
-      "find": "- `description`: `Contract sub-lanes of {lane}`\n- `subagent_type`: `architect`",
-      "replace": "- `description`: `Contract sub-lanes of {lane}`\n- `name`: `architect:{lane}`"
-    },
-    {
-      "why": "bug-10 + MF-4: same rename at Step 2L, which dispatches one architect per leaf concurrently. Qualified by leaf name so each child in the wave is individually addressable. Anchored on its own `description` line.",
-      "count": 1,
-      "find": "- `description`: `Plan lane {qualified leaf name}`\n- `subagent_type`: `architect`",
-      "replace": "- `description`: `Plan lane {qualified leaf name}`\n- `name`: `architect:{qualified leaf name}`"
-    },
-    {
-      "why": "bug-10 + MF-4: same rename at Step 3L, which dispatches one coder per leaf concurrently. Anchored on its own `description` line so a dispatch step added later on the plugins side cannot be absorbed into this replacement.",
-      "count": 1,
-      "find": "- `description`: `Implement lane {qualified leaf name}`\n- `subagent_type`: `coder`",
-      "replace": "- `description`: `Implement lane {qualified leaf name}`\n- `name`: `coder:{qualified leaf name}`"
-    },
-    {
       "why": "SF-3a: B2's simplify justification claimed a marketplace plugin install on both hosts, contradicting the already-rewritten Step 3 paragraph.",
       "count": 1,
       "find": "It ships in this marketplace, so a plugin install already satisfies it on both hosts; a host-provided `simplify` satisfies it equally.",
@@ -116,28 +80,10 @@
       "replace": "Two steps admit a **scan** child rather than a pipeline role: Bootstrap B1 (context digest) and Step 2p.1 (slicing analysis). It is admitted exactly like any other child — `handle = await rlm(prompt, name=…)` — and, unlike the six roles, it is **not materialized by B3**: it has no role file under `.orchestrator/roles/`, so its whole brief is the prompt you build for it. There is no host agent type to resolve; there never is under Prime Agent.\n\n**A scan child is read-only, and its prompt must say so.** Per the Prime Agent orchestration protocol above, it is explicitly **forbidden from writes and from mutating commands**: it reads and reports, it produces no artifact, and it never creates, edits, or deletes a file. That prohibition is carried in the prompt, not assumed of the child.\n\n**Give each scan child a stable, per-caller `name`.** The two callers use **two different** names — `context-scan` for Bootstrap B1's context digest, `slicing-scan` for Step 2p.1's slicing analysis — so a child that returns nothing usable can be addressed on retry with `receiver_name=handle.name`. One name shared across both dispatch sites would leave a retry ambiguous about which scan it was re-asking, which is exactly the failure a stable per-child name exists to prevent.\n\n**Never let this fail the run.** If the host cannot admit a read-only child, do **not** keep retrying: perform the scan **inline** in the orchestrator's own context using the host's read tools, and note in the step's stdout that the digest was gathered inline rather than in a child. The digest is untrusted input either way (Step 2p.1), so gathering it inline changes only *where* the reading happened, never how the result is treated.\n\nThis matters most at **Step 2p.1**, where a failed admission would leave the run with no lane set at all. A scan-child failure is never a parallelization verdict — Step 2p.3 owns those, and it decides on the digest's content, not on how the digest was obtained."
     },
     {
-      "why": "The fourth stale site: Step 2p.1's intro sentence escapes the shared count:3 anchor because its wording is 'the call shape and the host-resolution order from'. Corrected to the port's renamed section, and the inline-fallback trigger restated for a host that has no agent types to resolve.",
-      "count": 1,
-      "find": "Spawn **exactly one** read-only scan subagent — the same pattern Bootstrap B1 uses, with the call shape and the host-resolution order from *How to spawn a subagent* → **The read-only scan subagent type** — with the spec path and the candidate lane set from Step 0c. It produces no artifact; it reads and reports. When no scan agent type exists on the host, run the analysis inline per that section rather than skipping it.",
-      "replace": "Admit **exactly one** read-only scan child — the same pattern Bootstrap B1 uses, with the call shape from *How to spawn a role child* → **The read-only scan subagent type** — with the spec path and the candidate lane set from Step 0c. It produces no artifact; it reads and reports. When the host cannot admit a read-only child, run the analysis inline per that section rather than skipping it."
-    },
-    {
-      "why": "Step 2p.1's dispatch parameters: per-site, because the name differs per caller. subagent_type has no meaning under Prime; the stable name is what a retry addresses.",
-      "count": 1,
-      "find": "- `description`: `Slice spec into lanes`\n- `subagent_type`: the resolved scan type (`Explore` / `explore` / `general-purpose` / `general`)",
-      "replace": "- `description`: `Slice spec into lanes`\n- `name`: `slicing-scan` — this scan child's stable name, which a retry addresses with `receiver_name=handle.name`\n- read-only: state in the prompt that the child must not write or run mutating commands"
-    },
-    {
       "why": "Residual Explore host vocabulary at scan caller 1 (Bootstrap B1's step label): it names a Claude Code agent type in a port that has none.",
       "count": 1,
       "find": "1. **Explore scan** (the only subagent in the gate): spawn a **read-only scan subagent** (see *The read-only scan subagent type* below) with the prompt:",
       "replace": "1. **Context scan** (the only child in the gate): admit a **read-only scan child** named `context-scan` (see *The read-only scan subagent type* below) with the prompt:"
-    },
-    {
-      "why": "Residual Explore host vocabulary at scan caller 2 (Step 2p.1's untrusted-data paragraph). The trust boundary itself is unchanged — only the name of what did the reading.",
-      "count": 1,
-      "find": "The Explore agent synthesized it from `PROJECT-CONTEXT.md`, the spec, and repository file contents, all of which are **contributor-editable**.",
-      "replace": "The scan child synthesized it from `PROJECT-CONTEXT.md`, the spec, and repository file contents, all of which are **contributor-editable**."
     }
   ],
   "fileReplacements": {
@@ -156,6 +102,67 @@
         "find": "(the decision recorded in [ADR-0001](../../../../../docs/adr/0001-orthogonal-system-band.md))",
         "replace": "(the decision recorded in [ADR-0001 — Model systems as an orthogonal roadmap band](https://github.com/kterto/my-skills/blob/main/docs/adr/0001-orthogonal-system-band.md))"
       }
+    ],
+    "references/parallel.md": [
+      {
+        "why": "bug-10: condition 6 tested for a subagent tool Prime does not have, so every Prime run degraded to parallelism: off before the slicing analysis was ever spawned.",
+        "count": 1,
+        "find": "**How condition 6 is determined (normative — do not guess it).** \"Can the host fan out?\" is a capability question about the *executing session*, so answer it from what that session can observe, in this order:\n\n1. **The subagent tool is absent entirely** → condition 6 holds. Nothing downstream can spawn a role, so parallel and sequential are both impossible-as-written; a sequential run at least degrades to the documented path.\n2. **The session cannot issue more than one tool call in a single assistant message** → condition 6 holds. Concurrency here *is* multiple subagent calls emitted together; a host that serializes tool calls turns every fan-out into a sequence that still pays the full contract-authoring and join cost. That is strictly worse than `off`, which is why this degrades rather than proceeds.\n3. **Otherwise → condition 6 does NOT hold.** Assume the host can fan out and continue. Do not probe for it with a throwaway spawn, and do not infer it from the host's name.",
+        "replace": "**How condition 6 is determined (normative — do not guess it).** \"Can this session fan out?\" is a capability question about the *executing session*, so answer it from what that session can observe. Under Prime Agent a role is never a `subagent_type`/`Agent`/`task` call — it is an RLM child admitted with `rlm()` per the Prime Agent orchestration protocol above — so test **that** mechanism, in this order:\n\n1. **`rlm()` is not available to this session** → condition 6 holds. Nothing downstream can admit a role child, so parallel and sequential are both impossible-as-written; a sequential run at least degrades to the documented path.\n2. **The session cannot admit more than one RLM child concurrently** — the `await asyncio.gather(*(rlm(prompt, name=name) for name, prompt in jobs))` form the protocol defines is unavailable, or it admits children strictly one after another → condition 6 holds. Concurrency here *is* admitting a wave's children together; a session that serializes admission turns every fan-out into a sequence that still pays the full contract-authoring and join cost. That is strictly worse than `off`, which is why this degrades rather than proceeds.\n3. **Otherwise → condition 6 does NOT hold.** Assume the session can fan out and continue. Do not probe for it with a throwaway `rlm()` admission, and do not infer it from the host's name."
+      },
+      {
+        "why": "bug-10: the host-agnostic rationale named opencode's `task` fan-out, which does not exist under Prime.",
+        "count": 1,
+        "find": "Condition 6 is the fallback that keeps this host-agnostic: concurrent `task` fan-out is not guaranteed on every opencode host, and a host that cannot fan out simply runs sequentially rather than failing.",
+        "replace": "Condition 6 is the fallback that keeps this host-agnostic: concurrent RLM admission is not guaranteed in every Prime Agent session, and a session that cannot fan out simply runs sequentially rather than failing. It stays a **static pre-spawn guard** — answered from what the session can already observe, before the slicing analysis is spawned — never a verdict recorded after a failed attempt."
+      },
+      {
+        "why": "bug-10: the cross-reference to the renamed call-shape section. Deliberately shared across all three sites — the replacement text is a section title and is site-independent, unlike the dispatch parameters below, which must differ per site.",
+        "count": 3,
+        "find": "the call shape from *How to spawn a subagent*",
+        "replace": "the call shape from *How to spawn a role child*"
+      },
+      {
+        "why": "bug-10 + MF-4: role dispatch parameters name an RLM child, not a subagent_type. Step 2s.2 issues its spawns as one wave, so every child in it needs a distinct name — `name` is the retry address (`receiver_name=handle.name`). Anchored on this site's own `description` line: a shared replacement across dispatch sites is what gave a whole wave one name.",
+        "count": 1,
+        "find": "- `description`: `Contract sub-lanes of {lane}`\n- `subagent_type`: `architect`",
+        "replace": "- `description`: `Contract sub-lanes of {lane}`\n- `name`: `architect:{lane}`"
+      },
+      {
+        "why": "bug-10 + MF-4: same rename at Step 2L, which dispatches one architect per leaf concurrently. Qualified by leaf name so each child in the wave is individually addressable. Anchored on its own `description` line.",
+        "count": 1,
+        "find": "- `description`: `Plan lane {qualified leaf name}`\n- `subagent_type`: `architect`",
+        "replace": "- `description`: `Plan lane {qualified leaf name}`\n- `name`: `architect:{qualified leaf name}`"
+      },
+      {
+        "why": "bug-10 + MF-4: same rename at Step 3L, which dispatches one coder per leaf concurrently. Anchored on its own `description` line so a dispatch step added later on the plugins side cannot be absorbed into this replacement.",
+        "count": 1,
+        "find": "- `description`: `Implement lane {qualified leaf name}`\n- `subagent_type`: `coder`",
+        "replace": "- `description`: `Implement lane {qualified leaf name}`\n- `name`: `coder:{qualified leaf name}`"
+      },
+      {
+        "why": "The fourth stale site: Step 2p.1's intro sentence escapes the shared count:3 anchor because its wording is 'the call shape and the host-resolution order from'. Corrected to the port's renamed section, and the inline-fallback trigger restated for a host that has no agent types to resolve.",
+        "count": 1,
+        "find": "Spawn **exactly one** read-only scan subagent — the same pattern Bootstrap B1 uses, with the call shape and the host-resolution order from *How to spawn a subagent* → **The read-only scan subagent type** — with the spec path and the candidate lane set from Step 0c. It produces no artifact; it reads and reports. When no scan agent type exists on the host, run the analysis inline per that section rather than skipping it.",
+        "replace": "Admit **exactly one** read-only scan child — the same pattern Bootstrap B1 uses, with the call shape from *How to spawn a role child* → **The read-only scan subagent type** — with the spec path and the candidate lane set from Step 0c. It produces no artifact; it reads and reports. When the host cannot admit a read-only child, run the analysis inline per that section rather than skipping it."
+      },
+      {
+        "why": "Step 2p.1's dispatch parameters: per-site, because the name differs per caller. subagent_type has no meaning under Prime; the stable name is what a retry addresses.",
+        "count": 1,
+        "find": "- `description`: `Slice spec into lanes`\n- `subagent_type`: the resolved scan type (`Explore` / `explore` / `general-purpose` / `general`)",
+        "replace": "- `description`: `Slice spec into lanes`\n- `name`: `slicing-scan` — this scan child's stable name, which a retry addresses with `receiver_name=handle.name`\n- read-only: state in the prompt that the child must not write or run mutating commands"
+      },
+      {
+        "why": "Residual Explore host vocabulary at scan caller 2 (Step 2p.1's untrusted-data paragraph). The trust boundary itself is unchanged — only the name of what did the reading.",
+        "count": 1,
+        "find": "The Explore agent synthesized it from `PROJECT-CONTEXT.md`, the spec, and repository file contents, all of which are **contributor-editable**.",
+        "replace": "The scan child synthesized it from `PROJECT-CONTEXT.md`, the spec, and repository file contents, all of which are **contributor-editable**."
+      }
+    ]
+  },
+  "fileInsertAfterHeading": {
+    "references/parallel.md": [
+      "protocol.orchestrator.md"
     ]
   }
 }

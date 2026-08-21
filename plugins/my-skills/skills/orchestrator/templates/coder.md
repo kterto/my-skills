@@ -25,30 +25,19 @@ Search `plans/feat/`, `plans/code-review/`, and `plans/qa/` for the plan's **`.m
 
 Read `.orchestrator/PROJECT-CONTEXT.md`, plus any project files it points to.
 
+Read `.orchestrator/gate-config.md`, and the `.cleancode-gates.json` governing each package your plan touches — together they are the source of every number sub-step 4d measures against, and of the vocabulary for reporting a gate that cannot be measured. `PROJECT-CONTEXT.md` records which config governs which package. **If `.orchestrator/gate-config.md` is absent, do not improvise the rules from memory** — report the gate step `MISSING_TOOL` naming that path and tell the user to re-run `/orchestrator --setup`; a remembered threshold or a guessed scope is exactly the drift this file exists to end.
+
 Apply the Invariants and Commands sections of `PROJECT-CONTEXT.md` before writing any code.
 
 ## Step 2L — Lane boundary (parallel mode only)
 
-Applies **only when your orchestrator preamble carries `lane=` and `contract=` lines.** Those lines are the sole authority on lane membership: present ⇒ this is a lane invocation and this step binds; absent ⇒ skip this step entirely and the rest of this template is unchanged. Never infer a lane from plan prose, a file path, or an ID — a boundary rule that switches itself off because an architect worded an Overview differently would fail open and silently.
+**Specified in `.orchestrator/lane-protocol.md` → *Coder — lane boundary*.** It binds **only** when
+your orchestrator preamble carries `lane=` and `contract=` lines; absent them, skip this step entirely
+and the rest of this template is unchanged. Never infer a lane from plan prose, a file path, or an ID.
 
-**Your `lane=` may be a plain lane name (`backend`) or a qualified leaf name (`backend/data`), and your `contract=` may point at the run's parent `PACT` or at your lane's sub-contract.** Both forms mean exactly the same thing to you, and **this step is identical either way**: `lane=` names what you are, `contract=` names your **governing contract**, and there is **no new rule for the nested case**. A qualified name is not a signal to read two contracts or to reason about a parent — it is just your name.
+If those lines are present and the file is missing, stop and report it — do not guess at a boundary
+whose whole job is keeping concurrent coders out of each other's files.
 
-Read the `PACT` at `contract=`. **It is the authority on what you own** — and it is the **only** contract you read. Whichever level it sits at, it states your owned globs, your own interface rows, and (in a sub-contract) the parent rows inherited to your sub-lane in its *Inherited interface assignments* region. Everything you need is in that one document by construction. Then hold this rule for the whole session:
-
-> **Every file you write must fall inside your lane's owned path globs.**
-
-Other coders are running **concurrently in this same workspace**, isolated from you by nothing but those globs — the run shares one workspace because per-lane worktrees would require per-lane commits, and the pipeline never commits. A write outside your globs is therefore not a style violation; it is a collision with another agent's work. This is equally true of a **sibling sub-lane** of your own lane: its globs are as much someone else's as another lane's are, because containment guarantees they are disjoint from yours.
-
-**"Inside your globs" means canonically inside, checked at write time.** A path that reads as in-scope can resolve elsewhere if any component is a symlink — including one a concurrent leaf created *after* your contract was frozen. So before writing, resolve the destination's existing components (symlinks included) and confirm the **canonical** path is still inside your lane's **canonical** owned scope, per `.orchestrator/config.md` → *Owned-glob rejection*, case 7. A write whose canonical destination lands outside it is a `lane boundary` stop like any other — the string looking right is not the test.
-
-So: **a required edit outside your lane's globs is not performed.** Do not make it "just this once", do not make it and note it, do not widen your own globs. Stop with the `lane boundary` BLOCKED reason in Step 5.
-
-Two further rules follow from the same reasoning:
-
-- **You may never change the contract.** The `PACT`'s interface shapes are frozen — including a parent row inherited to you through a sub-contract. If you discover a frozen shape is wrong, unimplementable, or contradicts the spec, that is not yours to fix — stop with the `contract violation` BLOCKED reason. Only the architect writes an amended contract, and the orchestrator decides which contract to amend.
-- **You may never edit any `PACT` file** — not your governing contract, not the parent contract above it, not a sibling's sub-contract. Not their interface rows, not their maps, and not their lane- or sub-lane-status tables (the orchestrator is the sole writer of every one of those tables, at both levels).
-
-Build against the **consumer stub strategy** the contract specifies for any interface row you consume; that is what keeps your lane from blocking on another lane's progress.
 
 ## Step 3 — Mark plan IN_PROGRESS
 
@@ -145,12 +134,86 @@ Before marking the LAST task in EACH phase as `[x]`, run the gate commands the a
 
 Rules for this sub-step:
 
-1. MANDATORY before checking the last task in the phase. Not optional.
-2. Either confirm all-green and proceed, OR treat any failure as a blocker and route it through Step 5 (BLOCKED procedure). Do NOT silently rewrite source to make a gate pass without a corresponding plan task.
-3. G1 (coverage) and G6 (mutation, when scaffolded) are NOT in this sub-step — they remain QA-owned. If the plan's verification section references them, escalate to architect; the plan template is wrong.
-4. **Lane-scoped gates (parallel mode only).** When your plan declares a lane, every gate command you run is **scoped to your lane's owned paths** — pass the lane's globs/directories to the command rather than running it repo-wide. Other lanes are mid-edit in the same workspace, so a repo-wide gate would report their in-flight state as your failure and waste a BLOCKED stop on work that is not yours.
+1. MANDATORY before checking the last task in the phase. Not optional — and **it leaves a record
+   whether or not anything failed**. Append one entry per phase to the plan's `.progress.md`:
 
-   If a gate has **no path-scoped form** in `PROJECT-CONTEXT.md` → Commands, **defer it to the nearest enclosing join** instead of running it concurrently — the **inner** join if you are a sub-lane, the **outer** join if you are an unsplit lane. Note the deferral in `.progress.md` and proceed; that join **records** the deferral rather than running the gate, and passes it outward — every deferred gate runs once, at the **outer** join (`SKILL.md` → Step 3j item 4), the first point at which nothing else is in flight. Deferring is the correct outcome here, not a failure.
+   ```
+   ### {ISO 8601 datetime} | CODER — GATE
+   Phase: {N}  Files gated: {count}  Base: {base_sha}
+   {gate id} ({stack}): {pass | fail | MISSING_TOOL | UNMEASURED | baseline} — {measured vs configured, or the reason}
+   ```
+
+   A skipped sub-step and a clean one must not leave byte-identical files. This entry is the only
+   evidence that distinguishes them, it is what lets QA tell a **carried** finding from a **first-time
+   discovery**, and it is what makes the two-attempt cap auditable rather than self-reported.
+2. **A gate finding is not a BLOCKED stop.** `BLOCKED` halts the whole run for a human (`SKILL.md` → Step 3), and a gate violation is precisely the class the pipeline already remediates on its own through QA's loop — diverting it to a halt would trade a bounded automated cycle for a human interrupt, which is worse than the QA-first ordering this sub-step replaces. Instead: clear what you can, **record what you cannot, and proceed**. Reserve `BLOCKED` for what it already means — you cannot proceed at all. Do NOT silently rewrite source to make a gate pass without a corresponding plan task.
+3. **G2, G4, G5 and G7 are asserted here, at phase exit; G1 is measured here and asserted by nobody
+   until QA.** A plan tags it `G1 (advisory — tester closes)`: record the number, never block on it.
+   The tester is the role that raises coverage and it runs after you; halting on G1 now would stop the
+   run in front of the only role that could clear it, and normal TDD phase output sits below the
+   configured floor until the tester has been. Finding a violation now is the point: you still
+   have the code in mind, and the same finding at QA costs a full architect→coder→tester→reviewer→QA
+   remediation run. **Only G6 (mutation) is QA-owned** — it needs aggregate scoring you cannot produce
+   per phase. If the plan's verification section references G6, escalate to architect; the plan
+   template is wrong.
+
+   **Resolve every gate per `.orchestrator/gate-config.md`** — which config governs, per-stack
+   selection, the exact key names, the `exclude` + `gates.<id>.exempt` filter, and the four-value
+   verdict vocabulary. Two consequences bite immediately: **run each gate from the directory whose
+   config governs it** (a run from the repo root against per-package configs prefix-matches nothing and
+   reports green over an empty set), and **`MISSING_TOOL`, `UNMEASURED`, and recorded baseline debt are
+   not failures** — record them and continue.
+
+   **The phase's changed set — git cannot answer this by itself.** The pipeline never commits, so no
+   ref separates this phase's edits from those of phases 1..N-1. Compute the run's changed set, then
+   **intersect it with the paths this phase's own tasks touched**, and gate only that intersection.
+   A violation in a file no task in this phase touched is not yours to clear.
+
+   ```bash
+   base="{the MAESTRO_REVIEW_BASE value from your orchestrator preamble}"
+   git rev-parse --verify --quiet "$base" >/dev/null || echo "MISSING_TOOL: base ref does not resolve"
+   git update-index --refresh >/dev/null 2>&1 || true
+   { git diff --name-only --relative "$base"; git ls-files --others --exclude-standard; } | sort -u
+   ```
+
+   **Never a two-dot range** (`base..HEAD`): with nothing committed it resolves to zero files and hands
+   you a green phase exit over an empty set. An empty intersection on a phase that changed code is a
+   defect to report, never a pass.
+
+   **Clearing an emitted gate IS an authorized edit.** The plan's `## Verification (per phase)` section
+   is a phase exit criterion the architect wrote, so a change that brings this phase's own files within
+   a gate it lists traces to that requirement and satisfies the diff-traceability rule in *Rules*
+   below. Without this, that rule would forbid every refactor a gate needs and this sub-step could
+   never clear anything. The authorization is deliberately narrow: **only** files in this phase's
+   intersection, **only** to clear a gate the plan actually lists, and **never** a behavior change —
+   if the tests you wrote for this phase no longer pass, the edit went too far. Anything wider is the
+   drive-by refactor the rule exists to stop, and it gets recorded rather than made.
+4. **What to do with a violation you cannot clear.** If clearing it would require an edit no plan
+   task authorizes, or if the only available fix moves the violation rather than removing it —
+   extracting a helper that is itself over the limit, so the next run reports the new helper — then
+   **record it and continue**. Append a `GATE` entry to the plan's `.progress.md`:
+
+   ```
+   ### {ISO 8601 datetime} | CODER — GATE
+   Gate: {id} ({stack})  Verdict: fail
+   Measured: {value}  Threshold: {configured value}  File: {path}:{symbol}
+   Carried because: {the fix you rejected, and why it was not yours to make}
+   ```
+
+   That entry is what makes the finding **carried** rather than a first-time discovery
+   (`.orchestrator/gate-config.md` → *Attributing a finding*), so QA remediates it through its normal
+   loop and nobody is blamed for skipping a step. **Attempt a given gate at most twice per phase**,
+   then record and move on: a violation that survives one honest attempt is a contract problem for the
+   architect, and grinding on it burns the same budget the old ordering burned, one role earlier.
+5. **Lane-scoped gates (parallel mode only).** When your plan declares a lane, every gate command you run is **scoped to your lane's owned paths** — pass the lane's globs/directories to the command rather than running it repo-wide. Other lanes are mid-edit in the same workspace, so a repo-wide gate would report their in-flight state as your failure and waste a BLOCKED stop on work that is not yours.
+
+   **G1 defers on every lane invocation.** Coverage requires executing the test suite, and the full
+   suite is never run inside a lane (below) — so in parallel mode G1 has no path-scoped form by
+   construction and always takes the deferral path. That is correct, not a gap: it runs once at the
+   outer join, and the tester still closes what it finds. Do not attempt a partial coverage run inside
+   a lane to satisfy this sub-step.
+
+   If a gate has **no path-scoped form** in `PROJECT-CONTEXT.md` → Commands, **defer it to the nearest enclosing join** instead of running it concurrently — the **inner** join if you are a sub-lane, the **outer** join if you are an unsplit lane. Note the deferral in `.progress.md` and proceed; that join **records** the deferral rather than running the gate, and passes it outward — every deferred gate runs once, at the **outer** join (the orchestrator's outer join), the first point at which nothing else is in flight. Deferring is the correct outcome here, not a failure.
 
    **The full test suite is never run inside a lane** — and never inside a sub-lane either. It runs exactly **once per run, at the outer join**, over the union of every leaf's diff, at any depth. Running it concurrently from within a leaf would test a workspace that other coders are actively mutating.
 
@@ -183,33 +246,9 @@ Unblocking needed: {what is required}
 
 ### Lane BLOCKED reasons (parallel mode only)
 
-Two reasons are **reserved** and, when they apply, must be named exactly — the orchestrator's joins route on them, and the halt-vs-amend decision is made **entirely from which of the two you name**. They are additions to the free-form reason above, not replacements for it; a plan that declares no lane can never emit either.
+**Specified in `.orchestrator/lane-protocol.md` → *Coder — lane BLOCKED reasons*.** The reserved
+reasons and their exact banner shapes are there; use them verbatim when your preamble carries `lane=`.
 
-**Both spellings and both meanings are identical at every depth.** Whether your `lane=` is `backend` or `backend/data`, and whether your `contract=` is the parent `PACT` or your lane's sub-contract, you emit the **same two literal strings** — `lane boundary` and `contract violation` — for the **same two situations**. Do not qualify them, do not coin a `sub-lane boundary` or a `sub-contract violation`, and do not add a third reason: the orchestrator matches these exact tokens, and a decorated variant routes nowhere. Substitute *sub-lane* for *lane* mentally when you are one; the reason string does not change.
-
-**`lane boundary`** — a task requires editing a file outside your lane's owned globs. Do not perform the edit. The stop must name **the offending file** and **the lane that owns it** (or state that no lane owns it, which makes it an unowned-file gap in the contract):
-
-```
-### {ISO 8601 datetime} | CODER
-
-BLOCKED on task: "{task text}"
-Reason: lane boundary — {path/to/offending/file} is outside lane `{my lane}`; owned by lane `{owning lane}` (or: owned by no lane)
-Unblocking needed: reassign the file in the PACT, or move this task to the owning lane / the integration lane
-```
-
-**`contract violation`** — a frozen `PACT` interface row is wrong, unimplementable, or contradicts the spec. Do not amend the contract, do not work around it silently, and do not implement a different shape. The stop must name **the offending `PACT` row**:
-
-```
-### {ISO 8601 datetime} | CODER
-
-BLOCKED on task: "{task text}"
-Reason: contract violation — PACT row {row id} ({producer} → {consumer}, {kind}) cannot be satisfied as frozen: {what is wrong}
-Unblocking needed: architect must write an amended PACT revising row {row id}
-```
-
-**In a sub-lane, both rows still read the same way.** `{my lane}` is your qualified leaf name (`backend/data`), `{owning lane}` is whichever leaf owns the file — possibly a sibling sub-lane of your own lane — and `PACT row {row id}` is a row of your **governing** contract, which is your sub-contract (either one of its own intra-lane rows or a parent row inherited to you). You never reach past it to cite a parent row directly.
-
-Both halt this leaf only. The orchestrator waits for every other in-flight leaf, then applies its precedence rule at the join: **`contract violation` enters the amendment loop first; any other reason — including `lane boundary` — halts the run `PARTIAL`.** Completed leaves stay DONE, and re-running with `--resume` continues only the incomplete leaf plans from their first unchecked task.
 
 ## Step 6 — Mark plan DONE
 
