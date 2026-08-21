@@ -259,8 +259,15 @@ tree_out="$(node "$linter" "$repo_root/prime-agent/skills")" \
 tree_files="$(printf '%s\n' "$tree_out" | sed -n 's/^lint-prime-fences ok: \([0-9]*\) files.*/\1/p')"
 tree_fences="$(printf '%s\n' "$tree_out" | sed -n 's/.* \([0-9]*\) python fences.*/\1/p')"
 [[ -n "$tree_files" && -n "$tree_fences" ]] || fail "linter printed no coverage summary for the emitted tree: $tree_out"
-[[ "$tree_files" -ge 54 ]] || fail "linter modeled only $tree_files files of the emitted tree (expected at least 54) — the walk is not reaching the distribution"
-[[ "$tree_fences" == "15" ]] || fail "linter modeled $tree_fences python fences in the emitted tree, expected 15 — fence selection changed, or a fence was added without review"
+[[ "$tree_files" -ge 55 ]] || fail "linter modeled only $tree_files files of the emitted tree (expected at least 55) — the walk is not reaching the distribution"
+[[ "$tree_fences" == "17" ]] || fail "linter modeled $tree_fences python fences in the emitted tree, expected 17 — fence selection changed, or a fence was added without review"
+
+# 4f-bis. Cross-file section pointers resolve. Splitting SKILL.md and config.md into
+#     parallel/config-parallel references left 18 pointers naming a file that no longer
+#     held the section — including the normative definition of `span_base`. Step pointers
+#     were swept by hand and section pointers were not, so this makes the class mechanical.
+python3 "$repo_root/scripts/check-section-pointers.py" >/dev/null \
+  || fail "a cross-file \`file.md\` -> *Section* pointer names a file that does not own that heading — run: python3 scripts/check-section-pointers.py"
 
 # 4g. The coverage floor. A run that modeled nothing must not come back looking
 #     like a clean pass — that is the whole failure this section's 4f assertion

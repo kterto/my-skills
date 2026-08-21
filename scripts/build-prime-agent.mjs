@@ -104,14 +104,35 @@ function renderSkillMd(skill, source, overlay) {
     overlay.frontmatterReplacements ?? [],
     skill,
   )
-  const blocks = (overlay.insertAfterFrontmatter ?? []).map((name) => {
+  const blocks = loadBlocks(skill, overlay.insertAfterFrontmatter ?? [])
+  const rewritten = applyReplacements(body.replace(/^\n+/, ""), overlay.replacements ?? [], skill)
+  const head = ["---", kept, "---"].join("\n")
+  return [head, ...blocks, rewritten].join("\n\n")
+}
+
+// Shared by SKILL.md and by `fileInsertAfterHeading`, so a file that dispatches
+// RLM children carries the SAME protocol text as SKILL.md rather than a copy of
+// it in the overlay JSON. A second copy is a second thing to drift.
+function loadBlocks(skill, names) {
+  return names.map((name) => {
     const path = join(overlayRoot, name)
     if (!existsFile(path)) throw new Error(`${skill}: overlay block not found: ${relative(repoRoot, path)}`)
     return readFileSync(path, "utf8").replace(/\n+$/, "")
   })
-  const rewritten = applyReplacements(body.replace(/^\n+/, ""), overlay.replacements ?? [], skill)
-  const head = ["---", kept, "---"].join("\n")
-  return [head, ...blocks, rewritten].join("\n\n")
+}
+
+// Insert overlay blocks after a non-SKILL file's opening H1. SKILL.md gets its
+// blocks after the frontmatter; a reference file has none, so it anchors on the
+// heading instead. Needed once a dispatching section moved out of SKILL.md: the
+// emitted-fence linter fails such a file when it calls `rlm(` without the
+// protocol block that defines the contract, which is exactly right.
+function insertBlocksAfterHeading(text, blocks, label) {
+  if (!blocks.length) return text
+  const lines = text.split("\n")
+  const at = lines.findIndex((l) => l.startsWith("# "))
+  if (at === -1) throw new Error(`${label}: fileInsertAfterHeading needs an opening "# " heading`)
+  const rest = lines.slice(at + 1).join("\n").replace(/^\n+/, "")
+  return [lines.slice(0, at + 1).join("\n"), ...blocks, rest].join("\n\n")
 }
 
 function existsFile(path) {
@@ -148,7 +169,8 @@ for (const skill of skills) {
   const overlay = loadOverlay(skill)
   if (!overlay) continue
   const fileReplacements = overlay.fileReplacements ?? {}
-  const unusedFileReplacements = new Set(Object.keys(fileReplacements))
+  const fileInserts = overlay.fileInsertAfterHeading ?? {}
+  const unusedFileReplacements = new Set([...Object.keys(fileReplacements), ...Object.keys(fileInserts)])
   for (const file of walk(join(srcRoot, skill))) {
     const inSkill = relative(join(srcRoot, skill), file).split(sep).join("/")
     const rel = join(skill, relative(join(srcRoot, skill), file))
@@ -156,9 +178,14 @@ for (const skill of skills) {
     const mode = fileMode(file)
     if (inSkill === "SKILL.md") {
       generated.set(rel, { content: Buffer.from(renderSkillMd(skill, source.toString("utf8"), overlay)), mode })
-    } else if (fileReplacements[inSkill]) {
+    } else if (fileReplacements[inSkill] || fileInserts[inSkill]) {
       unusedFileReplacements.delete(inSkill)
-      generated.set(rel, { content: Buffer.from(applyReplacements(source.toString("utf8"), fileReplacements[inSkill], `${skill}/${inSkill}`)), mode })
+      let text = source.toString("utf8")
+      if (fileReplacements[inSkill]) text = applyReplacements(text, fileReplacements[inSkill], `${skill}/${inSkill}`)
+      if (fileInserts[inSkill]) {
+        text = insertBlocksAfterHeading(text, loadBlocks(skill, fileInserts[inSkill]), `${skill}/${inSkill}`)
+      }
+      generated.set(rel, { content: Buffer.from(text), mode })
     } else {
       generated.set(rel, { content: source, mode })
     }

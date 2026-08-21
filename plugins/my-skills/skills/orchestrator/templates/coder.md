@@ -31,26 +31,13 @@ Apply the Invariants and Commands sections of `PROJECT-CONTEXT.md` before writin
 
 ## Step 2L — Lane boundary (parallel mode only)
 
-Applies **only when your orchestrator preamble carries `lane=` and `contract=` lines.** Those lines are the sole authority on lane membership: present ⇒ this is a lane invocation and this step binds; absent ⇒ skip this step entirely and the rest of this template is unchanged. Never infer a lane from plan prose, a file path, or an ID — a boundary rule that switches itself off because an architect worded an Overview differently would fail open and silently.
+**Specified in `.orchestrator/lane-protocol.md` → *Coder — lane boundary*.** It binds **only** when
+your orchestrator preamble carries `lane=` and `contract=` lines; absent them, skip this step entirely
+and the rest of this template is unchanged. Never infer a lane from plan prose, a file path, or an ID.
 
-**Your `lane=` may be a plain lane name (`backend`) or a qualified leaf name (`backend/data`), and your `contract=` may point at the run's parent `PACT` or at your lane's sub-contract.** Both forms mean exactly the same thing to you, and **this step is identical either way**: `lane=` names what you are, `contract=` names your **governing contract**, and there is **no new rule for the nested case**. A qualified name is not a signal to read two contracts or to reason about a parent — it is just your name.
+If those lines are present and the file is missing, stop and report it — do not guess at a boundary
+whose whole job is keeping concurrent coders out of each other's files.
 
-Read the `PACT` at `contract=`. **It is the authority on what you own** — and it is the **only** contract you read. Whichever level it sits at, it states your owned globs, your own interface rows, and (in a sub-contract) the parent rows inherited to your sub-lane in its *Inherited interface assignments* region. Everything you need is in that one document by construction. Then hold this rule for the whole session:
-
-> **Every file you write must fall inside your lane's owned path globs.**
-
-Other coders are running **concurrently in this same workspace**, isolated from you by nothing but those globs — the run shares one workspace because per-lane worktrees would require per-lane commits, and the pipeline never commits. A write outside your globs is therefore not a style violation; it is a collision with another agent's work. This is equally true of a **sibling sub-lane** of your own lane: its globs are as much someone else's as another lane's are, because containment guarantees they are disjoint from yours.
-
-**"Inside your globs" means canonically inside, checked at write time.** A path that reads as in-scope can resolve elsewhere if any component is a symlink — including one a concurrent leaf created *after* your contract was frozen. So before writing, resolve the destination's existing components (symlinks included) and confirm the **canonical** path is still inside your lane's **canonical** owned scope, per `.orchestrator/config.md` → *Owned-glob rejection*, case 7. A write whose canonical destination lands outside it is a `lane boundary` stop like any other — the string looking right is not the test.
-
-So: **a required edit outside your lane's globs is not performed.** Do not make it "just this once", do not make it and note it, do not widen your own globs. Stop with the `lane boundary` BLOCKED reason in Step 5.
-
-Two further rules follow from the same reasoning:
-
-- **You may never change the contract.** The `PACT`'s interface shapes are frozen — including a parent row inherited to you through a sub-contract. If you discover a frozen shape is wrong, unimplementable, or contradicts the spec, that is not yours to fix — stop with the `contract violation` BLOCKED reason. Only the architect writes an amended contract, and the orchestrator decides which contract to amend.
-- **You may never edit any `PACT` file** — not your governing contract, not the parent contract above it, not a sibling's sub-contract. Not their interface rows, not their maps, and not their lane- or sub-lane-status tables (the orchestrator is the sole writer of every one of those tables, at both levels).
-
-Build against the **consumer stub strategy** the contract specifies for any interface row you consume; that is what keeps your lane from blocking on another lane's progress.
 
 ## Step 3 — Mark plan IN_PROGRESS
 
@@ -226,7 +213,7 @@ Rules for this sub-step:
    outer join, and the tester still closes what it finds. Do not attempt a partial coverage run inside
    a lane to satisfy this sub-step.
 
-   If a gate has **no path-scoped form** in `PROJECT-CONTEXT.md` → Commands, **defer it to the nearest enclosing join** instead of running it concurrently — the **inner** join if you are a sub-lane, the **outer** join if you are an unsplit lane. Note the deferral in `.progress.md` and proceed; that join **records** the deferral rather than running the gate, and passes it outward — every deferred gate runs once, at the **outer** join (`SKILL.md` → Step 3j item 4), the first point at which nothing else is in flight. Deferring is the correct outcome here, not a failure.
+   If a gate has **no path-scoped form** in `PROJECT-CONTEXT.md` → Commands, **defer it to the nearest enclosing join** instead of running it concurrently — the **inner** join if you are a sub-lane, the **outer** join if you are an unsplit lane. Note the deferral in `.progress.md` and proceed; that join **records** the deferral rather than running the gate, and passes it outward — every deferred gate runs once, at the **outer** join (the orchestrator's outer join), the first point at which nothing else is in flight. Deferring is the correct outcome here, not a failure.
 
    **The full test suite is never run inside a lane** — and never inside a sub-lane either. It runs exactly **once per run, at the outer join**, over the union of every leaf's diff, at any depth. Running it concurrently from within a leaf would test a workspace that other coders are actively mutating.
 
@@ -259,33 +246,9 @@ Unblocking needed: {what is required}
 
 ### Lane BLOCKED reasons (parallel mode only)
 
-Two reasons are **reserved** and, when they apply, must be named exactly — the orchestrator's joins route on them, and the halt-vs-amend decision is made **entirely from which of the two you name**. They are additions to the free-form reason above, not replacements for it; a plan that declares no lane can never emit either.
+**Specified in `.orchestrator/lane-protocol.md` → *Coder — lane BLOCKED reasons*.** The reserved
+reasons and their exact banner shapes are there; use them verbatim when your preamble carries `lane=`.
 
-**Both spellings and both meanings are identical at every depth.** Whether your `lane=` is `backend` or `backend/data`, and whether your `contract=` is the parent `PACT` or your lane's sub-contract, you emit the **same two literal strings** — `lane boundary` and `contract violation` — for the **same two situations**. Do not qualify them, do not coin a `sub-lane boundary` or a `sub-contract violation`, and do not add a third reason: the orchestrator matches these exact tokens, and a decorated variant routes nowhere. Substitute *sub-lane* for *lane* mentally when you are one; the reason string does not change.
-
-**`lane boundary`** — a task requires editing a file outside your lane's owned globs. Do not perform the edit. The stop must name **the offending file** and **the lane that owns it** (or state that no lane owns it, which makes it an unowned-file gap in the contract):
-
-```
-### {ISO 8601 datetime} | CODER
-
-BLOCKED on task: "{task text}"
-Reason: lane boundary — {path/to/offending/file} is outside lane `{my lane}`; owned by lane `{owning lane}` (or: owned by no lane)
-Unblocking needed: reassign the file in the PACT, or move this task to the owning lane / the integration lane
-```
-
-**`contract violation`** — a frozen `PACT` interface row is wrong, unimplementable, or contradicts the spec. Do not amend the contract, do not work around it silently, and do not implement a different shape. The stop must name **the offending `PACT` row**:
-
-```
-### {ISO 8601 datetime} | CODER
-
-BLOCKED on task: "{task text}"
-Reason: contract violation — PACT row {row id} ({producer} → {consumer}, {kind}) cannot be satisfied as frozen: {what is wrong}
-Unblocking needed: architect must write an amended PACT revising row {row id}
-```
-
-**In a sub-lane, both rows still read the same way.** `{my lane}` is your qualified leaf name (`backend/data`), `{owning lane}` is whichever leaf owns the file — possibly a sibling sub-lane of your own lane — and `PACT row {row id}` is a row of your **governing** contract, which is your sub-contract (either one of its own intra-lane rows or a parent row inherited to you). You never reach past it to cite a parent row directly.
-
-Both halt this leaf only. The orchestrator waits for every other in-flight leaf, then applies its precedence rule at the join: **`contract violation` enters the amendment loop first; any other reason — including `lane boundary` — halts the run `PARTIAL`.** Completed leaves stay DONE, and re-running with `--resume` continues only the incomplete leaf plans from their first unchecked task.
 
 ## Step 6 — Mark plan DONE
 
