@@ -66,8 +66,19 @@ having run. That is a vacuous pass, not a passing gate, and it silently defeats 
 ```bash
 base="${MAESTRO_REVIEW_BASE:-$(git merge-base HEAD origin/main)}"   # the run's Step 0a pre-flight base
 git update-index --refresh >/dev/null 2>&1 || true                  # build tools rewrite mtimes
-{ git diff --name-only --relative "$base"; git ls-files --others --exclude-standard; } | sort -u
+{ git diff --name-only --relative "$base" -- . ':(exclude,top)plans/'; git ls-files --others --exclude-standard -- . ':(exclude,top)plans/'; } | sort -u
 ```
+
+**`plans/` is excluded from both halves.** The pipeline's own artifacts — plan files, progress logs,
+`CR`s, `QA` reports, and on an `html` run a rendered sibling for every one of them — are orchestration
+metadata, not code. They prefix no stack's `roots`, so they never change a gate's verdict; what they
+do is land in the *ungated (outside all configured roots)* list of every report, on every gate run, by
+every role, at a volume that scales with how long the run has been going rather than with the change
+set. `:(exclude,top)` is repo-root-relative, so the exclusion holds whether the gate runs from the
+repo root or from a package directory, where the repo-root `plans/` is out of scope anyway. This is
+the default the reviewer has always carried — its `$MAESTRO_REVIEWER_DIFF_PATHSPEC` defaults to
+`. ':(exclude)plans/'` — and it belongs here too, and in the copies of this command the coder and the
+tester carry.
 
 **Both halves must be cwd-relative, or the roots match will silently half-fail.** A bare
 `git diff --name-only` prints repo-root-relative paths regardless of the directory you run it from,
@@ -126,4 +137,12 @@ or the wrong role gets blamed and the wrong fix gets planned.
   That means either the architect omitted the gate from `## Verification (per phase)` or the coder
   skipped its phase-exit sub-step. Name which in the verdict rationale; they need different fixes, and
   the gate result alone does not distinguish them. The progress log does.
+- **pre-existing (baseline)** — the failure is named in the `failing[]` of a `role: "baseline"` row
+  for that same `suite` in `.orchestrator/verification-ledger.json` (`SKILL.md` Step 0d). It was red
+  before the run began, so it is **not this run's finding**: record it with that label and move on.
+  Do not investigate it, do not plan a fix for it, and do not spend a remediation cycle on it. The
+  ledger is authoritative here precisely so that five roles do not each re-derive one answer from
+  `git show`. **When no baseline row exists** — the sweep was skipped for this project, or this
+  command is not in it — fall through to the three values below and **say which**, so a reader can
+  tell an unbaselined finding from a baselined one.
 - **regression** — the gate was green at phase exit and is red now. This is the ordinary QA signal.
