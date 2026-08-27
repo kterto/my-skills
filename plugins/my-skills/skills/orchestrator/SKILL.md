@@ -187,6 +187,7 @@ contract={governing contract path}  ← parallel path ONLY; omit the line entire
 leaves={FEAT-a},{FEAT-b},…          ← join-level spawns ONLY (tester/reviewer/qa); omit otherwise
 tree={tree hash}                    ← suite-running spawns ONLY (tester/qa); omit otherwise
 aggregate={digest path}             ← join-level spawns ONLY, parallel path, digest verified; omit otherwise
+delta={cycle delta file list}       ← reviewer spawns on cycle >= 2 ONLY; omit otherwise
 ```
 
 - `output_format` is resolved once per run (CLI arg > `.orchestrator/config.json` > default `md`).
@@ -197,6 +198,10 @@ aggregate={digest path}             ← join-level spawns ONLY, parallel path, d
 - `leaves=` carries the run's **resolved leaf set** — every leaf `FEAT` ID, in dispatch order — on the three join-level spawns (tester, reviewer, qa). The orchestrator dispatched those leaves and already holds the list, so a role that receives it **uses it as given and does not walk the contract tree**. Without it, each of the three would re-read the parent contract plus every sub-contract to rebuild a set the orchestrator never lost, once per role and again on every review and QA cycle. The `PACT` ID resolution walk in `.orchestrator/artifact-format.md` stays the **fallback** for a **legacy** run — one started before the orchestrator emitted this line — where it is absent. A **resumed** run is not a fallback case: Step 0r rebuilds the leaf set from the parent contract's `Sub-contract` column and emits `leaves=` like any other run.
 
 - `tree=` carries the working tree's hash, minted with Step 0a's recipe **immediately before this spawn** — never an earlier boundary's value, because the coder writes code and the tester writes tests between them. It goes to the **two roles that execute whole-app suites**, the tester and QA, and to nobody else; the reviewer runs nothing, so it does not get the line. Its sole use is the suite-inheritance match (Step 0a → *Suite inheritance*), and it is emitted on **both** paths — a sequential run duplicates suites exactly as a parallel one does.
+
+- `delta=` names the files this **cycle** changed, on review cycles of 2 or more: `git diff --name-only {the previous boundary's tree} {the current boundary's tree}`, both hashes read from `boundaries[]` in `.orchestrator/verification-ledger.json` (Step 0a), under the boundary recipe's own pathspec. **This is `boundaries[]`'s first consumer.** It is emitted on **both** paths and omitted entirely on cycle 1, which has no previous boundary to diff against.
+
+  **It narrows nothing.** `MAESTRO_REVIEW_BASE` is untouched, the working-tree snapshot is untouched, and the reviewer's read set is untouched — `delta=` is an **input to disclosure**, not a scope. What it buys is that the CR states what was examined: today a cycle-6 reviewer facing a multi-megabyte union necessarily reads a subset, and reports no scope at all, so nobody can tell a thorough review from a shallow one, or measure what a narrowing rule would cost. Reporting the scope is a strict increase in information over reporting none, and it is the measurement any future scope rule has to be argued from.
 
 - `aggregate=` names the **join digest** (`references/parallel.md` → 3j.4): the run's aggregate, materialized once by the orchestrator, which the tester, reviewer and QA read **in place of** the leaf plans, contracts and progress logs it replaces. It is emitted **only** on the parallel path, **only** when the digest built and its integrity check passed, and it is **omitted entirely** otherwise — a role that does not see the line resolves the aggregate exactly as it does today, from `leaves=`. There is no `aggregate=none`: the line's absence is the signal, exactly as it is for `lane=`, `contract=` and `leaves=`, and that omission is what keeps a sequential run's prompts byte-identical to a pre-feature run's.
 
@@ -870,6 +875,7 @@ root_plan={root_plan_id}   ← the run's immutable aggregate; the reviewer's req
 spec={spec_path}   ← the run's source spec; omit the line entirely when the run has no spec
 leaves={comma-separated leaf FEAT IDs, in dispatch order}   ← parallel path ONLY; omit the line entirely on a sequential run
 aggregate={path to .orchestrator/join-digest.md}   ← parallel path ONLY, and only when the digest built and its integrity check passed; omit the line entirely otherwise
+delta={path to the cycle delta file list}   ← review cycles >= 2 ONLY; omit the line entirely on cycle 1
 MAESTRO_REVIEW_BASE={base_sha}   ← the Step 0a pre-flight base; the reviewer snapshots the working tree against it
 
 Review plan {plan_id}. The plan is in DONE status.
@@ -1322,6 +1328,7 @@ root_plan={root_plan_id}   ← the run's immutable aggregate; the reviewer's req
 spec={spec_path}   ← the run's source spec; every artifact you write names its id in `related_to` (family membership). Omit the line entirely when the run has no spec
 leaves={comma-separated leaf FEAT IDs, in dispatch order}   ← parallel path ONLY; omit the line entirely on a sequential run
 aggregate={path to .orchestrator/join-digest.md}   ← parallel path ONLY, and only when the digest built and its integrity check passed; omit the line entirely otherwise
+delta={path to the cycle delta file list}   ← review cycles >= 2 ONLY; omit the line entirely on cycle 1
 MAESTRO_REVIEW_BASE={base_sha}   ← the Step 0a pre-flight base; the reviewer snapshots the working tree against it
 
 Review plan {qaf_plan_id}. The plan is in DONE status.

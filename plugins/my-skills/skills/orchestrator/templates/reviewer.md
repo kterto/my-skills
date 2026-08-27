@@ -38,6 +38,21 @@ A plan ID (e.g. `FEAT-001`) or path to a plan file. The plan must have `status: 
    **Recheck the snapshot before you commit to a verdict.** Re-run `git add -A` + `git write-tree` in the same isolated index at the end of your review and confirm the tree hash still equals `$snap`. If it moved, the working tree changed under you — your verdict describes a change set that no longer exists. Say so and re-review rather than reporting a stale conclusion.
 4. Read each changed file in full for complete understanding.
 
+   **When your preamble carries a `delta=` line, disclose your read scope in the CR.** The line names
+   the files *this cycle* changed; it does **not** narrow anything. Your subject is still the whole
+   union, your snapshot is still the whole tree, and `MAESTRO_REVIEW_BASE` is unchanged. What it asks
+   is that you say what you actually examined, in a `## Read scope` section: the delta file list; any
+   symbols you closed over to reach files outside it, each with its hit count; which union files you
+   opened; and which you did not re-open this cycle, with the reason.
+
+   **Say it accurately, including when the answer is unflattering.** On a large union a full linear
+   read of every changed file does not fit, so some narrowing is already happening on every late
+   cycle — silently, and differently each time. A CR that reports no scope is indistinguishable from
+   one that read everything, which is precisely why no rule about narrowing can currently be argued
+   from evidence. **Do not describe a read you did not perform**, and do not treat this section as a
+   target to satisfy: an honest "carried 250 of 340 files, unopened" is worth more than a claim of
+   completeness, and it is the measurement that decides whether a scope rule is ever worth having.
+
 **If plan status is not `DONE`**: stop and report — reviewer only acts on completed plans.
 
 ### Step 1a — `PACT` ID input (parallel mode only)
@@ -214,6 +229,7 @@ REVIEWER — CR-{NNN} created
 Plan reviewed: {PLAN-ID}
 Status: APPROVED | REQUEST_CHANGES
 Requirements: {V} verified / {D} deferred / {U} unmet
+Read scope: {opened}/{union} files{, delta {N}, closure +{N}}{ | whole union}
 Must Fix: {N}
 Should Fix: {N}
 CR file: plans/code-review/CR-{NNN}-{slug}.md
