@@ -132,6 +132,25 @@ Plan tasks remaining: {N} unchecked
 
 Before marking the LAST task in EACH phase as `[x]`, run the gate commands the architect listed in the plan's `## Verification (per phase)` section that apply to the phase's touched paths. Refer to the Commands section of `PROJECT-CONTEXT.md` for the canonical command set.
 
+The section's `### Gate coverage` table is a coverage index, not a second command list: it maps each
+runtime gate id to the command that carries it, which is what fills in the `{gate id}` line of the
+entry below without guessing. Run the commands; read the table to name what each one gated. A gate
+whose row reads `n/a` is not yours to run — record it as `n/a — {the row's reason}` rather than
+substituting a command the plan did not authorize.
+
+**Narrowing a listed command to this phase's changed-set intersection is an authorized deviation from
+the plan's literal command string. Widening one is not.** Each row's `Scope` token says which: fill a
+`changed-files` row's `<placeholder>` from the intersection you compute in rule 3 below, and when the
+plan names the unscoped form of a narrowable command anyway, **run the scoped form and record the
+substitution** — do not obey it, and do not refuse it. Run a `whole-project` row exactly as written;
+run an `advisory-instrument` row as written and record its number as a lower bound.
+
+This is the one exception to running the commands as the architect listed them, and it exists because
+a plan that names the whole-app suite beats every rule written in this template: you read the plan,
+not the authoring guidance the architect read. A plan whose close-out phase demands the *full* suite
+in bold is exactly the case — it has been obeyed, three times in one lane, against a rule two
+sections below that forbids it.
+
 Rules for this sub-step:
 
 1. MANDATORY before checking the last task in the phase. Not optional — and **it leaves a record
@@ -141,7 +160,16 @@ Rules for this sub-step:
    ### {ISO 8601 datetime} | CODER — GATE
    Phase: {N}  Files gated: {count}  Base: {base_sha}
    {gate id} ({stack}): {pass | fail | MISSING_TOOL | UNMEASURED | baseline} — {measured vs configured, or the reason}
+     cmd: {the exact command string you ran}  scope: {changed-files | whole-project | advisory-instrument | deferred-to-join}
+     substituted: {the plan's literal string} → narrowed to this phase's intersection   ← only when you narrowed
    ```
+
+   **The first three lines are byte-compatible with what QA already reads** — the verdict vocabulary
+   is unchanged, and the carried-versus-first-time discrimination depends on them
+   (`.orchestrator/gate-config.md` → *Attributing a finding*). The `cmd:` and `scope:` lines are
+   additive, and they are what make a scope claim auditable at all: with no command string on the
+   record, *did this phase run the whole suite* is answerable only from free prose — which is how
+   sixty-one whole-app suite executions crossed a single run without anyone noticing.
 
    A skipped sub-step and a clean one must not leave byte-identical files. This entry is the only
    evidence that distinguishes them, it is what lets QA tell a **carried** finding from a **first-time
@@ -173,7 +201,7 @@ Rules for this sub-step:
    base="{the MAESTRO_REVIEW_BASE value from your orchestrator preamble}"
    git rev-parse --verify --quiet "$base" >/dev/null || echo "MISSING_TOOL: base ref does not resolve"
    git update-index --refresh >/dev/null 2>&1 || true
-   { git diff --name-only --relative "$base"; git ls-files --others --exclude-standard; } | sort -u
+   { git diff --name-only --relative "$base" -- . ':(exclude,top)plans/'; git ls-files --others --exclude-standard -- . ':(exclude,top)plans/'; } | sort -u
    ```
 
    **Never a two-dot range** (`base..HEAD`): with nothing committed it resolves to zero files and hands
@@ -205,7 +233,13 @@ Rules for this sub-step:
    loop and nobody is blamed for skipping a step. **Attempt a given gate at most twice per phase**,
    then record and move on: a violation that survives one honest attempt is a contract problem for the
    architect, and grinding on it burns the same budget the old ordering burned, one role earlier.
-5. **Lane-scoped gates (parallel mode only).** When your plan declares a lane, every gate command you run is **scoped to your lane's owned paths** — pass the lane's globs/directories to the command rather than running it repo-wide. Other lanes are mid-edit in the same workspace, so a repo-wide gate would report their in-flight state as your failure and waste a BLOCKED stop on work that is not yours.
+5. **Gate scope — every mode.** Every gate command runs in the form its row's `Scope` token declares, over this phase's changed-set intersection. **When your plan declares a lane** that intersection is additionally bounded by your lane's owned paths — pass the lane's globs/directories to the command rather than running it repo-wide. Other lanes are mid-edit in the same workspace, so a repo-wide gate would report their in-flight state as your failure and waste a BLOCKED stop on work that is not yours.
+
+   **A `whole-project` command's red is attributed like any other finding.** When it fails in a file
+   **outside** this phase's intersection, record it `not-mine — {owning lane | pre-existing}` and **do
+   not fail the phase**. That is rule 3's *a violation in a file no task in this phase touched is not
+   yours to clear*, extended from gate findings to whole-project command results — one clause, not a
+   new rule. Do not build an attribution instrument no template describes; record it and proceed.
 
    **G1 defers on every lane invocation.** Coverage requires executing the test suite, and the full
    suite is never run inside a lane (below) — so in parallel mode G1 has no path-scoped form by
@@ -213,9 +247,24 @@ Rules for this sub-step:
    outer join, and the tester still closes what it finds. Do not attempt a partial coverage run inside
    a lane to satisfy this sub-step.
 
-   If a gate has **no path-scoped form** in `PROJECT-CONTEXT.md` → Commands, **defer it to the nearest enclosing join** instead of running it concurrently — the **inner** join if you are a sub-lane, the **outer** join if you are an unsplit lane. Note the deferral in `.progress.md` and proceed; that join **records** the deferral rather than running the gate, and passes it outward — every deferred gate runs once, at the **outer** join (the orchestrator's outer join), the first point at which nothing else is in flight. Deferring is the correct outcome here, not a failure.
+   If a gate has **no path-scoped form** in `PROJECT-CONTEXT.md` → Commands, **defer it to the nearest enclosing join** instead of running it concurrently — the **inner** join if you are a sub-lane, the **outer** join if you are an unsplit lane. Note the deferral in `.progress.md` and proceed; that join **records** the deferral rather than running the gate, and passes it outward — every deferred gate runs once, at the **outer** join (the orchestrator's outer join), the first point at which nothing else is in flight. Deferring is the correct outcome here, not a failure. **This outcome is parallel-mode only** — a laneless plan (sequential, `FIX`, `QAF`) has no join to redeem a deferral at, so a non-narrowable command there is run in place under its `whole-project` row, never deferred into nothing.
 
-   **The full test suite is never run inside a lane** — and never inside a sub-lane either. It runs exactly **once per run, at the outer join**, over the union of every leaf's diff, at any depth. Running it concurrently from within a leaf would test a workspace that other coders are actively mutating.
+   **A whole-app test suite is never run at phase exit — in any mode, on any plan type, lane or no
+   lane.** In parallel mode a repo-wide suite reports a sibling's in-flight state as your failure; in
+   sequential and remediation mode the cost is fixed and multi-minute, this phase's diff does not
+   justify it, and the run's own barriers execute it over a settled tree anyway. Naming those barriers
+   matters, because this rule is not "nobody runs the suite":
+
+   - **The tester's coverage command** (`templates/tester.md` → Step 4) is a whole-app execution by
+     construction. Its *measurement* scope stays changed-files-only — execution scope and measurement
+     scope are different things, and this rule narrows neither of the tester's.
+   - **QA's Step 3** runs every suite the plan touched. **This is the barrier that binds on a `FIX` or
+     `QAF` plan**, which is the one a remediation coder should point at when tempted to run the suite
+     itself.
+   - **The outer join**, on the parallel path, where `simplify` and the full test suite run exactly
+     **once per run**, over the union of every leaf's diff, at any depth — never per lane and never
+     per sub-lane. Running it concurrently from within a leaf would test a workspace that other coders
+     are actively mutating.
 
 ### TDD rules (non-negotiable)
 
@@ -285,7 +334,8 @@ Refer to the Commands and Conventions sections of `PROJECT-CONTEXT.md` for the c
 - Never commit secrets, credentials, or generated env files.
 - Do not add comments unless asked.
 - Every line in your diff must trace to a task in the current plan. No drive-by refactors or reformatting outside scope.
-- **Parallel mode only:** never write outside your lane's owned globs; never edit the `PACT`; never run the full test suite inside a lane.
+- **Parallel mode only:** never write outside your lane's owned globs; never edit the `PACT`.
+- **Never run a whole-app test suite at phase exit — any mode, any plan type, lane or no lane.** A phase gate runs the `changed-files` form; the whole-app suite belongs to the run's barriers (rule 5 above).
 
 ## Output to user
 

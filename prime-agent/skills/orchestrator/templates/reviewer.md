@@ -38,9 +38,32 @@ A plan ID (e.g. `FEAT-001`) or path to a plan file. The plan must have `status: 
    **Recheck the snapshot before you commit to a verdict.** Re-run `git add -A` + `git write-tree` in the same isolated index at the end of your review and confirm the tree hash still equals `$snap`. If it moved, the working tree changed under you — your verdict describes a change set that no longer exists. Say so and re-review rather than reporting a stale conclusion.
 4. Read each changed file in full for complete understanding.
 
+   **When your preamble carries a `delta=` line, disclose your read scope in the CR.** The line names
+   the files *this cycle* changed; it does **not** narrow anything. Your subject is still the whole
+   union, your snapshot is still the whole tree, and `MAESTRO_REVIEW_BASE` is unchanged. What it asks
+   is that you say what you actually examined, in a `## Read scope` section: the delta file list; any
+   symbols you closed over to reach files outside it, each with its hit count; which union files you
+   opened; and which you did not re-open this cycle, with the reason.
+
+   **Say it accurately, including when the answer is unflattering.** On a large union a full linear
+   read of every changed file does not fit, so some narrowing is already happening on every late
+   cycle — silently, and differently each time. A CR that reports no scope is indistinguishable from
+   one that read everything, which is precisely why no rule about narrowing can currently be argued
+   from evidence. **Do not describe a read you did not perform**, and do not treat this section as a
+   target to satisfy: an honest "carried 250 of 340 files, unopened" is worth more than a claim of
+   completeness, and it is the measurement that decides whether a scope rule is ever worth having.
+
 **If plan status is not `DONE`**: stop and report — reviewer only acts on completed plans.
 
 ### Step 1a — `PACT` ID input (parallel mode only)
+
+**When your preamble carries an `aggregate=` line**, read that file's section for your role **in place of** the artifacts named below, after checking its stamp's `root_plan_id`, `leaves` and `tree` against your own preamble. On any mismatch, or if the file is missing or unparseable, **fall through to `leaves=` and read the originals, printing which field mismatched** — never proceed on a digest you could not verify. Record which rung you took in your report, in the shape `references/parallel.md` → 3j.4 specifies; the artifact is what a human reads three cycles later when a verdict looks wrong.
+
+**Regions A, B, C and E replace** the walk over the parent contract, every sub-contract and every leaf plan for: each leaf's authorized-write set (region A — an authorized-**write** map, so a carve-out or an assigned unowned file is *not* a boundary crossing), every interface row at both levels resolved to its owning leaf with the frozen shape verbatim (B), the union requirement map with each claim qualified `{leaf-id}:AC{n}` (C), and every leaf's acceptance criteria byte-for-byte (E).
+
+**It replaces nothing else.** You still take the working-tree snapshot yourself, still read **every changed file in full**, and still open each leaf plan's `## Technical Notes` and `## Tasks` — the constraint-respected and every-line-traces-to-a-task lenses read prose, and a summary of prose is a different document. The spec, the join-level `CR`, `PROJECT-CONTEXT.md` and the gate thresholds are likewise unchanged.
+
+**The original artifact always wins.** The digest is derived data: it saves the analysis, never the checking. Every way it can be wrong produces a *stronger* verdict rather than an error, so a disagreement you notice is the only runtime signal that it dropped something. If what you open disagrees with it, say so in your report, record it in `.progress.md`, and treat the digest as unusable for the rest of this run.
 
 When the ID you were given carries the `PACT-` prefix, you were invoked **at the outer join** over a leaf fan-out. **When your preamble carries a `leaves=` line, that is the leaf plan set — use it as given.** Only when it is absent — a **legacy** run, started before the orchestrator emitted the line — resolve the set yourself. A resumed run is not such a case: Step 0r rebuilds the leaf set centrally and emits it. Either way, `.orchestrator/artifact-format.md` → **`PACT` ID resolution** is the single normative rule for resolving it, for what to evaluate, and for where to write back — **that rule is your entire knowledge of nesting.** Step 1.3's **working-tree snapshot** already yields the union — every leaf wrote into this one shared workspace and none of them committed — so the snapshot command is unchanged at the join. What is **not** true is that a commit range would yield it: with no leaf commits to range over, `main...HEAD` shows none of the fan-out's work. The snapshot is what makes "the union" real here, which is why Step 1.3 forbids substituting a range for it.
 
@@ -206,6 +229,7 @@ REVIEWER — CR-{NNN} created
 Plan reviewed: {PLAN-ID}
 Status: APPROVED | REQUEST_CHANGES
 Requirements: {V} verified / {D} deferred / {U} unmet
+Read scope: {opened}/{union} files{, delta {N}, closure +{N}}{ | whole union}
 Must Fix: {N}
 Should Fix: {N}
 CR file: plans/code-review/CR-{NNN}-{slug}.md

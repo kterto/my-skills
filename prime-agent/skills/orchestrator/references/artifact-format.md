@@ -173,7 +173,19 @@ When the ID you were given carries the `PACT-` prefix:
    Read every plan in the resulting **leaf set** in place of the single plan your own Step 1 would have read.
 3. **Every plan in the resolved leaf set must be `status: DONE`.** The check applies to the **resolved leaf set** — the sub-lane plans for a split lane, the lane plan for a flat one — not to the lane map's rows. If any is not DONE, stop and report which leaf is incomplete, naming it by its **qualified name** (`{lane}/{sub-lane}`) when it is a sub-lane: the union is not yet a complete change set, so any verdict over it would describe work that does not exist.
 4. **Evaluate the union of the leaf diffs as one change set**, in a single join-level pass. Never once per lane and never once per sub-lane. The leaves share one workspace, so the ordinary diff range already yields the union; what changes is that you evaluate it against every resolved leaf plan's acceptance criteria plus the `PACT`, not one plan's. **This evaluation is unchanged by nesting** — only the set of plans feeding it is resolved differently.
-5. **Write back at the join:** set `plan:` in your report frontmatter to the **parent** `PACT` ID, fill the Related region with a relative link to it, and append your Progress Log entry to **every** resolved leaf plan and its `.progress.md`, so no leaf's log is missing the join verdict.
+5. **Write back at the join — the entry once, a pointer everywhere else:** set `plan:` in your report frontmatter to the **parent** `PACT` ID and fill the Related region with a relative link to it. Then record your verdict at these three kinds of site, and only these:
+
+   - **The parent `PACT`'s `.progress.md` `## Log` takes the full entry**, byte-for-byte as your own *Update plan and progress files* step specifies, written **once**. The parent contract is the run's only index of the fan-out, so it is the one place a join verdict has a single home. Write the **sidecar**, never the `PACT` file itself.
+   - **Each resolved leaf plan's `## Progress Log` takes your ordinary one-line entry, unchanged.** It is already one line and already names your report ID and your verdict, so there is nothing there to de-duplicate — and replacing it with a pointer would lose the ID and the counts to save nothing.
+   - **Each leaf's `.progress.md` `## Log` takes a pointer in place of the entry** — your usual `### {ISO 8601 datetime} | {ROLE}` header over a single body line:
+
+     ```
+     {STATUS} — recorded in full at {PACT-ID}-{slug}.progress.md
+     ```
+
+     Leaf plans and the `PACT` share a directory, so this is a bare sibling filename. Keep it **plain text, never a markdown link**: a log line is rendered as an escaped text node, so a bare path creates no `href` for the link checker to resolve, and one shape serves both `output_format` modes.
+
+   **The guarantee is unchanged — no leaf's log is missing the join verdict.** Every leaf still gains one entry per join role per cycle, stamped with that role, that timestamp and that verdict token, so a reader who opens one leaf still learns which joins ran, when, and how they ruled — and now also where the reasoning is. What a leaf stops carrying is the entry *body*, which was identical in all of them. **That body is the cost this removes:** a nine-leaf fan-out wrote nine byte-identical paragraphs per join role per cycle, into exactly the logs the next join spawn re-reads and the digest's region F re-hashes.
 
 The single-plan-ID path is otherwise **unchanged** — same steps, same statuses, same stdout header lines. A `PACT` ID simply appears where a plan ID would.
 

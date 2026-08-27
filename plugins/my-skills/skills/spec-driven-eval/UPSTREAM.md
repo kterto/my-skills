@@ -1,6 +1,7 @@
 # Upstream provenance
 
-`spec-driven-eval` is **not** authored in this repository. It is vendored verbatim
+`spec-driven-eval` is **not** authored in this repository. It is vendored, with the two
+local modifications recorded below,
 so that the `orchestrator` skill's evaluation step (Step 4e) works out of the box,
 on every host, without a second install from a different marketplace.
 
@@ -19,7 +20,8 @@ is load-bearing — keep it on every edit and in every downstream distribution.
 
 ## Re-syncing
 
-The vendored copy is byte-identical to upstream. To pull a newer version:
+The vendored copy is upstream plus the two local modifications recorded below. To pull a
+newer version:
 
 ```bash
 npx @tech-leads-club/agent-skills install --skill spec-driven-eval
@@ -27,15 +29,33 @@ cp -R "$(pwd)/.claude/skills/spec-driven-eval/SKILL.md" \
       "$(pwd)/.claude/skills/spec-driven-eval/references" \
       plugins/my-skills/skills/spec-driven-eval/
 # .skill-meta.json is installer bookkeeping — do not vendor it.
+rm -rf .claude/skills/spec-driven-eval   # scratch drop: gitignored, and Claude Code
+                                         # would otherwise load it beside the real skill
 node scripts/generate-opencode-skill-index.mjs
 node scripts/build-prime-agent.mjs
+node scripts/check-host-parity.mjs   # the override above is a mirror — it must match
 ```
 
-Then bump the version and date in the table above.
+Then **re-apply the two local modifications listed below** — the copy landing from upstream does not
+carry them — and bump the version and date in the table above.
 
 ## Local modifications
 
-None. Two host-specific derivatives exist and are generated or maintained
+**Two, and a re-sync reverts both — re-apply them from this list.**
+
+1. **`## Profiles` section**, inserted immediately before *Reported beside the grade*. Defines `full`
+   (default) and `in-loop`, which selects sections only and changes no scoring rule. The orchestrator's
+   Step 4e invokes `Profile: in-loop`; without this section that line is a hint the workflow may ignore.
+2. **Executed-suite ledger clause** in *Engineering Gates `G`*, immediately before
+   *Probe-before-not-run*. A gate whose exact command string is recorded against the same tree hash is
+   scored from that record instead of re-executed. The orchestrator passes
+   `.orchestrator/verification-ledger.json`; without this clause it re-probes suites the tester
+   already ran against an unmoved tree.
+
+Both are additive, both preserve the CC-BY-4.0 attribution, and both must be applied to
+`.opencode/skills/spec-driven-eval/SKILL.md` as well.
+
+Two host-specific derivatives exist and are generated or maintained
 separately:
 
 - `.opencode/skills/spec-driven-eval/` — opencode override port (drops the

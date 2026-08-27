@@ -13,15 +13,31 @@ A plan ID (e.g. `FEAT-001`, `FIX-003`) or a direct path to a plan `.md` file.
 
 Search `plans/feat/`, `plans/code-review/`, and `plans/qa/` for the plan's **`.md`** file matching the ID (e.g. `FEAT-003-*.md`). The `.md` is always the canonical source of truth — read it fully, even if an `.html` view sits beside it. Also read the paired `.progress.md`.
 
-> **html note:** if `output_format=html`, a `<ID>-<slug>.html` rendered view exists alongside the `.md`. The `.md` is always the source of truth — mutate it first. When (and only when) `output_format=html` AND the `<ID>-<slug>.html` file exists beside the `.md`, you ALSO keep its task state in sync as you go: mirror each `[ ] → [x]` into the matching plan-html checkbox, refresh the progress overview, and stamp `data-updated-at`. See Step 4b-html. All other artifacts' `.html` views remain read-only (regenerated downstream); this sync applies to the plan (`FEAT`/`FIX`/`QAF`) html view you are executing, nothing else. `.progress.md` stays markdown-only.
+> **html note:** if `output_format=html`, a `<ID>-<slug>.html` rendered view exists alongside the `.md`. The `.md` is always the source of truth — mutate it first, then regenerate the view. When (and only when) `output_format=html` AND the `<ID>-<slug>.html` file exists beside the `.md`, you keep its task state in sync as you go by re-running `node .orchestrator/render-artifact.cjs <plan.md>` after each checkbox flip (see Step 4b-html) — never hand-edit the html. All other artifacts' `.html` views are likewise renders of their `.md`; this live re-render applies to the plan (`FEAT`/`FIX`/`QAF`) html view you are executing, nothing else. `.progress.md` stays markdown-only.
 
-**If status is not `PLANNED`**: check current status. If `IN_PROGRESS`, continue from the first unchecked `[ ]` task. If `DONE`, inform the user — nothing to implement.
+**If status is not `PLANNED`**: check current status.
+
+- **`IN_PROGRESS`** → continue from the first unchecked `[ ]` task.
+- **`BLOCKED`** → **re-entry is defined and identical to `IN_PROGRESS`**: continue from the first unchecked `[ ]` task. A `BLOCKED` plan is one a previous session stopped on, not a finished or corrupt one — its checked tasks are done and its unchecked ones are not, exactly as in `IN_PROGRESS`. **First read the `.progress.md` entry that recorded the block**, so you resume knowing what stopped the last session; if that blocker still holds, stop again with the same reason rather than re-attempting blindly. Set the plan back to `IN_PROGRESS` when you resume (Step 3). This is the status a halted leaf carries on a `--resume` run, so leaving it undefined would strand exactly the plans resume exists to continue.
+- **`DONE`** → inform the user; nothing to implement.
 
 ## Step 2 — Read project context (mandatory)
 
 Read `.orchestrator/PROJECT-CONTEXT.md`, plus any project files it points to.
 
+Read `.orchestrator/gate-config.md`, and the `.cleancode-gates.json` governing each package your plan touches — together they are the source of every number sub-step 4d measures against, and of the vocabulary for reporting a gate that cannot be measured. `PROJECT-CONTEXT.md` records which config governs which package. **If `.orchestrator/gate-config.md` is absent, do not improvise the rules from memory** — report the gate step `MISSING_TOOL` naming that path and tell the user to re-run `/orchestrator --setup`; a remembered threshold or a guessed scope is exactly the drift this file exists to end.
+
 Apply the Invariants and Commands sections of `PROJECT-CONTEXT.md` before writing any code.
+
+## Step 2L — Lane boundary (parallel mode only)
+
+**Specified in `.orchestrator/lane-protocol.md` → *Coder — lane boundary*.** It binds **only** when
+your orchestrator preamble carries `lane=` and `contract=` lines; absent them, skip this step entirely
+and the rest of this template is unchanged. Never infer a lane from plan prose, a file path, or an ID.
+
+If those lines are present and the file is missing, stop and report it — do not guess at a boundary
+whose whole job is keeping concurrent coders out of each other's files.
+
 
 ## Step 3 — Mark plan IN_PROGRESS
 
@@ -57,7 +73,7 @@ Session started. Plan status → IN_PROGRESS.
 
 Update the `**Status**` field in `.progress.md` to `IN_PROGRESS`.
 
-**html sync (html mode + plan `.html` exists only):** set the plan html's `<main data-status="in_progress">` and `data-updated-at` to match. See Step 4b-html for the sync rules.
+**html sync (html mode + plan `.html` exists only):** after writing `status: IN_PROGRESS` and the new `updated_at` to the plan `.md`, regenerate the view by re-running the renderer (see Step 4b-html) so the html reflects it.
 
 ## Step 4 — Implement tasks in strict TDD order
 
@@ -89,17 +105,17 @@ Parse the task description. Identify:
 3. If other previously-passing tests break, fix the implementation (not the tests).
 4. Mark the task `[x]` in the plan file.
 
-### 4b-html — Mirror completion into the plan html view (html mode only)
+### 4b-html — Regenerate the plan html view (html mode only)
 
-Run this immediately after marking a task `[x]` in the `.md`, and ONLY when both are true: `output_format=html` AND the `<ID>-<slug>.html` file exists beside the plan `.md`. Otherwise skip this sub-step entirely.
+Run this immediately after marking a task `[x]` (and updating `updated_at`) in the plan `.md`, and ONLY when both are true: `output_format=html` AND the `<ID>-<slug>.html` file exists beside the plan `.md`. Otherwise skip this sub-step entirely.
 
-For the task you just checked off:
+The `.md` is authoritative; do NOT hand-edit the `.html`. Regenerate it from the current `.md` by re-running the renderer:
 
-1. Find its `<li>` in the plan html — match by the task's `task__id` (e.g. `T-03`) or, failing that, by the task description text — and change its `<input type="checkbox" disabled>` to `<input type="checkbox" disabled checked>`.
-2. Refresh the progress overview to the new counts: update the `.progress__label` text (`{done} / {total} ({pct}%)`), the `.progress__fill` `data-pct` and inline `style="width: {pct}%;"`, and the `role="progressbar"` `aria-valuenow`. `{pct}` = round(done / total × 100).
-3. Set the root `<main>` `data-updated-at` to the same ISO 8601 datetime you wrote to the `.md`.
+```bash
+node .orchestrator/render-artifact.cjs plans/<dir>/<ID>-<slug>.md
+```
 
-Edit only these attributes/nodes — do not restyle or restructure the file. If the `.md` and `.html` ever disagree, the `.md` wins; correct the `.html` to match it.
+The renderer re-derives the checkbox states, the progress overview counts, and the `<main data-*>` shell (including `data-updated-at`) from the `.md`, so the rendered plan tracks reality. It exits non-zero without writing if the plan structure is non-conformant — if that happens, fix the `.md`, not the `.html`. Re-running it is idempotent and cheap; run it once per checked-off task (or once at the end of the session — a single final render also satisfies the pairing gate).
 
 ### 4c — Log each completed task
 
@@ -116,11 +132,139 @@ Plan tasks remaining: {N} unchecked
 
 Before marking the LAST task in EACH phase as `[x]`, run the gate commands the architect listed in the plan's `## Verification (per phase)` section that apply to the phase's touched paths. Refer to the Commands section of `PROJECT-CONTEXT.md` for the canonical command set.
 
+The section's `### Gate coverage` table is a coverage index, not a second command list: it maps each
+runtime gate id to the command that carries it, which is what fills in the `{gate id}` line of the
+entry below without guessing. Run the commands; read the table to name what each one gated. A gate
+whose row reads `n/a` is not yours to run — record it as `n/a — {the row's reason}` rather than
+substituting a command the plan did not authorize.
+
+**Narrowing a listed command to this phase's changed-set intersection is an authorized deviation from
+the plan's literal command string. Widening one is not.** Each row's `Scope` token says which: fill a
+`changed-files` row's `<placeholder>` from the intersection you compute in rule 3 below, and when the
+plan names the unscoped form of a narrowable command anyway, **run the scoped form and record the
+substitution** — do not obey it, and do not refuse it. Run a `whole-project` row exactly as written;
+run an `advisory-instrument` row as written and record its number as a lower bound.
+
+This is the one exception to running the commands as the architect listed them, and it exists because
+a plan that names the whole-app suite beats every rule written in this template: you read the plan,
+not the authoring guidance the architect read. A plan whose close-out phase demands the *full* suite
+in bold is exactly the case — it has been obeyed, three times in one lane, against a rule two
+sections below that forbids it.
+
 Rules for this sub-step:
 
-1. MANDATORY before checking the last task in the phase. Not optional.
-2. Either confirm all-green and proceed, OR treat any failure as a blocker and route it through Step 5 (BLOCKED procedure). Do NOT silently rewrite source to make a gate pass without a corresponding plan task.
-3. G1 (coverage) and G6 (mutation, when scaffolded) are NOT in this sub-step — they remain QA-owned. If the plan's verification section references them, escalate to architect; the plan template is wrong.
+1. MANDATORY before checking the last task in the phase. Not optional — and **it leaves a record
+   whether or not anything failed**. Append one entry per phase to the plan's `.progress.md`:
+
+   ```
+   ### {ISO 8601 datetime} | CODER — GATE
+   Phase: {N}  Files gated: {count}  Base: {base_sha}
+   {gate id} ({stack}): {pass | fail | MISSING_TOOL | UNMEASURED | baseline} — {measured vs configured, or the reason}
+     cmd: {the exact command string you ran}  scope: {changed-files | whole-project | advisory-instrument | deferred-to-join}
+     substituted: {the plan's literal string} → narrowed to this phase's intersection   ← only when you narrowed
+   ```
+
+   **The first three lines are byte-compatible with what QA already reads** — the verdict vocabulary
+   is unchanged, and the carried-versus-first-time discrimination depends on them
+   (`.orchestrator/gate-config.md` → *Attributing a finding*). The `cmd:` and `scope:` lines are
+   additive, and they are what make a scope claim auditable at all: with no command string on the
+   record, *did this phase run the whole suite* is answerable only from free prose — which is how
+   sixty-one whole-app suite executions crossed a single run without anyone noticing.
+
+   A skipped sub-step and a clean one must not leave byte-identical files. This entry is the only
+   evidence that distinguishes them, it is what lets QA tell a **carried** finding from a **first-time
+   discovery**, and it is what makes the two-attempt cap auditable rather than self-reported.
+2. **A gate finding is not a BLOCKED stop.** `BLOCKED` halts the whole run for a human (`SKILL.md` → Step 3), and a gate violation is precisely the class the pipeline already remediates on its own through QA's loop — diverting it to a halt would trade a bounded automated cycle for a human interrupt, which is worse than the QA-first ordering this sub-step replaces. Instead: clear what you can, **record what you cannot, and proceed**. Reserve `BLOCKED` for what it already means — you cannot proceed at all. Do NOT silently rewrite source to make a gate pass without a corresponding plan task.
+3. **G2, G4, G5 and G7 are asserted here, at phase exit; G1 is measured here and asserted by nobody
+   until QA.** A plan tags it `G1 (advisory — tester closes)`: record the number, never block on it.
+   The tester is the role that raises coverage and it runs after you; halting on G1 now would stop the
+   run in front of the only role that could clear it, and normal TDD phase output sits below the
+   configured floor until the tester has been. Finding a violation now is the point: you still
+   have the code in mind, and the same finding at QA costs a full architect→coder→tester→reviewer→QA
+   remediation run. **Only G6 (mutation) is QA-owned** — it needs aggregate scoring you cannot produce
+   per phase. If the plan's verification section references G6, escalate to architect; the plan
+   template is wrong.
+
+   **Resolve every gate per `.orchestrator/gate-config.md`** — which config governs, per-stack
+   selection, the exact key names, the `exclude` + `gates.<id>.exempt` filter, and the four-value
+   verdict vocabulary. Two consequences bite immediately: **run each gate from the directory whose
+   config governs it** (a run from the repo root against per-package configs prefix-matches nothing and
+   reports green over an empty set), and **`MISSING_TOOL`, `UNMEASURED`, and recorded baseline debt are
+   not failures** — record them and continue.
+
+   **The phase's changed set — git cannot answer this by itself.** The pipeline never commits, so no
+   ref separates this phase's edits from those of phases 1..N-1. Compute the run's changed set, then
+   **intersect it with the paths this phase's own tasks touched**, and gate only that intersection.
+   A violation in a file no task in this phase touched is not yours to clear.
+
+   ```bash
+   base="{the MAESTRO_REVIEW_BASE value from your orchestrator preamble}"
+   git rev-parse --verify --quiet "$base" >/dev/null || echo "MISSING_TOOL: base ref does not resolve"
+   git update-index --refresh >/dev/null 2>&1 || true
+   { git diff --name-only --relative "$base" -- . ':(exclude,top)plans/'; git ls-files --others --exclude-standard -- . ':(exclude,top)plans/'; } | sort -u
+   ```
+
+   **Never a two-dot range** (`base..HEAD`): with nothing committed it resolves to zero files and hands
+   you a green phase exit over an empty set. An empty intersection on a phase that changed code is a
+   defect to report, never a pass.
+
+   **Clearing an emitted gate IS an authorized edit.** The plan's `## Verification (per phase)` section
+   is a phase exit criterion the architect wrote, so a change that brings this phase's own files within
+   a gate it lists traces to that requirement and satisfies the diff-traceability rule in *Rules*
+   below. Without this, that rule would forbid every refactor a gate needs and this sub-step could
+   never clear anything. The authorization is deliberately narrow: **only** files in this phase's
+   intersection, **only** to clear a gate the plan actually lists, and **never** a behavior change —
+   if the tests you wrote for this phase no longer pass, the edit went too far. Anything wider is the
+   drive-by refactor the rule exists to stop, and it gets recorded rather than made.
+4. **What to do with a violation you cannot clear.** If clearing it would require an edit no plan
+   task authorizes, or if the only available fix moves the violation rather than removing it —
+   extracting a helper that is itself over the limit, so the next run reports the new helper — then
+   **record it and continue**. Append a `GATE` entry to the plan's `.progress.md`:
+
+   ```
+   ### {ISO 8601 datetime} | CODER — GATE
+   Gate: {id} ({stack})  Verdict: fail
+   Measured: {value}  Threshold: {configured value}  File: {path}:{symbol}
+   Carried because: {the fix you rejected, and why it was not yours to make}
+   ```
+
+   That entry is what makes the finding **carried** rather than a first-time discovery
+   (`.orchestrator/gate-config.md` → *Attributing a finding*), so QA remediates it through its normal
+   loop and nobody is blamed for skipping a step. **Attempt a given gate at most twice per phase**,
+   then record and move on: a violation that survives one honest attempt is a contract problem for the
+   architect, and grinding on it burns the same budget the old ordering burned, one role earlier.
+5. **Gate scope — every mode.** Every gate command runs in the form its row's `Scope` token declares, over this phase's changed-set intersection. **When your plan declares a lane** that intersection is additionally bounded by your lane's owned paths — pass the lane's globs/directories to the command rather than running it repo-wide. Other lanes are mid-edit in the same workspace, so a repo-wide gate would report their in-flight state as your failure and waste a BLOCKED stop on work that is not yours.
+
+   **A `whole-project` command's red is attributed like any other finding.** When it fails in a file
+   **outside** this phase's intersection, record it `not-mine — {owning lane | pre-existing}` and **do
+   not fail the phase**. That is rule 3's *a violation in a file no task in this phase touched is not
+   yours to clear*, extended from gate findings to whole-project command results — one clause, not a
+   new rule. Do not build an attribution instrument no template describes; record it and proceed.
+
+   **G1 defers on every lane invocation.** Coverage requires executing the test suite, and the full
+   suite is never run inside a lane (below) — so in parallel mode G1 has no path-scoped form by
+   construction and always takes the deferral path. That is correct, not a gap: it runs once at the
+   outer join, and the tester still closes what it finds. Do not attempt a partial coverage run inside
+   a lane to satisfy this sub-step.
+
+   If a gate has **no path-scoped form** in `PROJECT-CONTEXT.md` → Commands, **defer it to the nearest enclosing join** instead of running it concurrently — the **inner** join if you are a sub-lane, the **outer** join if you are an unsplit lane. Note the deferral in `.progress.md` and proceed; that join **records** the deferral rather than running the gate, and passes it outward — every deferred gate runs once, at the **outer** join (the orchestrator's outer join), the first point at which nothing else is in flight. Deferring is the correct outcome here, not a failure. **This outcome is parallel-mode only** — a laneless plan (sequential, `FIX`, `QAF`) has no join to redeem a deferral at, so a non-narrowable command there is run in place under its `whole-project` row, never deferred into nothing.
+
+   **A whole-app test suite is never run at phase exit — in any mode, on any plan type, lane or no
+   lane.** In parallel mode a repo-wide suite reports a sibling's in-flight state as your failure; in
+   sequential and remediation mode the cost is fixed and multi-minute, this phase's diff does not
+   justify it, and the run's own barriers execute it over a settled tree anyway. Naming those barriers
+   matters, because this rule is not "nobody runs the suite":
+
+   - **The tester's coverage command** (`templates/tester.md` → Step 4) is a whole-app execution by
+     construction. Its *measurement* scope stays changed-files-only — execution scope and measurement
+     scope are different things, and this rule narrows neither of the tester's.
+   - **QA's Step 3** runs every suite the plan touched. **This is the barrier that binds on a `FIX` or
+     `QAF` plan**, which is the one a remediation coder should point at when tempted to run the suite
+     itself.
+   - **The outer join**, on the parallel path, where `simplify` and the full test suite run exactly
+     **once per run**, over the union of every leaf's diff, at any depth — never per lane and never
+     per sub-lane. Running it concurrently from within a leaf would test a workspace that other coders
+     are actively mutating.
 
 ### TDD rules (non-negotiable)
 
@@ -149,6 +293,12 @@ Unblocking needed: {what is required}
 4. Update `**Status**` in `.progress.md` to `BLOCKED`.
 5. Stop and report to user.
 
+### Lane BLOCKED reasons (parallel mode only)
+
+**Specified in `.orchestrator/lane-protocol.md` → *Coder — lane BLOCKED reasons*.** The reserved
+reasons and their exact banner shapes are there; use them verbatim when your preamble carries `lane=`.
+
+
 ## Step 6 — Mark plan DONE
 
 When all tasks are checked `[x]`:
@@ -172,7 +322,7 @@ Total tasks completed this session: {N}
 ```
 
 4. Update `**Status**` in `.progress.md` to `DONE`.
-5. **html sync (html mode + plan `.html` exists only):** set the plan html's `<main data-status="done">` and `data-updated-at`. All task checkboxes should already read `checked` and the progress overview should show `{N} / {N} (100%)` from Step 4b-html; verify and correct if any lag.
+5. **html sync (html mode + plan `.html` exists only):** after writing `status: DONE` and the final `updated_at` to the plan `.md`, run a final `node .orchestrator/render-artifact.cjs plans/<dir>/<ID>-<slug>.md` so the view reflects DONE with all checkboxes `checked` and the progress overview at `{N} / {N} (100%)`. This one render also satisfies the pairing gate for the plan.
 
 ## Code style
 
@@ -184,6 +334,8 @@ Refer to the Commands and Conventions sections of `PROJECT-CONTEXT.md` for the c
 - Never commit secrets, credentials, or generated env files.
 - Do not add comments unless asked.
 - Every line in your diff must trace to a task in the current plan. No drive-by refactors or reformatting outside scope.
+- **Parallel mode only:** never write outside your lane's owned globs; never edit the `PACT`.
+- **Never run a whole-app test suite at phase exit — any mode, any plan type, lane or no lane.** A phase gate runs the `changed-files` form; the whole-app suite belongs to the run's barriers (rule 5 above).
 
 ## Output to user
 
@@ -197,3 +349,25 @@ Tasks remaining: {N}
 {If DONE}: Next: invoke /reviewer with plan ID {PLAN-ID}
 {If BLOCKED}: Blocked on: "{task text}" — {reason}
 ```
+
+**Parallel mode only.** When your plan declares a lane, add a `Lane: {name}` line directly under the `Status:` line. When the stop was one of the two reserved reasons, the `Blocked on:` reason string starts with that exact token so the join can route on it:
+
+```
+CODER — {PLAN-ID} session complete
+Status: BLOCKED
+Lane: {name}
+Tasks completed this session: {N}
+Tasks remaining: {N}
+Blocked on: "{task text}" — lane boundary — {file} outside lane `{my lane}`; owned by lane `{owning lane}`
+```
+
+```
+CODER — {PLAN-ID} session complete
+Status: BLOCKED
+Lane: {name}
+Tasks completed this session: {N}
+Tasks remaining: {N}
+Blocked on: "{task text}" — contract violation — PACT row {row id} cannot be satisfied as frozen
+```
+
+Every other line, and the whole non-lane output above, is unchanged.

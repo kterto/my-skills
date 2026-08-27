@@ -85,7 +85,7 @@ SIMPLIFY — <resolved scope>
 Mode: 5-angle fan-out | single-pass inline (no subagent fan-out available)
 Fixed:    <n>  — one line each: file:line — what changed and why
 Skipped:  <n>  — one line each: file:line — why it was skipped
-Bugs:     <n>  — correctness issues observed and NOT fixed here
+Bugs:     <n>  — one line each: file:line — correctness issue observed and NOT fixed here
 Gates:    <command> exit 0 | not defined for these paths
 ```
 

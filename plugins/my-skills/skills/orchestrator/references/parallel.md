@@ -429,7 +429,11 @@ Lane: {qualified leaf name} → {FEAT-ID}
 
 Verify every leaf plan file and its `.progress.md` exist and are non-empty before continuing, exactly as Step 2 does for the single-plan path.
 
-**Then run Step 2's requirement-coverage check in its parallel form, across the leaf set as a whole.** Each leaf plan's `## Requirement Coverage` map covers only its lane's assigned requirements, so no single plan can be checked against the spec — the union can. Take the union of the leaf maps' requirement numbers and compare it to the `Spec requirements` column of the frozen contract's lane map: **resolve the assignment down to leaves first.** A flat lane's assignment is its own row. A sub-split lane's row (`Lane plan ID` = `—`) resolves through its `Sub-contract` to that sub-contract's sub-lane map, whose `Spec requirements` cells must cover the parent row's cell (`.orchestrator/artifact-format.md` → **`PACT` ID resolution**) — a parent-assigned requirement the sub-contract's cells do not cover is a stop before any leaf is checked. **Every resolved assignment must then appear in every leaf it was assigned to and in no leaf it was not, with a non-empty `Covered by AC #` cell or a `Deferred` reason** — a requirement the contract deliberately assigned to two lanes appears in both leaf maps and is correct (`templates/architect.md` → *1. Lane map*). Re-invoke the specific leaf architects whose rows are missing or unfilled, once, with the identical prompt including that leaf's original `ID to use:` line — never a second `newid FEAT`, per the sole-allocation rule above. If still incomplete, stop and report. This is the same check Step 2 runs, at the same point in the run — before any coder starts, while nothing has been written to the workspace. Then **update `.orchestrator/run-manifest.json`** with the verified `leaf_ids`, in dispatch order (Step 0r → *The run manifest*) — the manifest is complete at this point, which is what makes a run halting after this step resumable by provenance.
+**Then run Step 2's requirement-coverage check in its parallel form, across the leaf set as a whole.** Each leaf plan's `## Requirement Coverage` map covers only its lane's assigned requirements, so no single plan can be checked against the spec — the union can. Take the union of the leaf maps' requirement numbers and compare it to the `Spec requirements` column of the frozen contract's lane map: **resolve the assignment down to leaves first.** A flat lane's assignment is its own row. A sub-split lane's row (`Lane plan ID` = `—`) resolves through its `Sub-contract` to that sub-contract's sub-lane map, whose `Spec requirements` cells must cover the parent row's cell (`.orchestrator/artifact-format.md` → **`PACT` ID resolution**) — a parent-assigned requirement the sub-contract's cells do not cover is a stop before any leaf is checked. **Every resolved assignment must then appear in every leaf it was assigned to and in no leaf it was not, with a non-empty `Covered by AC #` cell or a `Deferred` reason** — a requirement the contract deliberately assigned to two lanes appears in both leaf maps and is correct (`templates/architect.md` → *1. Lane map*). Re-invoke the specific leaf architects whose rows are missing or unfilled, once, with the identical prompt including that leaf's original `ID to use:` line — never a second `newid FEAT`, per the sole-allocation rule above. If still incomplete, stop and report. This is the same check Step 2 runs, at the same point in the run — before any coder starts, while nothing has been written to the workspace.
+
+**Then run Step 2's gate-completeness check on each leaf plan, independently.** Unlike requirement coverage — which no single leaf can satisfy, and which is therefore checked over the union — a `### Gate coverage` table is a per-plan artifact: each leaf owns a disjoint path set, so each leaf's table stands or falls alone. Check every leaf's, and re-invoke only the leaf architects whose table is missing, short, or unfilled, once, with that leaf's original `ID to use:` line — never a second `newid FEAT`, per the sole-allocation rule above. If any is still incomplete, stop and report. **This is where the parallel path needs the check most.** On a sequential run an omitted gate surfaces at QA and costs one remediation plan; on a parallel run it surfaces at the *join*, where the gate first runs over the union, and by then the lane that omitted it has been merged into a change set eight other leaves also wrote. That is exactly how one lane's 10 G2 and 4 G5 findings reached QA six phases after the code was written, and cost a `QAF` plan, a re-review, and a second QA pass to clear.
+
+Then **update `.orchestrator/run-manifest.json`** with the verified `leaf_ids`, in dispatch order (Step 0r → *The run manifest*) — the manifest is complete at this point, which is what makes a run halting after this step resumable by provenance.
 
 ### Step 3L — Coder fan-out: one coder per leaf
 
@@ -535,6 +539,8 @@ A `BLOCKED` sub-lane routes through the **same precedence rule** the outer join 
 
 **At both levels.** The orchestrator writes the parent contract's lane-status table and every sub-contract's sub-lane-status table. **No subagent ever writes a `PACT` or a sub-contract** — not its interface rows, not its maps, and not its status tables. That is what keeps the run-level view single-writer and unraceable, and nesting does not weaken it: it adds more tables with the same one writer, not more writers.
 
+**The ban is on the contract file, not on its `.progress.md` sidecar.** A join role appends its full verdict entry to the **parent contract's `.progress.md` `## Log`** (`.orchestrator/artifact-format.md` → *`PACT` ID resolution*, item 5), and that adds no second writer of the run-level view: the sidecar is an append-only log, it holds none of the contract's governing content, and the three join roles run strictly in sequence at the outer join. Saying so here is the point — an editor who reads the ban as covering the sidecar would push the join verdict back out into every leaf, which is nine byte-identical copies of one paragraph and exactly what the pointer rule removed.
+
 **Nor does overlap weaken it**, and it is worth stating in one sentence: **overlapping inner joins add no second writer**, because the orchestrator performs each inner join's writes itself — only the leaf coders and integration sub-lane coders it spawns run concurrently, and none of them writes a `PACT` or a sub-contract.
 
 ### Step 3j — Join and contract reconciliation (outer join)
@@ -570,13 +576,23 @@ Then, in order:
 
 3. **Run `simplify` once** over the **union diff** — not once per lane and not once per sub-lane. Invoke it with **no scope argument** (or the run's base range) so it resolves the union itself; never pass a leaf's `--plan` ID here, which would reduce this pass to one lane's diff. This is the same single pre-review simplification pass Step 3 describes, and it resolves the skill and degrades on its absence **exactly as Step 3 specifies** — parallel mode changes only its scope, not its cadence and not its dependency contract.
 
+   **Log the result, and name where.** Step 3 logs its `SIMPLIFY` entry to the plan's `.progress.md`; here there is no single plan, so the entry — including the `Bugs:` lines verbatim — goes to the **parent contract's `.progress.md`**, which is where the join's other verdicts land (`.orchestrator/artifact-format.md` → *`PACT` ID resolution*, item 5). Without a named site this pass is the one place in the run whose findings have nowhere to go: five angles read the whole union diff, observe correctness issues they are not authorized to fix, and print them to a subagent transcript that closes. The reviewer re-derives them from scratch minutes later.
+
    **`simplify` and the full test suite run exactly once per run, at this outer join — never per lane, never per sub-lane, at any depth.** Running `simplify` per lane would multiply a pass whose entire value is seeing the union; running the suite anywhere but here would test a workspace other leaves were still mutating.
 
-   **Re-run the leaf plans' own phase gates after `simplify` edits the union diff — mandatory, before the tester.** The rule is identical to Step 3's, one level up in scope: for **every leaf plan in the resolved leaf set**, re-run the gate commands from that plan's `## Verification (per phase)` section for each phase whose touched paths the simplify diff intersects, and **assert exit 0** for every one of them. Each leaf coder verified its own tree; `simplify` then edited across all of them at once, so no leaf's green survives its own diff being rewritten. **Whatever executable suite the repo happens to have is not a substitute for the plan's phase gates** — and on a doc-authoring plan the phase gate is the only verification covering the diff. A red gate routes exactly as at Step 3 — **all three outcomes, including the first**: a finding already carried in a leaf plan's `.progress.md` at no worse a measurement is **not** a red here and passes outward to the tester and QA; otherwise fix it, or amend the assertion as a **recorded plan task** with its justification logged to that leaf plan's Progress Log — never a silent rewrite, and **never proceed to the tester on a red gate — where "red" excludes a carried finding, and **`G1` is advisory at this step in every case and never blocks it**, exactly as at Step 3.
+   **De-duplicate the re-run before executing it.** Resolve every gate command this step is about to run, then run each **distinct** command once, in lane-map row order of first appearance, ties broken by the command string — the same ordering rule item 4 uses, so two runs over the same contract execute the same commands in the same sequence.
+
+   **De-duplication is on the command string this step is about to execute** — after every `changed-files` row's `<placeholder>` has been filled from that leaf's phase changed-set intersected with the simplify diff, bounded by that leaf's owned paths, exactly as its coder filled it — **never on the plan's literal row.** Two leaves carrying a byte-identical `changed-files` row are two different commands, because each resolves its placeholder against its own paths; collapsing them would skip real gate coverage and report a green nobody ran. What collapses is the `whole-project` class, which by its own definition takes no path argument — nine leaves naming one build or typecheck run it once. Byte equality of the resolved string is the whole test; no normalizing, no "same tool" heuristic.
+
+   **This de-duplicates; it does not narrow.** Every gate that would have run still runs, over the same tree, and a command named by one leaf alone is not a duplicate and is not skipped. Narrowing the set further — to the phases `simplify`'s `Fixed:` lines actually touched — is a real coverage trade and belongs in a separate, recorded decision, not here.
+
+   **Any outcome-2 fix re-opens the set.** A fix taken here changes the tree the already-green commands were measured against, and de-duplication removes the accidental re-runs that used to catch that. Re-run the de-duplicated set from the top after the last fix lands: one extra sweep over a settled tree is the price of collapsing the redundant ones.
+
+   **Re-run the leaf plans' own phase gates after `simplify` edits the union diff — mandatory, before the tester.** The rule is identical to Step 3's, one level up in scope: for **every leaf plan in the resolved leaf set**, re-run the gate commands from that plan's `## Verification (per phase)` section for each phase whose touched paths the simplify diff intersects, and **assert exit 0** for every one of them. Each leaf coder verified its own tree; `simplify` then edited across all of them at once, so no leaf's green survives its own diff being rewritten. **Whatever executable suite the repo happens to have is not a substitute for the plan's phase gates** — and on a doc-authoring plan the phase gate is the only verification covering the diff. A red gate routes exactly as at Step 3 — **all three outcomes, including the first**: a finding already carried in a leaf plan's `.progress.md` at no worse a measurement is **not** a red here and passes outward to the tester and QA; otherwise fix it, or amend the assertion as a **recorded plan task** with its justification logged to **every** leaf plan that named the command, not only the first — under de-duplication one execution is a red for each of them — never a silent rewrite, and **never proceed to the tester on a red gate — where "red" excludes a carried finding, and **`G1` is advisory at this step in every case and never blocks it**, exactly as at Step 3.
 
    This does **not** change the cadence rule above: the gates are re-run here because this is where `simplify` runs, and `simplify` still runs exactly once per run.
 
-4. **Run every deferred gate — mandatory, blocking, and the single place any of them runs.** This is the **only** site at which a deferred gate executes, at either depth: Step 3s collects and records its lane's deferrals but runs none of them (Step 3s item 3). So this step collects the deferrals recorded by every **unsplit** lane's coder **and** every deferral each inner join recorded, **de-duplicates them across the whole run**, and runs each **once over the union**. This is the first point at which nothing else is in flight, which is what makes that union a real one. **The de-duplicated set runs in lane-map row order of first deferral**, ties broken by the gate's command string — never analysis order and never completion order, so two runs over the same contract execute the same gates in the same sequence. **A non-zero exit blocks the join** — the run does not proceed to the tester, and routes to `PARTIAL` (3j.1) — **except an advisory gate (`G1`), whose union result is recorded and handed to the tester as its coverage input rather than routed to `PARTIAL`.** G1 always reaches this step on the parallel path, because coverage needs the full suite and no lane may run it; blocking the join on it would halt the run in front of the tester, the only role that raises coverage.
+4. **Run every deferred gate — mandatory, blocking, and the single place any of them runs.** This is the **only** site at which a deferred gate executes, at either depth: Step 3s collects and records its lane's deferrals but runs none of them (Step 3s item 3). So this step collects the deferrals recorded by every **unsplit** lane's coder **and** every deferral each inner join recorded, **de-duplicates them across the whole run**, and runs each **once over the union**. This is the first point at which nothing else is in flight, which is what makes that union a real one. **The de-duplicated set runs in lane-map row order of first deferral**, ties broken by the gate's command string — never analysis order and never completion order, so two runs over the same contract execute the same gates in the same sequence. **De-duplication across the run is the same idea suite inheritance generalizes across time** (`SKILL.md` Step 0a → *Suite inheritance*): before running a gate here, check `.orchestrator/verification-ledger.json` for a row with that exact command string against this exact tree, inherit a recorded `pass`, never inherit a recorded `fail`, and append a row for each one you do execute — recording `role: "join"`. Nothing about which gates run changes; a gate whose result against this tree is already recorded is not executed twice. **A non-zero exit blocks the join** — the run does not proceed to the tester, and routes to `PARTIAL` (3j.1) — **except an advisory gate (`G1`), whose union result is recorded and handed to the tester as its coverage input rather than routed to `PARTIAL`.** G1 always reaches this step on the parallel path, because coverage needs the full suite and no lane may run it; blocking the join on it would halt the run in front of the tester, the only role that raises coverage.
 
    **The failure output names the lane(s) that deferred the failing gate**, so de-duplication does not cost attribution: a gate three lanes deferred is run once and reported against all three.
 
@@ -666,6 +682,10 @@ Status: continuing sequentially from the current state
 
 #### 3j.3 — Downstream roles at the outer join
 
+**Mint the implementation boundary before dispatching any of them.** Items 3 and 4 above were the last things to touch the tree, so re-run Step 0a's tree-hash recipe and append a row to `.orchestrator/verification-ledger.json` — `step: "3j"`, `loop: null`, `cycle: 0`, `plan: {root_plan_id}`, `tree: {the hash}` — exactly as Step 3 does on the sequential path, with the same recipe and the same pathspec. **The parallel path mints one boundary here, not one per leaf and not one per inner join**: a leaf's tree is never a boundary, because other leaves are still writing to it.
+
+**Then build the join digest — 3j.4 below — before dispatching any of the three.** It is numbered after this sub-step and it runs before it finishes: 3j.4 is what the `aggregate=` line in each of the three prompts points at, so it must exist by the time they are issued. When `join_digest` is `false`, or the build's integrity check fails, no `aggregate=` line is emitted and the three roles resolve the aggregate exactly as described below.
+
 **Identical in `lanes` and in `full`, at every depth.** The tester (Step 3b), the reviewer (Step 4), and QA (Step 5) each run **exactly once, at the outer join, invoked with `root_plan_id` — the parent `PACT` ID (Step 2c)** — in place of a plan ID. There is no per-lane and no per-sub-lane tester, reviewer, or QA pass at any level.
 
 **This holds on every remediation cycle, not just the first.** The review and QA loops reassign the *active* `plan_id` to a `FIX`/`QAF` ID (Steps 4c, 5d), but `root_plan_id` is immutable, so the join roles are always invoked against the aggregate and the remediation plan travels as a **related input**. Invoking them against the remediation plan instead would silently narrow evaluation to that plan's diff — the leaf union would stop being reviewed the moment the first fix cycle ran.
@@ -675,3 +695,194 @@ Each resolves the **leaf** plan set from the preamble's `leaves=` line and uses 
 **Beyond that one rule these three roles need no depth-recursive logic.** All three templates gained the same two things — a `PACT`-ID input case and a Step 1a saying take `leaves=` as given, falling back to the normative resolution rule only on a legacy run. Each then gained a little more, and not the same little more: the **tester** folds every adopted sub-contract's interface rows into its existing critical-flow triage input; the **reviewer** gained a two-level interface-row lens (when a parent row's producer or consumer lane was sub-split, the sub-contract's *Inherited interface assignments* region names the sub-lane that owns that side) plus a boundary-lens clause making a sub-lane writing into a sibling sub-lane's globs the same violation as a lane writing into another lane's, and lost its `full`-mode per-lane-findings bullet outright, because under the redefined `full` no per-leaf `CR` is ever produced to carry findings from; **QA** likewise lost its per-lane-`CR` reconciliation rule, which is now simply "there are no per-leaf CRs to reconcile". Crucially, **no role recurses past one level, and none has a per-lane or per-sub-lane pass.** Where a role does reach a sub-contract — the reviewer's *Inherited interface assignments* lookup, the tester's sub-contract interface rows — it reads the parent `PACT`'s `Sub-contract` column exactly one level down and stops; `leaves=` carries leaf `FEAT` plan IDs only, so that one hop is the sole way to the sub-contract rows and all three roles legitimately take it. Putting the resolution rule in the shared reference rather than restating it in three role templates is deliberate: three copies would be three places to disagree about the same walk.
 
 **Steps 4, 4e, 5, and 7 are unchanged in every mode and at every depth.** The review loop, the in-loop spec eval, the QA loop, all three cycle caps, `BLOCKED_STALE` handling, and the Step 7 final-report/gates machinery are untouched by parallel mode — they simply operate over the union diff with the parent `PACT` ID where a plan ID would be. This is deliberate: leaving the remediation loops sequential is what keeps the existing cycle-cap machinery valid.
+
+#### 3j.4 — The join digest
+
+**Parallel path only, and optional.** When `join_digest` is `false` this sub-step does not run, no
+`aggregate=` line is emitted, and every join role reads exactly what it reads today. On a sequential
+run the sub-step does not exist at all — there is no contract, no leaf set, and every region below
+would be either empty or a verbatim copy of the one plan the role already opens. Emitting
+`aggregate=` there would break the `off`-run prompt-parity invariant to buy nothing.
+
+**The problem.** The tester, the reviewer and QA each rebuild the run's aggregate from the parent
+contract, every sub-contract, every leaf plan and every leaf `.progress.md` — **on every cycle**. The
+artifacts do not change between cycles; the reading is repeated because nothing carries it forward.
+On the run this sub-step was written for that was ~403 KB of plan text per tester spawn and ~721 KB
+per reviewer and QA spawn, across thirteen join spawns — 7.8 MB of re-ingestion for one run's worth
+of facts.
+
+**The fix, and its exact shape.** The orchestrator materializes the aggregate **once per boundary**
+into `.orchestrator/join-digest.md`, and the roles read their own section of it **in place of** the
+artifacts it replaces. *In place of* is the whole design: a digest that is merely *additional* raises
+every role's input instead of lowering it.
+
+##### The regions, and who reads them
+
+| Region | Consumers | Contains | Built from |
+| ------ | --------- | -------- | ---------- |
+| **A — authorized-write map** | reviewer | per leaf, the paths it may **write**: owned globs ∪ path-ownership carve-outs ∪ assigned unowned files ∪ integration scope, at both contract levels | contract regions 1, 2, 4, 5 |
+| **B — interface ledger** | tester, reviewer | every interface row from **both** levels, each carrying its frozen shape **verbatim** and resolved to the leaf that owns each side, plus both contracts' deliberately-not-frozen rows | parent region 3 + sub-contract region 3 + the sub-contract's *Inherited interface assignments* |
+| **C — union requirement map** | reviewer | one row per distinct spec requirement, its text verbatim, every claiming leaf's cell qualified `{leaf-id}:AC{n}`, and the contract's assignment resolved down to the owning leaf | the leaf `## Requirement Coverage` maps + both lane maps' `Spec requirements` cells |
+| **D — per-leaf gate posture** | QA | each leaf's `## Verification (per phase)` block and its `### Gate coverage` table, **verbatim and kept per leaf** | the leaf plans |
+| **E — acceptance criteria** | tester, reviewer, QA | each leaf's `## Acceptance Criteria`, copied byte-for-byte, `(QA-verified)` suffixes intact | the leaf plans |
+| **F — `GATE` index** | QA | per `CODER — GATE` entry: gate id, stack, verdict, **measured value**, threshold, `file:symbol`, and a **locator** (which `.progress.md`, which timestamp) — plus a positive scope assertion naming every log scanned and its content hash | every leaf `.progress.md` + the active `FIX`/`QAF` `.progress.md` |
+
+**Region A is an authorized-*write* map, not a glob table.** `Ownership governs writes` — a lane
+legitimately *reads* everywhere, and the carve-outs and assigned unowned files are writes no glob
+matches. A globs-only region turns each of those into a false boundary Must Fix, which the reviewer
+is required to raise *regardless of how good the code is*.
+
+**Region B's value is the join, not the copy.** A sub-contract's inherited-assignment region is an
+**index** into the parent's frozen shapes and does not restate them; the parent's rows do not name the
+sub-lane that owns each side. Neither artifact alone lets the reviewer gate on *every interface row
+satisfied on both sides at its frozen shape*. This is the one region that removes a real tree walk.
+
+**Region D is never unioned.** A `### Gate coverage` table is a per-plan artifact — each leaf owns a
+disjoint path set, so each leaf's table stands or falls alone. Unioning them erases the distinction
+between *the architect omitted the gate* and *the coder skipped its sub-step*, which are the two
+branches QA must choose between and which need different fixes.
+
+**Region F carries the measured value, and it is a pointer, not a copy.** A carried finding is one
+recorded *at no worse a measurement*; an index that records presence without the number lets a
+**regressed** measurement pass the join as carried. The `Carried because:` prose is deliberately
+**not** carried — QA opens the named `.progress.md` for any finding it is about to label carried,
+which is one or two files per cycle rather than all of them.
+
+**The verification ledger is not a region.** `.orchestrator/verification-ledger.json` is already one
+small file at a fixed path that roles both read and append to, its rows are rewritten in place
+(`fail` → `fail (reproduced)` / `flake`), and its match rule forbids any normalization of the command
+string. Copying it into a digest would save nothing, hand roles a row that has since been
+re-classified, and perform exactly the normalization the match rule bans. Roles read it directly.
+
+##### What the digest does not replace
+
+The digest replaces **metadata reads**. It replaces no read of the tree and no read of a normative
+rule. These stay reads of the original, every cycle:
+
+- the **working-tree snapshot** and **every changed file in full** — the review itself;
+- the **changed-file set**, recomputed against the tree at the moment the role runs;
+- **`.cleancode-gates.json` thresholds** — a number written in prose is a number that drifts, and an
+  absent key is not an ungated one;
+- **`PROJECT-CONTEXT.md`** commands, which *are* the gates, and which roles cite by line;
+- each plan's **`## Technical Notes`** and **`## Tasks`** — the constraint-respected and
+  every-line-traces-to-a-task lenses read prose, and a summary of prose is a different document;
+- the **`Carried because:`** prose behind a region-F row;
+- any **`.progress.md` a plan's acceptance criterion names as a deliverable**;
+- the **run-family walk**, whose input grows *during* the run;
+- the **join-level `CR`** and **the spec**.
+
+##### Building it
+
+**The orchestrator is the sole writer**, at exactly four sites: 3j.4 (here), a contract amendment
+(3j.2), Step 4c, and Step 5d — the same sole-writer rule and the same reason as the lane-status table.
+
+**Regions A and B are mechanical** — fixed contract regions with specified columns — and the
+orchestrator builds them directly. **Regions C, D, E and F are leaf-derived and are built by one
+read-only scan subagent** — the same pattern Bootstrap B1 and Step 2p.1 use, with the type
+resolution and the never-fail rule from `SKILL.md` → *The read-only scan subagent type*, which is
+what keeps this step host-agnostic. **If no scan type resolves on this host, build those regions
+inline** rather than skipping the digest: that costs the orchestrator one read of the leaf set, once,
+against thirteen role spawns re-reading it, so the trade still lands heavily on the digest's side.
+Note in the printed `DIGEST —` block that the regions were built inline. Under a host whose own
+dispatch protocol supersedes these call shapes, the scan child is admitted that host's way and still
+obeys the read-only rule. The subagent is used here because leaf plans are not machine-uniform: real leaf `## Requirement
+Coverage` tables have been observed carrying **nine different column headers across nine leaves**,
+none of them the canonical schema. **A template-shaped extractor is forbidden here** — it fails
+*open*: an unmatched header yields empty rows, an empty row reads as *no requirement*, and a
+requirement map with no unmet rows passes the reviewer's approval test. The builder reads; the
+orchestrator checks and writes.
+
+##### The integrity check — fail-closed, before the tester is dispatched
+
+Every check is a count, a set equality, or a hash over text the orchestrator already handles here.
+**Any failure means the digest is not written and `aggregate=` is not emitted** — the roles then run
+exactly as they do today. There is no "built with warnings".
+
+| # | Equality | Catches |
+| - | -------- | ------- |
+| **I1** | digest `leaves` == the preamble's `leaves=` == the manifest's `leaf_ids ∪ integration_leaf_ids` | a digest built for a superseded leaf set |
+| **I2a** | distinct requirement ids in C == the union of both lane maps' `Spec requirements` cells, ranges expanded | a whole requirement lost |
+| **I2b** | total claim cells in C == total data rows across the leaf coverage maps | rows **merged** and half a claim lost — a requirement one leaf meets on the producer side only. **I2a alone passes a digest that collapsed claims into rows; I2b alone passes one that duplicated instead of merging. Both, or the check is worthless.** |
+| **I3** | every leaf contributes ≥1 row; **no cell empty**; every met cell qualified `{leaf-id}:AC{n}` | **the fail-open** — the empty row that reads as *no requirement*. Leaf-local criterion numbers are ambiguous once unioned; qualification restores the pointer |
+| **I4a** | interface rows in B == parent rows + Σ sub-contract rows | a dropped row |
+| **I4b** | `sha256` of each frozen-shape cell == `sha256` of its source cell | **the only mechanically detectable difference between copied and summarized.** A paraphrase of a frozen shape is not a frozen shape |
+| **I4c** | inherited-assignment rows == parent rows touching that sub-split lane, each resolving to exactly one member of `leaves=` | a mis-attributed or unowned parent row |
+| **I5a** | A's path set == the union of both levels' globs, carve-outs, unowned assignments and integration scope; per-leaf sets pairwise disjoint | a dropped write authorization → **the false Must Fix** |
+| **I5b** | every path in the join's changed-file list matches ≥1 authorization in A | the only check here that is a **gate** rather than a fidelity check — and the changed-file list is already computed at this step |
+| **I6** | per leaf, criterion count and `sha256` of the acceptance-criteria block == source | any summarization at all. E is a byte copy, so the hash is exact |
+| **I7** | per leaf, `### Gate coverage` rows == 6, and `sha256` of the verification block == source | a **unioned** gate region |
+| **I8** | F names every `.progress.md` scanned, each one's content hash, and the entry count | **absence becomes evidence.** Two of QA's three attribution branches are decided by absence, and an empty result is otherwise ambiguous between *no entry existed* and *the builder missed it* |
+
+**Print the counts, never a checkmark.** A self-check nobody sees is indistinguishable from no check:
+
+```
+DIGEST — .orchestrator/join-digest.md @ {tree}
+  leaves {n}/{n} · requirements {d} distinct / {c} claims · interface {i} ({p}+{s}) · inherited {k}/{k}
+  authorizations {a} disjoint · AC {x} in {n} blocks (hash ✓) · gate rows {6n} · GATE entries {g} ({n} logs @ hash)
+```
+
+On failure, as a first-class line and never a silent omission:
+
+```
+DIGEST — not built ({which check failed}: {value} vs {value}); join roles will read the leaf set
+```
+
+##### The stamp, staleness, and rebuilding
+
+The digest's frontmatter stamps `{root_plan_id, sorted leaf ids, tree, per-leaf plan sha256, per-leaf
+progress sha256, built_at_step}`. A role verifies `root_plan_id`, `leaves` and `tree` against **its own
+preamble** before trusting a byte of it.
+
+**Staleness is two-part, and conflating them is the design error to avoid.** Regions A–E are frozen at
+authoring: a frozen shape may not change unilaterally, the orchestrator is the contracts' sole writer,
+and the architect never rewrites an existing plan — so they cannot go stale within a run and they
+carry forward across every cycle unchanged. That is where most of the saving lives, because most join
+spawns are cycle-2-or-later. **Region F is the sole region whose source moves**: join roles append to
+every leaf's progress log, and remediation coders write new `CODER — GATE` entries. **Rebuild F at
+every boundary** — 3j, 4c, 5d — which are the same three sites that already re-mint the tree hash, so
+the hook exists and the marginal cost is one file write. The per-leaf progress hashes let a role fall
+through **for one leaf only** when that log has moved, exactly as suite inheritance falls through for
+one suite.
+
+**A contract amendment invalidates the whole digest at once.** It rebinds `root_plan_id`,
+re-partitions the split and rebuilds the leaf set with new `FEAT` IDs — new maps, re-frozen rows,
+re-sliced authorizations. The superseded digest is **deleted, not overwritten in place**, and rebuilt
+inside the amendment's own transaction beside the manifest update. If the rebuild fails, the amendment
+fails and the run halts `PARTIAL` — the same rule the rest of that transaction already follows.
+
+##### Authority on disagreement, and the fallback ladder
+
+**The original artifact wins, always.** The skill already has doctrine for a derived summary and it is
+unambiguous: a digest is untrusted derived data, and verifying it *saves the analysis, never the
+checking*. The decisive argument is not deference but detectability — **every loss listed above
+produces a stronger verdict, not an error.** A dropped requirement row is counted as verified, because
+the unmet count is computed from the table's own rows. A role noticing a disagreement is the only
+runtime signal that the builder dropped something.
+
+This costs nothing, because roles do not re-derive: I1–I8 does the checking once, here. The role-level
+rule fires only on reads the role was making anyway. When what a role opens disagrees with the digest,
+three things follow: it **prints** it, it **records** it in its report and `.progress.md`, and the
+**digest is marked unusable for the rest of the run**. Without that third clause "the original wins"
+decays into every role privately re-deriving, and the digest becomes a file everyone reads and nobody
+trusts — strictly worse than not having one.
+
+The ladder:
+
+1. `aggregate={path}` present **and** the stamp verifies → read your own section in place of the
+   artifacts it replaces.
+2. Stamp mismatch, or the file is missing or unparseable → fall through to `leaves=` and read the leaf
+   artifacts, **printing which field mismatched**.
+3. `leaves=` absent — a **legacy** run only → the normative `PACT` ID resolution walk, unchanged.
+
+**Two silences to close, and the dangerous one is not the stale digest.** It is a build that failed or
+was skipped, after which every role silently takes rung 2, the run costs exactly what it costs today,
+and nobody knows P7 did not happen. So every join role prints its rung in its stdout header **and
+records it in its artifact** — the artifact is what a human reads three cycles later when a verdict
+looks wrong:
+
+```
+Aggregate: digest {path} @ {tree}
+Aggregate: leaves= — no digest ({reason})
+Aggregate: digest rejected — {field} mismatch
+Aggregate: PACT walk — legacy run
+```
