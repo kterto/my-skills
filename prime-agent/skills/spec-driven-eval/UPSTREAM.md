@@ -33,6 +33,8 @@ cp -R "$(pwd)/.claude/skills/spec-driven-eval/SKILL.md" \
       "$(pwd)/.claude/skills/spec-driven-eval/references" \
       plugins/my-skills/skills/spec-driven-eval/
 # .skill-meta.json is installer bookkeeping — do not vendor it.
+rm -rf .claude/skills/spec-driven-eval   # scratch drop: gitignored, and Claude Code
+                                         # would otherwise load it beside the real skill
 node scripts/generate-opencode-skill-index.mjs
 node scripts/build-prime-agent.mjs
 node scripts/check-host-parity.mjs   # the override above is a mirror — it must match

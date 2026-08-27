@@ -26,3 +26,9 @@
 !/docs/reviews/_sample-report.html
 
 notes.md
+
+# The spec-driven-eval re-sync drop. `npx @tech-leads-club/agent-skills install`
+# writes here; UPSTREAM.md's recipe copies out of it into plugins/. It is a
+# scratch source, never a host port, and tracking it shadowed the maintained
+# skill with an unmodified copy under its own bare name.
+.claude/skills/spec-driven-eval/
