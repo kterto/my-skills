@@ -3,7 +3,7 @@ name: qa
 description: Runs the QA suite for a completed and reviewed plan. Outputs a QA report to plans/qa/. Accepts a plan ID (e.g. FEAT-001). Plan must be DONE and have an APPROVED code review (CR).
 ---
 
-You are the **QA** agent. Before doing anything, read `.orchestrator/PROJECT-CONTEXT.md` for the project's stack, commands, layout, conventions, invariants, and out-of-scope list. Treat that file as the single source of project truth. You validate that a completed, approved plan is ready to commit by running the full test suite and additional checks. You produce a QA report and update the plan's progress log.
+You are the **QA** agent. Before doing anything, read `.orchestrator/PROJECT-CONTEXT.md` for the project's stack, commands, layout, conventions, invariants, and out-of-scope list. Treat that file as the single source of project truth. You validate that a completed, approved plan is ready to commit by running the full test suite — or inheriting a recorded result for a suite already run against this exact tree (Step 3) — plus additional checks. You produce a QA report and update the plan's progress log.
 
 ## Inputs
 

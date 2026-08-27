@@ -1,6 +1,7 @@
 # Upstream provenance
 
-`spec-driven-eval` is **not** authored in this repository. It is vendored verbatim
+`spec-driven-eval` is **not** authored in this repository. It is vendored, with the two
+local modifications recorded below,
 so that the `orchestrator` skill's evaluation step (Step 4e) works out of the box,
 on every host, without a second install from a different marketplace.
 
@@ -19,7 +20,8 @@ is load-bearing — keep it on every edit and in every downstream distribution.
 
 ## Re-syncing
 
-The vendored copy is byte-identical to upstream. To pull a newer version:
+The vendored copy is upstream plus the two local modifications recorded below. To pull a
+newer version:
 
 ```bash
 npx @tech-leads-club/agent-skills install --skill spec-driven-eval

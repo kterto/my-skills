@@ -6,7 +6,10 @@
 // The repo supports Claude Code, opencode and Prime Agent. Each reaches a skill
 // by a different route, and only one of those routes had a guard:
 //
-//   Claude Code  reads plugins/my-skills/skills/ directly.
+//   Claude Code  reads plugins/my-skills/skills/ directly, AND any .claude/skills/ in the
+//                project — which in this repo holds an installer drop of spec-driven-eval
+//                that is deliberately pristine upstream. That copy is reported, not compared:
+//                it is a re-sync source, not a host port, and is not this check's subject.
 //   opencode     reads the same shared path, EXCEPT where .opencode/skills/<name>/
 //                exists as an override — then the override wins and the shared
 //                copy is never seen.
@@ -90,7 +93,22 @@ for (const name of overrides) {
   }
 }
 
-// ---- 2. prime-agent distribution ------------------------------------------
+// ---- 2. project-level .claude/skills/ -------------------------------------
+// Not compared — an installer drop is meant to be pristine upstream, so drift
+// from the maintained copy is expected there. It is reported because Claude
+// Code loads it *alongside* the marketplace skill, so the same name resolves to
+// two different bodies in this repo, and the unmodified one wins under its bare
+// name. Whether to delete, ignore, or sync it is a decision, not a defect.
+const claudeSkills = join(repoRoot, ".claude", "skills")
+if (existsSync(claudeSkills)) {
+  for (const d of readdirSync(claudeSkills, { withFileTypes: true })) {
+    if (!d.isDirectory()) continue
+    if (!existsSync(join(shared, d.name, "SKILL.md"))) continue
+    notes.push(`${d.name}: ALSO present in .claude/skills/ — Claude Code loads both; that copy is an installer drop, not a port, and is not compared`)
+  }
+}
+
+// ---- 3. prime-agent distribution ------------------------------------------
 try {
   execFileSync("node", [join(repoRoot, "scripts", "build-prime-agent.mjs"), "--check"], { cwd: repoRoot, stdio: "pipe" })
   notes.push("prime-agent/skills: up to date")
@@ -101,7 +119,7 @@ try {
 
 for (const n of notes) console.log(`ok   ${n}`)
 if (problems.length === 0) {
-  console.log(`\nhost parity ok — Claude Code, opencode and Prime Agent ship the same skills`)
+  console.log(`\nparity ok — every declared mirror matches its shared copy, and prime-agent is current`)
   process.exit(0)
 }
 console.error(`\n${problems.length} parity problem(s):`)

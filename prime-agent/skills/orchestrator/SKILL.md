@@ -1,6 +1,6 @@
 ---
 name: orchestrator
-description: Multi-role pipeline orchestrator. Use when the user invokes "/orchestrator", says "orchestrate", or asks to "run the full pipeline". Auto-detects whether to run bootstrap (first-time setup) or go straight to the pipeline based on the presence of `.orchestrator/config.json`; pass `--setup` to force bootstrap. Admits each role (brainstormer → architect → coder → tester → reviewer → qa) as an RLM child. Never commits or pushes.
+description: Multi-role pipeline orchestrator. Use when the user invokes "/orchestrator", says "orchestrate", or asks to "run the full pipeline". Auto-detects whether to run bootstrap (first-time setup) or go straight to the pipeline — bootstrap runs when `.orchestrator/config.json` is absent or any file it materializes is missing; pass `--setup` to force bootstrap. Admits each role (brainstormer → architect → coder → tester → reviewer → qa) as an RLM child. Never commits or pushes.
 ---
 
 ## Prime Agent compatibility
@@ -156,7 +156,7 @@ brainstormer → architect → coder → tester → reviewer ──(APPROVED)─
                              ↑                          │                    │                      ↑        │
                              └──(REQUEST_CHANGES: architect→coder→[tester?]→reviewer)┘              │        └──(BLOCKED: architect→coder→reviewer→qa)
                              └──(ISSUES: architect→coder→[tester?]→reviewer, same loop)─────────────┘
-                                [max_review_cycles review cycles] [max_eval_cycles eval cycles]     [max_qa_cycles QA cycles]
+                                [review_budget review cycles]     [max_eval_cycles eval cycles]     [max_qa_cycles QA cycles]
 ```
 
 Brainstormer runs once at the start of every pipeline. It produces a spec, which the architect turns into a plan. The fix and QA-remediation loops do not re-run brainstormer — they reuse the original spec via the plan's `related_to` field.
@@ -515,9 +515,11 @@ different questions — the manifest binds a run to its **provenance**, the ledg
 over time** — and merging them would leave half the ledger unavailable to an `off` run.
 
 **`suites[]` has consumers; `boundaries[]` does not yet.** The tester, QA and the outer join all read
-`suites[]` through the inheritance rule above. `boundaries[]` is read by nothing — it is what a later
-cycle's delta will be measured from, and it is written now because a boundary with no consumer is
-cheap while a consumer with no boundary is impossible. **`tree=` is emitted only to the spawns that
+`suites[]` through the inheritance rule above. `boundaries[]` is read by the `delta=` line the reviewer
+receives on cycles of two or more, which is computed by diffing the previous boundary's tree against
+the current one. That consumer is what the boundary was written for; until it existed the rows were
+kept anyway, because a boundary with no consumer is cheap while a consumer with no boundary is
+impossible. **`tree=` is emitted only to the spawns that
 read it** — the tester and QA — and to no other role: a line every role carries and none uses is how
 `MAESTRO_PREV_CR_REF` came to sit in a role template, referenced and never set.
 

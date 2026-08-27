@@ -13,9 +13,14 @@ skills/spec-driven-eval/
     Version: 1.0.0
     License: CC-BY-4.0 — https://creativecommons.org/licenses/by/4.0/
 
-    Not covered by this package's MIT license. Redistributed with host
-    adaptations only: a "Prime Agent compatibility" preamble is prepended, and
-    the Claude-only `disable-model-invocation` frontmatter key is dropped. The
-    methodology, rubric, and scoring text are unchanged from upstream. The
+    Not covered by this package's MIT license. Redistributed with two host
+    adaptations -- a "Prime Agent compatibility" preamble is prepended, and the
+    Claude-only `disable-model-invocation` frontmatter key is dropped -- and two
+    modifications to the skill's own text: a `## Profiles` section defining a
+    sections-only `in-loop` profile, and a clause in the `Engineering Gates G`
+    bullet accepting a recorded execution against an identical tree as the
+    gate's probe. Both are additive; both are listed in the vendored copy's
+    UPSTREAM.md under *Local modifications*. No scoring rule, threshold, or
+    rubric value is altered by either: the same Final comes out. The
     attribution in the skill's frontmatter (`license`, `metadata.author`) must be
     preserved in any further redistribution.
