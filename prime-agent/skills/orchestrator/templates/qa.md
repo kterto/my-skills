@@ -34,6 +34,16 @@ Precondition check: Plan {PLAN-ID} status={status}, CR={CR-ID} CR status={cr_sta
 
 ### Step 1a — `PACT` ID input (parallel mode only)
 
+**When your preamble carries an `aggregate=` line**, read that file's section for your role **in place of** the artifacts named below, after checking its stamp's `root_plan_id`, `leaves` and `tree` against your own preamble. On any mismatch, or if the file is missing or unparseable, **fall through to `leaves=` and read the originals, printing which field mismatched** — never proceed on a digest you could not verify. Record which rung you took in your report, in the shape `references/parallel.md` → 3j.4 specifies; the artifact is what a human reads three cycles later when a verdict looks wrong.
+
+**Regions D, E and F replace** the walk over the leaf plans and their progress logs for: each leaf's `## Verification (per phase)` block and `### Gate coverage` table, **kept per leaf and never unioned** — unioning them erases the difference between *the architect omitted the gate* and *the coder skipped its sub-step*, which are your two branches and need different fixes (D); every leaf's acceptance criteria byte-for-byte (E); and an index of every `CODER — GATE` entry with its **measured value**, threshold and locator, plus a positive assertion naming every log scanned (F).
+
+**Region F is a pointer, not a copy.** The `Carried because:` prose is deliberately absent: open the named `.progress.md` for any finding you are about to label *carried* — one or two files per cycle, not all of them. F's scope assertion is what makes an empty result mean *no entry existed* rather than *the builder missed it*, which two of your three attribution branches depend on.
+
+**It replaces nothing else.** The run-family walk stays a walk — its input grows *during* the run. The join-level `CR`, the gate thresholds, `PROJECT-CONTEXT.md`'s commands, the changed set, and `.orchestrator/verification-ledger.json` are all unchanged.
+
+**The original artifact always wins.** The digest is derived data: it saves the analysis, never the checking. Every way it can be wrong produces a *stronger* verdict rather than an error, so a disagreement you notice is the only runtime signal that it dropped something. If what you open disagrees with it, say so in your report, record it in `.progress.md`, and treat the digest as unusable for the rest of this run.
+
 When the ID you were given carries the `PACT-` prefix, you were invoked **at the outer join** over a leaf fan-out. **When your preamble carries a `leaves=` line, that is the leaf plan set — use it as given.** Only when it is absent — a **legacy** run, started before the orchestrator emitted the line — resolve the set yourself. A resumed run is not such a case: Step 0r rebuilds the leaf set centrally and emits it. Either way, `.orchestrator/artifact-format.md` → **`PACT` ID resolution** is the single normative rule for resolving it, for what to evaluate, and for where to write back — **that rule is your entire knowledge of nesting**; nothing else about your workflow changes.
 
 Your additions on top of that:
@@ -65,6 +75,8 @@ QA file path: `plans/qa/QA-{NNN}-{slug}.md`
 
 Run all relevant test suites based on what the plan touches. Use the Commands section of `PROJECT-CONTEXT.md` for the canonical test commands per app layer. Skip a suite if its app was not touched, but always run a suite the plan modifies.
 
+**Check `.orchestrator/verification-ledger.json` before each one.** It records every whole-app suite this run has already executed and the tree hash it ran against; your preamble's `tree=` line carries the current hash. The rule is normative in `SKILL.md` Step 0a → *Suite inheritance* — match the command string and the tree **exactly**, inherit a recorded `pass`, never inherit a recorded `fail`. This is the largest saving available to you: by the time QA runs, the tester has usually executed the same suites against the same tree an hour earlier. **It narrows nothing** — a suite you would have run still runs unless its result against this exact tree is already on record, and the app-level skip rule above is unchanged. When you execute, append your row.
+
 There is no root-level aggregate runner. Always `cd` into the relevant app directory per the Commands section of `PROJECT-CONTEXT.md`.
 
 Log each suite run to `.progress.md`:
@@ -72,7 +84,18 @@ Log each suite run to `.progress.md`:
 ### {ISO 8601 datetime} | QA
 
 Ran: {command}
+Tree: {the tree= hash}
 Result: {PASS | FAIL} — Total: {N} | Passed: {N} | Failed: {N} | Skipped: {N}
+```
+
+An inherited suite is logged in the same place, in the same shape, and is never silently omitted:
+
+```
+### {ISO 8601 datetime} | QA
+
+Inherited: {command}
+Tree: {the tree= hash}
+From: {artifact} at {ISO 8601} — result {pass}
 ```
 
 Capture:

@@ -35,15 +35,31 @@ node scripts/generate-opencode-skill-index.mjs
 node scripts/build-prime-agent.mjs
 ```
 
-Then bump the version and date in the table above, and reinstall this
+Then **re-apply the two local modifications listed below** — the copy landing
+from upstream does not carry them — bump the version and date in the table
+above, and reinstall this
 distribution with `prime-agent/install.sh`. The CC-BY-4.0 attribution above
 survives every re-sync — it is load-bearing in this distribution exactly as it is
 upstream.
 
 ## Local modifications
 
-None. The directory you are reading **is** one of two host-specific derivatives;
-both are generated or maintained separately in the source repository, from the
+**Two, and a re-sync reverts both — re-apply them from this list.**
+
+1. **`## Profiles` section**, inserted immediately before *Reported beside the grade*. Defines `full`
+   (default) and `in-loop`, which selects sections only and changes no scoring rule. The orchestrator's
+   Step 4e invokes `Profile: in-loop`; without this section that line is a hint the workflow may ignore.
+2. **Executed-suite ledger clause** in *Engineering Gates `G`*, immediately before
+   *Probe-before-not-run*. A gate whose exact command string is recorded against the same tree hash is
+   scored from that record instead of re-executed. The orchestrator passes
+   `.orchestrator/verification-ledger.json`; without this clause it re-probes suites the tester
+   already ran against an unmoved tree.
+
+Both are additive, both preserve the CC-BY-4.0 attribution, and both must be applied to
+`.opencode/skills/spec-driven-eval/SKILL.md` as well.
+
+The directory you are reading **is** one of two host-specific derivatives; both
+are generated or maintained separately in the source repository, from the
 vendored copy at `plugins/my-skills/skills/spec-driven-eval/`:
 
 - `.opencode/skills/spec-driven-eval/` — opencode override port (drops the

@@ -124,7 +124,7 @@ related_to: {the run's SPEC id — ALWAYS, when the run has one — plus this ar
 - [ ] Implement {first unit of work} to pass tests
 - [ ] Write failing test(s) for {second unit of work}
 - [ ] Implement {second unit of work} to pass tests
-- [ ] Run full test suite and confirm green
+- [ ] Run this phase's tests and confirm green — the scoped form; the whole-app suite belongs to the run's barriers, never to a phase
 
 ## Verification (per phase)
 
@@ -137,7 +137,27 @@ related_to: {the run's SPEC id — ALWAYS, when the run has one — plus this ar
 
 Apply the Commands section of `PROJECT-CONTEXT.md` to determine the per-phase gate commands. Run only those whose path condition matches the phase's diff. Phase exit criterion: EVERY applicable command was run and its verdict recorded — exit 0, or a carried `GATE` entry naming the fix that was rejected and why. No silent rewrites of source to make a gate pass without a corresponding plan task.
 
+| Command | Scope | Phases | Path condition |
+| ------- | ----- | ------ | -------------- |
+| {command, with its narrowing argument written as a `<placeholder>`} | changed-files | {phase numbers} | {when it applies} |
+| {command} | whole-project | {phase numbers} | {which of the three properties this relies on: no path argument, does not mutate, seconds-scale} |
+| {coverage command} | advisory-instrument | {phase numbers} | measured and recorded, never asserted |
+| {command} | deferred-to-join | {phase numbers} | lane plans only — redeemed once at the outer join |
+
+**Every row carries a `Scope` token from the closed set `changed-files | whole-project | advisory-instrument | deferred-to-join`.** `changed-files` is the default, and the only legal token for a command that accepts a path, pattern, directory or spec argument — the coder fills each `<placeholder>` from the phase's changed-set intersection. **Narrowing a listed command to that intersection is authorized; widening one is not.** A `whole-project` row is run exactly as written. `deferred-to-join` is legal only on a plan that carries a lane.
+
 `G1 (advisory — tester closes)` is measured and recorded here, never asserted exit 0.
+
+### Gate coverage
+
+| Gate | Phases | Carried by | Assertion |
+| ---- | ------ | ---------- | --------- |
+| G1 | {phase numbers} | {the command that measures it} | advisory — measured and recorded, never exit 0 |
+| G2 | {phase numbers} | {command} | exit 0 |
+| G4 | {phase numbers} | {command} | exit 0 |
+| G5 | {phase numbers} | {command} | exit 0 |
+| G6 | — | — | QA-only — never run at phase exit |
+| G7 | {phase numbers} | {command} | exit 0 |
 
 
 ## Dependencies
@@ -169,6 +189,73 @@ that a per-phase run cannot produce.
 
 Scope every emitted gate to the phase's changed files, which is what the gate measures anyway. For a
 phase that touches no covered root, emit no gate and say so.
+
+**Close the section with the `### Gate coverage` table — six rows, one per runtime gate id, in the
+order G1, G2, G4, G5, G6, G7.** (`G3` is folded into `G2`; it is not a runtime gate and gets no row.)
+Every row's `Carried by` cell names the **command** that runs that gate — the toolchain command from
+`PROJECT-CONTEXT.md` → Commands, or the clean-code-gates CLI invocation with its `--gates` letters —
+or reads the literal `n/a`, with the reason in the `Phases` cell. `G6`'s row is always `n/a` /
+QA-only.
+
+The table is not decoration, and it is not a summary of the prose above it: **it is the only
+machine-checkable statement that a gate is carried at all**, and the orchestrator verifies it before
+any coder starts — `SKILL.md` Step 2, and `references/parallel.md` Step 2L on the parallel path. Prose naming `yarn lint` per phase says
+nothing about whether G2's complexity thresholds or G5's no-comments scan are enforced anywhere; a
+`Carried by` cell does. This is a failure the pipeline has already paid for — a lane plan whose
+verification section listed analyze, format, test and a layer gate, and named no gate letter, shipped
+10 G2 findings in its own new widget files through six phases; they surfaced at QA, two roles and a
+full remediation run later.
+
+A gate you genuinely cannot carry at phase exit is an `n/a` row **with its reason**, never a missing
+row. An honest `n/a` is a decision the reviewer and QA can see and price; a missing row is
+indistinguishable from an oversight, which is the state that cost the run above.
+
+### Scoping a phase gate
+
+Every row of the command table carries one `Scope` token, from a closed set of four.
+
+**`changed-files` is the default.** A command that accepts a path, pattern, directory or spec
+argument is emitted **only** in its narrowed form, with the argument written as an explicit
+`<placeholder>` the coder fills from the phase's changed-set intersection. Test runners, linters,
+formatters, dependency scanners and the clean-code-gates CLI are all narrowable; look each one's
+narrowing flag up in `PROJECT-CONTEXT.md` → Commands and write it into the row rather than leaving
+the coder to guess it.
+
+**`whole-project` is for a command that satisfies all three properties:** it takes no path argument,
+it does not mutate the tree, and it completes in seconds. Typecheck, build and whole-project static
+analysis are the usual members, and they earn the token — a green suite is not a typecheck, because
+a per-file test transform never sees the cross-file type error a build catches. Name in the
+`Path condition` cell which of the three properties you are relying on. The token is a
+classification, not an escape hatch: a `whole-project` row naming a test suite is a malformed plan.
+
+**`advisory-instrument` is the coverage command, and nothing else.** Coverage's denominator is the
+gate config's roots, so narrowing its *execution* does not narrow its measurement — it only
+under-reports the numerator, because a changed file is frequently covered by a test that names a
+different file. Emit it unscoped, tag it `G1 (advisory — tester closes)`, and treat the number as a
+lower bound.
+
+**`deferred-to-join` is a parallel-mode outcome only.** A laneless plan — sequential, `FIX`, `QAF` —
+has no join to redeem a deferral at, so on those plans the token is illegal: classify a
+non-narrowable command as `whole-project` and state its cost in the `Path condition` cell instead.
+
+**Never emit a whole-app test suite into a phase row, in any mode, on any plan type.** Not bare, not
+with a coverage flag, and not as the close-out phase's finale. **That last idiom has a name, and it
+is the one to watch for**: *scoped for the early phases, the full suite for the last one* reads as
+diligence, and it is the exact shape that sent three whole-app suite runs out of a single concurrent
+lane — then got copied verbatim into the remediation plan written to fix it. A close-out suite is
+the run's barrier, never a phase's.
+
+**When a command has a mutating and a non-mutating form, emit the non-mutating one.** A lint that
+auto-fixes, or a formatter that writes in place, rewrites the tree it is measuring: its own result
+becomes unreproducible, and in a shared workspace it silently reformats files belonging to a sibling
+lane. Emit the check form.
+
+This table and the `### Gate coverage` table answer different questions and are keyed differently.
+`### Gate coverage` is keyed by **gate id** and answers *is this gate carried at all*; the command
+table is keyed by **command** and answers *what does this command look at*. One plan routinely runs
+more commands than it has gate letters, and one command's scope can differ between phases — neither
+fits in a six-row per-gate table. Where the two touch, the scope is stated once, here, and the gate
+row keeps naming the command only.
 
 ## Step 3R — Build the requirement coverage map (type `feat` with a source spec)
 
@@ -257,7 +344,8 @@ Status: PLANNED. Ready for coder.
 - Never plan out-of-scope items from PROJECT-CONTEXT.md. If the request asks for one, surface the conflict and stop.
 - If a plan touches an open product decision listed in PROJECT-CONTEXT.md, surface the decision dependency — do not silently pick.
 - **Never author a gate threshold in a plan.** Every numeric threshold lives in `.cleancode-gates.json` at the project root, per stack, and QA enforces it from there. A gate belongs in `## Verification (per phase)`, **not** in the acceptance-criteria list — the reviewer owns every criterion and runs no gates, so a criterion reading "passes G1" is rubber-stamped or estimated, which is the unowned guessed threshold this rule exists to delete. When a criterion genuinely must reference one, name the gate and the stack and suffix it `(QA-verified)` — "passes G2 for `dart-flutter` (QA-verified)" — never restating a number, because a number written here is a number that can disagree with the one the tool runs. It is exactly how a plan came to demand one complexity limit while the gate enforced a stricter one, and every plan written against the looser number failed QA. Exemptions are likewise not authored here: a per-gate carve-out belongs in that gate's `gates.<id>.exempt` list, which is what the live configs use. Do **not** send it to `exclude` — that is stack-wide and would drop the file from every other gate too.
-- **G6 (mutation) is the only QA-only gate — do NOT emit it in `## Verification (per phase)`.** G1, G2, G4, G5 and G7 ARE emitted there for every phase touching a covered root (see *Verification (per phase)*): a gate the coder cannot see is a gate discovered two roles late, and clearing it then costs a full remediation run.
+- **G6 (mutation) is the only QA-only gate — do NOT emit it in `## Verification (per phase)`.** G1, G2, G4, G5 and G7 ARE emitted there for every phase touching a covered root (see *Verification (per phase)*): a gate the coder cannot see is a gate discovered two roles late, and clearing it then costs a full remediation run. **Every one of the six runtime gate ids carries a row in that section's `### Gate coverage` table** — a carried gate names its command, an uncarried one says `n/a` and why. The orchestrator re-invokes you once on a table that is missing, short, or holding an empty `Carried by` cell, quoting the gate letters, and stops the run if the second attempt is still incomplete.
+- **Never emit a whole-app test suite into `## Verification (per phase)`** — not bare, not coverage-flagged, and not as a close-out phase's finale. Every narrowable command is emitted in its `changed-files` form with a `<placeholder>` argument, and every row carries a `Scope` token from the closed set (see *Scoping a phase gate*). A phase gate that runs the whole suite buys nothing the run's barriers do not already run, and inside a lane it reports a sibling's in-flight tree as this phase's failure.
 - FIX and QAF plans inherit `## Verification (per phase)` ONLY when the plan touches production code that the gates cover. Doc-only FIX plans (plan-file reconciliations, README updates, spec rewrites, ADR updates) skip the verification section.
 - A `PACT` carries no `## Tasks` and no `## Verification (per phase)` section — it is a contract, not a plan. The work it governs lives in the lane `FEAT` plans.
 - Never emit a `PACT` with an unvalidated, unbounded, `..`-escaping, or overlapping path glob. Reject and repair before writing; drop and report a lane you cannot bound.
@@ -274,11 +362,11 @@ Plan: plans/{dir}/{PREFIX}-{NNN}-{slug}.md
 Progress: plans/{dir}/{PREFIX}-{NNN}-{slug}.progress.md
 Tasks: {N}
 Requirements: {M} mapped / {D} deferred
-Verification: {per-phase | QA-only}
+Verification: {per-phase — gates {ids} | QA-only — {reason}}
 Next: invoke /coder with plan ID {PREFIX}-{NNN}
 ```
 
-Print `Verification: per-phase` if the plan emitted a `## Verification (per phase)` section, else `Verification: QA-only`.
+Print `Verification: per-phase — gates {ids}`, where `{ids}` lists the gate ids whose `### Gate coverage` row names a command, comma-separated, when the plan emitted a `## Verification (per phase)` section. Otherwise print `Verification: QA-only — {reason}`, **with the reason stated**: on a `FEAT` plan the only admissible reason is that no phase touches a root any `.cleancode-gates.json` covers; on a `FIX` or `QAF` plan it is that the plan is doc-only (`templates/architect.md` → *Rules*). An unreasoned `QA-only` is exactly what the orchestrator's gate-completeness check re-invokes on — it cannot tell a deliberate deferral from a dropped section, and it is not allowed to guess.
 
 The `Requirements:` line reports the `## Requirement Coverage` map: `{M}` is the total row count — which equals the number of numbered requirements in the source spec, or in lane-plan mode the size of the lane's assigned set — and `{D}` is how many of those rows are `Deferred`. Print `Requirements: n/a` on a `FIX`, `QAF`, or `PACT`, which carry no map.
 
@@ -291,6 +379,6 @@ Progress: plans/feat/PACT-{NNN}-{slug}.progress.md
 Lanes: {N}
 Interface points: {N}
 Integration lane: {name}
-Verification: QA-only
+Verification: QA-only — contract, not a plan
 Next: orchestrator Step 2L (lane plan fan-out)
 ```
