@@ -165,6 +165,22 @@ LLM judges have well-documented biases; hold these explicitly:
 - **Self-preference bias** — see Core rule 4 (judge ≠ author).
 - **Anchoring** — score against the frozen baseline and the calibration anchors in `references/reference.md`, not against the previous implementation you happened to grade.
 
+### Profiles — which sections a caller receives
+
+Two profiles. **Neither changes a scoring rule, a threshold, or a method** — they select which
+*sections* the report carries, and the same `Final` comes out of both.
+
+- **`full`** (default, and what a bare invocation means) — everything below.
+- **`in-loop`** — required: the **per-criterion evidence matrix**, the numeric **`Final`**, the
+  **ranked gap list**, and the **Engineering Gates `G`**. Omitted: `R`, `S`, `D`, and the
+  cross-implementation comparison roll-up. Those four are reported *beside* the grade and never
+  folded into it, so omitting them moves no number; `D` in particular classifies every added test
+  case individually, which is the most expensive thing in a report nobody downstream reads it from.
+
+**Do not offer a cheaper method under either profile.** Fewer sections is the whole difference: a
+criterion still needs its evidence, an UNMET still needs its search, and a gate still needs its
+probe. A caller asking for `in-loop` is asking for a shorter report, never a laxer one.
+
 ### Reported beside the grade (NOT folded into Final — keep comparable)
 
 - **Robustness Index `R`** — extra tests beyond PRD cases, weighted High=1.0 / Med=0.5 / Low=0.25, summed. Signals defensive quality. Never inflates `Final`.
@@ -173,7 +189,13 @@ LLM judges have well-documented biases; hold these explicitly:
   - **Rogue build** — built something that traces to *neither* a PRD AC *nor* a valid `E`-addition (untraceable / invented) ⇒ `fail`.
   - **Plan drift** — `spec.md`/`tasks.md` sanctioned a behavior the code didn't build (or left half-built / inconsistent) ⇒ `partial`.
   Everything traces cleanly ⇒ `pass`. Report the failing/partial behaviors with `file:line`. **A valid requirement the framework derived into the spec but correctly did NOT build (because it is out of scope) is good discipline — it is *not* an `S` penalty;** record it as deferred-valid under `E`.
-- **Engineering Gates `G`** — `build`, `lint`, `unit`, `e2e`. **Each gate must be an actually-executed `✓`/`✗` or an explicit `not-run` (with reason, e.g. e2e infra unavailable).** Never report a gate as passing without running it. **The `build` gate is pinned mechanically to remove evaluator discretion:** pick the project's canonical build command once per benchmark (the build script the repo documents) and define the gate as that command exiting `0` — nothing else decides it. Record the exact command in the report so every run uses the identical gate. A pre-existing, unrelated toolchain failure in code the change didn't touch (e.g. a known typecheck error in an untouched migration path) is a **documented non-graded NOTE**, not a `✗`: it does not gate `build` and does not trigger `Adjusted Final`. Record it in the report as a known note, but the `build` verdict follows only the pinned build command's exit code. **Probe-before-not-run:** a gate may only be reported `not-run` after a recorded real attempt — the command executed (or the prerequisite check, e.g. `docker ps` for e2e infra) and its error output pasted as evidence. A reason without an attempt is not valid; the gate stays *not yet scored*, exactly like an UNMET without a search (Core rule 2 applied to gates). **Only a confirmed-red gate (`✗`) triggers `Adjusted Final = Final × 0.5`**; a `not-run` gate cannot grant or deduct credit — it is reported as a known blind spot. The unadjusted `Final` stays reported for comparison. A red gate is **never** fixed by the evaluator (Core rule 5) — record `✗`, adjust, and list the fix.
+- **Engineering Gates `G`** — `build`, `lint`, `unit`, `e2e`. **Each gate must be an actually-executed `✓`/`✗` or an explicit `not-run` (with reason, e.g. e2e infra unavailable).** Never report a gate as passing without running it. **The `build` gate is pinned mechanically to remove evaluator discretion:** pick the project's canonical build command once per benchmark (the build script the repo documents) and define the gate as that command exiting `0` — nothing else decides it. Record the exact command in the report so every run uses the identical gate. A pre-existing, unrelated toolchain failure in code the change didn't touch (e.g. a known typecheck error in an untouched migration path) is a **documented non-graded NOTE**, not a `✗`: it does not gate `build` and does not trigger `Adjusted Final`. Record it in the report as a known note, but the `build` verdict follows only the pinned build command's exit code. **A recorded execution counts as the probe.** When the caller supplies an executed-suite ledger — a
+record of `{command, tree, result}` pairs — a gate whose exact command string is recorded against the
+**same tree hash** the diff resolves to is scored from that record, citing it as the evidence, rather
+than re-executed. Byte-identical command and identical tree, or it does not match: a scoped
+invocation and a whole-suite invocation are different gates, and a tree that moved is a different
+subject. This is the same evidence standard, sourced one step earlier — never a licence to report a
+gate nobody ran. **Probe-before-not-run:** a gate may only be reported `not-run` after a recorded real attempt — the command executed (or the prerequisite check, e.g. `docker ps` for e2e infra) and its error output pasted as evidence. A reason without an attempt is not valid; the gate stays *not yet scored*, exactly like an UNMET without a search (Core rule 2 applied to gates). **Only a confirmed-red gate (`✗`) triggers `Adjusted Final = Final × 0.5`**; a `not-run` gate cannot grant or deduct credit — it is reported as a known blind spot. The unadjusted `Final` stays reported for comparison. A red gate is **never** fixed by the evaluator (Core rule 5) — record `✗`, adjust, and list the fix.
 - **Test Distribution `D`** — every feature test classified into one of three tiers, reported as counts **and** % of the suite. Shows where the testing effort went; never inflates `Final`. See below.
 
 ### Test distribution by tier `D` (reported beside)
