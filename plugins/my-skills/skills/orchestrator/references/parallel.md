@@ -778,7 +778,14 @@ rule. These stay reads of the original, every cycle:
 
 **Regions A and B are mechanical** — fixed contract regions with specified columns — and the
 orchestrator builds them directly. **Regions C, D, E and F are leaf-derived and are built by one
-read-only scan subagent**, because leaf plans are not machine-uniform: real leaf `## Requirement
+read-only scan subagent** — the same pattern Bootstrap B1 and Step 2p.1 use, with the type
+resolution and the never-fail rule from `SKILL.md` → *The read-only scan subagent type*, which is
+what keeps this step host-agnostic. **If no scan type resolves on this host, build those regions
+inline** rather than skipping the digest: that costs the orchestrator one read of the leaf set, once,
+against thirteen role spawns re-reading it, so the trade still lands heavily on the digest's side.
+Note in the printed `DIGEST —` block that the regions were built inline. Under a host whose own
+dispatch protocol supersedes these call shapes, the scan child is admitted that host's way and still
+obeys the read-only rule. The subagent is used here because leaf plans are not machine-uniform: real leaf `## Requirement
 Coverage` tables have been observed carrying **nine different column headers across nine leaves**,
 none of them the canonical schema. **A template-shaped extractor is forbidden here** — it fails
 *open*: an unmatched header yields empty rows, an empty row reads as *no requirement*, and a

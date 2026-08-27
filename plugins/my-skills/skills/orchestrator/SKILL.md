@@ -161,7 +161,7 @@ The subagent prompt MUST be self-contained: it does not see this conversation. I
 
 #### The read-only scan subagent type
 
-Two steps spawn a **scan** subagent rather than a pipeline role: Bootstrap B1 (context digest) and Step 2p.1 (slicing analysis). Unlike the six roles, this one is **not materialized by B3** — it is whatever read-only agent type the host already provides, and the name differs per host. Resolve it **once per run**, in this order, and use the first that exists:
+Three steps spawn a **scan** subagent rather than a pipeline role: Bootstrap B1 (context digest), Step 2p.1 (slicing analysis), and Step 3j.4 (the join digest's leaf-derived regions). Unlike the six roles, this one is **not materialized by B3** — it is whatever read-only agent type the host already provides, and the name differs per host. Resolve it **once per run**, in this order, and use the first that exists:
 
 1. `Explore` — Claude Code's built-in read-only search agent.
 2. `explore` — the opencode equivalent, when the host registers one.

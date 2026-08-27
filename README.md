@@ -316,6 +316,7 @@ my-skills/
 │   └── README.md
 ├── scripts/
 │   ├── build-prime-agent.mjs     # build prime-agent/skills from the marketplace skills
+│   ├── check-host-parity.mjs     # Claude Code / opencode / Prime Agent ship the same skills
 │   ├── generate-opencode-skill-index.mjs
 │   ├── install-opencode.sh
 │   ├── install-prime-agent.sh    # one-command Prime install (fetches, then delegates)
@@ -554,6 +555,20 @@ Regenerate the derived trees whenever skill files are added, removed, or renamed
 node scripts/generate-opencode-skill-index.mjs   # opencode remote index
 node scripts/build-prime-agent.mjs               # prime-agent/skills
 ```
+
+**Editing a skill that has an `.opencode/skills/` override means editing two files.**
+opencode reads the shared `plugins/my-skills/skills/` path *except* where an override
+exists — there the override wins and the shared copy is never seen. So a change to an
+overridden skill lands for Claude Code and, once rebuilt, for Prime Agent, and silently
+misses opencode. Nothing else catches that:
+
+```bash
+node scripts/check-host-parity.mjs   # all three hosts ship the same skills
+```
+
+It compares each override declared a *mirror* against its shared copy, ignoring only the
+port-header paragraph, reports one declared *divergent* without comparing it, and runs the
+prime-agent `--check` — so one command answers whether the three hosts have drifted apart.
 
 `prime-agent/skills/` is **generated**, never hand-edited: the builder copies each
 marketplace skill and applies its Prime adaptation from `prime-agent/overlays/<skill>.json`

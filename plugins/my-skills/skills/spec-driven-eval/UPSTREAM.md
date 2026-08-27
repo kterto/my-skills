@@ -29,6 +29,7 @@ cp -R "$(pwd)/.claude/skills/spec-driven-eval/SKILL.md" \
 # .skill-meta.json is installer bookkeeping — do not vendor it.
 node scripts/generate-opencode-skill-index.mjs
 node scripts/build-prime-agent.mjs
+node scripts/check-host-parity.mjs   # the override above is a mirror — it must match
 ```
 
 Then **re-apply the two local modifications listed below** — the copy landing from upstream does not
