@@ -68,7 +68,7 @@ On invocation with a plain-language task description (and optional `--setup`):
 > **Already loaded? Do not reload.** A caller running several tasks in one session — the `product-manager` skill does exactly this, one run per user story — needs this protocol **once**, not once per task. If its text is still visible in your context, a second task is a **new pipeline run starting here at the Lifecycle**, not a re-read of the skill. **A new run rebinds everything**: `base_sha`, the spec, the cycle counters, the family counts. "Capture once" anywhere below means once per *run*, never once per session — carrying story 1's base into story 2 would diff the wrong tree. Re-invoking would duplicate roughly 26k tokens of protocol per task, and a ten-story milestone would spend most of a context window on copies of one document. Reload only when you genuinely cannot see this text any more — after compaction, or in a fresh session. Presence is the test, not recollection.
 
 1. Resolve config (see `references/config.md`): CLI args > `.orchestrator/config.json` > defaults.
-2. If `--setup` is present OR `.orchestrator/config.json` does not exist OR any file B3 materializes is missing — currently `.orchestrator/artifact-format.md`, `.orchestrator/config.md`, `.orchestrator/gate-config.md`, `.orchestrator/lane-protocol.md` — → run **Bootstrap** (Steps B1–B3), then continue. **A project bootstrapped by an older skill version has `config.json` and none of the files added since**, so keying only on `config.json` would leave every role pointing at a reference that is not there.
+2. If `--setup` is present OR `.orchestrator/config.json` does not exist OR any file B3 materializes is missing — currently `.orchestrator/.gitignore`, `.orchestrator/artifact-format.md`, `.orchestrator/config.md`, `.orchestrator/gate-config.md`, `.orchestrator/lane-protocol.md` — → run **Bootstrap** (Steps B1–B3), then continue. **A project bootstrapped by an older skill version has `config.json` and none of the files added since**, so keying only on `config.json` would leave every role pointing at a reference that is not there.
 3. Run **Pipeline** (Steps 0–6).
 4. Spec eval runs inside the review loop (Step 4e), before the QA exit gate.
 5. On `READY_TO_COMMIT` → run **Final report** (Step 7).
@@ -139,11 +139,38 @@ Check for a resolvable **`simplify`** skill the same way, and record its availab
 
    Re-copy all six on every bootstrap (including `--setup` re-runs) so they stay in sync with the installed skill version. If the scaffolds/scripts are missing, `output_format=html` silently degrades to md because roles cannot render the `.html`.
 
-3. **Write config**: merge `templates/config.template.json` with any CLI overrides (precedence: CLI arg > `.orchestrator/config.json` > default) and write the result to `.orchestrator/config.json`.
+3. **Write the state-tracking contract** (`.orchestrator/.gitignore`). Bootstrap materializes run state and skill copies into the same directory a human keeps `config.json` and `PROJECT-CONTEXT.md` in, so the project cannot tell them apart unless this file says so. Write it as an **allow-list** — everything under `.orchestrator/` is ignored unless named — so a state file added by a *later* skill version defaults to ignored instead of silently entering the next feature commit:
+
+   ```gitignore
+   # --- BEGIN orchestrator-managed (rewritten on every bootstrap) ---
+   # Allow-list. Ignored by default; tracked only by explicit exception below.
+   *
+   !*/
+   !.gitignore
+   !config.json
+   !PROJECT-CONTEXT.md
+   !eval-baselines/**
+   # --- END orchestrator-managed ---
+   # Project additions go below this line; bootstrap preserves them.
+   ```
+
+   `*` ignores every file; `!*/` lets git descend into subdirectories so the exceptions below can re-include paths inside them (without it, an excluded parent directory makes re-inclusion impossible). **Rewrite only the region between the markers**, preserving anything the project added underneath — the same "the project's choice wins" shape step 4 uses for `config.json` keys. If the markers are absent and the file exists, prepend the managed block rather than overwriting.
+
+   **What is tracked, and why only these.** `config.json` must be tracked: Step 0b reads `parallelism`, `max_parallel_lanes`, and `max_contract_amendments` from the **merge-base** copy (`$mb:.orchestrator/config.json`), so an untracked file makes those three keys unreachable and they fail closed to defaults forever. `PROJECT-CONTEXT.md` is hand-curated shared project knowledge that a teammate's fresh clone must already have. Everything else is either **per-run state** (`run-manifest.json`, `verification-ledger.json`, `tmp/`) — branch-scoped, rewritten whole each run, and therefore unmergeable — or a **copy of the installed skill** (`artifact-format.md`, `config.md`, `gate-config.md`, `lane-protocol.md`, `html-templates/`, the four `.cjs`, the rendered role files), which Lifecycle item 2 re-materializes the moment it goes missing. Tracking the copies lands a four-figure diff in a product PR on every skill upgrade; ignoring them costs nothing, because a fresh clone missing them simply triggers bootstrap.
+
+   **This file is additive, never destructive.** `.gitignore` has no effect on paths git already tracks, so writing it into a project that currently commits its run state changes nothing on its own. Say so in the summary and print the one-line remedy rather than running it — the orchestrator never mutates the index:
+
+   ```
+   .orchestrator/run-manifest.json and .orchestrator/verification-ledger.json are tracked
+   but are per-run state. To stop committing them (history is untouched):
+     git rm --cached .orchestrator/run-manifest.json .orchestrator/verification-ledger.json
+   ```
+
+4. **Write config**: merge `templates/config.template.json` with any CLI overrides (precedence: CLI arg > `.orchestrator/config.json` > default) and write the result to `.orchestrator/config.json`.
 
    **On a re-run, an existing `.orchestrator/config.json` wins over the template for every key it sets.** The template contributes only keys the project does not already have — a new setting added by a later skill version, at its default. Bootstrap re-runs on upgrades now (Lifecycle item 2), so treating the template as authoritative here would silently reset a project's `parallelism`, its `lanes`, and its `agent_sync_targets` back to defaults, turning a self-healing upgrade into a configuration loss the project would discover only by watching a run behave differently.
 
-4. **Print bootstrap summary**: list all created/updated paths (including `.orchestrator/roles/`, `.orchestrator/artifact-format.md`, `.orchestrator/config.md`, `.orchestrator/gate-config.md`, `.orchestrator/lane-protocol.md`, `.orchestrator/html-templates/`, and the four `.orchestrator/*.cjs` render/gate scripts) and the achieved context confidence.
+5. **Print bootstrap summary**: list all created/updated paths (including `.orchestrator/.gitignore`, `.orchestrator/roles/`, `.orchestrator/artifact-format.md`, `.orchestrator/config.md`, `.orchestrator/gate-config.md`, `.orchestrator/lane-protocol.md`, `.orchestrator/html-templates/`, and the four `.orchestrator/*.cjs` render/gate scripts) and the achieved context confidence.
 
 ## Pipeline
 
@@ -338,7 +365,7 @@ Without `--resume` nothing here applies and 0a runs exactly as written. This is 
 Inspect the workspace. Run in parallel:
 
 - `git rev-parse --abbrev-ref HEAD` — current branch.
-- `git status --porcelain=v1 -- . ':(exclude).opencode' ':(exclude).claude' ':(exclude).prime'` — clean vs dirty. The excludes drop host-runtime scaffolding the harness writes into the project (opencode's `.opencode/`, Claude Code's `.claude/`); without them the tree is permanently dirty under those hosts and the orchestrator can never see a clean workspace. `.orchestrator/` project state is **not** excluded — decide "clean vs dirty" from this command's literal output, not from an assumption.
+- `git status --porcelain=v1 -- . ':(exclude).opencode' ':(exclude).claude' ':(exclude).prime'` — clean vs dirty. The excludes drop host-runtime scaffolding the harness writes into the project (opencode's `.opencode/`, Claude Code's `.claude/`); without them the tree is permanently dirty under those hosts and the orchestrator can never see a clean workspace. `.orchestrator/` is **not** excluded here, and does not need to be: B3's `.orchestrator/.gitignore` already ignores everything under it except `config.json` and `PROJECT-CONTEXT.md`, which are human-authored and *should* register as dirty when someone edits them. A repo that still tracks its per-run state predates that contract and will show the pipeline's own writes as dirt — bootstrap prints the `git rm --cached` remedy for exactly that. Decide "clean vs dirty" from this command's literal output, not from an assumption.
 - `git rev-parse --show-toplevel` — repo root.
 
 Define `protected_branches = {main, master, dev, develop, trunk}`.
@@ -558,7 +585,9 @@ max_family_cycles: {max_family_cycles}
 - When the merge-base has no `.orchestrator/config.json`, or the file is absent/unparseable there, fall back to the **defaults** (`off` / `6` / `2`) — never to the working-tree copy.
 - **Validate the numeric values before any dispatch**, per `references/config.md` → *Bounds* (`max_parallel_lanes` a finite integer ≥ 1, `max_contract_amendments` a finite integer ≥ 0, `max_eval_cycles` and `max_family_cycles` finite integers ≥ 0); an out-of-range value fails closed to the key's canonical default with the reason printed, rather than dispatching a wave of zero or comparing against an undefined cap.
 
-Every other key (`output_format`, `automation_level`, the thresholds) keeps reading from the working tree as before — they are presentation and interview preferences, not concurrency authority, and none of them widens a branch's blast radius.
+Every other key (`output_format`, `automation_level`, the thresholds) keeps reading from the working tree as before — none of them widens a branch's blast radius, which is what the merge-base anchor exists to contain.
+
+**But `output_format` is project policy, not a per-developer preference — do not let its trust anchor suggest otherwise.** Reading it from the working tree is correct (a branch cannot escalate concurrency with it); *diverging* on it across a team is not. `scripts/check-artifact-pairing.cjs` never reads `output_format` or `config.json` at all: it scopes via `branchScope({auditPath: 'plans', ext: '.md', baseRef})` — **every** changed `.md` on the branch, whoever authored it — and unconditionally requires each one's `.html` sibling. So a developer running `html` is blocked by every md-only artifact a teammate added to the same branch, and cannot clear the gate without re-rendering work that is not theirs. The key therefore belongs in the **tracked** `.orchestrator/config.json`, identical for everyone on the branch, and a project that wants to change it should change it once, deliberately, for the whole team. `automation_level` and the thresholds are genuinely per-developer; `output_format` is not.
 
 **If the resolved value is `off` (including by default), the run is finished with parallel mode.** **Steps 0c, 0r, 2p, 2c, 2s, 2L, 3L, 3s, and 3j do not exist for this run**: skip them entirely and follow Steps 1 → 2 → 3 → 3b → 4 → 5 → 7 exactly as written. Do not print a parallelism line in the banner above, and emit nothing else — an `off` run's stdout is byte-identical to a pre-feature run's.
 

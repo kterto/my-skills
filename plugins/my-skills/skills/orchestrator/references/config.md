@@ -20,6 +20,8 @@
 | `baseline_sweep` | string (`auto` \| `always` \| `off`) | `"auto"` | — |
 | `join_digest` | boolean | `true` | — |
 
+`output_format` selects the artifact format every role renders. **It is a team-wide decision, not a per-developer one** — `check-artifact-pairing.cjs` scopes over every changed `.md` on the branch regardless of author, so two developers running different values block each other. Keep it in the tracked `.orchestrator/config.json`; see *Version Control — what `.orchestrator/` tracks*. `html` silently degrades to `md` when the html scaffolds or `render-artifact.cjs` are missing.
+
 `automation_level` governs whether the brainstormer stops to interview the user. `manual` (default) runs the full interview loop and confirmation gate. `autonomous` resolves every open question with the brainstormer's own stated default (recorded under "Decisions resolved by Brainstormer default") and produces a `READY_FOR_PLANNING` spec with no prompts. Only the brainstormer acts on this key; all other roles ignore it.
 
 `clarity_threshold` is the brainstormer's per-spec interview target in `manual` mode: it keeps asking the user questions — one answer at a time, re-rating clarity after each reply — until its self-rated spec clarity reaches this value, with **no cap on the number of questions**. Distinct from `context_threshold`, which gates only the bootstrap PROJECT-CONTEXT interview. Ignored in `autonomous` mode (no interview) and by all non-brainstormer roles.
@@ -293,6 +295,43 @@ A lane coder may never unilaterally change the contract: discovering a frozen in
 `--resume` is a per-invocation intent, not a setting — like `--setup`, it maps to **no config key** and cannot be made sticky in `.orchestrator/config.json`. Its detection, opt-in, and re-entry semantics are normative in `SKILL.md` → Step 0.
 
 `lanes`, `sublanes`, `max_parallel_lanes`, `max_contract_amendments`, `max_eval_cycles`, and `max_family_cycles` have **no CLI arg** that sets their value (`--override-family-budget` bypasses the budget for one run; it does not change the key) — set them in `.orchestrator/config.json` directly.
+
+## Version Control — what `.orchestrator/` tracks
+
+Bootstrap writes `.orchestrator/.gitignore` as an **allow-list**: everything under `.orchestrator/` is
+ignored unless named. Two files are tracked, and only two.
+
+| Path | Tracked | Why |
+|---|---|---|
+| `config.json` | **yes** | Step 0b reads `parallelism`, `max_parallel_lanes`, `max_contract_amendments` from the **merge-base** copy (`$mb:.orchestrator/config.json`). Untracked, those three keys have no merge-base to read and fail closed to defaults permanently — the branch-cannot-widen-its-own-concurrency control stops working. |
+| `PROJECT-CONTEXT.md` | **yes** | Hand-curated shared project knowledge a teammate's fresh clone must already have. Prose, so it three-way merges. |
+| `eval-baselines/**` | **yes** | Durable comparability anchors, not per-run output. |
+| `run-manifest.json`, `verification-ledger.json`, `tmp/` | no | Per-run, branch-scoped, rewritten **whole** on every run. Two branches hold two mutually exclusive snapshots, not two mergeable sets of rows — a silent three-way auto-merge would produce a state no run ever emitted. |
+| `artifact-format.md`, `config.md`, `gate-config.md`, `lane-protocol.md`, `html-templates/`, the four `.cjs`, rendered role files | no | Copies of the installed skill. Lifecycle item 2 re-materializes them the moment one goes missing, so a fresh clone self-heals. Tracking them lands a four-figure diff in a product PR on every skill upgrade. |
+
+**Why an allow-list rather than a list of ignores.** A deny-list has to be extended every time the
+pipeline learns to write a new file, and it is extended *after* the file has already been committed
+somewhere. The allow-list makes the next state file ignored by default, and it fixes Step 0a's
+clean-tree gate, the reviewer's `git add -A` snapshot, `git ls-files --others --exclude-standard` in
+every changed-set command, and any caller that stages with `git add -A`, in one place and with no
+pathspec edits.
+
+**`output_format` is project policy, not a per-developer preference.** It resolves from the working
+tree (it cannot widen a branch's blast radius, so the merge-base anchor does not apply to it), but it
+must not *differ* between developers on one branch: `check-artifact-pairing.cjs` never reads it, and
+scopes over every changed `.md` on the branch regardless of author, so an `html`-mode developer is
+blocked by a teammate's md-only artifacts. Change it once, for the team. `automation_level` and the
+thresholds are genuinely per-developer.
+
+**Adopting this in a project that already commits its state.** `.gitignore` never affects paths git
+already tracks, so bootstrap writing the file changes nothing by itself — it is safe to land alone.
+Stop the churn with, and only with, an explicit untrack (history is left intact):
+
+```bash
+git rm --cached .orchestrator/run-manifest.json .orchestrator/verification-ledger.json
+```
+
+The orchestrator prints this and never runs it: the pipeline does not touch the index.
 
 ## Precedence
 
