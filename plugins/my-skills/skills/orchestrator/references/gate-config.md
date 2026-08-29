@@ -66,7 +66,7 @@ having run. That is a vacuous pass, not a passing gate, and it silently defeats 
 ```bash
 base="${MAESTRO_REVIEW_BASE:-$(git merge-base HEAD origin/main)}"   # the run's Step 0a pre-flight base
 git update-index --refresh >/dev/null 2>&1 || true                  # build tools rewrite mtimes
-{ git diff --name-only --relative "$base" -- . ':(exclude,top)plans/'; git ls-files --others --exclude-standard -- . ':(exclude,top)plans/'; } | sort -u
+{ git diff --name-only --relative "$base" -- . ':(exclude,top)plans/' ':(exclude,top).orchestrator/'; git ls-files --others --exclude-standard -- . ':(exclude,top)plans/' ':(exclude,top).orchestrator/'; } | sort -u
 ```
 
 **`plans/` is excluded from both halves.** The pipeline's own artifacts — plan files, progress logs,
@@ -77,7 +77,7 @@ every role, at a volume that scales with how long the run has been going rather 
 set. `:(exclude,top)` is repo-root-relative, so the exclusion holds whether the gate runs from the
 repo root or from a package directory, where the repo-root `plans/` is out of scope anyway. This is
 the default the reviewer has always carried — its `$MAESTRO_REVIEWER_DIFF_PATHSPEC` defaults to
-`. ':(exclude)plans/'` — and it belongs here too, and in the copies of this command the coder and the
+`. ':(exclude)plans/' ':(exclude).orchestrator/'` — and it belongs here too, and in the copies of this command the coder and the
 tester carry.
 
 **Both halves must be cwd-relative, or the roots match will silently half-fail.** A bare

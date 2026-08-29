@@ -48,7 +48,7 @@ Using the e2e framework from PROJECT-CONTEXT, write e2e tests for the selected f
 ```bash
 base="${MAESTRO_REVIEW_BASE:-$(git merge-base HEAD origin/main)}"
 git update-index --refresh >/dev/null 2>&1 || true
-{ git diff --name-only --relative "$base" -- . ':(exclude,top)plans/'; git ls-files --others --exclude-standard -- . ':(exclude,top)plans/'; } | sort -u
+{ git diff --name-only --relative "$base" -- . ':(exclude,top)plans/' ':(exclude,top).orchestrator/'; git ls-files --others --exclude-standard -- . ':(exclude,top)plans/' ':(exclude,top).orchestrator/'; } | sort -u
 ```
 
 The pipeline never commits, so `base..HEAD` resolves to zero files and would hand you a vacuous pass.
