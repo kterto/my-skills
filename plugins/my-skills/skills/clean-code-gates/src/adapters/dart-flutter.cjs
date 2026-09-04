@@ -845,11 +845,17 @@ ${fileEls}
   }
   process.on('exit', onExit);
 
+  // Keep the tool's own words. When mutation_test aborts it says exactly why on
+  // stdout, and discarding that turns a one-line diagnosis into an
+  // investigation — the gate then reports only that no report appeared, which
+  // is the symptom rather than the cause.
+  const BASELINE_RED = /failed with unmodified code/i;
   const invoke = (extra) => {
     try {
       exec(dart.cmd, extra ? [...args.slice(0, -1), extra, args[args.length - 1]] : args, {
         cwd: io.root,
-        stdio: ['ignore', 'ignore', 'ignore'],
+        stdio: ['ignore', 'pipe', 'pipe'],
+        encoding: 'utf8',
         maxBuffer: 64 * 1024 * 1024,
         // Without this the 43-minute-hang class that motivated this gate is
         // unmitigated. SIGKILL rather than the default SIGTERM because a wedged
@@ -859,12 +865,22 @@ ${fileEls}
       });
       return null;
     } catch (err) {
-      // Two very different failures arrive here. A non-zero exit is
+      // Three different failures arrive here. ETIMEDOUT means we killed it
+      // mid-run, so whatever is on disk covers an arbitrary prefix of the scope
+      // — a partial measurement, never a score. An abort on the unmodified
+      // baseline means the project's own suite is red before any mutation, which
+      // is a precondition failure and not a mutation result. Anything else is
       // mutation_test's own quality gate firing: the report is complete and our
-      // threshold comparison is the one that counts. ETIMEDOUT means we killed
-      // it mid-run, so whatever is on disk covers an arbitrary prefix of the
-      // scope — a partial measurement, never a score.
-      return err && err.code === 'ETIMEDOUT' ? 'run-timeout' : null;
+      // threshold comparison is the one that counts.
+      if (err && err.code === 'ETIMEDOUT') return { reason: 'run-timeout' };
+      const out = `${(err && err.stdout) || ''}${(err && err.stderr) || ''}`.trim();
+      if (BASELINE_RED.test(out)) {
+        return {
+          reason: 'baseline-suite-red',
+          detail: out.split('\n').filter(Boolean).slice(-2).join(' ').slice(0, 300),
+        };
+      }
+      return null;
     }
   };
 
@@ -877,7 +893,7 @@ ${fileEls}
     // on a measured sample the mean was 0.85 s while two mutants cost 30.8 s
     // each, so only the cap is an estimate the budget can honour.
     const dryFail = invoke('-d');
-    if (dryFail) return { unmeasured: true, reason: dryFail, budget };
+    if (dryFail) return { unmeasured: true, ...dryFail, budget };
     const dryXml = readReport();
     const dry = parseMutationTestJunit(dryXml);
     if (!dry) return { unmeasured: true, reason: 'preflight-failed', budget };
@@ -902,7 +918,7 @@ ${fileEls}
 
     dropReport();
     const runFail = invoke(null);
-    if (runFail) return { unmeasured: true, reason: runFail, budget };
+    if (runFail) return { unmeasured: true, ...runFail, budget };
     const xml = readReport();
     if (xml == null) return { unmeasured: true, reason: 'no-report', budget };
     return { xml, budget };
@@ -1028,9 +1044,16 @@ const G6_RULES = {
  */
 function g6Unmeasured(run, { targets, threshold, command, tool }) {
   const b = run.budget || {};
-  const detail = run.worstCaseSeconds != null
-    ? `${run.chargeable ?? '?'} chargeable mutants x ${b.perMutantSeconds ?? '?'}s cap = ${run.worstCaseSeconds}s exceeds the ${b.totalSeconds ?? '?'}s budget`
-    : `the run did not produce a scorable report (${run.reason})`;
+  // Prefer the tool's own words when it gave any: "no report appeared" is the
+  // symptom, and the cause is usually one line the tool already printed.
+  let detail;
+  if (run.worstCaseSeconds != null) {
+    detail = `${run.chargeable ?? '?'} chargeable mutants x ${b.perMutantSeconds ?? '?'}s cap = ${run.worstCaseSeconds}s exceeds the ${b.totalSeconds ?? '?'}s budget`;
+  } else if (run.detail) {
+    detail = `${run.reason} — ${run.detail}`;
+  } else {
+    detail = `the run did not produce a scorable report (${run.reason})`;
+  }
   return gateResult('G6', 'error', {
     command,
     tool,
@@ -1050,7 +1073,9 @@ function g6Unmeasured(run, { targets, threshold, command, tool }) {
       line: 1,
       rule: 'mutation/unmeasured',
       message: `mutation testing did not run: ${detail}`,
-      fixHint: 'Narrow the G6 scope, raise gates.G6.budget, or run G6 on a schedule rather than per change',
+      fixHint: run.reason === 'baseline-suite-red'
+        ? 'The project test suite fails before any mutation is applied. Make it green, then re-run G6'
+        : 'Narrow the G6 scope, raise gates.G6.budget, or run G6 on a schedule rather than per change',
     }],
   });
 }

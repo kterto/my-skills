@@ -312,6 +312,22 @@ test('a run we killed on the clock is not scored from its partial report', () =>
   assert.strictEqual(r.measurement.reason, 'run-timeout');
 });
 
+test('the reason a run could not be measured reaches the report', () => {
+  const r = runG6(['lib/calc.dart'], dartCfg, io, {
+    resolveFlutter: flutterOk,
+    mutationTestAvailable: () => true,
+    runMutationTest: () => ({
+      unmeasured: true,
+      reason: 'baseline-suite-red',
+      detail: 'Error: Running the test commands failed with unmodified code! Aborting.',
+      budget: { totalSeconds: 1800 },
+    }),
+  });
+  assert.strictEqual(r.measurement.reason, 'baseline-suite-red');
+  const finding = r.findings.find((f) => f.rule === 'mutation/unmeasured');
+  assert.match(finding.message, /unmodified code/);
+});
+
 test('runMutationTest bounds the child process and asks for a dry run first', () => {
   const calls = [];
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccg-g6-test-'));
@@ -370,6 +386,47 @@ test('a scoring run that writes no report is never scored from the preflight rep
     );
     assert.strictEqual(call, 2, 'the scoring run should have been attempted');
     assert.ok(run.unmeasured, `expected an unmeasured run, got ${JSON.stringify(run)}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a red baseline suite is named as such, not reported as a missing report', () => {
+  // mutation_test runs the test command on UNMODIFIED code first and aborts if
+  // it fails, writing no report. That is a precondition failure of the project's
+  // own suite, not a mutation result — and the tool says so on stderr, so
+  // throwing that away turns a one-line diagnosis into an investigation.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccg-g6-test-'));
+  fs.writeFileSync(path.join(dir, 'a.dart'), 'int f(int a, int b) => a + b;\n');
+  const dryReport = `<?xml version="1.0"?>
+<testsuites>
+  <testsuite id="0" name="x" package="x" tests="1" failures="1" errors="0" time="0.0">
+    <testcase name="Line1_x_0" classname="a.dart" time="0.0">
+      <failure type="undetected" message="undetected"/>
+    </testcase>
+  </testsuite>
+</testsuites>`;
+  try {
+    let onDisk = null;
+    let call = 0;
+    const run = runMutationTest(
+      { cmd: 'flutter', pre: [] }, dartCfg, { root: dir }, ['a.dart'], {},
+      {
+        execFileSync: () => {
+          call += 1;
+          if (call === 1) { onDisk = dryReport; return ''; }
+          const err = new Error('Command failed');
+          err.status = 1;
+          err.stdout = 'Error while processing:\n  Error: Running the test commands failed with unmodified code! Aborting.\n';
+          throw err;
+        },
+        readReport: () => onDisk,
+        dropReport: () => { onDisk = null; },
+      },
+    );
+    assert.ok(run.unmeasured);
+    assert.strictEqual(run.reason, 'baseline-suite-red');
+    assert.match(run.detail, /unmodified code/);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
