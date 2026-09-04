@@ -86,6 +86,22 @@ function nodeTsTools(root) {
   return tools;
 }
 
+/**
+ * True when a package is activated with `dart pub global`. Checked by listing
+ * the pub cache's bin directory rather than shelling out to `dart`, so the
+ * scaffold stays fast and works when no SDK is on PATH.
+ */
+function dartGlobalPkg(name) {
+  const home = process.env.HOME || process.env.USERPROFILE || '';
+  const cache = process.env.PUB_CACHE || (home ? path.join(home, '.pub-cache') : null);
+  if (!cache) return false;
+  try {
+    return fs.existsSync(path.join(cache, 'bin', name));
+  } catch {
+    return false;
+  }
+}
+
 function dartFlutterTools(root) {
   return [
     {
@@ -102,9 +118,16 @@ function dartFlutterTools(root) {
     },
     {
       gates: 'G6',
-      label: 'dart_mutant (external CLI)',
+      label: 'mutation_test (default)',
+      present: dartGlobalPkg('mutation_test'),
+      install: 'dart pub global activate mutation_test',
+    },
+    {
+      gates: 'G6',
+      label: 'dart_mutant (only with gates.G6.tool: "dart_mutant")',
       present: onPath('dart_mutant'),
       install: 'brew install dart_mutant',
+      optional: true,
     },
   ];
 }

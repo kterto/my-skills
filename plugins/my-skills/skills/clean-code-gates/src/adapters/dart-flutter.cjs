@@ -22,14 +22,18 @@ const { toPosix } = require('../scope.cjs');
  *    Dart naming lints. Uses the SDK analyzer (via FVM) — no extra install —
  *    so enablement follows the project's lint set (flutter_lints provides the
  *    naming lints by default).
- *  - G6 (mutation): runs the external `dart_mutant` binary over the stack root
- *    glob with the project's `flutter test` as the kill command and the gate's
- *    mutationScore as the `--threshold`. Reads the pass/fail verdict from the
- *    Stryker JSON report's top-level `mutationScore` and lists surviving mutants
- *    (`status` ∈ {Survived, NoCoverage}) as findings. dart_mutant sandboxes its
- *    own mutations (no in-place edits, no worktree, no `pub get`); the report is
- *    written to a temp dir and removed after parsing. Needs `dart_mutant` on
- *    PATH — it is an external CLI, not a pub dependency.
+ *  - G6 (mutation): runs the `mutation_test` pub package by default, over
+ *    exactly the in-scope files, via a generated config that also carries the
+ *    project's `flutter test` as the kill command. The score comes from its
+ *    junit report — `<testsuite tests= failures=>` sums to total/undetected and
+ *    each failing `<testcase>` names its file and line — because junit is the
+ *    only mutation_test format carrying both halves. `coverage/lcov.info` is
+ *    passed with `-c` when present, so only covered statements are mutated.
+ *    `gates.G6.tool: "dart_mutant"` selects the external CLI instead, scored
+ *    from a Stryker JSON report over its whole --glob. Either way the threshold
+ *    comparison is ours against .cleancode-gates.json; the tool's own quality
+ *    gate and exit code are never read. Reports go to a temp dir that is removed
+ *    after parsing, so no report directory, worktree or `pub get` litter is left.
  *  - G7 (dependency-structure): built-in, zero-tool circular-import detector.
  *    Parses Dart imports across the source roots (resolving `package:<self>/`
  *    and relative imports to files) and reports any import cycle — the Dart
@@ -41,7 +45,7 @@ const GATE_META = {
   G1: { name: 'coverage', tool: 'flutter' },
   G2: { name: 'cyclomatic-complexity', tool: 'dart_code_linter' },
   G4: { name: 'naming', tool: 'dart analyze' },
-  G6: { name: 'mutation', tool: 'dart_mutant' },
+  G6: { name: 'mutation', tool: 'mutation_test' },
   G7: { name: 'dependency-structure', tool: 'builtin' },
 };
 
@@ -93,6 +97,21 @@ function gateResult(gate, status, extra = {}) {
   };
 }
 
+/**
+ * Install advice per tool. G6's two tools install in different ways — a pub
+ * global package versus a standalone CLI — so the generic "install Flutter"
+ * line is wrong for both and would send a reader down the wrong path.
+ */
+function g6InstallHint(gate, tool) {
+  if (tool === 'mutation_test') {
+    return `dart-flutter ${gate} needs the mutation_test package — run \`dart pub global activate mutation_test\``;
+  }
+  if (tool === 'dart_mutant') {
+    return `dart-flutter ${gate} needs the dart_mutant CLI on PATH — e.g. \`brew install dart_mutant\``;
+  }
+  return `dart-flutter ${gate} needs ${tool} on PATH — install Flutter (or FVM) so \`${tool}\` resolves`;
+}
+
 function missingTool(gate, stackCfg) {
   const meta = GATE_META[gate] || { name: gate, tool: 'unknown' };
   const tool = (stackCfg.gates[gate] || {}).tool || meta.tool;
@@ -103,7 +122,7 @@ function missingTool(gate, stackCfg) {
     status: 'missing_tool',
     tool,
     findings: [],
-    installHint: `dart-flutter ${gate} needs ${tool} on PATH — install Flutter (or FVM) so \`${tool}\` resolves`,
+    installHint: g6InstallHint(gate, tool),
   };
 }
 
@@ -476,7 +495,191 @@ function runG4(files, stackCfg, io) {
   return gateResult('G4', findings.length ? 'fail' : 'pass', { command, findings });
 }
 
-// ---- G6: mutation (dart_mutant) ----------------------------------------
+// ---- G6: mutation (mutation_test by default; dart_mutant opt-in) --------
+
+/**
+ * Parse mutation_test's junit report into { score, total, byFile } — the same
+ * shape parseDartMutantReport returns, so g6Verdict stays tool-agnostic.
+ *
+ * junit is the only mutation_test format that carries BOTH halves of the score:
+ * `<testsuite tests= failures=>` sums to total/undetected, and each failing
+ * `<testcase>` names its file in `classname` with the line in the failure body
+ * ("File: x Line: 49") and in the case name ("Line49_builtin.op.geq_0"). The
+ * plain `xml` format lists only undetected mutations with no total, so a score
+ * cannot be derived from it.
+ *
+ * mutation_test has its own `<threshold failure=...>` and sets its exit code
+ * from it. We deliberately do not emit that element and never read that exit
+ * code: the threshold lives in .cleancode-gates.json and the comparison happens
+ * in g6Verdict, so the config stays the single source of every number.
+ */
+function parseMutationTestJunit(xml) {
+  if (typeof xml !== 'string' || !/<testsuite\b/.test(xml)) return null;
+
+  let total = 0;
+  let undetected = 0;
+  const suiteRe = /<testsuite\b[^>]*>/g;
+  let m;
+  while ((m = suiteRe.exec(xml))) {
+    const tests = /\btests="(\d+)"/.exec(m[0]);
+    const failures = /\bfailures="(\d+)"/.exec(m[0]);
+    if (tests) total += Number(tests[1]);
+    if (failures) undetected += Number(failures[1]);
+  }
+  // Suites present but nothing mutated: mirror dart_mutant's 0-mutant report so
+  // g6Verdict reaches its `total === 0 -> pass` arm instead of erroring.
+  if (total === 0) return { score: 0, total: 0, byFile: {} };
+
+  const byFile = {};
+  const caseRe = /<testcase\b([^>]*)>([\s\S]*?)<\/testcase>/g;
+  while ((m = caseRe.exec(xml))) {
+    const [, attrs, body] = m;
+    if (!/<failure\b/.test(body)) continue;
+    const cls = /\bclassname="([^"]*)"/.exec(attrs);
+    if (!cls) continue;
+    let line = null;
+    const fromBody = /\bLine:\s*(\d+)/.exec(body);
+    if (fromBody) line = Number(fromBody[1]);
+    if (!line) {
+      const name = /\bname="([^"]*)"/.exec(attrs);
+      const fromName = name && /^Line(\d+)_/.exec(name[1]);
+      if (fromName) line = Number(fromName[1]);
+    }
+    if (!line) continue;
+    (byFile[cls[1]] = byFile[cls[1]] || []).push(line);
+  }
+
+  return { score: ((total - undetected) / total) * 100, total, byFile };
+}
+
+/** `dart` the same way resolveFlutter resolved `flutter` (FVM-aware). */
+function dartInvocation(flutter) {
+  return flutter.cmd === 'fvm' ? { cmd: 'fvm', pre: ['dart'] } : { cmd: 'dart', pre: [] };
+}
+
+/** True when `mutation_test` is activated for this SDK. */
+function mutationTestAvailable(flutter) {
+  const dart = dartInvocation(flutter);
+  try {
+    execFileSync(dart.cmd, [...dart.pre, 'pub', 'global', 'run', 'mutation_test', '--version'], {
+      stdio: 'ignore',
+      timeout: 120000,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function xmlEscape(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/**
+ * Invoke mutation_test over exactly the in-scope targets and return its junit
+ * report as a string, or null when none was written.
+ *
+ * The target list is written into a generated config because a bare source-file
+ * argument carries no test command. Listing files explicitly also makes the
+ * score scope-exact, which dart_mutant cannot be (it scores whatever its single
+ * --glob mutated). Coverage is passed when lcov exists: mutation_test only runs
+ * mutants on covered statements, which is the difference between a run that
+ * finishes and one that does not. Everything is written to a temp dir that is
+ * removed afterwards, so no mutation-test-report/ litter reaches the tree.
+ */
+function runMutationTest(flutter, stackCfg, io, targets) {
+  const dart = dartInvocation(flutter);
+  const testCommand = [flutter.cmd, ...flutter.pre, 'test'].join(' ');
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccg-g6-'));
+  const cfgPath = path.join(outDir, 'targets.xml');
+
+  const fileEls = targets.map((rel) => `    <file>${xmlEscape(rel)}</file>`).join('\n');
+  fs.writeFileSync(
+    cfgPath,
+    `<?xml version="1.0" encoding="UTF-8"?>
+<mutations version="1.2">
+  <files>
+${fileEls}
+  </files>
+  <commands>
+    <command group="test" expected-return="0" working-directory="." timeout="1800">${xmlEscape(testCommand)}</command>
+  </commands>
+</mutations>
+`,
+    'utf8',
+  );
+
+  const args = [...dart.pre, 'pub', 'global', 'run', 'mutation_test', '-f', 'junit', '-o', outDir, '-q'];
+  const lcov = path.join(io.root, 'coverage', 'lcov.info');
+  if (fs.existsSync(lcov)) args.push('-c', lcov);
+  args.push(cfgPath);
+
+  // mutation_test edits the target files IN PLACE and restores them when it
+  // finishes. dart_mutant sandboxes instead, so this is the one tool that can
+  // leave a live mutation in the tree — an interrupted or crashed run corrupts
+  // source, and a project whose files are untracked has nothing to restore
+  // from. Snapshot the bytes ourselves and put back anything that differs.
+  const snapDir = path.join(outDir, 'snapshot');
+  const snapshots = [];
+  try {
+    fs.mkdirSync(snapDir, { recursive: true });
+    targets.forEach((rel, i) => {
+      const abs = path.join(io.root, rel);
+      if (!fs.existsSync(abs)) return;
+      const keep = path.join(snapDir, String(i));
+      fs.copyFileSync(abs, keep);
+      snapshots.push({ abs, keep });
+    });
+  } catch {
+    // A snapshot we could not take is one we must not pretend to have.
+    snapshots.length = 0;
+  }
+
+  const restore = () => {
+    for (const { abs, keep } of snapshots) {
+      try {
+        if (!fs.existsSync(keep)) continue;
+        const now = fs.readFileSync(abs);
+        const then = fs.readFileSync(keep);
+        if (!now.equals(then)) fs.copyFileSync(keep, abs);
+      } catch {
+        /* a file we cannot compare is one we cannot safely rewrite */
+      }
+    }
+  };
+
+  let xml = null;
+  try {
+    try {
+      execFileSync(dart.cmd, args, {
+        cwd: io.root,
+        stdio: ['ignore', 'ignore', 'ignore'],
+        maxBuffer: 64 * 1024 * 1024,
+      });
+    } catch {
+      // Non-zero exit is mutation_test's own quality gate firing; the report is
+      // still written and our threshold comparison is the one that counts.
+    }
+    const reportPath = path.join(outDir, 'mutation-test.junit.xml');
+    if (fs.existsSync(reportPath)) xml = fs.readFileSync(reportPath, 'utf8');
+  } finally {
+    // Runs on the success path too: a clean mutation_test restores its own
+    // edits, so this is normally a no-op comparison, and the one time it is not
+    // is the time it matters. It cannot help against SIGKILL, which kills this
+    // process as well — that residual is documented, not defended.
+    restore();
+    try {
+      fs.rmSync(outDir, { recursive: true, force: true });
+    } catch {
+      /* ignore */
+    }
+  }
+  return xml;
+}
 
 /** Parse dart_mutant's Stryker JSON into { score, total, byFile: { name: [lines] } }. */
 function parseDartMutantReport(json) {
@@ -541,11 +744,16 @@ function g6Glob(stackCfg) {
  * scoped, but the pass/fail score is root-wide — it is never presented as a
  * per-file score.
  */
-function g6Verdict(parsed, { targets, threshold, command, stackCfg, io }) {
+function g6Verdict(parsed, { targets, threshold, command, stackCfg, io, tool }) {
   const thresholds = { mutationScore: threshold };
-  if (!targets.length) return gateResult('G6', 'pass', { command, thresholds });
-  if (!parsed || parsed.score == null) return gateResult('G6', 'error', { command, thresholds });
-  if (parsed.total === 0) return gateResult('G6', 'pass', { command, thresholds });
+  // gateResult defaults `tool` to GATE_META's, which names the stack default.
+  // G6 is the one gate a project can retarget, so the report must name the tool
+  // that actually ran — otherwise a dart_mutant-pinned project reads as if
+  // mutation_test produced the verdict.
+  const ran = tool || (stackCfg.gates.G6 || {}).tool || GATE_META.G6.tool;
+  if (!targets.length) return gateResult('G6', 'pass', { command, thresholds, tool: ran });
+  if (!parsed || parsed.score == null) return gateResult('G6', 'error', { command, thresholds, tool: ran });
+  if (parsed.total === 0) return gateResult('G6', 'pass', { command, thresholds, tool: ran });
 
   const findings = [];
   const failed = parsed.score < threshold;
@@ -577,7 +785,7 @@ function g6Verdict(parsed, { targets, threshold, command, stackCfg, io }) {
     }
   }
 
-  return gateResult('G6', failed ? 'fail' : 'pass', { command, thresholds, findings });
+  return gateResult('G6', failed ? 'fail' : 'pass', { command, thresholds, findings, tool: ran });
 }
 
 /**
@@ -624,25 +832,42 @@ function runMutant(flutter, stackCfg, io, threshold) {
   return json;
 }
 
+/**
+ * G6 runs mutation_test by default and dart_mutant only when the config asks
+ * for it (`gates.G6.tool: "dart_mutant"`). Both produce the same verdict shape,
+ * so the choice changes only which binary runs and which report is parsed.
+ */
 function runG6(files, stackCfg, io, deps = {}) {
   const resolveF = deps.resolveFlutter || resolveFlutter;
   const hasCmd = deps.commandExists || commandExists;
-  const runner = deps.runMutant || runMutant;
+  const hasMutationTest = deps.mutationTestAvailable || mutationTestAvailable;
+  const runMutantFn = deps.runMutant || runMutant;
+  const runMutationTestFn = deps.runMutationTest || runMutationTest;
 
   const flutter = resolveF(io.root);
-  if (!flutter || !hasCmd('dart_mutant')) return missingTool('G6', stackCfg);
+  if (!flutter) return missingTool('G6', stackCfg);
 
   const threshold = ((stackCfg.gates.G6 || {}).thresholds || {}).mutationScore ?? 70;
-  const command = 'dart_mutant --json --quiet --ai none';
   const targets = files.filter(
     (rel) => DART_FILE_RE.test(rel) && !isExempt(rel, stackCfg, 'G6'),
   );
+  const tool = (stackCfg.gates.G6 || {}).tool || GATE_META.G6.tool;
+
+  if (tool === 'dart_mutant') {
+    if (!hasCmd('dart_mutant')) return missingTool('G6', stackCfg);
+    const command = 'dart_mutant --json --quiet --ai none';
+    const opts = { targets, threshold, command, stackCfg, io };
+    if (!targets.length) return g6Verdict(null, opts);
+    const json = runMutantFn(flutter, stackCfg, io, threshold);
+    return g6Verdict(json == null ? null : parseDartMutantReport(json), opts);
+  }
+
+  if (!hasMutationTest(flutter)) return missingTool('G6', stackCfg);
+  const command = 'dart pub global run mutation_test -f junit';
   const opts = { targets, threshold, command, stackCfg, io };
   if (!targets.length) return g6Verdict(null, opts);
-
-  const json = runner(flutter, stackCfg, io, threshold);
-  const parsed = json == null ? null : parseDartMutantReport(json);
-  return g6Verdict(parsed, opts);
+  const xml = runMutationTestFn(flutter, stackCfg, io, targets);
+  return g6Verdict(xml == null ? null : parseMutationTestJunit(xml), opts);
 }
 
 // ---- G7: dependency-structure (built-in circular-import detector) -------
@@ -796,6 +1021,9 @@ module.exports = {
     parseDartMutantReport,
     g6Glob,
     g6Verdict,
+    parseMutationTestJunit,
+    runMutationTest,
+    mutationTestAvailable,
     runG6,
     resolveImport,
     buildImportGraph,

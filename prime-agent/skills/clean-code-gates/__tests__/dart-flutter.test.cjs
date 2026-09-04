@@ -3,7 +3,8 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
 const adapter = require('../src/adapters/dart-flutter.cjs');
-const { parseLcov, fileMetrics, coverageFindings, parseDclJson, g2Findings, parseAnalyzeLine, parseDartMutantReport, g6Glob, g6Verdict, runG6, resolveImport, buildImportGraph, findCycles } = adapter._internals;
+const { parseLcov, fileMetrics, coverageFindings, parseDclJson, g2Findings, parseAnalyzeLine, parseDartMutantReport,
+  parseMutationTestJunit, g6Glob, g6Verdict, runG6, resolveImport, buildImportGraph, findCycles } = adapter._internals;
 
 const fixture = (name) => fs.readFileSync(path.join(__dirname, 'fixtures', name), 'utf8');
 
@@ -152,6 +153,22 @@ const g6Io = { root: '/abs/root' };
 const g6Command = 'dart_mutant --json --quiet --ai none';
 const g6Opts = (targets) => ({ targets, threshold: 70, command: g6Command, stackCfg: dartCfg, io: g6Io });
 
+// G6 defaults to mutation_test; the dart_mutant path is opt-in, so the tests
+// that drive it must pin the tool the same way a project's config would.
+const dartCfgMutant = {
+  ...dartCfg,
+  gates: { ...dartCfg.gates, G6: { ...dartCfg.gates.G6, tool: 'dart_mutant' } },
+};
+const junitFixture = (total, failures, cases) => `<?xml version="1.0"?>
+<testsuites>
+  <testsuite id="0" name="builtin.op" package="builtin.op" tests="${total}" failures="${failures}" errors="0" time="1.0">
+${cases}
+  </testsuite>
+</testsuites>`;
+const failingCase = (file, line) => `    <testcase name="Line${line}_builtin.op_0" classname="${file}" time="1.0">
+      <failure type="undetected" message="All tests passed despite changing the code!">File: ${file} Line: ${line} Original line: a &gt;= b Mutation: a == b</failure>
+    </testcase>`;
+
 test('g6Verdict (a) passes with no findings when score ≥ threshold', () => {
   const parsed = parseDartMutantReport(fixture('g6-dart-mutant-pass.json'));
   const r = g6Verdict(parsed, g6Opts(['lib/calc.dart']));
@@ -219,13 +236,13 @@ test('g6Verdict passes without error when there are no in-scope targets', () => 
 });
 
 test('runG6 returns missing_tool when Flutter or dart_mutant is absent', () => {
-  const noFlutter = runG6(['lib/a.dart'], dartCfg, g6Io, {
+  const noFlutter = runG6(['lib/a.dart'], dartCfgMutant, g6Io, {
     resolveFlutter: () => null,
     commandExists: () => true,
     runMutant: () => { throw new Error('must not run'); },
   });
   assert.strictEqual(noFlutter.status, 'missing_tool');
-  const noBinary = runG6(['lib/a.dart'], dartCfg, g6Io, {
+  const noBinary = runG6(['lib/a.dart'], dartCfgMutant, g6Io, {
     resolveFlutter: () => ({ cmd: 'flutter', pre: [] }),
     commandExists: () => false,
     runMutant: () => { throw new Error('must not run'); },
@@ -235,7 +252,7 @@ test('runG6 returns missing_tool when Flutter or dart_mutant is absent', () => {
 
 test('runG6 passes without invoking dart_mutant when no targets are in scope', () => {
   let invoked = false;
-  const r = runG6(['lib/a_test.dart', 'README.md'], dartCfg, g6Io, {
+  const r = runG6(['lib/a_test.dart', 'README.md'], dartCfgMutant, g6Io, {
     resolveFlutter: () => ({ cmd: 'flutter', pre: [] }),
     commandExists: () => true,
     runMutant: () => { invoked = true; return null; },
@@ -245,7 +262,7 @@ test('runG6 passes without invoking dart_mutant when no targets are in scope', (
 });
 
 test('runG6 wires the parsed report through the verdict matrix (fail case)', () => {
-  const r = runG6(['lib/calc.dart', 'lib/util.dart'], dartCfg, g6Io, {
+  const r = runG6(['lib/calc.dart', 'lib/util.dart'], dartCfgMutant, g6Io, {
     resolveFlutter: () => ({ cmd: 'flutter', pre: [] }),
     commandExists: () => true,
     runMutant: () => fixture('g6-dart-mutant-fail.json'),
@@ -256,10 +273,90 @@ test('runG6 wires the parsed report through the verdict matrix (fail case)', () 
 });
 
 test('runG6 errors when the report is missing (null from the runner)', () => {
-  const r = runG6(['lib/calc.dart'], dartCfg, g6Io, {
+  const r = runG6(['lib/calc.dart'], dartCfgMutant, g6Io, {
     resolveFlutter: () => ({ cmd: 'flutter', pre: [] }),
     commandExists: () => true,
     runMutant: () => null,
+  });
+  assert.strictEqual(r.status, 'error');
+});
+
+// ---- G6 via mutation_test (the dart-flutter default) --------------------
+
+test('parseMutationTestJunit derives score, total and survivor lines from junit', () => {
+  const xml = junitFixture(24, 1, failingCase('lib/calc.dart', 49));
+  const parsed = parseMutationTestJunit(xml);
+  assert.strictEqual(parsed.total, 24);
+  assert.ok(Math.abs(parsed.score - 95.8333) < 0.01);
+  assert.deepStrictEqual(parsed.byFile, { 'lib/calc.dart': [49] });
+});
+
+test('parseMutationTestJunit falls back to the case name when the body has no Line:', () => {
+  const xml = `<?xml version="1.0"?>
+<testsuites>
+  <testsuite tests="2" failures="1" errors="0">
+    <testcase name="Line7_builtin.op_0" classname="lib/calc.dart">
+      <failure type="undetected" message="undetected"/>
+    </testcase>
+  </testsuite>
+</testsuites>`;
+  assert.deepStrictEqual(parseMutationTestJunit(xml).byFile, { 'lib/calc.dart': [7] });
+});
+
+test('parseMutationTestJunit returns null on a non-junit payload', () => {
+  assert.strictEqual(parseMutationTestJunit('not xml'), null);
+  assert.strictEqual(parseMutationTestJunit(''), null);
+  assert.strictEqual(parseMutationTestJunit(null), null);
+});
+
+test('parseMutationTestJunit reports zero mutants as a 0-total pass, not an error', () => {
+  const parsed = parseMutationTestJunit(junitFixture(0, 0, ''));
+  assert.strictEqual(parsed.total, 0);
+  assert.strictEqual(parsed.score, 0);
+  const r = g6Verdict(parsed, g6Opts(['lib/calc.dart']));
+  assert.strictEqual(r.status, 'pass');
+});
+
+test('runG6 uses mutation_test by default and never touches dart_mutant', () => {
+  const r = runG6(['lib/calc.dart'], dartCfg, g6Io, {
+    resolveFlutter: () => ({ cmd: 'flutter', pre: [] }),
+    commandExists: () => { throw new Error('dart_mutant must not be probed'); },
+    mutationTestAvailable: () => true,
+    runMutant: () => { throw new Error('dart_mutant must not run'); },
+    runMutationTest: () => junitFixture(10, 5, failingCase('lib/calc.dart', 12)),
+  });
+  assert.strictEqual(r.tool, 'mutation_test');
+  assert.strictEqual(r.status, 'fail');
+  assert.ok(r.findings.some((f) => f.id === 'G6:score'));
+  assert.ok(r.findings.some((f) => f.rule === 'mutation/survived' && f.line === 12));
+});
+
+test('runG6 reports missing_tool when mutation_test is not activated', () => {
+  const r = runG6(['lib/calc.dart'], dartCfg, g6Io, {
+    resolveFlutter: () => ({ cmd: 'flutter', pre: [] }),
+    mutationTestAvailable: () => false,
+    runMutationTest: () => { throw new Error('must not run'); },
+  });
+  assert.strictEqual(r.status, 'missing_tool');
+  assert.match(r.installHint, /dart pub global activate mutation_test/);
+});
+
+test('runG6 passes without invoking mutation_test when no targets are in scope', () => {
+  let invoked = false;
+  const r = runG6(['lib/a_test.dart', 'README.md'], dartCfg, g6Io, {
+    resolveFlutter: () => ({ cmd: 'flutter', pre: [] }),
+    mutationTestAvailable: () => true,
+    runMutationTest: () => { invoked = true; return null; },
+  });
+  assert.strictEqual(r.status, 'pass');
+  assert.strictEqual(invoked, false);
+});
+
+test('runG6 errors when mutation_test writes no report', () => {
+  const r = runG6(['lib/calc.dart'], dartCfg, g6Io, {
+    resolveFlutter: () => ({ cmd: 'flutter', pre: [] }),
+    mutationTestAvailable: () => true,
+    runMutationTest: () => null,
   });
   assert.strictEqual(r.status, 'error');
 });

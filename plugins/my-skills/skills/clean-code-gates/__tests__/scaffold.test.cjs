@@ -51,11 +51,15 @@ test('node-ts: stryker + dependency-cruiser entries carry install commands', () 
   assert.match(find(advice, 'dependency-cruiser').install, /dependency-cruiser/);
 });
 
-test('dart-flutter: dart_code_linter + dart_mutant advice with install commands', () => {
+test('dart-flutter: dart_code_linter + both G6 tools advertised with install commands', () => {
   const d = tmp();
   const advice = scaffoldAdvice(d, ['dart-flutter']);
   assert.match(find(advice, 'dart_code_linter').install, /dart pub add -d dart_code_linter/);
-  assert.match(find(advice, 'dart_mutant (external CLI)').install, /brew install dart_mutant/);
+  assert.match(find(advice, 'mutation_test (default)').install, /dart pub global activate mutation_test/);
+  assert.match(
+    find(advice, 'dart_mutant (only with gates.G6.tool: "dart_mutant")').install,
+    /brew install dart_mutant/,
+  );
 });
 
 test('formatAdvice: advice-only banner + no supported stack message', () => {
