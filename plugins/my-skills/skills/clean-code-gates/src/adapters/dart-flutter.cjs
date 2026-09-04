@@ -104,7 +104,7 @@ function gateResult(gate, status, extra = {}) {
  */
 function g6InstallHint(gate, tool) {
   if (tool === 'mutation_test') {
-    return `dart-flutter ${gate} needs the mutation_test package — run \`dart pub global activate mutation_test\``;
+    return `dart-flutter ${gate} needs the mutation_test package — run \`dart pub global activate mutation_test\` (or install the dart_mutant CLI, which ${gate} falls back to)`;
   }
   if (tool === 'dart_mutant') {
     return `dart-flutter ${gate} needs the dart_mutant CLI on PATH — e.g. \`brew install dart_mutant\``;
@@ -498,58 +498,191 @@ function runG4(files, stackCfg, io) {
 // ---- G6: mutation (mutation_test by default; dart_mutant opt-in) --------
 
 /**
- * Parse mutation_test's junit report into { score, total, byFile } — the same
- * shape parseDartMutantReport returns, so g6Verdict stays tool-agnostic.
+ * mutation_test's junit report, walked as elements rather than paired by
+ * pattern, into { score, measuredScore, total, measured, counts, byFile,
+ * byStatus } — the same shape parseDartMutantReport returns, so g6Verdict
+ * stays tool-agnostic.
  *
- * junit is the only mutation_test format that carries BOTH halves of the score:
- * `<testsuite tests= failures=>` sums to total/undetected, and each failing
- * `<testcase>` names its file in `classname` with the line in the failure body
- * ("File: x Line: 49") and in the case name ("Line49_builtin.op.geq_0"). The
- * plain `xml` format lists only undetected mutations with no total, so a score
- * cannot be derived from it.
+ * Reading `xunit_report.dart` settles what the document means. Per suite,
+ * `tests=` is mutationCount, `failures=` is undetectedCount and `errors=` is
+ * blockedCount — and blockedCount is TIMEOUT plus NOT-COVERED summed together,
+ * with no attribute anywhere separating them. So the suite attributes cannot
+ * produce a score on their own, and the earlier `(tests - failures) / tests`
+ * counted every mutant that never ran as a mutant the tests killed.
+ *
+ * The per-`<testcase>` elements carry the four outcomes individually, and they
+ * are what we count. A DETECTED mutant is written with no child element, i.e.
+ * self-closing; UNDETECTED carries `<failure type="undetected">`; TIMEOUT and
+ * NOT-COVERED carry `<error>` with distinguishing `type` text. Detection is
+ * therefore inferred from the ABSENCE of a child, which is only sound if the
+ * element boundary is real — a paired-tag regex reads the next survivor's
+ * failure body as the killed mutant's own and attributes it to the wrong file.
+ * That is why this walks tags instead. Suite attributes are still read, as a
+ * consistency check against the elements counted.
  *
  * mutation_test has its own `<threshold failure=...>` and sets its exit code
  * from it. We deliberately do not emit that element and never read that exit
  * code: the threshold lives in .cleancode-gates.json and the comparison happens
  * in g6Verdict, so the config stays the single source of every number.
  */
-function parseMutationTestJunit(xml) {
-  if (typeof xml !== 'string' || !/<testsuite\b/.test(xml)) return null;
 
-  let total = 0;
-  let undetected = 0;
-  const suiteRe = /<testsuite\b[^>]*>/g;
-  let m;
-  while ((m = suiteRe.exec(xml))) {
-    const tests = /\btests="(\d+)"/.exec(m[0]);
-    const failures = /\bfailures="(\d+)"/.exec(m[0]);
-    if (tests) total += Number(tests[1]);
-    if (failures) undetected += Number(failures[1]);
-  }
-  // Suites present but nothing mutated: mirror dart_mutant's 0-mutant report so
-  // g6Verdict reaches its `total === 0 -> pass` arm instead of erroring.
-  if (total === 0) return { score: 0, total: 0, byFile: {} };
-
-  const byFile = {};
-  const caseRe = /<testcase\b([^>]*)>([\s\S]*?)<\/testcase>/g;
-  while ((m = caseRe.exec(xml))) {
-    const [, attrs, body] = m;
-    if (!/<failure\b/.test(body)) continue;
-    const cls = /\bclassname="([^"]*)"/.exec(attrs);
-    if (!cls) continue;
-    let line = null;
-    const fromBody = /\bLine:\s*(\d+)/.exec(body);
-    if (fromBody) line = Number(fromBody[1]);
-    if (!line) {
-      const name = /\bname="([^"]*)"/.exec(attrs);
-      const fromName = name && /^Line(\d+)_/.exec(name[1]);
-      if (fromName) line = Number(fromName[1]);
+/**
+ * Yield one record per markup tag: { name, attrs, close, selfClosing, start, end }.
+ * Node ships no XML parser and this adapter takes no dependencies, so the
+ * document is tokenised at the tag level. Comments, CDATA, PIs and doctypes are
+ * skipped, and a `>` inside a quoted attribute value does not end a tag.
+ */
+function* xmlTags(src) {
+  const n = src.length;
+  let i = 0;
+  while (i < n) {
+    const lt = src.indexOf('<', i);
+    if (lt < 0) return;
+    if (src.startsWith('<!--', lt)) { const e = src.indexOf('-->', lt + 4); i = e < 0 ? n : e + 3; continue; }
+    if (src.startsWith('<![CDATA[', lt)) { const e = src.indexOf(']]>', lt + 9); i = e < 0 ? n : e + 3; continue; }
+    if (src.startsWith('<?', lt)) { const e = src.indexOf('?>', lt + 2); i = e < 0 ? n : e + 2; continue; }
+    if (src.startsWith('<!', lt)) { const e = src.indexOf('>', lt + 2); i = e < 0 ? n : e + 1; continue; }
+    let j = lt + 1;
+    let quote = null;
+    for (; j < n; j += 1) {
+      const c = src[j];
+      if (quote) { if (c === quote) quote = null; continue; }
+      if (c === '"' || c === "'") { quote = c; continue; }
+      if (c === '>') break;
     }
-    if (!line) continue;
-    (byFile[cls[1]] = byFile[cls[1]] || []).push(line);
+    if (j >= n) return;
+    const raw = src.slice(lt + 1, j);
+    i = j + 1;
+    const close = raw.charCodeAt(0) === 47; /* '/' */
+    const selfClosing = !close && raw.charCodeAt(raw.length - 1) === 47;
+    let k = close ? 1 : 0;
+    while (k < raw.length && /\s/.test(raw[k])) k += 1;
+    const nameStart = k;
+    while (k < raw.length && !/[\s/>]/.test(raw[k])) k += 1;
+    const name = raw.slice(nameStart, k);
+    if (!name) continue;
+    yield { name, attrs: raw.slice(k, selfClosing ? -1 : undefined), close, selfClosing, start: lt, end: i };
   }
+}
 
-  return { score: ((total - undetected) / total) * 100, total, byFile };
+function xmlUnescape(s) {
+  return String(s)
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_, d) => String.fromCharCode(Number(d)))
+    .replace(/&amp;/g, '&');
+}
+
+/** Attributes of one already-delimited tag. */
+function xmlAttrs(s) {
+  const out = {};
+  const re = /([A-Za-z_:][-\w.:]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
+  let m;
+  while ((m = re.exec(s))) out[m[1]] = xmlUnescape(m[2] !== undefined ? m[2] : m[3]);
+  return out;
+}
+
+/**
+ * Which of mutation_test's outcomes a `<testcase>` child names. The `type`
+ * strings are free text from the writer, not a schema, so anything
+ * unrecognised lands in `blocked` — counted, never scored as a kill. A future
+ * version that adds a fifth outcome degrades to "not measured", not to "passed".
+ */
+function junitCaseStatus(tagName, typeAttr) {
+  if (tagName === 'failure') return 'survived';
+  const t = String(typeAttr || '').toLowerCase();
+  if (t.includes('timeout')) return 'timeout';
+  if (t.includes('not covered')) return 'notCovered';
+  return 'blocked';
+}
+
+const G6_UNRUN = new Set(['timeout', 'blocked']);
+
+function parseMutationTestJunit(xml) {
+  // Guard on the document element, not on `<testsuite`: a scope that yields no
+  // mutants is written as a bare `<testsuites/>`, which is a legitimate report
+  // of nothing to verify rather than a malformed one.
+  if (typeof xml !== 'string' || !/<testsuites\b/.test(xml)) return null;
+
+  const counts = { detected: 0, survived: 0, timeout: 0, notCovered: 0, blocked: 0 };
+  const byStatus = { survived: {}, timeout: {}, notCovered: {}, blocked: {} };
+  const byFile = {};
+
+  let declared = 0;
+  let declaredUndetected = 0;
+  let declaredBlocked = 0;
+  let open = null;
+
+  const lineOf = (nameAttr, text) => {
+    const fromName = /^Line(\d+)_/.exec(nameAttr || '');
+    if (fromName) return Number(fromName[1]);
+    const fromText = /\bLine:\s*(\d+)/.exec(text || '');
+    return fromText ? Number(fromText[1]) : null;
+  };
+  const commit = (tc) => {
+    counts[tc.status] += 1;
+    if (tc.status === 'detected' || !tc.file || tc.line == null) return;
+    (byStatus[tc.status][tc.file] = byStatus[tc.status][tc.file] || []).push(tc.line);
+    // byFile is what a fixer acts on: a surviving mutant and an uncovered line
+    // are both real test debt. A timed-out mutant is neither — it is unmeasured,
+    // and blaming a test's assertions for it sends the fixer after the wrong thing.
+    if (!G6_UNRUN.has(tc.status)) (byFile[tc.file] = byFile[tc.file] || []).push(tc.line);
+  };
+
+  for (const t of xmlTags(xml)) {
+    if (t.name === 'testsuite' && !t.close) {
+      const a = xmlAttrs(t.attrs);
+      if (/^\d+$/.test(a.tests || '')) declared += Number(a.tests);
+      if (/^\d+$/.test(a.failures || '')) declaredUndetected += Number(a.failures);
+      if (/^\d+$/.test(a.errors || '')) declaredBlocked += Number(a.errors);
+      continue;
+    }
+    if (t.name === 'testcase') {
+      if (t.close) {
+        if (open) { open.line = lineOf(open.nameAttr, xml.slice(open.bodyFrom, t.start)); commit(open); open = null; }
+        continue;
+      }
+      if (open) { open.line = lineOf(open.nameAttr, ''); commit(open); open = null; }
+      const a = xmlAttrs(t.attrs);
+      const tc = { file: a.classname || '', nameAttr: a.name || '', status: 'detected', line: null, bodyFrom: t.end };
+      if (t.selfClosing) { tc.line = lineOf(tc.nameAttr, ''); commit(tc); } else { open = tc; }
+      continue;
+    }
+    if (open && !t.close && (t.name === 'failure' || t.name === 'error')) {
+      open.status = junitCaseStatus(t.name, xmlAttrs(t.attrs).type);
+    }
+  }
+  if (open) { open.line = lineOf(open.nameAttr, ''); commit(open); }
+
+  const total = counts.detected + counts.survived + counts.timeout + counts.notCovered + counts.blocked;
+  // The writer sums every suite attribute from the very lists that produce these
+  // elements, so all three must agree with what we counted: tests= is
+  // mutationCount, failures= is undetectedCount, errors= is timeout plus
+  // not-covered. When they disagree the document is truncated, or is not this
+  // writer's — an error, never "nothing to measure" and never a score we invent.
+  if (declared !== total) return null;
+  if (declaredUndetected !== counts.survived) return null;
+  if (declaredBlocked !== counts.timeout + counts.notCovered + counts.blocked) return null;
+  if (total === 0) {
+    return { score: 0, measuredScore: 0, total: 0, measured: 0, counts, byFile: {}, byStatus };
+  }
+  const measured = counts.detected + counts.survived;
+  return {
+    // `score` is the pessimistic bound the gate compares: a mutant that was not
+    // run is not a mutant the tests killed, so it counts against the code.
+    // `measuredScore` is the same ratio over only the mutants that actually ran,
+    // reported beside it so a run full of timeouts reads as unmeasured rather
+    // than merely bad.
+    score: measured === 0 ? null : (counts.detected / total) * 100,
+    measuredScore: measured === 0 ? null : (counts.detected / measured) * 100,
+    total,
+    measured,
+    counts,
+    byFile,
+    byStatus,
+  };
 }
 
 /** `dart` the same way resolveFlutter resolved `flutter` (FVM-aware). */
@@ -591,9 +724,23 @@ function xmlEscape(s) {
  * finishes and one that does not. Everything is written to a temp dir that is
  * removed afterwards, so no mutation-test-report/ litter reaches the tree.
  */
-function runMutationTest(flutter, stackCfg, io, targets) {
+const G6_BUDGET_DEFAULTS = { perMutantSeconds: 120, totalSeconds: 1800, maxMutants: 400 };
+
+function g6Budget(g6cfg) {
+  const b = (g6cfg && g6cfg.budget) || {};
+  const num = (v, d) => (Number.isFinite(v) && v > 0 ? v : d);
+  return {
+    perMutantSeconds: num(b.perMutantSeconds, G6_BUDGET_DEFAULTS.perMutantSeconds),
+    totalSeconds: num(b.totalSeconds, G6_BUDGET_DEFAULTS.totalSeconds),
+    maxMutants: num(b.maxMutants, G6_BUDGET_DEFAULTS.maxMutants),
+  };
+}
+
+function runMutationTest(flutter, stackCfg, io, targets, g6cfg = {}, deps = {}) {
+  const exec = deps.execFileSync || execFileSync;
   const dart = dartInvocation(flutter);
   const testCommand = [flutter.cmd, ...flutter.pre, 'test'].join(' ');
+  const budget = g6Budget(g6cfg);
   const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccg-g6-'));
   const cfgPath = path.join(outDir, 'targets.xml');
 
@@ -606,7 +753,7 @@ function runMutationTest(flutter, stackCfg, io, targets) {
 ${fileEls}
   </files>
   <commands>
-    <command group="test" expected-return="0" working-directory="." timeout="1800">${xmlEscape(testCommand)}</command>
+    <command group="test" expected="0" working-directory="." timeout="${budget.perMutantSeconds}">${xmlEscape(testCommand)}</command>
   </commands>
 </mutations>
 `,
@@ -617,6 +764,16 @@ ${fileEls}
   const lcov = path.join(io.root, 'coverage', 'lcov.info');
   if (fs.existsSync(lcov)) args.push('-c', lcov);
   args.push(cfgPath);
+
+  const reportPath = path.join(outDir, 'mutation-test.junit.xml');
+  const readReport = deps.readReport
+    || (() => (fs.existsSync(reportPath) ? fs.readFileSync(reportPath, 'utf8') : null));
+  // The preflight and the scoring run write the same path. Clear it between
+  // them: a scoring run that dies without writing would otherwise be scored
+  // from the dry run's document, which lists every mutant as undetected because
+  // no test was ever executed.
+  const dropReport = deps.dropReport
+    || (() => { try { fs.rmSync(reportPath, { force: true }); } catch { /* ignore */ } });
 
   // mutation_test edits the target files IN PLACE and restores them when it
   // finishes. dart_mutant sandboxes instead, so this is the one tool that can
@@ -639,7 +796,12 @@ ${fileEls}
     snapshots.length = 0;
   }
 
+  // Reachable from `finally`, from a signal handler, and from process exit, so
+  // it must be harmless when more than one of those fires.
+  let restored = false;
   const restore = () => {
+    if (restored) return;
+    restored = true;
     for (const { abs, keep } of snapshots) {
       try {
         if (!fs.existsSync(keep)) continue;
@@ -651,34 +813,108 @@ ${fileEls}
       }
     }
   };
+  const cleanup = () => {
+    try { fs.rmSync(outDir, { recursive: true, force: true }); } catch { /* ignore */ }
+  };
 
-  let xml = null;
-  try {
+  // Node runs NEITHER `finally` NOR 'exit' handlers when SIGINT/SIGTERM/SIGHUP
+  // arrive with their default disposition — the process is simply gone and the
+  // mutated file stays mutated in the user's tree. Registering a listener is
+  // what changes that: it makes the signal non-fatal, so the blocking exec
+  // below returns, `finally` runs, and the snapshot goes back. The handler body
+  // only covers the case where the loop turns again before we exit.
+  //
+  // The cost is that a signal no longer stops the gate promptly, which is why
+  // the exec timeout below is load-bearing for this: without it an interrupted
+  // run would wait out a hang it can no longer be killed out of.
+  const SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'];
+  const handlers = {};
+  const onExit = () => restore();
+  const disarm = () => {
+    for (const sig of SIGNALS) process.removeListener(sig, handlers[sig]);
+    process.removeListener('exit', onExit);
+  };
+  for (const sig of SIGNALS) {
+    handlers[sig] = () => {
+      restore();
+      cleanup();
+      disarm();
+      process.kill(process.pid, sig); // re-raise so the exit status stays 128+n
+    };
+    process.on(sig, handlers[sig]);
+  }
+  process.on('exit', onExit);
+
+  const invoke = (extra) => {
     try {
-      execFileSync(dart.cmd, args, {
+      exec(dart.cmd, extra ? [...args.slice(0, -1), extra, args[args.length - 1]] : args, {
         cwd: io.root,
         stdio: ['ignore', 'ignore', 'ignore'],
         maxBuffer: 64 * 1024 * 1024,
+        // Without this the 43-minute-hang class that motivated this gate is
+        // unmitigated. SIGKILL rather than the default SIGTERM because a wedged
+        // Dart VM is exactly what SIGTERM is already failing to stop.
+        timeout: budget.totalSeconds * 1000,
+        killSignal: 'SIGKILL',
       });
-    } catch {
-      // Non-zero exit is mutation_test's own quality gate firing; the report is
-      // still written and our threshold comparison is the one that counts.
+      return null;
+    } catch (err) {
+      // Two very different failures arrive here. A non-zero exit is
+      // mutation_test's own quality gate firing: the report is complete and our
+      // threshold comparison is the one that counts. ETIMEDOUT means we killed
+      // it mid-run, so whatever is on disk covers an arbitrary prefix of the
+      // scope — a partial measurement, never a score.
+      return err && err.code === 'ETIMEDOUT' ? 'run-timeout' : null;
     }
-    const reportPath = path.join(outDir, 'mutation-test.junit.xml');
-    if (fs.existsSync(reportPath)) xml = fs.readFileSync(reportPath, 'utf8');
+  };
+
+  try {
+    // Cost is (chargeable mutants) x (one full suite run), so it has to be known
+    // before it is spent. `-d` loads the same config and the same lcov and runs
+    // no tests, returning the exact count the scoring run would produce. Mutants
+    // on uncovered lines cost no suite run at all, so they are counted but not
+    // charged. The admission test multiplies by the per-mutant CAP, not a mean:
+    // on a measured sample the mean was 0.85 s while two mutants cost 30.8 s
+    // each, so only the cap is an estimate the budget can honour.
+    const dryFail = invoke('-d');
+    if (dryFail) return { unmeasured: true, reason: dryFail, budget };
+    const dryXml = readReport();
+    const dry = parseMutationTestJunit(dryXml);
+    if (!dry) return { unmeasured: true, reason: 'preflight-failed', budget };
+    // Nothing to mutate is a complete answer, and a common one — on a real
+    // Flutter project a third of the files are enums, interfaces and generated
+    // shells. Running the suite to rediscover that costs a full test start per
+    // file and can only reproduce the document the preflight already holds.
+    if (dry.total === 0) return { xml: dryXml, budget };
+
+    const chargeable = dry.total - dry.counts.notCovered;
+    const worstCaseSeconds = chargeable * budget.perMutantSeconds;
+    if (dry.total > budget.maxMutants || worstCaseSeconds > budget.totalSeconds) {
+      return {
+        unmeasured: true,
+        reason: dry.total > budget.maxMutants ? 'mutant-cap' : 'time-budget',
+        mutants: dry.total,
+        chargeable,
+        worstCaseSeconds,
+        budget,
+      };
+    }
+
+    dropReport();
+    const runFail = invoke(null);
+    if (runFail) return { unmeasured: true, reason: runFail, budget };
+    const xml = readReport();
+    if (xml == null) return { unmeasured: true, reason: 'no-report', budget };
+    return { xml, budget };
   } finally {
     // Runs on the success path too: a clean mutation_test restores its own
     // edits, so this is normally a no-op comparison, and the one time it is not
     // is the time it matters. It cannot help against SIGKILL, which kills this
     // process as well — that residual is documented, not defended.
     restore();
-    try {
-      fs.rmSync(outDir, { recursive: true, force: true });
-    } catch {
-      /* ignore */
-    }
+    disarm();
+    cleanup();
   }
-  return xml;
 }
 
 /** Parse dart_mutant's Stryker JSON into { score, total, byFile: { name: [lines] } }. */
@@ -693,22 +929,38 @@ function parseDartMutantReport(json) {
   // non-object report becomes error (null), never a property-access crash.
   if (!report || typeof report !== 'object' || Array.isArray(report)) return null;
   const score = typeof report.mutationScore === 'number' ? report.mutationScore : null;
-  const SURVIVED = new Set(['survived', 'nocoverage']);
+  // Stryker's statuses map onto the same four outcomes mutation_test reports, so
+  // g6Verdict can file the same four rules whichever tool ran. Collapsing
+  // NoCoverage into "survived" — as this did — hides the difference between a
+  // test that asserts too little and a line no test reaches at all.
+  const STATUS = {
+    survived: 'survived',
+    nocoverage: 'notCovered',
+    timeout: 'timeout',
+    runtimeerror: 'blocked',
+    compileerror: 'blocked',
+    ignored: 'blocked',
+  };
+  const counts = { detected: 0, survived: 0, timeout: 0, notCovered: 0, blocked: 0 };
+  const byStatus = { survived: {}, timeout: {}, notCovered: {}, blocked: {} };
   const byFile = {};
   let total = 0;
   for (const [name, fobj] of Object.entries(report.files || {})) {
-    const lines = [];
     for (const m of fobj.mutants || []) {
       total += 1;
       // Normalize away casing and the underscore variant (No_Coverage / NoCoverage).
-      const status = String(m.status || '').toLowerCase().replace(/_/g, '');
-      if (!SURVIVED.has(status)) continue;
+      const raw = String(m.status || '').toLowerCase().replace(/_/g, '');
+      const status = STATUS[raw] || 'detected';
+      counts[status] += 1;
+      if (status === 'detected') continue;
       const line = m.location && m.location.start && m.location.start.line;
-      if (line) lines.push(line);
+      if (!line) continue;
+      (byStatus[status][name] = byStatus[status][name] || []).push(line);
+      if (!G6_UNRUN.has(status)) (byFile[name] = byFile[name] || []).push(line);
     }
-    if (lines.length) byFile[name] = lines;
   }
-  return { score, total, byFile };
+  const measured = counts.detected + counts.survived;
+  return { score, total, measured, counts, byFile, byStatus };
 }
 
 /**
@@ -744,16 +996,92 @@ function g6Glob(stackCfg) {
  * scoped, but the pass/fail score is root-wide — it is never presented as a
  * per-file score.
  */
-function g6Verdict(parsed, { targets, threshold, command, stackCfg, io, tool }) {
+const G6_RULES = {
+  survived: {
+    rule: 'mutation/survived',
+    label: 'surviving mutant',
+    hint: (l) => `Add an assertion that fails when the code at line ${l} is mutated`,
+  },
+  notCovered: {
+    rule: 'mutation/not-covered',
+    label: 'mutant on a line no test covers',
+    hint: (l) => `Line ${l} is not executed by any test; cover it before it can be mutation-tested`,
+  },
+  timeout: {
+    rule: 'mutation/timeout',
+    label: 'mutant timed out (unmeasured)',
+    hint: (l) => `The suite did not terminate with line ${l} mutated; this mutant was not measured`,
+  },
+  blocked: {
+    rule: 'mutation/blocked',
+    label: 'mutant blocked (unmeasured)',
+    hint: (l) => `The tool could not run the mutant at line ${l}`,
+  },
+};
+
+/**
+ * A gate result for a scope that was not measured. Never `pass` and never
+ * `fail`: a scope nothing ran against has no score to compare, and the repo's
+ * own rule is that a pass which measured nothing must not be byte-identical to
+ * a pass that did. `measurement.reason` is what tells an operator whether the
+ * run was declined, killed, or never produced a report.
+ */
+function g6Unmeasured(run, { targets, threshold, command, tool }) {
+  const b = run.budget || {};
+  const detail = run.worstCaseSeconds != null
+    ? `${run.chargeable ?? '?'} chargeable mutants x ${b.perMutantSeconds ?? '?'}s cap = ${run.worstCaseSeconds}s exceeds the ${b.totalSeconds ?? '?'}s budget`
+    : `the run did not produce a scorable report (${run.reason})`;
+  return gateResult('G6', 'error', {
+    command,
+    tool,
+    thresholds: { mutationScore: threshold },
+    measurement: {
+      state: 'unmeasured',
+      reason: run.reason || 'no-report',
+      mutants: run.mutants ?? null,
+      chargeable: run.chargeable ?? null,
+      worstCaseSeconds: run.worstCaseSeconds ?? null,
+      budgetSeconds: b.totalSeconds ?? null,
+    },
+    findings: [{
+      id: 'G6:unmeasured',
+      severity: 'blocker',
+      file: targets[0],
+      line: 1,
+      rule: 'mutation/unmeasured',
+      message: `mutation testing did not run: ${detail}`,
+      fixHint: 'Narrow the G6 scope, raise gates.G6.budget, or run G6 on a schedule rather than per change',
+    }],
+  });
+}
+
+function g6Verdict(parsed, opts) {
+  const { targets, threshold, command, stackCfg, io, tool } = opts;
   const thresholds = { mutationScore: threshold };
   // gateResult defaults `tool` to GATE_META's, which names the stack default.
   // G6 is the one gate a project can retarget, so the report must name the tool
   // that actually ran — otherwise a dart_mutant-pinned project reads as if
   // mutation_test produced the verdict.
   const ran = tool || (stackCfg.gates.G6 || {}).tool || GATE_META.G6.tool;
-  if (!targets.length) return gateResult('G6', 'pass', { command, thresholds, tool: ran });
-  if (!parsed || parsed.score == null) return gateResult('G6', 'error', { command, thresholds, tool: ran });
-  if (parsed.total === 0) return gateResult('G6', 'pass', { command, thresholds, tool: ran });
+  if (!targets.length) {
+    return gateResult('G6', 'pass', {
+      command, thresholds, tool: ran, measurement: { state: 'empty', mutants: 0 },
+    });
+  }
+  if (!parsed) return g6Unmeasured({ reason: 'no-report' }, { ...opts, tool: ran });
+  if (parsed.total === 0) {
+    return gateResult('G6', 'pass', {
+      command, thresholds, tool: ran, measurement: { state: 'empty', mutants: 0 },
+    });
+  }
+  // Mutants exist but none of them ran: every one timed out or was blocked.
+  // There is no ratio to compare, so this is unmeasured rather than a zero.
+  if (parsed.score == null) {
+    return g6Unmeasured(
+      { reason: 'nothing-ran', mutants: parsed.total, chargeable: parsed.total },
+      { ...opts, tool: ran },
+    );
+  }
 
   const findings = [];
   const failed = parsed.score < threshold;
@@ -769,23 +1097,44 @@ function g6Verdict(parsed, { targets, threshold, command, stackCfg, io, tool }) 
       fixHint: 'Strengthen tests to kill the surviving mutants listed below',
     });
   }
-  for (const name of Object.keys(parsed.byFile)) {
-    const rel = toPosix(path.isAbsolute(name) ? path.relative(io.root, name) : name);
-    if (isExempt(rel, stackCfg, 'G6')) continue;
-    for (const line of parsed.byFile[name]) {
-      findings.push({
-        id: `G6-${rel}:${line}`,
-        severity: 'warning',
-        file: rel,
-        line,
-        rule: 'mutation/survived',
-        message: `surviving mutant at ${rel}:${line}`,
-        fixHint: `Add an assertion that fails when the code at line ${line} is mutated`,
-      });
+  // Four outcomes, four rules. A survivor and an uncovered line are both real
+  // debt but the fix differs — write a stronger assertion, versus write any test
+  // at all — and a timed-out mutant is neither, so blaming it on the test's
+  // assertions sends a fixer after the wrong thing. The dart_mutant path
+  // supplies the same buckets, so both tools report the same shape.
+  const buckets = parsed.byStatus || { survived: parsed.byFile || {} };
+  for (const status of Object.keys(G6_RULES)) {
+    const meta = G6_RULES[status];
+    for (const name of Object.keys(buckets[status] || {})) {
+      const rel = toPosix(path.isAbsolute(name) ? path.relative(io.root, name) : name);
+      if (isExempt(rel, stackCfg, 'G6')) continue;
+      for (const line of buckets[status][name]) {
+        findings.push({
+          id: `G6-${status}-${rel}:${line}`,
+          severity: 'warning',
+          file: rel,
+          line,
+          rule: meta.rule,
+          message: `${meta.label} at ${rel}:${line}`,
+          fixHint: meta.hint(line),
+        });
+      }
     }
   }
 
-  return gateResult('G6', failed ? 'fail' : 'pass', { command, thresholds, findings, tool: ran });
+  const measurement = parsed.counts
+    ? {
+      state: parsed.measured === parsed.total ? 'measured' : 'partial',
+      mutants: parsed.total,
+      measured: parsed.measured,
+      measuredScore: parsed.measuredScore,
+      ...parsed.counts,
+    }
+    : { state: 'measured', mutants: parsed.total, measured: parsed.total };
+
+  return gateResult('G6', failed ? 'fail' : 'pass', {
+    command, thresholds, findings, tool: ran, measurement,
+  });
 }
 
 /**
@@ -847,27 +1196,49 @@ function runG6(files, stackCfg, io, deps = {}) {
   const flutter = resolveF(io.root);
   if (!flutter) return missingTool('G6', stackCfg);
 
-  const threshold = ((stackCfg.gates.G6 || {}).thresholds || {}).mutationScore ?? 70;
+  const g6 = stackCfg.gates.G6 || {};
+  const threshold = (g6.thresholds || {}).mutationScore ?? 70;
   const targets = files.filter(
     (rel) => DART_FILE_RE.test(rel) && !isExempt(rel, stackCfg, 'G6'),
   );
-  const tool = (stackCfg.gates.G6 || {}).tool || GATE_META.G6.tool;
+  const tool = g6.tool || GATE_META.G6.tool;
 
-  if (tool === 'dart_mutant') {
-    if (!hasCmd('dart_mutant')) return missingTool('G6', stackCfg);
+  const viaDartMutant = () => {
     const command = 'dart_mutant --json --quiet --ai none';
-    const opts = { targets, threshold, command, stackCfg, io };
+    const opts = { targets, threshold, command, stackCfg, io, tool: 'dart_mutant' };
     if (!targets.length) return g6Verdict(null, opts);
     const json = runMutantFn(flutter, stackCfg, io, threshold);
     return g6Verdict(json == null ? null : parseDartMutantReport(json), opts);
-  }
+  };
 
-  if (!hasMutationTest(flutter)) return missingTool('G6', stackCfg);
-  const command = 'dart pub global run mutation_test -f junit';
-  const opts = { targets, threshold, command, stackCfg, io };
-  if (!targets.length) return g6Verdict(null, opts);
-  const xml = runMutationTestFn(flutter, stackCfg, io, targets);
-  return g6Verdict(xml == null ? null : parseMutationTestJunit(xml), opts);
+  const viaMutationTest = () => {
+    const command = 'dart pub global run mutation_test -f junit';
+    const opts = { targets, threshold, command, stackCfg, io, tool: 'mutation_test' };
+    if (!targets.length) return g6Verdict(null, opts);
+    const run = runMutationTestFn(flutter, stackCfg, io, targets, g6);
+    if (!run) return g6Verdict(null, opts);
+    // A refused run and a run we killed on the clock are both unmeasured, and
+    // runMutationTest reports both the same way: the report on disk after a kill
+    // covers an arbitrary prefix of the scope, so it is discarded, not scored.
+    if (run.unmeasured) return g6Unmeasured(run, opts);
+    return g6Verdict(run.xml == null ? null : parseMutationTestJunit(run.xml), opts);
+  };
+
+  // `dart_mutant` is never a default — defaults.cjs writes `mutation_test`, so
+  // the only way that value appears is a human choosing it. An explicit choice
+  // is not a preference: never silently run a tool the config did not name.
+  if (tool === 'dart_mutant') {
+    return hasCmd('dart_mutant') ? viaDartMutant() : missingTool('G6', stackCfg);
+  }
+  if (tool !== 'mutation_test') return missingTool('G6', stackCfg);
+
+  // The documented default: mutation_test, falling back to dart_mutant so a
+  // project that has one but not the other still gets a gate. g6Verdict is told
+  // which one actually ran, so the report never attributes one tool's score to
+  // the other.
+  if (hasMutationTest(flutter)) return viaMutationTest();
+  if (hasCmd('dart_mutant')) return viaDartMutant();
+  return missingTool('G6', stackCfg);
 }
 
 // ---- G7: dependency-structure (built-in circular-import detector) -------

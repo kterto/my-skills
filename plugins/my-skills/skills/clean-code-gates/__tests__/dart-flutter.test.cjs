@@ -159,12 +159,30 @@ const dartCfgMutant = {
   ...dartCfg,
   gates: { ...dartCfg.gates, G6: { ...dartCfg.gates.G6, tool: 'dart_mutant' } },
 };
-const junitFixture = (total, failures, cases) => `<?xml version="1.0"?>
+// mutation_test writes one <testcase> per mutant and a killed mutant is
+// SELF-CLOSING, so a fixture that declares `tests="24"` while carrying a single
+// element is a document the tool cannot emit. Pad the balance with real killed
+// elements: the parser cross-checks `tests=` against what it counts, and an
+// inconsistent report is an error rather than a score.
+const killedCase = (i) => `    <testcase name="Line${100 + i}_builtin.op_0" classname="lib/killed.dart" time="0.1"/>`;
+const junitFixture = (total, failures, cases) => {
+  const listed = cases ? cases.split('<testcase').length - 1 : 0;
+  // `failures=` must equal the number of <failure> elements, so pad the declared
+  // survivors too — a suite claiming five undetected mutants while listing one is
+  // a document mutation_test cannot emit, and the parser rejects it.
+  const extraFailures = Array.from(
+    { length: Math.max(0, failures - listed) },
+    (_, i) => failingCase('lib/other.dart', 200 + i),
+  ).join('\n');
+  const survivors = listed + Math.max(0, failures - listed);
+  const padding = Array.from({ length: Math.max(0, total - survivors) }, (_, i) => killedCase(i)).join('\n');
+  return `<?xml version="1.0"?>
 <testsuites>
   <testsuite id="0" name="builtin.op" package="builtin.op" tests="${total}" failures="${failures}" errors="0" time="1.0">
-${cases}
+${[cases, extraFailures, padding].filter(Boolean).join('\n')}
   </testsuite>
 </testsuites>`;
+};
 const failingCase = (file, line) => `    <testcase name="Line${line}_builtin.op_0" classname="${file}" time="1.0">
       <failure type="undetected" message="All tests passed despite changing the code!">File: ${file} Line: ${line} Original line: a &gt;= b Mutation: a == b</failure>
     </testcase>`;
@@ -202,7 +220,7 @@ test('g6Verdict (b) fails with one score blocker plus per-line survivor warnings
     ['lib/calc.dart:12', 'lib/calc.dart:5', 'lib/calc.dart:8', 'lib/util.dart:7'],
   );
   assert.strictEqual(warnings[0].rule, 'mutation/survived');
-  assert.strictEqual(warnings[0].id, `G6-${warnings[0].file}:${warnings[0].line}`);
+  assert.strictEqual(warnings[0].id, `G6-survived-${warnings[0].file}:${warnings[0].line}`);
 });
 
 test('g6Verdict relativizes absolute survivor paths and skips exempt files', () => {
@@ -298,6 +316,7 @@ test('parseMutationTestJunit falls back to the case name when the body has no Li
     <testcase name="Line7_builtin.op_0" classname="lib/calc.dart">
       <failure type="undetected" message="undetected"/>
     </testcase>
+    <testcase name="Line9_builtin.op_0" classname="lib/calc.dart" time="0.1"/>
   </testsuite>
 </testsuites>`;
   assert.deepStrictEqual(parseMutationTestJunit(xml).byFile, { 'lib/calc.dart': [7] });
@@ -323,7 +342,7 @@ test('runG6 uses mutation_test by default and never touches dart_mutant', () => 
     commandExists: () => { throw new Error('dart_mutant must not be probed'); },
     mutationTestAvailable: () => true,
     runMutant: () => { throw new Error('dart_mutant must not run'); },
-    runMutationTest: () => junitFixture(10, 5, failingCase('lib/calc.dart', 12)),
+    runMutationTest: () => ({ xml: junitFixture(10, 5, failingCase('lib/calc.dart', 12)) }),
   });
   assert.strictEqual(r.tool, 'mutation_test');
   assert.strictEqual(r.status, 'fail');
@@ -331,10 +350,11 @@ test('runG6 uses mutation_test by default and never touches dart_mutant', () => 
   assert.ok(r.findings.some((f) => f.rule === 'mutation/survived' && f.line === 12));
 });
 
-test('runG6 reports missing_tool when mutation_test is not activated', () => {
+test('runG6 reports missing_tool when neither mutation tool is available', () => {
   const r = runG6(['lib/calc.dart'], dartCfg, g6Io, {
     resolveFlutter: () => ({ cmd: 'flutter', pre: [] }),
     mutationTestAvailable: () => false,
+    commandExists: () => false,
     runMutationTest: () => { throw new Error('must not run'); },
   });
   assert.strictEqual(r.status, 'missing_tool');

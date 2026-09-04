@@ -70,19 +70,49 @@ node <skill-dir>/bin/gates.cjs --scope diff --gates G5 --out -
 - **G1 / G6 test runner (node-ts)** — the coverage (G1) and mutation (G6) gates work with **Jest or Vitest**, auto-detected from `node_modules/.bin` (both present → jest, for back-compat). Vitest emits the same Istanbul `coverage-summary.json`, so only the invocation differs. Override auto-detection with `gates.G1.tool: "jest" | "vitest"` (coverage) and `gates.G6.runner: "jest" | "vitest"` (mutation) in `.cleancode-gates.json`. Vitest coverage needs a provider (`@vitest/coverage-v8` or `-istanbul`); Vitest mutation needs `@stryker-mutator/vitest-runner`. When the chosen runner or its plugin is absent, the gate reports `missing_tool` with an install hint.
 - **G6 (mutation, dart-flutter)** runs the `mutation_test` pub package by default. It writes a
   generated config naming exactly the in-scope files plus the project's test command, runs
-  `dart pub global run mutation_test -f junit`, and derives the score from the junit report:
-  `<testsuite tests= failures=>` sums to total/undetected, and each failing `<testcase>` names
-  its file and line. junit is the only format carrying both halves — the plain `xml` report
-  lists undetected mutations with no total, so no score can be derived from it. When
+  `dart pub global run mutation_test -f junit`, and derives the score by walking the junit
+  report's `<testcase>` elements. Each one carries exactly one of four outcomes: a killed
+  mutant has no child element (it is self-closing), a survivor carries
+  `<failure type="undetected">`, and a timed-out or never-executed mutant carries `<error>`
+  with a distinguishing `type`. The score is `detected / total` — the pessimistic bound, since
+  a mutant that never ran is not a mutant the tests killed — with `measuredScore` reported
+  beside it over only the mutants that actually ran. The suite attributes are read solely as a
+  consistency check (`tests=` is the mutation count, `failures=` the undetected count, and
+  `errors=` fuses timeout with not-covered, which is why they cannot produce a score on their
+  own); a report whose attributes disagree with its elements is an error, never a score. junit
+  is the only format carrying the per-mutant outcomes — the plain `xml` report lists undetected
+  mutations with no total. When
   `coverage/lcov.info` exists it is passed with `-c`, so only covered statements are mutated.
   Install with `dart pub global activate mutation_test`.
   Set `gates.G6.tool: "dart_mutant"` to use the external `dart_mutant` CLI instead, which
   reads a Stryker-compatible JSON report (`brew install dart_mutant`). Either way the pass/fail
   comparison happens against `.cleancode-gates.json`'s `mutationScore`; `mutation_test`'s own
   `<threshold>` element is never emitted and its exit code is never read, so the config stays
-  the single source of every number. Both tools sandbox their mutations and leave no report
-  directory, worktree, or `pub get` litter behind.
-  Note `mutation_test` edits target files **in place** and restores them on a clean exit,
-  where `dart_mutant` sandboxes its mutations. The adapter snapshots every target before the
-  run and puts back anything that differs afterwards, so a crash or a killed tool cannot leave
-  a live mutation in the tree; a `SIGKILL` to the gate process itself is the documented residual.
+  the single source of every number. Neither tool leaves a report directory, worktree, or
+  `pub get` litter behind.
+  `dart_mutant` sandboxes its mutations; `mutation_test` edits target files **in place** and
+  restores them on a clean exit. The adapter snapshots every target before the run, registers
+  `SIGINT`/`SIGTERM`/`SIGHUP` handlers, and puts back anything that differs, so an interrupted
+  run cannot leave a live mutation in the tree. Registering those handlers is what makes the
+  restore reachable at all — Node runs neither `finally` nor `exit` handlers on a
+  default-disposition signal — and it also means a signal no longer stops the gate instantly.
+  **Wrap the gate as `timeout -k 30 <seconds>`, never bare `timeout`:** the plain form sends
+  `SIGTERM`, which the gate now absorbs so it can restore. `SIGKILL` to the gate process is the
+  one documented residual, and `gates.G6.budget.totalSeconds` should be lower than any outer
+  wrapper's bound.
+
+  **G6 is bounded and may decline.** `gates.G6.budget` takes `perMutantSeconds` (default 120,
+  written into the generated config as the per-mutant `timeout`), `totalSeconds` (default 1800,
+  the hard bound on the child process) and `maxMutants` (default 400). Before scoring anything
+  the adapter runs `mutation_test -d`, which counts the mutations without running any test, and
+  refuses the run when the mutant count or the worst-case wall clock exceeds the budget. A
+  refused run — and a run killed on the clock — reports `status: error` with
+  `measurement.state: "unmeasured"` and the arithmetic that caused it. **Never `pass`:** a scope
+  nothing ran against has no score to compare. Every G6 result carries a `measurement` block
+  (`empty` | `measured` | `partial` | `unmeasured`), so "did it pass" and "was it actually
+  verified" are separate questions. Because each mutant re-runs the whole test command, G6 over
+  a large project is a scheduled artifact, not a per-change gate — use `--scope diff` or a
+  narrow module.
+- Mirrors the gate semantics in a project's qa agent (`.claude/agents/qa.md` in GSD repos) but decoupled from any plan/CR/QA flow. G8 (rework ratio) is intentionally out of scope — it's a plan-tree metric, not a code property.
+- Tests: `cd <skill-dir> && node --test`.
+- `<skill-dir>` is this skill's own directory in the installed Prime Agent skill tree: `.prime/agent/skills/clean-code-gates` for a project install, `~/.prime/agent/skills/clean-code-gates` for a global one.
