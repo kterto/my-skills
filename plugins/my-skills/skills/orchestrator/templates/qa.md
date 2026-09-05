@@ -13,6 +13,26 @@ A plan ID (e.g. `FEAT-001`). The plan must have `status: DONE` and a correspondi
 
 **Or a `PACT` ID** (e.g. `PACT-20260807T004018Z-c4af`) — the join-level invocation in parallel mode. See Step 1a.
 
+## Step 0 — Gate wall-clock budget (mandatory)
+
+Read `gate_wall_clock_minutes` from `.orchestrator/config.json` (integer ≥ 0; default `15`; `0`
+disables the bound). **Run every suite and every gate command in Steps 3, 4 and 4b under that
+bound.** On a command that exceeds it: stop it, record that gate's verdict as `UNMEASURED`, and add
+the gate to the report's `stale_gates:` frontmatter list with the elapsed minutes.
+
+A stale gate is **not** a failure. It is a gate whose result is unknown, and the difference matters:
+a fail is something a fix plan can act on, while a timeout is an operator decision about tooling or
+scope that no remediation cycle can reach. Never enter the QA-remediation loop over one, and never
+let it read as a pass.
+
+**This is the only producer of `stale_gates:`, and the orchestrator's `BLOCKED_STALE` status is
+synthesized from it** (`SKILL.md` Step 5d). If this step never writes the key, that status is
+unreachable and a hung gate simply hangs the run — which is exactly what a mutation runner that
+spends 43 minutes spawning nothing looks like from here.
+
+Emit `stale_gates: []` when nothing exceeded the bound, so the key's absence always means an older
+report rather than a clean one.
+
 ## Step 1 — Validate preconditions (mandatory)
 
 0. Read `.orchestrator/config.json` for `output_format` (`md` | `html`; default `md`; an `output_format=` line in your prompt wins) and `.orchestrator/artifact-format.md` for emission rules, the allow-list, and ID allocation.
@@ -44,7 +64,7 @@ Precondition check: Plan {PLAN-ID} status={status}, CR={CR-ID} CR status={cr_sta
 
 **The original artifact always wins.** The digest is derived data: it saves the analysis, never the checking. Every way it can be wrong produces a *stronger* verdict rather than an error, so a disagreement you notice is the only runtime signal that it dropped something. If what you open disagrees with it, say so in your report, record it in `.progress.md`, and treat the digest as unusable for the rest of this run.
 
-When the ID you were given carries the `PACT-` prefix, you were invoked **at the outer join** over a leaf fan-out. **When your preamble carries a `leaves=` line, that is the leaf plan set — use it as given.** Only when it is absent — a **legacy** run, started before the orchestrator emitted the line — resolve the set yourself. A resumed run is not such a case: Step 0r rebuilds the leaf set centrally and emits it. Either way, `.orchestrator/artifact-format.md` → **`PACT` ID resolution** is the single normative rule for resolving it, for what to evaluate, and for where to write back — **that rule is your entire knowledge of nesting**; nothing else about your workflow changes.
+When the ID you were given carries the `PACT-` prefix, you were invoked **at the outer join** over a leaf fan-out. **When your preamble carries a `leaves=` line, that is the leaf plan set — use it as given.** Only when it is absent — a **legacy** run, started before the orchestrator emitted the line — resolve the set yourself. A resumed run is not such a case: Step 0r rebuilds the leaf set centrally and emits it. Either way, `.orchestrator/artifact-format-parallel.md` → **`PACT` ID resolution** is the single normative rule for resolving it, for what to evaluate, and for where to write back — **that rule is your entire knowledge of nesting**; nothing else about your workflow changes.
 
 Your additions on top of that:
 
@@ -197,7 +217,9 @@ Any non-allow-listed match = fail with file:line list.
 
 ### G6 — Mutation testing (test-quality verification)
 
-Run only on files changed in this plan (avoid full-suite cost). Use the mutation testing tool configured for the project (per Commands section of `PROJECT-CONTEXT.md`). Gate: the stack's `G6.thresholds.mutationScore`, aggregate across the changed-file set. Report `MISSING_TOOL` if mutation testing is not yet wired. Skip a stack's mutation run if no changed files exist for it.
+Run only on files changed in this plan (avoid full-suite cost). **`.cleancode-gates.json`'s `gates.<stack>.G6.tool` is the authority on which tool runs** — `PROJECT-CONTEXT.md`'s Commands section describes the project, and where the two disagree the config is what the gate runner actually obeys, so a stale description there must not send you to a different tool. Gate: the stack's `G6.thresholds.mutationScore`, aggregate across the changed-file set. Report `MISSING_TOOL` if mutation testing is not yet wired. Skip a stack's mutation run if no changed files exist for it.
+
+**`UNMEASURED` is not a low score and never a pass.** A mutation runner can return a verdict having measured nothing — a scope it declined on cost, a run killed on the clock, a report it never wrote, or a suite already red before any mutation was applied. Where the runner reports a measurement state, record it beside the score and treat anything other than a completed measurement as `UNMEASURED` with the runner's own stated reason. Do not average an unmeasured scope into an aggregate, and do not let a scope with no mutants read as a scope that passed: report it as measuring nothing. A score computed over a partial run is a lower bound at best — say which it is.
 
 The mutation threshold is aggregate across the changed-file set, not per-file. Per-file scores are advisory; the aggregate is the gate.
 
@@ -322,6 +344,7 @@ cycle: 0
 test_failures: {N}
 lint_errors: {N}
 type_errors: {N}
+stale_gates: []   # or [{gate: G6, elapsed_minutes: 43}, ...] — gates that exceeded Step 0's bound
 ---
 
 ## Summary

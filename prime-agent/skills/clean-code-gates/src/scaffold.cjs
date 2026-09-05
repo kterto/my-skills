@@ -156,11 +156,16 @@ function formatAdvice(advice, stacks) {
   for (const stack of stacks) {
     lines.push(`\n[${stack}]`);
     for (const a of advice.filter((x) => x.stack === stack)) {
-      lines.push(`  ${a.present ? 'ok  ' : 'MISS'} ${a.gates.padEnd(6)} ${a.label}`);
+      // `opt` is a third state, not a softer MISS: an optional entry is a
+      // fallback its gate does not need, so an absent one is not a gap. G6 runs
+      // on mutation_test and falls back to dart_mutant — counting the fallback
+      // as missing tells every Dart project to install a tool it will never use.
+      const mark = a.present ? 'ok  ' : (a.optional ? 'opt ' : 'MISS');
+      lines.push(`  ${mark} ${a.gates.padEnd(6)} ${a.label}`);
       if (!a.present) lines.push(`         ↳ ${a.install}`);
     }
   }
-  const missing = advice.filter((a) => !a.present).length;
+  const missing = advice.filter((a) => !a.present && !a.optional).length;
   lines.push(
     missing
       ? `\n${missing} tool group(s) missing — install the above, then re-run the gates. G5 (no-comments) needs no tooling.`

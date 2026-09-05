@@ -75,3 +75,29 @@ test('formatAdvice: lists install command for a missing tool', () => {
   assert.match(text, /npm i -D/);
   assert.match(text, /\[node-ts\]/);
 });
+
+test('dart-flutter: the dart_mutant entry is declared a fallback, not a requirement', () => {
+  const d = tmp();
+  const fallback = find(
+    scaffoldAdvice(d, ['dart-flutter']),
+    'dart_mutant (only with gates.G6.tool: "dart_mutant")',
+  );
+  assert.equal(fallback.optional, true);
+});
+
+test('formatAdvice: an absent optional tool is not a gap and is not marked MISS', () => {
+  // Driven directly rather than through scaffoldAdvice: whether dart_mutant is
+  // installed on the machine running the tests is not what this asserts.
+  const advice = [
+    { stack: 'dart-flutter', gates: 'G2/G4', label: 'dart_code_linter', present: false, install: 'x' },
+    { stack: 'dart-flutter', gates: 'G6', label: 'mutation_test (default)', present: true, install: 'y' },
+    { stack: 'dart-flutter', gates: 'G6', label: 'dart_mutant (fallback)', present: false, install: 'z', optional: true },
+  ];
+  const text = formatAdvice(advice, ['dart-flutter']);
+  // One real gap, not two: G6 is satisfied by mutation_test alone.
+  assert.match(text, /^1 tool group\(s\) missing/m);
+  assert.match(text, /opt\s+G6\s+dart_mutant \(fallback\)/);
+  assert.doesNotMatch(text, /MISS.*dart_mutant/);
+  // Its install line still shows, because it is advice worth having.
+  assert.match(text, /↳ z/);
+});

@@ -14,7 +14,7 @@ On invocation with a plain-language task description (and optional `--setup`):
 > **Already loaded? Do not reload.** A caller running several tasks in one session — the `product-manager` skill does exactly this, one run per user story — needs this protocol **once**, not once per task. If its text is still visible in your context, a second task is a **new pipeline run starting here at the Lifecycle**, not a re-read of the skill. **A new run rebinds everything**: `base_sha`, the spec, the cycle counters, the family counts. "Capture once" anywhere below means once per *run*, never once per session — carrying story 1's base into story 2 would diff the wrong tree. Re-invoking would duplicate roughly 26k tokens of protocol per task, and a ten-story milestone would spend most of a context window on copies of one document. Reload only when you genuinely cannot see this text any more — after compaction, or in a fresh session. Presence is the test, not recollection.
 
 1. Resolve config (see `references/config.md`): CLI args > `.orchestrator/config.json` > defaults.
-2. If `--setup` is present OR `.orchestrator/config.json` does not exist OR any file B3 materializes is missing — currently `.orchestrator/.gitignore`, `.orchestrator/artifact-format.md`, `.orchestrator/config.md`, `.orchestrator/gate-config.md`, `.orchestrator/lane-protocol.md` — → run **Bootstrap** (Steps B1–B3), then continue. **A project bootstrapped by an older skill version has `config.json` and none of the files added since**, so keying only on `config.json` would leave every role pointing at a reference that is not there.
+2. If `--setup` is present OR `.orchestrator/config.json` does not exist OR any file B3 materializes is missing — currently `.orchestrator/.gitignore`, `.orchestrator/artifact-format.md`, `.orchestrator/artifact-format-html.md`, `.orchestrator/artifact-format-parallel.md`, `.orchestrator/config.md`, `.orchestrator/gate-config.md`, `.orchestrator/lane-protocol.md` — → run **Bootstrap** (Steps B1–B3), then continue. **A project bootstrapped by an older skill version has `config.json` and none of the files added since**, so keying only on `config.json` would leave every role pointing at a reference that is not there.
 3. Run **Pipeline** (Steps 0–6).
 4. Spec eval runs inside the review loop (Step 4e), before the QA exit gate.
 5. On `READY_TO_COMMIT` → run **Final report** (Step 7).
@@ -75,7 +75,16 @@ Check for a resolvable **`simplify`** skill the same way, and record its availab
    **Preserve a project's deliberate frontmatter overrides when re-rendering.** If a role file already exists and its frontmatter carries keys the template does not — a pinned `model:`, a host-specific field — carry those keys forward onto the new body rather than dropping them. Bootstrap now re-runs whenever a materialized file is missing (Lifecycle item 2), so this step overwrites role files on upgrades, not just on first setup: silently reverting a project's model pin would be a regression the project never asked for and would not notice until a run cost more than it should. Replace the **body** always; merge the **frontmatter**. A key the template also defines wins from the template — the local copy is stale by definition.
 
 2. **Materialize artifact rules + config reference + html scaffolds + render scripts (load-bearing).** Subagents cannot read the skill's own `references/`, `templates/html/`, or `scripts/` directories — those paths do not exist in the target project. Copy them into `.orchestrator/` so every role can read and run them:
-   - `references/artifact-format.md` → `.orchestrator/artifact-format.md`
+   - `references/artifact-format.md` → `.orchestrator/artifact-format.md` (the core rules every role reads before writing any artifact — the `md` artifact, the directory allow-list, the run family, ID allocation, Related navigation, and the stdout header contract)
+   - `references/artifact-format-html.md` → `.orchestrator/artifact-format-html.md` (the html rendered view and its two blocking validation gates; read only when `output_format=html`)
+   - `references/artifact-format-parallel.md` → `.orchestrator/artifact-format-parallel.md` (the `PACT` contract, sub-contracts, inherited interface assignments, `PACT` ID resolution, and the additive parallel stdout lines; read only when the resolved `parallelism` is not `off`)
+
+     **The split is why the core file is worth reading in full.** Every role loads
+     `artifact-format.md` before writing anything, and on the default `md` sequential run the html
+     and parallel content governs nothing — it was 52% of the file. Splitting it costs a pointer and
+     removes that from every spawn. **Section names did not change**, so every existing
+     cross-reference of the form `artifact-format-parallel.md` → *`PACT` ID resolution* still names its
+     section; it now lives in the file the pointer names.
    - `references/config.md` → `.orchestrator/config.md` (the normative key/lane/glob reference the role templates point at; distinct from `.orchestrator/config.json`, which holds the resolved *values*)
    - `references/lane-protocol.md` → `.orchestrator/lane-protocol.md` (the architect's contract authoring and lane-plan mode, and the coder's lane boundary and BLOCKED vocabulary — read only by a role whose preamble carries `lane=` or `Type: contract`, which is why it is not in their templates)
    - `references/gate-config.md` → `.orchestrator/gate-config.md` (how any role resolves a gate's config, scope, exemptions, and verdict vocabulary — normative for the coder, the tester, and QA alike, which is what stops the three of them drifting apart on the same gate)
@@ -101,7 +110,7 @@ Check for a resolvable **`simplify`** skill the same way, and record its availab
 
    `*` ignores every file; `!*/` lets git descend into subdirectories so the exceptions below can re-include paths inside them (without it, an excluded parent directory makes re-inclusion impossible). **Rewrite only the region between the markers**, preserving anything the project added underneath — the same "the project's choice wins" shape step 4 uses for `config.json` keys. If the markers are absent and the file exists, prepend the managed block rather than overwriting.
 
-   **What is tracked, and why only these.** `config.json` must be tracked: Step 0b reads `parallelism`, `max_parallel_lanes`, and `max_contract_amendments` from the **merge-base** copy (`$mb:.orchestrator/config.json`), so an untracked file makes those three keys unreachable and they fail closed to defaults forever. `PROJECT-CONTEXT.md` is hand-curated shared project knowledge that a teammate's fresh clone must already have. Everything else is either **per-run state** (`run-manifest.json`, `verification-ledger.json`, `tmp/`) — branch-scoped, rewritten whole each run, and therefore unmergeable — or a **copy of the installed skill** (`artifact-format.md`, `config.md`, `gate-config.md`, `lane-protocol.md`, `html-templates/`, the four `.cjs`, the rendered role files), which Lifecycle item 2 re-materializes the moment it goes missing. Tracking the copies lands a four-figure diff in a product PR on every skill upgrade; ignoring them costs nothing, because a fresh clone missing them simply triggers bootstrap.
+   **What is tracked, and why only these.** `config.json` must be tracked: Step 0b reads `parallelism`, `max_parallel_lanes`, and `max_contract_amendments` from the **merge-base** copy (`$mb:.orchestrator/config.json`), so an untracked file makes those three keys unreachable and they fail closed to defaults forever. `PROJECT-CONTEXT.md` is hand-curated shared project knowledge that a teammate's fresh clone must already have. Everything else is either **per-run state** (`run-manifest.json`, `verification-ledger.json`, `tmp/`) — branch-scoped, rewritten whole each run, and therefore unmergeable — or a **copy of the installed skill** (`artifact-format.md` and its `-html` / `-parallel` companions, `config.md`, `gate-config.md`, `lane-protocol.md`, `html-templates/`, the four `.cjs`, the rendered role files), which Lifecycle item 2 re-materializes the moment it goes missing. Tracking the copies lands a four-figure diff in a product PR on every skill upgrade; ignoring them costs nothing, because a fresh clone missing them simply triggers bootstrap.
 
    **This file is additive, never destructive.** `.gitignore` has no effect on paths git already tracks, so writing it into a project that currently commits its run state changes nothing on its own. Say so in the summary and print the one-line remedy rather than running it — the orchestrator never mutates the index:
 
@@ -115,7 +124,7 @@ Check for a resolvable **`simplify`** skill the same way, and record its availab
 
    **On a re-run, an existing `.orchestrator/config.json` wins over the template for every key it sets.** The template contributes only keys the project does not already have — a new setting added by a later skill version, at its default. Bootstrap re-runs on upgrades now (Lifecycle item 2), so treating the template as authoritative here would silently reset a project's `parallelism`, its `lanes`, and its `agent_sync_targets` back to defaults, turning a self-healing upgrade into a configuration loss the project would discover only by watching a run behave differently.
 
-5. **Print bootstrap summary**: list all created/updated paths (including `.orchestrator/.gitignore`, `.orchestrator/artifact-format.md`, `.orchestrator/config.md`, `.orchestrator/gate-config.md`, `.orchestrator/lane-protocol.md`, `.orchestrator/html-templates/`, and the four `.orchestrator/*.cjs` render/gate scripts) and the achieved context confidence.
+5. **Print bootstrap summary**: list all created/updated paths (including `.orchestrator/.gitignore`, `.orchestrator/artifact-format.md`, `.orchestrator/artifact-format-html.md`, `.orchestrator/artifact-format-parallel.md`, `.orchestrator/config.md`, `.orchestrator/gate-config.md`, `.orchestrator/lane-protocol.md`, `.orchestrator/html-templates/`, and the four `.orchestrator/*.cjs` render/gate scripts) and the achieved context confidence.
 
 ## Pipeline
 
@@ -207,6 +216,8 @@ ORCHESTRATOR CONTEXT (authoritative — do not recompute):
 output_format={resolved output_format}
 automation_level={resolved automation_level}   ← brainstormer acts on this; other roles ignore it
 Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
+Artifact rules (html mode only): also read .orchestrator/artifact-format-html.md.
+Artifact rules (parallel path ONLY): also read .orchestrator/artifact-format-parallel.md; omit this line entirely on a sequential run.
 HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
 ID to use: {PREFIX}-{ID-TOKEN}      ← producing roles ONLY; use verbatim, do not compute your own
 lane={qualified leaf name}          ← parallel path ONLY; omit the line entirely on a sequential run
@@ -253,7 +264,7 @@ Reviewer/architect-fix runs honor an explicit pre-chosen path env var when set (
 
 This step runs before anything else. Its goal: **always start the pipeline in a clean, isolated workspace** — a fresh feature branch or a git worktree. Never run on a protected branch (`main` / `master` / `dev` / `develop` / `trunk`) and never run with a dirty working tree.
 
-Parse the invocation's arguments here, including **`--resume`** (see 0r) and **`--override-family-budget`** (see the family budget gate below). `--resume` maps to no config key — it is a per-invocation intent, like `--setup` (`references/config.md` → Accepted CLI Args).
+Parse the invocation's arguments here, including **`--resume`** (see 0r), **`--override-family-budget`** (see the family budget gate below) and **`--override-spec-size`** (see Step 2's scope band). `--resume` maps to no config key — it is a per-invocation intent, like `--setup` (`references/config.md` → Accepted CLI Args).
 
 **Family budget gate — run it before the workspace gate, and before Step 1.** When the invocation names an existing spec — the reuse
 form at Step 1, an explicit `SPEC-*` id or a `plans/specs/` path — resolve that spec's family and count its reviews
@@ -293,7 +304,7 @@ record it only in the run manifest** — that file is written at Step 2c, which 
 `off` run, so on the default path the audit trail would not exist at all. Skip the gate only when the invocation names no existing spec — a genuinely new feature has no family
 yet. When it is skipped, `family_cr_count` is `0`; bind it either way, since Step 7's report prints it.
 
-**Bind `review_budget = min(max_review_cycles, max_family_cycles − family_cr_count)` at Step 0b, once, and test Step 4's cap against it.** `max_review_cycles` defaults to `10` and `max_family_cycles` to `6`, and the family gate is a **pre-flight** check — so on a new spec, where `family_cr_count` is `0`, the in-run cap can never bind and one invocation may legally spend the whole cross-run family budget before anything notices. Clamping is what makes the in-run counter honest about the budget it is actually drawing on. **`--max-review` raises the in-run bound; nothing raises the remainder** — a flag is the invoking user's authority over this run, not over the family's history, and `--override-family-budget` is the control that exists for that.
+**Bind `review_budget = max(1, min(max_review_cycles, max_family_cycles − family_cr_count − eval_reserve))` at Step 0b, once, and test Step 4's cap against it.** `max_review_cycles` defaults to `10` and `max_family_cycles` to `6`, and the family gate is a **pre-flight** check — so on a new spec, where `family_cr_count` is `0`, the in-run cap can never bind and one invocation may legally spend the whole cross-run family budget before anything notices. Clamping is what makes the in-run counter honest about the budget it is actually drawing on. **`--max-review` raises the in-run bound; nothing raises the remainder** — a flag is the invoking user's authority over this run, not over the family's history, and `--override-family-budget` is the control that exists for that.
 
 **Resolve `max_family_cycles` before either consumer reads it.** Step 0's family gate compares against it and Step 0b validates it, so the gate and this clamp must not compute against two different numbers: apply *Bounds* validation first, then run the gate and bind `review_budget` from the same resolved value. Otherwise a malformed cap — a string, a negative — lets the gate and the clamp disagree about one budget, and a negative remainder would clamp the run to a budget it is already past before its first review exists.
 
@@ -492,6 +503,36 @@ against.
 different questions — the manifest binds a run to its **provenance**, the ledger records its **tree
 over time** — and merging them would leave half the ledger unavailable to an `off` run.
 
+#### The run meter — evaluated at every boundary
+
+**Every boundary row already carries the timestamp this needs.** When `max_run_minutes > 0`, compute
+`elapsed = now − run_started_at` as each boundary is written, and print it beside the boundary:
+
+```
+ORCHESTRATOR — boundary {step}/{cycle}: {elapsed_minutes}m elapsed of {max_run_minutes}m
+```
+
+When `elapsed_minutes >= max_run_minutes`, **do not open another cycle.** Finish the step in flight,
+then stop with a `Status: STALLED` banner naming the elapsed time, the boundary reached, and what
+remained:
+
+```
+ORCHESTRATOR — run budget exhausted
+Elapsed: {elapsed_minutes}m / {max_run_minutes}m
+Stopped at: {step}, {loop} cycle {cycle}
+Remaining: {the steps not reached}
+Status: STALLED
+```
+
+**This is a stop, not a kill.** Every artifact written so far stays on disk, the plan keeps its
+status, and a later invocation resumes under the family budget as usual. The point is that the run
+can answer *how long have I been going* at all: cycle counts are a proxy for spend that stops
+tracking the moment one cycle costs ten times another, and a run that reached every one of its cycle
+caps can still have spent fifteen hours without a single mechanism noticing.
+
+**Off by default** (`max_run_minutes: 0`), because a badly chosen bound stops good runs. Set it once
+the project has a baseline for what its runs cost.
+
 **`suites[]` has consumers; `boundaries[]` does not yet.** The tester, QA and the outer join all read
 `suites[]` through the inheritance rule above. `boundaries[]` is read by the `delta=` line the reviewer
 receives on cycles of two or more, which is computed by diffing the previous boundary's tree against
@@ -499,33 +540,58 @@ the current one. That consumer is what the boundary was written for; until it ex
 kept anyway, because a boundary with no consumer is cheap while a consumer with no boundary is
 impossible. **`tree=` is emitted only to the spawns that
 read it** — the tester and QA — and to no other role: a line every role carries and none uses is how
-`MAESTRO_PREV_CR_REF` came to sit in a role template, referenced and never set.
+`MAESTRO_PREV_CR_REF` came to sit in a role template, referenced and never set — it has since been removed from `templates/reviewer.md`, where it stood as a live hook for the per-cycle narrowing ADR-0022 declined to ship.
 
 #### 0b — Initialise counters
 
 Read cycle caps from config:
 
-- `max_review_cycles` — from `.orchestrator/config.json`; default 10 if absent. **`review_budget` is derived from it here** — `min(max_review_cycles, max_family_cycles − family_cr_count)` — and every cap test in the run uses the derived value, never the raw key.
+- `max_review_cycles` — from `.orchestrator/config.json`; default 10 if absent. **`review_budget` is derived from it here** — see the binding rule below — and every cap test in the run uses the derived value, never the raw key.
 - `max_qa_cycles` — from `.orchestrator/config.json`; default 5 if absent.
 - `max_eval_cycles` — from `.orchestrator/config.json`; default 2 if absent.
 - `max_family_cycles` — from `.orchestrator/config.json`; default 6 if absent.
+- `max_run_minutes` — from `.orchestrator/config.json`; default `0` (disabled) if absent.
+- `gate_wall_clock_minutes` — from `.orchestrator/config.json`; default `15` if absent. Passed through to QA; the orchestrator itself only forwards it.
+
+**Bind `review_budget` with the eval's remediation reserved:**
+
+```
+eval_reserve   = (max_eval_cycles > 0 and spec-driven-eval resolved) ? max_eval_cycles : 0
+review_budget  = max(1, min(max_review_cycles, max_family_cycles − family_cr_count − eval_reserve))
+```
+
+**Why the reserve exists.** Step 4e fires on every reviewer `APPROVED` and, on `ISSUES`, remediates
+through the ordinary review loop — so eval findings spend the *same* budget the reviewer just
+converged inside. Without a reserve the reviewer can legitimately spend the family's last slot, and
+the eval then raises a finding that nothing is left to fix: the run ships with the gap recorded and
+the next invocation stops at the family gate. Reserving up front makes the eval's remediation a cost
+the run planned for rather than one it discovers it cannot pay. The `max(1, …)` floor keeps a run
+startable when the reserve would otherwise consume the whole remainder — a run with one review and no
+eval headroom is worth more than a run that cannot begin.
 
 Set:
 
 - `review_cycle = 0`
 - `qa_cycle = 0`
 - `eval_cycle = 0`
+- `run_started_at = boundaries[0].at` from `.orchestrator/verification-ledger.json` — the 0a boundary, which Step 0a has already written. This is the run's clock; there is no other.
 
 Log to your running status output:
 
 ```
 ORCHESTRATOR — pipeline started
 Input: {input summary}
-max_review_cycles: {max_review_cycles}  (review_budget: {review_budget})
+max_review_cycles: {max_review_cycles}  (review_budget: {review_budget} — bound by {in-run cap | family remainder}{, {eval_reserve} reserved for eval remediation})
 max_qa_cycles: {max_qa_cycles}
 max_eval_cycles: {max_eval_cycles}
-max_family_cycles: {max_family_cycles}
+max_family_cycles: {max_family_cycles}  (family reviews to date: {family_cr_count})
+max_run_minutes: {max_run_minutes | "off"}
 ```
+
+**Print which cap is binding, not just the number.** On a fresh spec `max_review_cycles` is
+structurally inert — `family_cr_count` is `0`, so the family remainder is the smaller term and the
+configured `10` never applies. An operator reading `10` and getting six reviews has been told the
+wrong thing by their own banner, and `--max-review` cannot raise the number that actually binds.
 
 **Resolve `parallelism`** with the standard precedence — CLI `--parallel` > `.orchestrator/config.json` > default `off`. Also read `max_contract_amendments` (default `2`) and set `amendment_count = 0`, and read `max_parallel_lanes` (default `6`). Every key's values, semantics, and absent-key tolerance are normative in **`references/config.md`** — read them there; they are deliberately not restated here.
 
@@ -591,13 +657,13 @@ At **Step 2c**, immediately after the parent contract verifies, write `.orchestr
 2. **On any mismatch, missing manifest, or more than one resumable manifest: do NOT resume.** Print what failed and **require explicit selection** — the user names the run to resume, or starts fresh. Never auto-pick. A spec whose bytes changed, a base that moved, a branch that differs, a resolved `parallelism` that no longer matches, or an artifact absent from the manifest means the on-disk plans are **not** provably this orchestrator's; treating them as authoritative is exactly the escalation this gate exists to stop.
 3. **Only then skip Steps 1, 2p, 2c, 2s, and 2L.** The spec, the parent contract, every sub-contract, and every leaf plan already exist on disk and — **having passed validation** — are authoritative. Re-deriving any of them would produce a different split from the one the completed leaves were written against.
 4. Recover the parent contract by the manifest's `contract_ids` root, never by scanning `plans/feat/`. **Bind `root_plan_id` to that contract's ID, and `spec_path` to the spec file the manifest's `spec_id` names** — already located in step 1 to verify `spec_sha256`. Step 2 and Step 2c are the only other binding sites for `root_plan_id` and Step 1 the only one for `spec_path`, and item 3 skips all three, so without this a resumed run reaches Step 4 with both names unbound and emits `root_plan=` / `spec=` as literal placeholders. The reviewer's fallback covers an *absent* line, not a malformed one, so it would silently lose its requirement-coverage anchor on exactly the runs whose leaf maps were authored in a prior session. Same guarantee as `leaves=` below.
-5. **Rebuild the full leaf set from the manifest's `leaf_ids`**, cross-checked against the parent contract's `Sub-contract` column (the one-level resolution rule in `.orchestrator/artifact-format.md` → **`PACT` ID resolution`**). The two must agree; a disagreement is a mismatch under step 2 and stops the resume.
+5. **Rebuild the full leaf set from the manifest's `leaf_ids`**, cross-checked against the parent contract's `Sub-contract` column (the one-level resolution rule in `.orchestrator/artifact-format-parallel.md` → **`PACT` ID resolution`**). The two must agree; a disagreement is a mismatch under step 2 and stops the resume.
 6. **Read `references/parallel.md` now, then re-enter at its Step 3L**, with the leaf set **restricted to leaves whose `FEAT` plan is not `DONE`**. Item 3 skipped Step 2p, which is otherwise the only step that opens that file — Steps 3L, 3s and 3j are all defined there, not here. A leaf already `DONE` is not re-dispatched and its work is not rolled back.
 7. Proceed through **Step 3s and Step 3j** — both in `references/parallel.md` — **normally**. The coder's existing resume-from-first-unchecked-task semantics carry the rest and are **unchanged** — that is what makes per-leaf resume free.
 
 **A resumed run emits `leaves=` too.** Step 5 above rebuilt the full leaf set from the manifest, so by the time the join-level spawns are issued the orchestrator holds exactly the same resolved set a fresh run would hold — the resume path re-derives it once, centrally, rather than leaving each of the three roles to re-derive it separately. The Step 3b, Step 4, and Step 5 prompt blocks therefore carry `leaves=` on a resumed run exactly as they do on a fresh one, and it names the **full** leaf set, not only the leaves being re-dispatched: the tester, reviewer, and QA evaluate the union of every leaf's diff, including the ones that were already `DONE` and were not re-run. This is what narrows the three join templates' documented `PACT`-walk fallback to **legacy** runs — a run started before `leaves=` existed — rather than to resumed ones.
 
-Print what was recovered and what is being re-dispatched, so a resumed run is never indistinguishable from a fresh one in the transcript (`.orchestrator/artifact-format.md` → Parallel-mode lines):
+Print what was recovered and what is being re-dispatched, so a resumed run is never indistinguishable from a fresh one in the transcript (`.orchestrator/artifact-format-parallel.md` → Parallel-mode lines):
 
 ```
 RESUME — {PACT-ID}
@@ -699,6 +765,8 @@ output_format={resolved output_format}
 automation_level={resolved automation_level}
 clarity_threshold={resolved clarity_threshold}   ← manual-mode interview target; keep asking until self-rated clarity ≥ this
 Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
+Artifact rules (html mode only): also read .orchestrator/artifact-format-html.md.
+Artifact rules (parallel path ONLY): also read .orchestrator/artifact-format-parallel.md; omit this line entirely on a sequential run.
 HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
 ID to use: {computed SPEC-<id>}
 
@@ -759,6 +827,8 @@ Prompt to send:
 ORCHESTRATOR CONTEXT (authoritative — do not recompute):
 output_format={resolved output_format}
 Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
+Artifact rules (html mode only): also read .orchestrator/artifact-format-html.md.
+Artifact rules (parallel path ONLY): also read .orchestrator/artifact-format-parallel.md; omit this line entirely on a sequential run.
 HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
 ID to use: {computed FEAT-<id>}
 
@@ -783,6 +853,55 @@ Read the plan file at `plan_path` and the paired `.progress.md` (same path with 
 
 **Requirement-coverage check (mandatory, same pass).** Count the numbered items in the spec's `## Functional requirements` section, and count the rows in the plan's `## Requirement Coverage` map. **They must be equal, and every row must carry either a non-empty `Covered by AC #` cell or a `Deferred` status with a reason.** If the map is absent, short, or has an empty cell on a `Met-by-plan` row, re-invoke the architect once, quoting the specific requirement numbers that are missing or unfilled. If it is still incomplete after the retry, stop and report — a plan that does not account for the spec sends the reviewer into the pipeline blind, and every requirement it dropped comes back as a post-approval remediation run. This is the cheapest point in the whole run to catch it: nothing has been written to the workspace yet.
 
+**Scope band (same pass, same count).** The requirement count taken above is the only measure of how
+big this deliverable is that the run ever computes, and until now it was used for an equality check
+and then discarded. Compare it against `max_spec_requirements` (Step 0b; `0` disables this entirely
+and is the default):
+
+| Band | Condition | Action |
+| ---- | --------- | ------ |
+| quiet | `N <= max_spec_requirements` | nothing — do not print, do not annotate |
+| stop | `N > max_spec_requirements` | print the banner below and **do not proceed to Step 3** |
+
+```
+ORCHESTRATOR — spec scope exceeds the configured budget
+Spec: {spec_id}
+Requirements: {N} / {max_spec_requirements}
+Plan: {P} phases, {T} tasks
+Projected family draw: ~{ceil(N / max_spec_requirements)} of {max_family_cycles} reviews
+Proposed split:
+  {for each group: "run {i}: FR {a}-{b} — {the sub-heading or phase name it came from}"}
+Continue undecomposed with --override-spec-size.
+Status: STALLED
+```
+
+**Derive the split mechanically from what is already on disk** — never invent one. Read the spec's
+`###` sub-headings inside `## Functional requirements` and group contiguous blocks until each group
+reaches the budget; when the plan's phase boundaries are coarser than those headings, prefer the
+phases, because each phase is already required to exit on a green tree and is therefore already a
+shippable unit. Print the groups with their FR ranges. A refusal without a split is a wall; a refusal
+that names the four runs it would rather see is a plan.
+
+**Why this is a stop and not a warning.** The family budget is the only cross-run bound, it is checked
+**pre-flight** against prior history, and on a brand-new spec that history is empty — so a single first
+invocation may legally spend all of it, which is exactly what the run this band was written for did:
+53 requirements, 145 tasks, 122 files admitted as one deliverable, six of six family reviews consumed,
+and every follow-up item now needing `--override-family-budget` to start. The band converts that from
+something discovered at the end into a decision made at the cheapest possible moment — before the
+architect has written a task and before anything has touched the workspace.
+
+**`--override-spec-size` skips this band for one invocation**, on the record: append
+`ORCHESTRATOR — spec size overridden ({N}/{max_spec_requirements})` to the plan's `.progress.md`, the
+same shape `--override-family-budget` uses. It is the invoking user's authority over this run, and
+like every other override it is recorded rather than silent.
+
+**Size is a multiplier, not a threshold — calibrate accordingly.** Across 218 specs on the reference
+machine the median is 14 requirements and p75 is ~25, and larger specs do draw more reviews (mean 2.0
+→ 3.2–3.5; three-or-more-round families 23% → 68–75%). But the worst family in that corpus is a
+12-requirement spec, and its largest spec took three reviews. This band catches the tail; it does not
+predict the hard ones, and it must not be sold as if it does. `references/config.md` →
+`max_spec_requirements` carries the full calibration.
+
 **Gate-completeness check (mandatory, same pass).** Read the plan's `## Verification (per phase)` section. It must close with a `### Gate coverage` table carrying **one row per runtime gate id — G1, G2, G4, G5, G6, G7** — each with a non-empty `Carried by` cell naming the command that runs it, or the literal `n/a` with a reason. If the section is absent altogether, the architect's summary must have printed `Verification: QA-only — {reason}`. A missing table, a short one, an empty `Carried by` cell, or an unreasoned `QA-only` all fail: re-invoke the architect once, quoting the specific gate letters that are missing or unfilled, and stop and report if it is still incomplete after the retry. **Same pass, the command table.** The section also carries a `| Command | Scope | Phases | Path condition |` table, every row with a non-empty `Scope` cell drawn from the closed set `changed-files | whole-project | advisory-instrument | deferred-to-join`. Two cells fail on sight and are re-invoked along with everything else: a `whole-project` token on a command that runs tests, and any `deferred-to-join` token on a plan that carries no lane — there is no join on a sequential or remediation run to redeem it at. **Skip this check entirely when the project holds no `.cleancode-gates.json` anywhere** — with no gate config there are no gates to account for, and this degrades exactly as Bootstrap B2's optional dependencies do.
 
 This makes the same trade the requirement-coverage check above makes, one level down: it verifies every gate is *accounted for*, never that the named command truly enforces it — the orchestrator runs no gates and cannot know. What it closes is the silent hole. A plan whose verification section lists a toolchain command per phase and names no gate at all reads as thorough, passes every later structural check, and is indistinguishable from a plan that deliberately deferred. The gates then run for the first time at QA, two roles after the code was written, and clearing them there costs a QA-remediation plan, a re-review, and a second QA pass. This is the cheapest point in the run to demand them and the most expensive one to discover them at — the same asymmetry, and the same argument, as the requirement map.
@@ -799,6 +918,8 @@ Invoke the **coder** subagent with the role-prompt preamble (no `ID to use:` lin
 ORCHESTRATOR CONTEXT (authoritative — do not recompute):
 output_format={resolved output_format}
 Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
+Artifact rules (html mode only): also read .orchestrator/artifact-format-html.md.
+Artifact rules (parallel path ONLY): also read .orchestrator/artifact-format-parallel.md; omit this line entirely on a sequential run.
 HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
 MAESTRO_REVIEW_BASE={base_sha}   ← the Step 0a pre-flight base; your phase gates scope the working tree against it
 
@@ -842,6 +963,8 @@ Prompt to send:
 ORCHESTRATOR CONTEXT (authoritative — do not recompute):
 output_format={resolved output_format}
 Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
+Artifact rules (html mode only): also read .orchestrator/artifact-format-html.md.
+Artifact rules (parallel path ONLY): also read .orchestrator/artifact-format-parallel.md; omit this line entirely on a sequential run.
 HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
 ID to use: {computed TEST-<id>}
 leaves={comma-separated leaf FEAT IDs, in dispatch order}   ← parallel path ONLY; omit the line entirely on a sequential run
@@ -900,6 +1023,8 @@ Compute the CR ID: `newid CR` (unless `MAESTRO_CR_TARGET_PATH` is set — then u
 ORCHESTRATOR CONTEXT (authoritative — do not recompute):
 output_format={resolved output_format}
 Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
+Artifact rules (html mode only): also read .orchestrator/artifact-format-html.md.
+Artifact rules (parallel path ONLY): also read .orchestrator/artifact-format-parallel.md; omit this line entirely on a sequential run.
 HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
 ID to use: {computed CR-<id>}
 root_plan={root_plan_id}   ← the run's immutable aggregate; the reviewer's requirement-coverage anchor. Emitted on BOTH paths, on every cycle.
@@ -908,6 +1033,7 @@ leaves={comma-separated leaf FEAT IDs, in dispatch order}   ← parallel path ON
 aggregate={path to .orchestrator/join-digest.md}   ← parallel path ONLY, and only when the digest built and its integrity check passed; omit the line entirely otherwise
 delta={path to the cycle delta file list}   ← review cycles >= 2 ONLY; omit the line entirely on cycle 1
 MAESTRO_REVIEW_BASE={base_sha}   ← the Step 0a pre-flight base; the reviewer snapshots the working tree against it
+budget: review_cycle={review_cycle} review_budget={review_budget} family_cr_count={family_cr_count}   ← stamp these into the CR frontmatter; they are how a later reader knows what the run had left
 
 Review plan {plan_id}. The plan is in DONE status.
 Follow your full reviewer workflow and print the structured output summary.
@@ -915,6 +1041,8 @@ Follow your full reviewer workflow and print the structured output summary.
 
 > **On the parallel path the reviewer is invoked with `root_plan_id` — the parent `PACT` ID — not the active `plan_id`** (Step 3j.3), so it runs once at the join over the **whole** leaf union, on every review cycle. A remediation pass reassigns `plan_id` (Step 4c) but never `root_plan_id`, so cycle 2 reviews the same aggregate cycle 1 did, with the `FIX` plan supplied as a **related input** rather than as the subject. On an `off` run the two coincide and the block reads exactly as before.
 >
+> **The `budget:` line exists so the budget is legible from the artifacts, not only from the console.** `review_budget` is printed once at Step 0b and once in the final report, and persisted nowhere in between — `grep -rn review_budget plans/` over a run that spent its entire family budget returns nothing. Stamping it into every `CR` makes the pressure a run was under readable afterwards, by a human or by the next forensic pass, and it is what lets a reader tell a family that converged in two reviews from one that was approved on its last permitted cycle.
+
 > **`root_plan=` is emitted on both paths, and it is what keeps requirement coverage alive across remediation cycles.** Step 4c reassigns `plan_id` to the `FIX` plan, whose acceptance criteria are the previous CR's Must Fixes and which carries no `## Requirement Coverage` map by design. Without this line a sequential cycle-2 review would gate on the `FIX` plan alone and silently drop everything cycle 1 was checking — the same leak, one level down. The reviewer resolves the map from `root_plan` and re-verifies it on every cycle, which is also what surfaces a requirement an earlier cycle met and a later fix broke.
 >
 > **`leaves=` is emitted here, on the parallel path only.** The orchestrator dispatched the leaves at Step 3L and still holds the resolved set, so it hands it over rather than making the role rebuild it. The line is **omitted entirely on an `off` run**, exactly as `lane=` and `contract=` are. It is re-emitted on **every** review cycle, so a cycle-10 run re-reads nothing a cycle-1 run already resolved.
@@ -932,7 +1060,20 @@ Read the CR file at `cr_path`. If the file does not exist or is empty, re-invoke
 
 #### If REQUEST_CHANGES:
 
-Check `review_cycle` against **`review_budget`**, bound at Step 0b as `min(max_review_cycles, max_family_cycles − family_cr_count)`. If `review_cycle >= review_budget`:
+Check `review_cycle` against **`review_budget`**, bound at Step 0b as `max(1, min(max_review_cycles, max_family_cycles − family_cr_count − eval_reserve))`.
+
+**Warn before the budget is gone, not after.** When `review_budget − review_cycle == 2`, print one
+line to the running status output:
+
+```
+ORCHESTRATOR — review budget: {review_cycle}/{review_budget} used, 2 remaining
+```
+
+The run this warning exists for learned its budget was spent by reading its own final report. Two
+cycles is the point at which an operator can still choose to narrow the remaining work, waive a
+Should Fix, or stop and split — a warning at one is a notification, not a decision point.
+
+If `review_cycle >= review_budget`:
 
 ```
 ORCHESTRATOR — review cycle limit reached ({review_budget})
@@ -956,6 +1097,8 @@ Compute the fix-plan ID: `newid FIX`. Invoke **architect** with the role-prompt 
 ORCHESTRATOR CONTEXT (authoritative — do not recompute):
 output_format={resolved output_format}
 Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
+Artifact rules (html mode only): also read .orchestrator/artifact-format-html.md.
+Artifact rules (parallel path ONLY): also read .orchestrator/artifact-format-parallel.md; omit this line entirely on a sequential run.
 HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
 ID to use: {computed FIX-<id>}
 spec={spec_path}   ← the run's source spec; every artifact you write names its id in `related_to` (family membership). Omit the line entirely when the run has no spec
@@ -976,6 +1119,8 @@ Invoke **coder** with the role-prompt preamble (no `ID to use:` line):
 ORCHESTRATOR CONTEXT (authoritative — do not recompute):
 output_format={resolved output_format}
 Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
+Artifact rules (html mode only): also read .orchestrator/artifact-format-html.md.
+Artifact rules (parallel path ONLY): also read .orchestrator/artifact-format-parallel.md; omit this line entirely on a sequential run.
 HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
 MAESTRO_REVIEW_BASE={base_sha}   ← the Step 0a pre-flight base; your phase gates scope the working tree against it
 
@@ -999,6 +1144,8 @@ When re-running tester, compute a fresh report ID (`newid TEST`) and use the sam
 ORCHESTRATOR CONTEXT (authoritative — do not recompute):
 output_format={resolved output_format}
 Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
+Artifact rules (html mode only): also read .orchestrator/artifact-format-html.md.
+Artifact rules (parallel path ONLY): also read .orchestrator/artifact-format-parallel.md; omit this line entirely on a sequential run.
 HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
 ID to use: {computed TEST-<id>}
 leaves={comma-separated leaf FEAT IDs, in dispatch order}   ← parallel path ONLY; omit the line entirely on a sequential run
@@ -1111,7 +1258,7 @@ against the **spec**; the root plan's `## Requirement Coverage` map records whic
 this run deliberately deferred. **Resolve that map the way the reviewer does** (`templates/reviewer.md`
 Step 1 and its join lens): on a `FEAT` root it is the plan's own map; on a `PACT` root — the whole
 parallel path, where `root_plan_id` is the parent contract and a `PACT` carries no map of its own — it
-is the **union of the leaf plans' maps**, resolved through `.orchestrator/artifact-format.md` →
+is the **union of the leaf plans' maps**, resolved through `.orchestrator/artifact-format-parallel.md` →
 **`PACT` ID resolution**, in which a requirement counts as `Deferred` only when **every** leaf assigned
 it defers it. Without that resolution the reconciliation finds no map on every parallel run and drops
 nothing — re-opening a lane's recorded deferral, which is precisely the fight this paragraph exists to
@@ -1130,6 +1277,30 @@ the branches below and Step 7b's `Spec eval:` line do not report a failed eval o
 correctly — and go to Step 5.
 Without this reconciliation the two mechanisms fight: P1's sanctioned deferral becomes a permanent
 eval failure and every deferred requirement spawns a remediation run that cannot succeed.
+
+**Then floor the remediation on kind — not on the score, and not on the list being non-empty.**
+`eval_status = ISSUES` derives from a gap list the workflow defines as *"fixes to reach 1.00"*, so on
+any non-trivial spec it is non-empty at every score a real implementation reaches: a run that graded
+**0.94 `Spec-complete` with every requirement verified and none unmet** still returned `ISSUES`, and
+so did its remediation at **0.98**. Re-entering the loop on that alone spends the reviewer's budget
+re-litigating a diff the reviewer has already approved. An actionable item earns a remediation cycle
+only when it is one of:
+
+- an **Engineering Gate confirmed red** that this run caused (a `not-run` gate never qualifies — see above);
+- a requirement the root plan's map marks **`Met-by-plan`** that the eval scores **unmet** — the map
+  promised it and the code does not deliver it, which is a broken commitment rather than a missing
+  refinement;
+- a gap naming an **untested security or authentication obligation** — an unasserted guard on
+  credentials, transport trust, access control, or a boundary the spec calls out. This carve-out is
+  not decoration: on the run this floor was written for, the eval's top-ranked gap was the only
+  assertion that mTLS validates its CA, and any floor expressed as a number would have discarded it.
+
+**Everything else is recorded, not remediated.** Carry it verbatim into Step 7b's `Issues found:`
+list with its rank and reason, so the run ships with the gap visible and the operator decides. State
+the split in the eval line of the final report — `{N} actionable, {M} recorded` — because a gap that
+was seen and consciously not fixed must not read the same as a gap that was never found. **If the
+floor empties the actionable set, set `eval_status = PASS`** by the same normalization the
+deferred-by-decision rule above uses, and go to Step 5.
 
 #### If any Engineering Gate is a confirmed red `✗`:
 
@@ -1237,6 +1408,8 @@ Compute the QA report ID: `newid QA`. Invoke the **qa** subagent with the role-p
 ORCHESTRATOR CONTEXT (authoritative — do not recompute):
 output_format={resolved output_format}
 Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
+Artifact rules (html mode only): also read .orchestrator/artifact-format-html.md.
+Artifact rules (parallel path ONLY): also read .orchestrator/artifact-format-parallel.md; omit this line entirely on a sequential run.
 HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
 ID to use: {computed QA-<id>}
 MAESTRO_REVIEW_BASE={base_sha}   ← the Step 0a pre-flight base; every gate scopes the working tree against it
@@ -1281,7 +1454,7 @@ All blocking gates passed; the plan is safe to commit. This status indicates tha
 
 #### If BLOCKED_STALE:
 
-A `BLOCKED_STALE` status means one or more gates exceeded their wall-clock budget (per QA Step 0). The result is unknown, not failed. Do NOT enter the QA-remediation loop — gate timeouts are an operator decision, not an architect remediation target. Stop and report to the user:
+A `BLOCKED_STALE` status means one or more gates exceeded their wall-clock budget — `gate_wall_clock_minutes`, enforced by `templates/qa.md` → Step 0, which is the sole producer of the `stale_gates:` frontmatter this status is read from. The result is unknown, not failed. Do NOT enter the QA-remediation loop — gate timeouts are an operator decision, not an architect remediation target. Stop and report to the user:
 
 ```
 ORCHESTRATOR — QA stale
@@ -1317,6 +1490,8 @@ Compute the QAF plan ID: `newid QAF`. Invoke **architect** with the role-prompt 
 ORCHESTRATOR CONTEXT (authoritative — do not recompute):
 output_format={resolved output_format}
 Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
+Artifact rules (html mode only): also read .orchestrator/artifact-format-html.md.
+Artifact rules (parallel path ONLY): also read .orchestrator/artifact-format-parallel.md; omit this line entirely on a sequential run.
 HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
 ID to use: {computed QAF-<id>}
 spec={spec_path}   ← the run's source spec; every artifact you write names its id in `related_to` (family membership). Omit the line entirely when the run has no spec
@@ -1337,6 +1512,8 @@ Invoke **coder** with the role-prompt preamble (no `ID to use:` line):
 ORCHESTRATOR CONTEXT (authoritative — do not recompute):
 output_format={resolved output_format}
 Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
+Artifact rules (html mode only): also read .orchestrator/artifact-format-html.md.
+Artifact rules (parallel path ONLY): also read .orchestrator/artifact-format-parallel.md; omit this line entirely on a sequential run.
 HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
 MAESTRO_REVIEW_BASE={base_sha}   ← the Step 0a pre-flight base; your phase gates scope the working tree against it
 
@@ -1353,6 +1530,8 @@ Compute the CR ID: `newid CR`. Invoke **reviewer** with the role-prompt preamble
 ORCHESTRATOR CONTEXT (authoritative — do not recompute):
 output_format={resolved output_format}
 Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
+Artifact rules (html mode only): also read .orchestrator/artifact-format-html.md.
+Artifact rules (parallel path ONLY): also read .orchestrator/artifact-format-parallel.md; omit this line entirely on a sequential run.
 HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
 ID to use: {computed CR-<id>}
 root_plan={root_plan_id}   ← the run's immutable aggregate; the reviewer's requirement-coverage anchor. Emitted on BOTH paths, on every cycle.
@@ -1393,7 +1572,7 @@ Extract plan IDs and file paths from subagent output using these patterns:
 
 If an agent output is ambiguous or missing the expected pattern, re-read the relevant plan file directly to determine status before continuing.
 
-> **Note — BLOCKED_STALE is orchestrator-synthesized:** the qa agent never emits the literal string `BLOCKED_STALE`. The orchestrator infers it from the QA report's `stale_gates:` frontmatter (gate wall-clock timeout exceeded). Do not expect this value in the qa agent's `Status:` output line.
+> **Note — BLOCKED_STALE is orchestrator-synthesized:** the qa agent never emits the literal string `BLOCKED_STALE`. The orchestrator infers it from the QA report's `stale_gates:` frontmatter, written by `templates/qa.md` → Step 0 when a gate exceeds `gate_wall_clock_minutes`. **An absent key means a report from before that step existed, not a clean run** — Step 0 emits `stale_gates: []` when nothing timed out. Do not expect this value in the qa agent's `Status:` output line.
 
 ### Rules
 
