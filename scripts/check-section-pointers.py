@@ -46,7 +46,10 @@ def owners_of(sec):
         if n.startswith(sec):
             out |= {os.path.basename(x) for x in byname[n]}
     return out
-pat=re.compile(r'`?(?:\.orchestrator/|references/)?([A-Za-z0-9_.-]+\.md)`?\s*(?:→|->)\s*\*{0,2}([^*\n`.,;)]+)')
+# The section name may be fenced (*`PACT` ID resolution*), so backticks must be
+# allowed INSIDE it and stripped by norm() — excluding them silently dropped every
+# pointer whose section begins with one, which was the whole `PACT` family.
+pat=re.compile(r'`?(?:\.orchestrator/|references/)?([A-Za-z0-9_.-]+\.md)`?\s*(?:→|->)\s*\*{0,2}([^*\n.,;)]+)')
 bad=[]
 for f in files:
     for i,l in enumerate(open(f,encoding='utf-8'),1):

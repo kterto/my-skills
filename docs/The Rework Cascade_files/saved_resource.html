@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<!-- saved from url=(0253)https://89a3a000-15d7-4f89-8875-6791e8f9f436.frame.claudeusercontent.com/_f/1787269635-bb26/?__frame_t=xGJsVqGi2aQUeql0WW882ZNK.cd2ad997-30af-45cc-85e2-16f0c8014c20.3cc0c860-aa76-4189-9749-155a3fce52e9.1787667111&__frame_v=manifest.0012e129155e2ab1.json -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><!-- frame-runtime --><!--<base href="/_f/1787269635-bb26/">--><base href="."><script>window.__FRAME_PREAMBLE={"capabilities":{"artifact":"artifact.oqIe8shs.js","assets":"assets.DBUJcvq_.js","comments":"comments.GLuHR3zP.js","db":"db.CRhVHzSt.js","downloads":"downloads.C3GSvEDP.js","embed":"embed.CZsbekoQ.js","mcp":"mcp.D3B2EyQu.js","network":"network.B5UA9Su4.js","permissions":"permissions.BNySkLV5.js","room":"room.DE7EMui-.js","sample":"sample.BW2Uysoh.js","self":"artifact.oqIe8shs.js","user":"user.BpKav-Rf.js"},"transforms":"_transforms.h3_8GSUa.js","comments":"_comments.BOgkE6qU.js","translate":"_translate.5HCW4BJh.js"}</script><script>(function(){"use strict";var Y=["light","dark","system"],X=/^[A-Za-z0-9_-]{1,64}$/,D=/^[a-zA-Z_:][a-zA-Z0-9_:.-]{0,127}$/,G=new Set(["class","hidden","value","checked"]);function V(e){const t=e.toLowerCase();return t.startsWith("data-")||t.startsWith("aria-")||G.has(t)}var be="http://www.w3.org/1999/xhtml",Z="http://www.w3.org/2000/svg",J=new Set(["script","style","iframe","noscript","noframes","noembed","xmp","plaintext","template","title","textarea","object","embed"]),Q=new Set(["script","style"]);function ee(e){const t=e.localName.toLowerCase();return e.namespaceURI==="http://www.w3.org/1999/xhtml"?!J.has(t):e.namespaceURI===Z?!Q.has(t):!1}var te=new Set(["html","head","body","frameset"]);function re(e){return e.namespaceURI==="http://www.w3.org/1999/xhtml"&&te.has(e.localName)}function ne(e){if(e===null||typeof e!="object")return!1;const t=e;if(typeof t.target!="string"||!X.test(t.target)||t.text!==void 0&&typeof t.text!="string")return!1;if(t.attrsSet!==void 0){if(t.attrsSet===null||typeof t.attrsSet!="object")return!1;for(const[n,s]of Object.entries(t.attrsSet))if(!D.test(n)||typeof s!="string")return!1}if(t.attrsRemoved!==void 0){if(!Array.isArray(t.attrsRemoved))return!1;for(const n of t.attrsRemoved)if(typeof n!="string"||!D.test(n))return!1}return!0}function se(e,t){if(e===null||typeof e!="object")return!1;const{seq:n,elements:s}=e;if(typeof n!="number"||!Number.isSafeInteger(n)||!Array.isArray(s)||s.length===0||s.length>64)return!1;for(let o=0;o<s.length;o++)if(!t(s[o]))return!1;return!0}function ae(e){return e===null||typeof e!="object"?!1:se(e.__frame_patch,ne)}function oe(e){if(e===null||typeof e!="object")return!1;const t=e.__frame_init;return t!==null&&typeof t=="object"}function ie(e){return e!==null&&typeof e=="object"&&e.__frame_size_poke===!0}function le(e){if(e===null||typeof e!="object")return!1;const t=e.__frame_theme;if(t===null||typeof t!="object")return!1;const n=t.theme;return typeof n=="string"&&Y.includes(n)}var O="__frame_scroll",ce=150,ue=310,fe=160,pe=3e4;function de(){let e=0,t=!1,n=!1,s=!1,o=0,l=null;const c=i=>{try{sessionStorage.setItem(O,JSON.stringify({y:i}))}catch{}},f=()=>{if(clearTimeout(e),l===null)return;const i=l;l=null,c(i)},S=()=>{if(t){t=!1;return}n=!0,l=scrollY,clearTimeout(e),e=setTimeout(f,ce)};try{addEventListener("scroll",S,{passive:!0}),addEventListener("pagehide",f)}catch{}const v=()=>{let i;try{i=sessionStorage.getItem(O)}catch{return null}if(i===null)return null;let d;try{d=JSON.parse(i)}catch{d=null}const u=d?.y;if(!(typeof u=="number"&&Number.isFinite(u)&&u>=0)){try{sessionStorage.removeItem(O)}catch{}return null}return u};let b=!1;const m=i=>{try{const d=scrollY;scrollTo({top:i,left:0,behavior:"instant"}),o=i,s=!0,clearTimeout(e),l=null,c(i);const u=scrollY;u!==d&&(t=!0),u!==i&&!b&&(b=!0,addEventListener("load",()=>{try{if(scrollY===u){const h=v();m(h!==null?h:o)}}catch{}},{once:!0}))}catch{}},y=()=>{try{return!!location.hash}catch{return!0}};let g=!1;const E=()=>{try{if(g||innerWidth>ue||innerHeight>fe)return;g=!0;const i=Date.now(),d=()=>{try{removeEventListener("resize",d)}catch{}if(Date.now()-i>pe||n||y())return;const u=v();m(u!==null?u:o)};addEventListener("resize",d)}catch{}};let r=!1,p=!1;return{restore(){if(r||(r=!0,y()))return;const i=v();i!==null&&(m(i),E())},promoted(){if(p||(p=!0,y()))return;const i=v();i!==null?(m(i),E()):s&&m(o)}}}var Ee="modulepreload",Ae=function(e){return"/"+e},Re={},me=function(t,n,s){let o=Promise.resolve();function l(c){const f=new Event("vite:preloadError",{cancelable:!0});if(f.payload=c,window.dispatchEvent(f),!f.defaultPrevented)throw c}return o.then(c=>{for(const f of c||[])f.status==="rejected"&&l(f.reason);return t().catch(l)})};(function(){const e=Object.defineProperty,t=globalThis,n=["RTCPeerConnection","webkitRTCPeerConnection","RTCDataChannel","RTCIceCandidate","RTCSessionDescription","RTCRtpSender","RTCRtpReceiver"];let s=0;for(let o=0;o<n.length;o++){const l=n[o];try{e(t,l,{value:void 0,writable:!1,configurable:!1})}catch{try{delete t[l]}catch{}try{e(t,l,{value:void 0,writable:!1,configurable:!0})}catch{}}typeof t[l]=="function"&&s++}if(s&&window!==top)try{parent.postMessage({__frame_rtc_lockdown_failed:s},"*")}catch{}})();var he=1e4,_e=Object.freeze([...window.__FRAME_PREAMBLE?.origins??["https://claude.ai","https://preview.claude.ai"]]);function F(e){for(const t of _e)if(t.endsWith(":*"))try{const n=new URL(e);if(`${n.protocol}//${n.hostname}:*`===t)return!0}catch{}else if(e===t)return!0;return!1}var M=Object.freeze({...window.__FRAME_PREAMBLE?.capabilities}),j=window.__FRAME_PREAMBLE?.transforms,N=window.__FRAME_PREAMBLE?.comments,I=window.__FRAME_PREAMBLE?.translate,L=/^[\w.-]+\.js$/;function T(e){return me(()=>import("/_runtime/"+e),void 0)}function z(e,t){return{contract:e.contract,changes:new Set(e.changes??[]),flags:new Set(e.flags??[]),capabilities:e.capabilities??{},capBudgets:e.capBudgets??{},transforms:new Map,shellOrigin:t,mount:W,pipe:()=>({wrap:(n,s)=>(...o)=>{try{return s(...o)}catch(l){return Promise.reject(l)}}})}}var P=null,w=null;function q(e,t,n){try{Object.defineProperty(e,t,{value:n,writable:!1,configurable:!1,enumerable:!0})}catch{try{Object.defineProperty(e,t,{value:n,writable:!1,configurable:!0,enumerable:!0})}catch{}}}var B=!1;function ve(e,t){const n=[];for(const s of e.elements){const o=document.querySelector(`[data-id="${s.target}"]`);if(!o){parent.postMessage({__frame_patch_miss:{seq:e.seq}},t);return}if([...Object.keys(s.attrsSet??{}),...s.attrsRemoved??[]].some(l=>!V(l))){parent.postMessage({__frame_patch_miss:{seq:e.seq}},t);return}if(s.text!==void 0&&(!ee(o)||re(o))){parent.postMessage({__frame_patch_miss:{seq:e.seq}},t);return}for(const[l,c]of Object.entries(s.attrsSet??{}))if(!$(o,l)){try{o.setAttribute(l,c)}catch{}H(o,l,c)}for(const l of s.attrsRemoved??[])$(o,l)||(o.removeAttribute(l),H(o,l,null));typeof s.text=="string"&&(o.textContent=s.text),n.push(s.target)}try{document.dispatchEvent(new CustomEvent("claude:edit",{detail:{seq:e.seq,targets:n}}))}catch{}}function H(e,t,n){if(!(e instanceof HTMLInputElement))return;const s=t.toLowerCase();s==="checked"?e.checked=n!==null:s==="value"&&e.type!=="file"&&(e.value=n??"")}function $(e,t){const n=t.toLowerCase(),s=e;return n==="data-id"||(n==="value"||n==="checked")&&(s.__artifactSecret===!0||/^(password|hidden|file)$/.test(s.type??"")||/(^|\s)(cc-|one-time-code|current-password|new-password)/i.test(`${e.getAttribute("autocomplete")??""} ${s.autocomplete??""}`))}function K(e){const t=document.documentElement;e==="light"||e==="dark"?(t.dataset.theme=e,t.style.colorScheme=e,B=!0):B&&(delete t.dataset.theme,t.style.colorScheme="",B=!1)}var R=new Map;function ye(){let e;const t={u:new Promise(n=>{e=n}),r:n=>{t.done=!0,e(n)},done:!1,nulled:!1};return t}var ge=Object.freeze(Object.assign(Object.create(null),{call:Function.prototype.call,apply:Function.prototype.apply,bind:Function.prototype.bind})),W=(e,t)=>{const n=R.get(e);if(!n||n.done){n?.nulled&&w&&parent.postMessage({__frame_cap_telemetry:{kind:"cap-load-error",cap:e}},w);return}const s=typeof t=="function"?Object.setPrototypeOf(t,ge):Object.assign(Object.create(null),t);typeof s.then=="function"&&delete s.then,n.r(Object.freeze(s))},U=Object.getOwnPropertyDescriptor(window,"claude");if(window!==top&&!(U&&U.writable===!1)){const e=j&&L.test(j)?T(j).catch(()=>{}):Promise.resolve(void 0),t=r=>{if(r.type==="auxclick"&&r.button!==1)return;const p=r.target,i=p&&p.closest?p.closest("a[href],area[href]"):null;if(!i)return;const d=i.getAttribute("href");if(!d)return;let u,h;try{u=new URL(d,document.baseURI),h=new URL(document.baseURI).origin}catch{return}if((u.protocol==="http:"||u.protocol==="https:")&&u.origin!==h){r.preventDefault();const _=(i.getAttribute("target")??"").toLowerCase(),C=r.type==="auxclick"||r.metaKey||r.ctrlKey||r.shiftKey||r.altKey||!["","_self","_top","_parent"].includes(_);parent.postMessage({__frame_nav:!0,url:u.href,newTab:C},"*")}};addEventListener("click",t,!0),addEventListener("auxclick",t,!0);const n={},s=r=>{r.isTrusted&&(n.pointer=!0)},o=r=>{r.isTrusted&&(n.click=!0)};addEventListener("pointermove",s,{capture:!0,passive:!0}),addEventListener("click",o,{capture:!0,passive:!0}),e.then(r=>{r?.wireNav&&(r.wireNav(),removeEventListener("click",t,!0),removeEventListener("auxclick",t,!0),removeEventListener("pointermove",s,!0),removeEventListener("click",o,!0),r.wireEngagement?.(n))});let l=null;try{l=de()}catch{}const c=U?.value??{};q(window,"claude",c);for(const r of Object.keys(M)){if(c[r]!==void 0){q(c,r,c[r]);continue}R.set(r,ye())}if(c.use===void 0){const r=p=>{if(typeof p!="string"||!Object.hasOwn(M,p))return Promise.resolve(null);const i=R.get(p);return i?i.u:Promise.resolve(c[p]??null)};try{Object.defineProperty(c,"use",{value:r,writable:!0,configurable:!0,enumerable:!1})}catch{}}let f=null,S=null,v=0;const b=r=>{r.source!==parent||!F(r.origin)||oe(r.data)&&(f=r.data.__frame_init,w=r.origin,removeEventListener("message",b),clearTimeout(v),S?.())};addEventListener("message",b),parent.postMessage({__frame_connect:!0},"*");const m=new Promise(r=>{S=r,v=setTimeout(()=>{removeEventListener("message",b),r()},he)}),y=document.readyState==="loading"?new Promise(r=>document.addEventListener("DOMContentLoaded",()=>r(),{once:!0})):Promise.resolve();y.then(()=>{try{l?.restore()}catch{}});const g={cb:null},E=r=>{if(!(r.source!==parent||!F(r.origin))&&ie(r.data)){try{l?.promoted()}catch{}g.cb?.()}};addEventListener("message",E),m.then(async()=>{if(!f||!w){for(const a of R.values())a.nulled=!0,a.r(null);return}K(f.theme);const r=w;let p=!1,i=!1;addEventListener("message",a=>{if(a.source!==parent||a.origin!==r)return;le(a.data)&&K(a.data.__frame_theme.theme),ae(a.data)&&ve(a.data.__frame_patch,r);const k=a.data?.__fc_mode;k&&typeof k=="object"&&!p&&N&&L.test(N)&&(p=!0,T(N).then(x=>x.install?.(r,k.on===!0)).catch(()=>{}));const A=a.data?.__ft_cmd;A&&typeof A=="object"&&!i&&I&&L.test(I)&&(i=!0,T(I).then(x=>x.install?.(r,A)).catch(()=>{}))});const d=Object.keys(f.capabilities??{}).filter(a=>Object.hasOwn(M,a)).map(a=>[a,M[a]]).filter(a=>typeof a[1]=="string"&&L.test(a[1])),u=await Promise.allSettled(d.map(([,a])=>T(a))),h=await e,_=w;if(h?.buildBoot||parent.postMessage({__frame_cap_telemetry:{kind:"cap-load-error",cap:"_transforms"}},_),h?.buildBoot)try{P=h.buildBoot(f,h.TRANSFORMS??{},{shellOrigin:_,mount:W},a=>parent.postMessage({__frame_cap_telemetry:a},_))}catch{parent.postMessage({__frame_cap_telemetry:{kind:"cap-load-error",cap:"_transforms"}},_),P=z(f,_)}else P=z(f,_);const C=a=>parent.postMessage({__frame_cap_telemetry:{kind:"cap-load-error",cap:a}},_),we=P;u.forEach((a,k)=>{const A=d[k][0];if(a.status!=="fulfilled"){C(A);return}try{a.value?.install?.(we)}catch{C(A)}});for(const a of R.values())a.done||(a.nulled=!0,a.r(null));await y,parent.postMessage({__frame_ready:!0},w),e.then(a=>a?.installSizeReporter?.(_,g))})}})();</script><!-- /frame-runtime --><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}</style></head><body data-new-gr-c-s-check-loaded="14.1323.0" data-gr-ext-installed="">
+<title>The Rework Cascade</title>
+<link rel="preconnect" href="https://fonts.googleapis.com/">
+<link rel="preconnect" href="https://fonts.gstatic.com/" crossorigin="">
+<link rel="stylesheet" href="./css2">
+
+<style>
+:root {
+  --ground: #EDF0F5;
+  --surface: #FFFFFF;
+  --surface-2: #F5F7FA;
+  --ink: #0F1420;
+  --ink-2: #333C4F;
+  --muted: #5C6880;
+  --line: #D3DAE6;
+  --line-soft: #E3E8F0;
+  --accent: #1B45C4;
+  --accent-soft: #E4EAFA;
+  --signal: #BE3A16;
+  --signal-soft: #FAE6DF;
+  --pass: #1F6B4C;
+  --pass-soft: #DFEDE6;
+  --warn: #8A6100;
+  --warn-soft: #F7EDD6;
+
+  --f-display: "Newsreader", Georgia, "Times New Roman", serif;
+  --f-body: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --measure: 68ch;
+  --pad: clamp(1.1rem, 4vw, 2.5rem);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground: #0B0E15;
+    --surface: #121722;
+    --surface-2: #171D2B;
+    --ink: #E7EBF4;
+    --ink-2: #C3CBDC;
+    --muted: #8C97AF;
+    --line: #29314396;
+    --line-soft: #232A3A;
+    --accent: #7D9CFF;
+    --accent-soft: #1A2340;
+    --signal: #FF8055;
+    --signal-soft: #331A12;
+    --pass: #57C494;
+    --pass-soft: #10281F;
+    --warn: #DDA83C;
+    --warn-soft: #2B2213;
+  }
+}
+
+:root[data-theme="dark"] {
+  --ground: #0B0E15;
+  --surface: #121722;
+  --surface-2: #171D2B;
+  --ink: #E7EBF4;
+  --ink-2: #C3CBDC;
+  --muted: #8C97AF;
+  --line: #29314396;
+  --line-soft: #232A3A;
+  --accent: #7D9CFF;
+  --accent-soft: #1A2340;
+  --signal: #FF8055;
+  --signal-soft: #331A12;
+  --pass: #57C494;
+  --pass-soft: #10281F;
+  --warn: #DDA83C;
+  --warn-soft: #2B2213;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--f-body);
+  font-size: 16.5px;
+  line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap {
+  max-width: 1140px;
+  margin: 0 auto;
+  padding: 0 var(--pad) 6rem;
+}
+
+.col { max-width: var(--measure); }
+
+h1, h2, h3, h4 { font-family: var(--f-display); font-weight: 500; text-wrap: balance; margin: 0; letter-spacing: -0.012em; }
+
+p { margin: 0; }
+
+a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+
+code, .mono { font-family: var(--f-mono); font-size: 0.855em; font-variant-ligatures: none; }
+code { background: var(--surface-2); border: 1px solid var(--line-soft); padding: 0.08em 0.34em; border-radius: 3px; color: var(--ink-2); }
+
+.eyebrow {
+  font-family: var(--f-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+/* ---------- masthead ---------- */
+
+header.mast {
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+.mast-inner {
+  max-width: 1140px;
+  margin: 0 auto;
+  padding: clamp(2.4rem, 6vw, 4.2rem) var(--pad) clamp(2rem, 4vw, 3rem);
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+}
+.mast h1 {
+  font-size: clamp(2.5rem, 6.4vw, 4.1rem);
+  line-height: 1.02;
+  letter-spacing: -0.028em;
+}
+.mast h1 em { font-style: italic; color: var(--signal); }
+.deck {
+  font-size: clamp(1.02rem, 1.9vw, 1.16rem);
+  color: var(--ink-2);
+  max-width: 62ch;
+}
+.mast-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.6rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--line-soft);
+  font-family: var(--f-mono);
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+/* ---------- headline stat band ---------- */
+
+.band {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  margin-top: 2.6rem;
+}
+.stat { background: var(--surface); padding: 1.05rem 1.15rem; display: flex; flex-direction: column; gap: 0.18rem; }
+.stat .n {
+  font-family: var(--f-display);
+  font-size: 2.05rem;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+.stat .n.sig { color: var(--signal); }
+.stat .k { font-family: var(--f-mono); font-size: 0.68rem; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); }
+.stat .s { font-size: 0.83rem; color: var(--ink-2); line-height: 1.4; }
+
+/* ---------- sections ---------- */
+
+section { margin-top: clamp(3.2rem, 7vw, 5rem); }
+section > .col > * + * { margin-top: 1.05rem; }
+
+.sec-head { display: flex; flex-direction: column; gap: 0.55rem; margin-bottom: 1.7rem; }
+.sec-head h2 { font-size: clamp(1.62rem, 3.4vw, 2.15rem); line-height: 1.12; }
+.rule { height: 1px; background: var(--line); margin-bottom: 1.7rem; }
+
+/* ---------- verdict cards ---------- */
+
+.verdicts { display: grid; grid-template-columns: repeat(auto-fit, minmax(268px, 1fr)); gap: 1rem; }
+.vc {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--muted);
+  padding: 1.25rem 1.3rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+.vc.is-confirmed { border-top-color: var(--signal); }
+.vc.is-partial { border-top-color: var(--warn); }
+.vc.is-refuted { border-top-color: var(--pass); }
+.vc h3 { font-size: 1.14rem; }
+.vc .tag {
+  align-self: flex-start;
+  font-family: var(--f-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 600;
+  padding: 0.22rem 0.5rem;
+  border-radius: 2px;
+}
+.is-confirmed .tag { background: var(--signal-soft); color: var(--signal); }
+.is-partial .tag { background: var(--warn-soft); color: var(--warn); }
+.is-refuted .tag { background: var(--pass-soft); color: var(--pass); }
+.vc p { font-size: 0.92rem; color: var(--ink-2); }
+.vc .cite { font-family: var(--f-mono); font-size: 0.72rem; color: var(--muted); line-height: 1.5; border-top: 1px solid var(--line-soft); padding-top: 0.6rem; margin-top: auto; }
+
+/* ---------- trace ---------- */
+
+.trace-frame { border: 1px solid var(--line); background: var(--surface); }
+.trace-scroll { overflow-x: auto; }
+.trace { min-width: 720px; padding: 1.5rem 1.4rem 1.1rem; }
+
+.trace-row { display: grid; grid-template-columns: 128px 1fr; align-items: center; gap: 1rem; }
+.trace-row + .trace-row { margin-top: 0.55rem; }
+.trace-label { font-family: var(--f-mono); font-size: 0.7rem; color: var(--muted); line-height: 1.35; text-align: right; }
+.trace-label b { display: block; color: var(--ink); font-weight: 600; font-size: 0.74rem; }
+
+.ticks { position: relative; height: 1.4rem; border-bottom: 1px solid var(--line-soft); }
+.tick { position: absolute; top: 0; font-family: var(--f-mono); font-size: 0.66rem; color: var(--muted); transform: translateX(-50%); }
+.tick::after { content: ""; position: absolute; left: 50%; bottom: -0.42rem; width: 1px; height: 0.35rem; background: var(--line); }
+
+.lane { position: relative; height: 30px; background: var(--surface-2); border: 1px solid var(--line-soft); }
+.ev {
+  position: absolute; top: 4px; bottom: 4px;
+  width: 7px; margin-left: -3.5px;
+  border-radius: 1px;
+  background: var(--muted);
+}
+.ev.rc { background: var(--signal); }
+.ev.ap { background: var(--pass); }
+.ev.blk { background: var(--signal); opacity: 0.45; }
+.ev.gate { background: var(--warn); }
+.ev.mark { background: var(--accent); width: 2px; margin-left: -1px; top: 0; bottom: 0; }
+
+.gateflag {
+  position: absolute; top: -1.55rem;
+  transform: translateX(-50%);
+  font-family: var(--f-mono); font-size: 0.63rem;
+  color: var(--accent); white-space: nowrap;
+  padding-bottom: 0.15rem;
+}
+.gateflag::after { content: ""; position: absolute; left: 50%; bottom: -2px; width: 1px; height: 5px; background: var(--accent); }
+
+.legend { display: flex; flex-wrap: wrap; gap: 0.4rem 1.15rem; padding: 0.9rem 1.4rem 1.15rem; border-top: 1px solid var(--line-soft); font-family: var(--f-mono); font-size: 0.7rem; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 0.4rem; }
+.sw { width: 9px; height: 9px; border-radius: 1px; display: inline-block; }
+
+.caption { font-size: 0.86rem; color: var(--muted); margin-top: 0.85rem; max-width: 74ch; }
+
+/* ---------- cause blocks ---------- */
+
+.cause {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  padding: 1.5rem var(--pad) 1.6rem;
+  display: grid;
+  grid-template-columns: 3.1rem 1fr;
+  gap: 0 1.1rem;
+  align-items: start;
+}
+.cause + .cause { margin-top: 1rem; }
+.rank {
+  font-family: var(--f-display);
+  font-size: 1.9rem;
+  line-height: 0.95;
+  color: var(--signal);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+}
+.rank small { display: block; font-family: var(--f-mono); font-size: 0.6rem; letter-spacing: 0.08em; color: var(--muted); margin-top: 0.35rem; text-transform: uppercase; }
+.cause-body { display: flex; flex-direction: column; gap: 0.85rem; min-width: 0; }
+.cause h3 { font-size: 1.24rem; line-height: 1.24; }
+.cause p { font-size: 0.955rem; color: var(--ink-2); max-width: 74ch; }
+.share {
+  display: inline-flex; align-items: baseline; gap: 0.45rem;
+  font-family: var(--f-mono); font-size: 0.72rem; letter-spacing: 0.06em;
+  color: var(--signal); background: var(--signal-soft);
+  padding: 0.24rem 0.55rem; border-radius: 2px; align-self: flex-start;
+  text-transform: uppercase; font-weight: 600;
+}
+
+.ev-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.5rem; border-left: 2px solid var(--line); padding-left: 0.95rem; }
+.ev-list li { font-size: 0.875rem; color: var(--ink-2); }
+.ev-list .src { font-family: var(--f-mono); font-size: 0.75rem; color: var(--muted); display: block; margin-top: 0.12rem; word-break: break-word; }
+
+/* ---------- fork table ---------- */
+
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: 0.885rem; }
+th, td { text-align: left; padding: 0.72rem 0.9rem; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+thead th {
+  font-family: var(--f-mono); font-size: 0.67rem; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--muted); font-weight: 500; background: var(--surface-2); border-bottom: 1px solid var(--line);
+  position: sticky; top: 0;
+}
+tbody tr:last-child td { border-bottom: none; }
+td.num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+td .role { font-family: var(--f-mono); font-size: 0.76rem; color: var(--ink); font-weight: 500; }
+.pill {
+  display: inline-block; font-family: var(--f-mono); font-size: 0.66rem; letter-spacing: 0.06em;
+  padding: 0.16rem 0.42rem; border-radius: 2px; text-transform: uppercase; font-weight: 600; white-space: nowrap;
+}
+.pill.bad { background: var(--signal-soft); color: var(--signal); }
+.pill.ok { background: var(--pass-soft); color: var(--pass); }
+.pill.mid { background: var(--warn-soft); color: var(--warn); }
+
+/* ---------- fix list ---------- */
+
+.fix { border: 1px solid var(--line); background: var(--surface); }
+.fix + .fix { margin-top: 0.8rem; }
+.fix > summary {
+  cursor: pointer; list-style: none;
+  display: grid; grid-template-columns: 2.5rem 1fr auto; gap: 0.9rem; align-items: center;
+  padding: 0.95rem 1.15rem;
+}
+.fix > summary::-webkit-details-marker { display: none; }
+.fix .pnum { font-family: var(--f-mono); font-size: 0.78rem; font-weight: 600; color: var(--accent); }
+.fix .ftitle { font-family: var(--f-body); font-weight: 500; font-size: 0.985rem; line-height: 1.35; }
+.fix .meta { display: flex; gap: 0.4rem; align-items: center; }
+.fix[open] > summary { border-bottom: 1px solid var(--line-soft); background: var(--surface-2); }
+.fix-body { padding: 1.15rem 1.15rem 1.35rem; display: flex; flex-direction: column; gap: 0.85rem; }
+.fix-body p { font-size: 0.91rem; color: var(--ink-2); max-width: 78ch; }
+.fix-body .lbl { font-family: var(--f-mono); font-size: 0.66rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); display: block; margin-bottom: 0.25rem; }
+.paths { font-family: var(--f-mono); font-size: 0.75rem; color: var(--muted); line-height: 1.7; word-break: break-word; }
+
+/* ---------- callout ---------- */
+
+.note {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  background: var(--surface);
+  padding: 1.1rem 1.25rem;
+  display: flex; flex-direction: column; gap: 0.5rem;
+}
+.note p { font-size: 0.92rem; color: var(--ink-2); }
+
+footer.end { margin-top: 4.5rem; padding-top: 1.5rem; border-top: 1px solid var(--line); font-family: var(--f-mono); font-size: 0.73rem; color: var(--muted); line-height: 1.8; }
+
+@media (max-width: 640px) {
+  .cause { grid-template-columns: 1fr; gap: 0.9rem; padding-left: 1.1rem; padding-right: 1.1rem; }
+  .rank { font-size: 1.4rem; }
+  .rank small { display: inline; margin-left: 0.5rem; }
+  .fix > summary { grid-template-columns: 2rem 1fr; }
+  .fix .meta { grid-column: 1 / -1; }
+}
+
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<header class="mast">
+  <div class="mast-inner">
+    <span class="eyebrow">Orchestrator skill · degradation forensics</span>
+    <h1>The pipeline reached its exit gate at 15:31.<br>It kept working for <em>five and a half more hours</em>.</h1>
+    <p class="deck">Two live monorepos, 964 run artifacts and the full commit history of the skill were read to answer one question: why does the orchestrator now burn so many cycles? The answer is not the size of the skill, and it is not the size of the project.</p>
+    <div class="mast-meta">
+      <span>31 agents · 3.07M tokens · 1,016 tool calls</span>
+      <span>Corpus: lotery_oracle + toodls</span>
+      <span>Every cited line re-verified against source</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="band">
+    <div class="stat"><span class="n sig">13</span><span class="k">code reviews</span><span class="s">for one feature, in one day</span></div>
+    <div class="stat"><span class="n sig">8</span><span class="k">runs after approval</span><span class="s">each a fresh architect→coder→reviewer→qa</span></div>
+    <div class="stat"><span class="n">52.6<span style="font-size:.55em">%</span></span><span class="k">spec retention</span><span class="s">269 of 511 requirements reach the reviewer</span></div>
+    <div class="stat"><span class="n">3.00</span><span class="k">G8 rework ratio</span><span class="s">threshold 0.5 — it shipped anyway</span></div>
+    <div class="stat"><span class="n">340<span style="font-size:.55em">B</span></span><span class="k">final spec eval</span><span class="s">the comparable one is 8 KB</span></div>
+  </div>
+
+  <!-- ================= VERDICTS ================= -->
+  <section>
+    <div class="sec-head col">
+      <span class="eyebrow">Section one</span>
+      <h2>Your three theories, graded</h2>
+      <p style="color:var(--ink-2);font-size:1rem">Each was tested head-on against the artifacts, then attacked by two independent adversarial verifiers before anything was allowed to stand.</p>
+    </div>
+
+    <div class="verdicts">
+      <article class="vc is-confirmed">
+        <span class="tag">Confirmed · dominant</span>
+        <h3>Rules the roles don't share</h3>
+        <p>Not mutual contradiction so much as a <strong>lossy contract chain</strong>. The reviewer gates on the plan's acceptance criteria; spec-driven-eval gates on the spec; the gate thresholds fork four ways between architect, coder, tester and QA. Every fork is a manufactured cycle.</p>
+        <p class="cite">Decisive: one diff, three verdicts — tester PASS at 71.41%, reviewer blocking MF-5 for the same tests, QA ❌ at ≥85%.</p>
+      </article>
+
+      <article class="vc is-partial">
+        <span class="tag">Partial · wrong mechanism</span>
+        <h3>The skill is too large</h3>
+        <p>The size is real and extreme, but agents are not losing the thread inside a long file — the sequential core the pipeline actually runs is only <strong>13% of SKILL.md</strong>. What size actually costs is a fixed token tax and, measurably, <strong>silently skipped mandatory steps</strong>.</p>
+        <p class="cite">Decisive: 55.6% of SKILL.md governs a parallel path that has produced 0 PACT artifacts in lotery_oracle — and the mandatory simplify pass logged 0 entries on the run that then burned 4 cycles on complexity.</p>
+      </article>
+
+      <article class="vc is-refuted">
+        <span class="tag">Refuted</span>
+        <h3>toodls grew too big</h3>
+        <p>The worst run in the corpus happened in the <strong>smaller, younger project</strong>. toodls' reviews-per-feature is flat or improving straight through the window you report degradation in. Within toodls, correlation between plan size and rejections is <strong>0.04</strong>.</p>
+        <p class="cite">Decisive: 2026-08-20 — lotery_oracle 8.0 CR per spec; toodls 3.3 for the same half-month, against a larger context and a longer history.</p>
+      </article>
+    </div>
+  </section>
+
+  <!-- ================= TRACE ================= -->
+  <section>
+    <div class="sec-head col">
+      <span class="eyebrow">Section two · the evidence</span>
+      <h2>One feature, eight hours, eleven slugs</h2>
+      <p style="color:var(--ink-2);font-size:1rem"><code>mobile-contest-timeline</code> in lotery_oracle, 2026-08-20. Below it, a normal day from eight days earlier at the same scale.</p>
+    </div>
+
+    <div class="trace-frame">
+      <div class="trace-scroll">
+        <div class="trace">
+          <div class="trace-row">
+            <div class="trace-label"></div>
+            <div class="ticks">
+              <span class="tick" style="left:0%">13:30</span>
+              <span class="tick" style="left:19.7%">15:00</span>
+              <span class="tick" style="left:39.5%">16:30</span>
+              <span class="tick" style="left:59.2%">18:00</span>
+              <span class="tick" style="left:78.9%">19:30</span>
+              <span class="tick" style="left:98.7%">21:00</span>
+            </div>
+          </div>
+
+          <div class="trace-row">
+            <div class="trace-label"><b>2026-08-20</b>mobile-contest-timeline<br>13 CR · 6 QA · 11 slugs</div>
+            <div class="lane">
+              <span class="gateflag" style="left:24.2%">reviewer APPROVED 15:31</span>
+              <span class="ev mark" style="left:24.2%" title="First APPROVED — the pipeline&#39;s exit gate"></span>
+              <span class="ev rc" style="left:2.9%" title="14:38 CR REQUEST_CHANGES"></span>
+              <span class="ev rc" style="left:7.2%" title="14:57 CR REQUEST_CHANGES"></span>
+              <span class="ev rc" style="left:9.4%" title="15:07 CR REQUEST_CHANGES"></span>
+              <span class="ev rc" style="left:12.0%" title="15:19 CR REQUEST_CHANGES"></span>
+              <span class="ev ap" style="left:24.2%" title="15:31 CR APPROVED"></span>
+              <span class="ev blk" style="left:25.4%" title="15:36 QA BLOCKED — G2"></span>
+              <span class="ev rc" style="left:39.8%" title="16:45 CR REQUEST_CHANGES — quality gates"></span>
+              <span class="ev ap" style="left:45.0%" title="17:02 CR APPROVED — gate fixes"></span>
+              <span class="ev gate" style="left:46.3%" title="17:08 QA G2 PASS"></span>
+              <span class="ev rc" style="left:53.2%" title="17:35 CR REQUEST_CHANGES — spec-eval remediation"></span>
+              <span class="ev ap" style="left:56.1%" title="17:49 CR APPROVED — dark targets"></span>
+              <span class="ev blk" style="left:56.8%" title="17:52 QA BLOCKED — G2 again"></span>
+              <span class="ev ap" style="left:67.8%" title="18:47 CR APPROVED — selected-numbers G2"></span>
+              <span class="ev gate" style="left:68.4%" title="18:50 QA G2 PASS"></span>
+              <span class="ev ap" style="left:77.6%" title="19:18 CR APPROVED — date rail / context retry"></span>
+              <span class="ev blk" style="left:78.5%" title="19:22 QA BLOCKED — G2 a third time"></span>
+              <span class="ev rc" style="left:83.4%" title="19:50 CR REQUEST_CHANGES — station details G2"></span>
+              <span class="ev ap" style="left:86.6%" title="20:01 CR APPROVED — remove analyzer exclusions"></span>
+              <span class="ev gate" style="left:87.2%" title="20:04 QA READY_WITH_WARNINGS — G8 = 3.00"></span>
+              <span class="ev" style="left:101%" title="21:09 EVAL 340 bytes · FINAL READY_WITH_WARNINGS"></span>
+            </div>
+          </div>
+
+          <div class="trace-row">
+            <div class="trace-label"><b>2026-08-12</b>baseline day<br>19 CR across 7 specs · max 3 per slug</div>
+            <div class="lane">
+              <span class="ev rc" style="left:6%"></span>
+              <span class="ev ap" style="left:11%"></span>
+              <span class="ev ap" style="left:24%"></span>
+              <span class="ev rc" style="left:38%"></span>
+              <span class="ev ap" style="left:44%"></span>
+              <span class="ev ap" style="left:58%"></span>
+              <span class="ev ap" style="left:71%"></span>
+              <span class="ev rc" style="left:83%"></span>
+              <span class="ev ap" style="left:90%"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="legend">
+        <span><i class="sw" style="background:var(--signal)"></i> CR request-changes</span>
+        <span><i class="sw" style="background:var(--pass)"></i> CR approved</span>
+        <span><i class="sw" style="background:var(--signal);opacity:.45"></i> QA blocked (G2)</span>
+        <span><i class="sw" style="background:var(--warn)"></i> QA pass / warnings</span>
+        <span><i class="sw" style="background:var(--accent)"></i> exit gate</span>
+      </div>
+    </div>
+
+    <p class="caption">The cascade is not a long review loop — the in-run counter peaked at 4 of a permitted 10. It is <strong>eight separate pipeline runs after approval</strong>, each with a new slug, each resetting the cycle counters to zero. The caps never fired because the work escaped the run they were counting.</p>
+  </section>
+
+  <!-- ================= CAUSES ================= -->
+  <section>
+    <div class="sec-head col">
+      <span class="eyebrow">Section three</span>
+      <h2>What actually went wrong</h2>
+      <p style="color:var(--ink-2);font-size:1rem">Ranked by share of the wasted cycles each accounts for, grounded in the blocking-item counts from the run.</p>
+    </div>
+
+    <article class="cause">
+      <div class="rank">01<small>~33%</small></div>
+      <div class="cause-body">
+        <h3>Half the spec never reaches the role that gates approval</h3>
+        <span class="share">6 of 18 blocking items · 3 of 8 post-approval runs</span>
+        <p>The reviewer is bound to the plan's acceptance criteria. Nothing requires the architect to map spec requirements onto them — and in practice the architect compresses them about 2:1. spec-driven-eval, the one role that reads the spec, fires <em>after</em> the pipeline has already reached its terminal state, and Step 7b has no branch on <code>ISSUES</code>. So every dropped requirement is invisible until after approval, and can only be remediated by starting a whole new run.</p>
+        <ul class="ev-list">
+          <li>511 spec functional requirements → 269 plan acceptance criteria across 18 features. Worst: <code>admin-design-contract</code> 76 → 14.<span class="src">lotery_oracle/plans/specs/ vs plans/feat/</span></li>
+          <li>Spec requirement 11 — "match the structural states in <code>design/mobile/index.html#frames-08-09</code>: rail date/stations, official game context, contextual next/latest station…" — appears in none of the plan's nine criteria.<span class="src">SPEC-20260820T131542Z-d9b0:48 · FEAT-20260820T134357Z-95b6 §Acceptance Criteria</span></li>
+          <li>At 18:58, two hours and 27 minutes after approval, a fix plan opens with: "Remediate the missing structural treatment from mobile design frames 08–09."<span class="src">FIX-20260820T185735Z-8483</span></li>
+          <li>"Plan's <strong>Acceptance Criteria</strong> (each must be met)" — the reviewer's entire binding.<span class="src">templates/reviewer.md:70</span></li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="cause">
+      <div class="rank">02<small>~30%</small></div>
+      <div class="cause-body">
+        <h3>The gate contract forks four ways, so gates are discovered two roles too late</h3>
+        <span class="share">5 of 18 blocking items · 4 of 8 post-approval runs</span>
+        <p>Four roles hold four non-reconciled definitions of the same gates. The architect and coder are <em>forbidden</em> from emitting coverage as a phase gate; the tester passes at a hardcoded 70%; QA blocks at 85/80. The architect is told to write "≤ 10" complexity while QA and both projects' config gate at 8. Gate bake-in is optional, so on this run the coder's exit contract was two shell commands against QA's seven gates.</p>
+        <ul class="ev-list">
+          <li>One diff, three verdicts: tester "<strong>PASS</strong>, 71.41% meets the advisory 70% floor" · reviewer MF-5 "required behavior coverage is missing" (blocking) · QA "G1 ❌ ≥85% / ≥80%".<span class="src">TEST-…3ff9:41,57 · CR-20260820T143831Z-7d3a · QA-20260820T153658Z-775a:40</span></li>
+          <li>Live numeric contradiction inside one skill: "cyclomatic-complexity ≤ 10 is added to the AC list" vs "Gate: cyclomatic complexity ≤ 8".<span class="src">templates/architect.md:342 vs templates/qa.md:115 and .cleancode-gates.json</span></li>
+          <li>"G1 (coverage) and G6 (mutation) remain QA-only — do NOT emit them in <code>## Verification (per phase)</code>."<span class="src">templates/architect.md:343 · templates/coder.md:150</span></li>
+          <li>The word "G1"–"G8" appears 36 times in qa.md and <strong>zero</strong> times in reviewer.md — yet "missing tests" is a blocking verdict for the reviewer.<span class="src">templates/reviewer.md:74</span></li>
+          <li>All three QA blocks in the run were G2 on a Flutter <code>build()</code> method: 86, 41 and 36 source lines against a ≤30 ceiling.<span class="src">QA 15:36 · 17:52 · 19:22</span></li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="cause">
+      <div class="rank">03<small>~20%</small></div>
+      <div class="cause-body">
+        <h3>Nothing budgets the cascade — the caps count the wrong thing</h3>
+        <span class="share">the multiplier: 8 findings became 8 full runs</span>
+        <p><code>max_review_cycles</code> and <code>max_qa_cycles</code> are scoped to a single orchestrator invocation. When work overflows a run, a new run starts with a new slug and both counters begin at zero. Meanwhile G8 — the pipeline's own rework detector, which measures exactly the symptom you are reporting — is advisory by design, and computes over the active plan rather than the family.</p>
+        <ul class="ev-list">
+          <li>"HIGH_REWORK is a warning, not a BLOCK."<span class="src">templates/qa.md:178</span></li>
+          <li>G8 was recomputed six times in the family, climbing 1.60 → 3.00 against a 0.5 threshold, and stopped nothing: "All blocking checks pass. G8 exceeds the rework threshold, so the plan can ship."<span class="src">QA-20260820T200443Z-c8d8:44,60</span></li>
+          <li>The root run's CRs are stamped cycle 0,1,2,3,4 — peak 4 of 10. The other 8 family CRs are all stamped <code>cycle: 0</code>, because each is a fresh run.<span class="src">plans/code-review/ frontmatter</span></li>
+          <li>The run terminated by shipping, not by budget: <code>status: READY_WITH_WARNINGS</code>.<span class="src">FINAL-20260820T210950Z-8344:3</span></li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="cause">
+      <div class="rank">04<small>~12%</small></div>
+      <div class="cause-body">
+        <h3>Remediation plans carry no previously-cleared invariants, so the fixes break each other</h3>
+        <span class="share">3 of 18 blocking items · 1 post-approval run</span>
+        <p>Each fix plan is authored fresh against one report, with its own criteria and its own out-of-scope block. What earlier cycles cleared is not handed forward. Acceptance criterion 6 — verified at 15:31 — was broken twice afterwards. And the complexity extractions relocate the violation rather than removing it, in the reviewer's own words.</p>
+        <ul class="ev-list">
+          <li>"Timeline complexity violation was moved, not removed… simply relocates the G2 failure that this QAF is intended to clear."<span class="src">CR-20260820T164528Z-dd92 MF-1</span></li>
+          <li>A project-wide <code>analyzer.exclude</code> added by one fix run required its own remediation run to remove.<span class="src">QAF-…192938Z-44c4 → CR-…195039Z-96ed → FIX-…195459Z-dae5 → CR-…200134Z-b2f8</span></li>
+          <li>G2 verdict alternation on the same gate: FAIL 15:36 → PASS 17:08 → FAIL 17:52 → PASS 18:50 → FAIL 19:22 → PASS 20:04.<span class="src">plans/qa/ 2026-08-20</span></li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="cause">
+      <div class="rank">05<small>~5%</small></div>
+      <div class="cause-body">
+        <h3>Protocol volume doesn't confuse agents — it makes mandatory steps vanish</h3>
+        <span class="share">~5% of cycles · the large majority of wasted tokens</span>
+        <p>This is your first theory, corrected. Nothing suggests comprehension decay inside a long file. What is measurable is a fixed per-run tax — 63,423 tokens per injection, doubled to 76,305 because product-manager re-invokes the skill per story — and three of the protocol's own mandatory steps silently skipped in this very run, with no audit trail.</p>
+        <ul class="ev-list">
+          <li>55.6% of SKILL.md (94,870 of 170,549 chars) governs the parallel path. lotery_oracle runs <code>"parallelism": "full"</code> with six lanes and has produced <strong>0 PACT artifacts</strong>; toodls has 8 across ~62 feature lines.<span class="src">SKILL.md:444-703, 776-1028, 1029-1167</span></li>
+          <li>The mandatory simplify pass logged <strong>0 entries</strong> across the entire timeline family — and 3 on the same day's morning feature, under the same protocol.<span class="src">SKILL.md:759-761 · FEAT-…95b6.progress.md vs FEAT-…c426.progress.md</span></li>
+          <li>The terminal spec eval is 340 bytes with no evidence matrix and no grade — against Step 7a.3's "a report missing the per-criterion evidence matrix or final grade is incomplete… stop rather than printing a completion banner". The banner printed. The comparable eval is 8 KB; earlier ones run 27–80 KB.<span class="src">EVAL-20260820T210950Z-7072</span></li>
+          <li>Both projects run <code>output_format: "md"</code>, so Steps 7c/7d and the render/pairing gates are dead weight in the main-agent context.<span class="src">.orchestrator/config.json ×2</span></li>
+        </ul>
+      </div>
+    </article>
+  </section>
+
+  <!-- ================= FORK TABLE ================= -->
+  <section>
+    <div class="sec-head col">
+      <span class="eyebrow">Section four</span>
+      <h2>The fork, in one table</h2>
+      <p style="color:var(--ink-2);font-size:1rem">Same repository, same diff, same day. Read down a column and the contract is coherent; read across a row and it is not.</p>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th>Obligation</th><th>Architect writes</th><th>Coder is told</th><th>Tester applies</th><th>QA gates at</th><th></th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="role">G1 coverage</td>
+            <td>forbidden to emit</td>
+            <td>"NOT in this sub-step"</td>
+            <td class="num">≥ 70% lines</td>
+            <td class="num">≥ 85% stmts / 80% br</td>
+            <td><span class="pill bad">forked</span></td>
+          </tr>
+          <tr>
+            <td class="role">G2 complexity</td>
+            <td class="num">≤ 10 cyclomatic</td>
+            <td>only if plan wires it</td>
+            <td>—</td>
+            <td class="num">≤ 8 / depth 2 / 30 SLOC</td>
+            <td><span class="pill bad">contradiction</span></td>
+          </tr>
+          <tr>
+            <td class="role">Test adequacy</td>
+            <td>acceptance criteria</td>
+            <td>TDD per task</td>
+            <td>coverage floor + audit</td>
+            <td>numeric gate</td>
+            <td><span class="pill bad">3 verdicts, 1 diff</span></td>
+          </tr>
+          <tr>
+            <td class="role">Requirement source</td>
+            <td>spec → plan (2:1 loss)</td>
+            <td>plan only</td>
+            <td>plan only</td>
+            <td>plan + gates</td>
+            <td><span class="pill bad">spec unreachable</span></td>
+          </tr>
+          <tr>
+            <td class="role">Reviewer's binding</td>
+            <td colspan="4">plan acceptance criteria — <span class="mono">zero</span> mentions of G1–G8, yet "missing tests" is blocking</td>
+            <td><span class="pill mid">unbounded</span></td>
+          </tr>
+          <tr>
+            <td class="role">Rework budget</td>
+            <td colspan="4">G8 measured at 3.00 against a 0.5 threshold, per-plan scope, advisory only</td>
+            <td><span class="pill mid">non-binding</span></td>
+          </tr>
+          <tr>
+            <td class="role">Artifact format</td>
+            <td colspan="4">all four <code>.cjs</code> gates byte-identical across both projects and source</td>
+            <td><span class="pill ok">aligned</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ================= FIXES ================= -->
+  <section>
+    <div class="sec-head col">
+      <span class="eyebrow">Section five</span>
+      <h2>The fix, in order</h2>
+      <p style="color:var(--ink-2);font-size:1rem">Ordered by impact over effort. Items 1–5 close contract gaps and are where the cycles come back; items 6–8 are volume and hygiene. Doing 6 first would feel productive and move nothing.</p>
+    </div>
+
+    <details class="fix" open="">
+      <summary><span class="pnum">P1</span><span class="ftitle">Give the plan a per-requirement coverage map, and bind the reviewer to it</span><span class="meta"><span class="pill mid">M</span><span class="pill bad">~33%</span></span></summary>
+      <div class="fix-body">
+        <p>Add a mandatory <code>## Requirement Coverage</code> table to the plan template, immediately above <code>## Acceptance Criteria</code>: one row per numbered spec requirement — <em>spec FR # · covered by AC # · Met-by-plan / Deferred + reason + follow-up id</em>. An unmapped requirement is a BLOCKED stop, not an omission. Then rewrite the reviewer's first evaluation bullet to gate on the map, and pass <code>spec_path</code> in the reviewer dispatch so it can resolve it. Scope the reviewer to the map, not to a free re-read of the spec, so review cost doesn't balloon.</p>
+        <div><span class="lbl">Files</span><div class="paths">templates/architect.md (rules block, ~line 342) · templates/reviewer.md:70 · SKILL.md Step 2 and Step 4</div></div>
+        <div><span class="lbl">Watch for</span><p style="margin:0">The architect padding the map with trivial mappings. First-cycle Must-Fix count will rise before it falls — that is the point.</p></div>
+      </div>
+    </details>
+
+    <details class="fix">
+      <summary><span class="pnum">P2</span><span class="ftitle">Move spec-driven-eval before the exit gate and give <code>ISSUES</code> a loop back</span><span class="meta"><span class="pill ok">S</span><span class="pill bad">3 runs</span></span></summary>
+      <div class="fix-body">
+        <p>Relocate Step 7a to fire on the <em>first</em> reviewer APPROVED, between Step 4's approved branch and Step 5. Add the branch that does not exist anywhere in the file today: on <code>ISSUES</code>, allocate a fix plan from the architect with the unmet criteria as tasks, increment <code>review_cycle</code>, loop to Step 3. Only <code>PASS</code>, <code>SKIPPED</code>, or a recorded operator waiver may reach Step 7b. Then harden the banner precondition — no <code>plans/eval/EVAL-*</code> for this run means the eval did not happen — and add a minimum-body assertion so a 340-byte stub fails.</p>
+        <div><span class="lbl">Files</span><div class="paths">SKILL.md:1504-1534 (Step 7a) · SKILL.md:1535-1590 (Step 7b)</div></div>
+        <div><span class="lbl">Trade-off</span><p style="margin:0">Spec-eval will grade a diff that has not passed the gates, so a few findings get re-litigated after gate fixes. Cheaper than a pipeline restart per finding.</p></div>
+      </div>
+    </details>
+
+    <details class="fix">
+      <summary><span class="pnum">P3</span><span class="ftitle">Single-source every threshold in <code>.cleancode-gates.json</code> and delete the four prose restatements</span><span class="meta"><span class="pill mid">M</span><span class="pill ok">net deletion</span></span></summary>
+      <div class="fix-body">
+        <p>The machine-readable source already exists in both repos with every threshold. Strip the numbers out of qa.md's gate bodies and replace with one line pointing at the config. Delete architect.md:342 outright — it is the only place a role is told to author a threshold, and it contradicts the config. Replace tester.md's hardcoded 70% with the configured G1 threshold so tester PASS and QA G1 can never disagree on the same diff. Replace reviewer.md:74's qualitative coverage bullet with the G1 command plus one rule: below threshold is a Must Fix, at or above it coverage is not — missing tests for a <em>named</em> criterion stay a Must Fix under that criterion.</p>
+        <div><span class="lbl">Files</span><div class="paths">templates/qa.md:107-166, 228-236 · templates/architect.md:342 · templates/tester.md:37,43-44,95 · templates/reviewer.md:74</div></div>
+      </div>
+    </details>
+
+    <details class="fix">
+      <summary><span class="pnum">P4</span><span class="ftitle">Make G1 and G2 coder-loop gates instead of QA-only</span><span class="meta"><span class="pill mid">M</span><span class="pill bad">~30%</span></span></summary>
+      <div class="fix-body">
+        <p>Narrow the QA-only prohibition from "G1 and G6" to G6 alone — G6 genuinely needs aggregate scoring, G1 does not. Emit the G1 changed-file coverage command as a phase gate for every phase touching covered roots. Change qa.md:100's "G2, G4, G5, G7 <strong>may</strong> be wired as bake-in coder-loop gates" to <strong>are</strong>, with QA's role on them regression-only. This is what closes the 2-commands-versus-7-gates gap: a gate failure becomes a minutes-long phase-exit fix instead of a full run.</p>
+        <div><span class="lbl">Files</span><div class="paths">templates/architect.md:343 · templates/coder.md:150 · templates/qa.md:100</div></div>
+        <div><span class="lbl">Your call, separately</span><p style="margin:0">All three G2 blocks were Flutter <code>build()</code> methods, and the reviewer recorded that the extraction relocated rather than removed the violation. Consider raising <code>source-lines-of-code</code> for the dart-flutter stack or exempting widget <code>build()</code>. Observed three times consecutively — not proven inevitable.</p></div>
+      </div>
+    </details>
+
+    <details class="fix">
+      <summary><span class="pnum">P5</span><span class="ftitle">Give the run family a rework budget — make G8 blocking and family-scoped</span><span class="meta"><span class="pill ok">S</span><span class="pill bad">~20%</span></span></summary>
+      <div class="fix-body">
+        <p>Change G8's denominator from "this plan" to "this run family" — every CR/FIX/QAF whose <code>related_to</code> chain resolves to the same spec id. That single change is why the per-plan version reads ~1.00 in every toodls bucket: <code>plan:</code> is reassigned each cycle, so it is structurally blind. Then replace "a warning, not a BLOCK" with two tiers: ≤ 0.5 pass, 0.5–1.5 warnings as today, above 1.5 <code>BLOCKED_REWORK</code> — stop and hand the decision to the human rather than spawning another remediation. Add <code>max_family_cycles</code> (default 6) alongside the per-run counters, and refuse to start an 8th run on the same spec without an explicit override.</p>
+        <div><span class="lbl">Files</span><div class="paths">templates/qa.md:168-178 and status propagation at 203, 236, 260-273, 281, 290, 296, 303 · SKILL.md:283-284, 1259, 1395, Step 0 pre-flight</div></div>
+        <div><span class="lbl">Trade-off</span><p style="margin:0">A genuinely hard feature will now stall and demand a decision. That substitutes five minutes of your attention for eight hours of cascade. Start the threshold at 1.5 and tighten once you have a baseline.</p></div>
+      </div>
+    </details>
+
+    <details class="fix">
+      <summary><span class="pnum">P6</span><span class="ftitle">Split SKILL.md into a thin sequential protocol plus loaded fragments</span><span class="meta"><span class="pill mid">M</span><span class="pill mid">tokens</span></span></summary>
+      <div class="fix-body">
+        <p>Move the parallel steps (2p, 2c/2s/2L/3L/3s, 3j — 94,870 chars, 55.6% of the file) into <code>references/parallel.md</code>, leaving a ~15-line stub at line 444. Same treatment for config.md's <code>full</code>-only viability gate (59,360 chars, 62.8%) and for Steps 7c/7d, which are dead in both projects. Cuts the per-run injection from ~63k to ~28k tokens. <strong>Do not delete the parallel path</strong> — toodls runs <code>parallelism: "ask"</code> and has 8 PACT artifacts. Demote it, don't remove it.</p>
+        <div><span class="lbl">Files</span><div class="paths">SKILL.md:444-703, 776-1028, 1029-1167, 1591-1624 · references/config.md:206-536 · the parallel spans in templates/architect.md (63.4%) and templates/coder.md (49.1%)</div></div>
+        <div><span class="lbl">Why sixth</span><p style="margin:0">It closes no contract gap on its own. The payoff is step compliance and tokens, not cycle counts. Cross-references to the moved steps must be rewritten or they dangle.</p></div>
+      </div>
+    </details>
+
+    <details class="fix">
+      <summary><span class="pnum">P7</span><span class="ftitle">Stop the double injection of the protocol</span><span class="meta"><span class="pill ok">S</span><span class="pill mid">76k tok/story</span></span></summary>
+      <div class="fix-body">
+        <p>product-manager re-invokes the orchestrator skill per story, so the protocol lands in context twice — 76,305 tokens, 13.7% of the final context of the 2026-08-20 run. Change the instruction to: if the protocol is already present in this session's context, execute the pipeline directly from Step 0 with the brief as input; invoke the Skill tool only when it is absent. Guard on "present in context", not "invoked earlier this session".</p>
+        <div><span class="lbl">Files</span><div class="paths">skills/product-manager/SKILL.md:97 · skills/orchestrator/SKILL.md:10-18 (Lifecycle)</div></div>
+      </div>
+    </details>
+
+    <details class="fix">
+      <summary><span class="pnum">P8</span><span class="ftitle">Re-sync toodls' vendored copies — as hygiene, not as a cure</span><span class="meta"><span class="pill ok">S</span><span class="pill ok">~0 effect</span></span></summary>
+      <div class="fix-body">
+        <p>toodls carries a 43.8 KB <code>config.md</code> against a 93.1 KB source, and an older architect.md. I flagged this early as a likely cause; it is not one. Every added line in the diff is parallel-mode contract prose, governing a path toodls almost never takes — and toodls' reviews-per-feature stayed flat the entire time it carried the staleness. Every other vendored file in both repos is byte-identical to source, including all four <code>.cjs</code> gates. Re-sync <em>after</em> P6 shrinks these files, and preserve the two intentional local deltas: lotery_oracle's <code>coder.md</code> <code>model: sonnet</code> frontmatter, and its rewritten ADR link.</p>
+        <div><span class="lbl">Files</span><div class="paths">toodls/.orchestrator/config.md · toodls/.claude/agents/architect.md</div></div>
+      </div>
+    </details>
+  </section>
+
+  <!-- ================= INSTRUMENT ================= -->
+  <section>
+    <div class="sec-head col">
+      <span class="eyebrow">Section six</span>
+      <h2>So it's caught next time</h2>
+    </div>
+    <div class="col" style="display:flex;flex-direction:column;gap:0.85rem">
+      <div class="note">
+        <p><strong>CR per spec family.</strong> Count code reviews whose <code>related_to</code> chain resolves to one spec. Measured by day in lotery_oracle: 1.0 · 1.0 · 2.7 · 1.2 · 2.7 · <strong>8.0</strong>. In toodls by half-month: 2.7 · 3.8 · 3.0 · 3.3. Alert above 4. This is the single number that would have caught it — flat in one project, 3× spike in the other.</p>
+      </div>
+      <div class="note">
+        <p><strong>Distinct slugs per spec.</strong> 11 slugs on 2 specs on the bad day; 16 slugs on 7 specs on the good one. Alert above 3 — this is the direct detector for work escaping the cycle caps by starting a new run.</p>
+      </div>
+      <div class="note">
+        <p><strong>Post-approval artifact count.</strong> Artifacts created after a family's first APPROVED. Measured: 8. Alert above 1.</p>
+      </div>
+      <div class="note">
+        <p><strong>Gate PASS→FAIL alternation.</strong> Any second failure on a gate that already passed within the same family. Measured six alternations on G2 alone.</p>
+      </div>
+      <div class="note">
+        <p><strong>Mandatory-step compliance.</strong> Assert one <code>SIMPLIFY</code> entry per progress file and exactly one eval artifact per family with a body over 2 KB. Both were silently zero on the bad run. Also assert <code>cycle:</code> is non-decreasing across a family — 8 of the 13 CRs are stamped <code>cycle: 0</code>, so the pipeline's own record understates its rework by eight.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= OPEN ================= -->
+  <section>
+    <div class="sec-head col">
+      <span class="eyebrow">Section seven</span>
+      <h2>What I could not settle</h2>
+    </div>
+    <div class="col" style="display:flex;flex-direction:column;gap:1rem">
+      <p><strong>The decisive run has no transcript.</strong> The timeline artifacts span 13:15–21:09, but the session store holds only 03:34–12:47 for that project that day. So I cannot tell whether the eight post-approval runs were launched by the pipeline or by you, one per finding. That changes where the family budget in P5 has to live — an in-run counter, or a pre-flight check that reads the family's history.</p>
+      <p><strong>Which spec-eval ran at ~17:15?</strong> A fix plan stamped 17:25 is titled "timeline spec-evaluation remediation", but no eval artifact exists between 08:24 and 21:09. If spec-driven-eval is being invoked outside Step 7a, P2's edit targets the wrong call site and the standalone entry point needs the same fix.</p>
+      <p><strong>Was the 09:48 re-vendor causal?</strong> lotery_oracle's <code>.orchestrator</code> jumped 12 commits that morning. Before: 3 CRs on one feature. After: 13 CRs and 9 fix plans. But the post-migration feature was also the first hard Flutter UI feature graded against a 314 KB design-contract corpus with G2 actually running. A clean A/B is cheap and available — three prior skill revisions are still cached on disk.</p>
+      <p><strong>Why did simplify run in the morning and not in the afternoon?</strong> Same day, same protocol, same project. If the answer is context pressure at Step 3, that is the strongest evidence for your first theory in its corrected form, and P6 moves up the list.</p>
+    </div>
+  </section>
+
+  <footer class="end">
+    <div>Method — 5 parallel forensic streams (cycle forensics ×2, skill-size audit, cross-role contract audit, git regression correlation), 12 findings put through 2 independent adversarial verifiers each, one completeness critic, one synthesis. The verifiers were instructed to default to refuted; every claim above was re-grounded with fresh citations and then spot-checked by hand against the source files.</div>
+    <div style="margin-top:.6rem">Corpus — lotery_oracle: 393 plan artifacts. toodls: 571. Orchestrator skill: 4,096 lines across 12 files, 50 commits.</div>
+  </footer>
+
+</div>
+
+</body><grammarly-desktop-integration data-grammarly-shadow-root="true" style="visibility: visible !important;"><template shadowrootmode="open"><style>
+      div.grammarly-desktop-integration {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+        -moz-user-select: none;
+        -webkit-user-select: none;
+        -ms-user-select:none;
+        user-select:none;
+      }
+
+      div.grammarly-desktop-integration:before {
+        content: attr(data-content);
+      }
+    </style><div aria-label="grammarly-integration" role="group" tabindex="-1" class="grammarly-desktop-integration" data-content="{&quot;mode&quot;:&quot;full&quot;,&quot;isActive&quot;:true,&quot;isUserDisabled&quot;:false}"></div></template></grammarly-desktop-integration></html>

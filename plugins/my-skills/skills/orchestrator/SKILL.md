@@ -567,7 +567,10 @@ Read cycle caps from config:
 **Bind `review_budget` with the eval's remediation reserved:**
 
 ```
-family_remainder = max_family_cycles − family_cr_count
+# max_family_cycles == 0 disables the family budget entirely (references/config.md → Bounds).
+# A disabled budget must not bind: treat the remainder as unbounded rather than as 0 − count,
+# which would otherwise make "off" the tightest setting the system can express.
+family_remainder = (max_family_cycles == 0) ? ∞ : max_family_cycles − family_cr_count
 eval_reserve     = (max_eval_cycles > 0 and spec_eval_live) ? max_eval_cycles : 0
 
 # What Step 4's REQUEST_CHANGES branch tests. The reserve is withheld from it.
@@ -903,7 +906,7 @@ ORCHESTRATOR — spec scope exceeds the configured budget
 Spec: {spec_id}
 Requirements: {N} / {max_spec_requirements}
 Plan: {P} phases, {T} tasks
-Projected family draw: ~{ceil(N / max_spec_requirements)} of {max_family_cycles} reviews
+Projected: ~{ceil(N / max_spec_requirements)} runs to cover this spec undecomposed, each drawing at least one of {max_family_cycles} family reviews
 Proposed split:
   {for each group: "run {i}: FR {a}-{b} — {the sub-heading or phase name it came from}"}
 To act on the split: write one spec per group (the brainstormer takes a scope brief, or copy this
@@ -935,13 +938,11 @@ available: nothing has touched the workspace, no coder has run, and no review ha
 that in the banner rather than claiming nothing was spent, and keep the plan on disk so a run that
 proceeds under `--override-spec-size` reuses it instead of re-planning.
 
-**This band is sequential-path only, and that is a real gap, not a decision.** Step 2 does not run
-when `parallelism` is not `off` — Steps 2p/2c/2L replace it — so a parallel run of any size is
-admitted unbanded today. Lane slicing is not a substitute: it divides the work across lanes without
-bounding the total, and the family budget it draws on is the same one. Until the band is stated for
-2c, a project that wants this bound on parallel runs must set `max_spec_requirements` **and** run
-sequentially; a parallel run simply does not consult the key. Say so rather than letting an operator
-believe it is covered.
+**The band binds on both paths.** Step 2 does not run when `parallelism` is not `off` — Steps
+2p/2c/2L replace it — so `references/parallel.md` → *Step 2c* runs this same band against the same
+count, before any coder is dispatched. It has to: lane slicing divides one deliverable across
+concurrent coders without reducing its size, and every lane's reviews draw on the one family budget
+this band exists to protect.
 
 **`--override-spec-size` skips this band for one invocation**, on the record: append
 `ORCHESTRATOR — spec size overridden ({N}/{max_spec_requirements})` to the plan's `.progress.md`, the
@@ -1363,6 +1364,13 @@ normalizations here or in the reconciliation above be applied — otherwise a ru
 empty but whose gate is red derives `ISSUES`, has its (already empty) actionable set "emptied" by
 this floor, normalizes to `PASS`, and ships the red gate having skipped the branch that exists to
 catch it.
+
+**An `ISSUES` whose actionable set was already empty before either rule ran is a `PASS`.** The
+reconciliation's clause requires a non-empty set and the floor's requires the floor to have emptied
+it, so a gap list consisting entirely of rows the report marks unscored or observation-only matches
+neither and would otherwise fall through to the remediate branch with nothing to remediate. Normalize
+it the same way — no confirmed red gate, empty actionable set, `eval_status = PASS`, persisted status
+updated in place — and go to Step 5.
 
 **Everything else is recorded, not remediated.** Carry it verbatim into Step 7b's `Issues found:`
 list with its rank and reason, so the run ships with the gap visible and the operator decides. State

@@ -37,7 +37,7 @@ cycle: <integer>          # review or qa cycle number (0-based)
 
 Body: free-form markdown with headings, lists, and fenced code blocks as appropriate for the role.
 
-## html rendered view (additional, only when output_format=html)
+## Where the html view rules live
 
 **When `output_format=html`, read `.orchestrator/artifact-format-html.md` before writing any
 artifact** — the html view's authoring rules and its two blocking validation gates live there. On an
@@ -181,7 +181,7 @@ Required header lines per role:
 
 Roles that have a path line also print it immediately after the Status line (or after the ID line for architect, which has no Status line). Additional informational lines (e.g. `Coverage:`, `Next:`) may follow but are not parsed by the orchestrator for control flow.
 
-### Parallel-mode lines (additive — only when `parallelism` is not `off`)
+### Where the additive stdout lines live
 
 Moved to `.orchestrator/artifact-format-parallel.md`, under this same name. Every row in the table
 above is unchanged on the parallel path; those lines are additive and never replace one.
