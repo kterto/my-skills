@@ -91,7 +91,7 @@ Check for a resolvable **`simplify`** skill the same way, and record its availab
    - `templates/html/*.template.html` → `.orchestrator/html-templates/` (all seven: spec, plan, test-report, code-review, qa-report, final-report, progress-timeline)
    - `scripts/render-artifact.cjs`, `scripts/check-artifact-pairing.cjs`, `scripts/check-artifact-links.cjs`, `scripts/gate-scope.cjs` → `.orchestrator/` (the four runtime `.cjs`; do NOT copy the `*.test.cjs` files or `scripts/README.md`). These are zero-dependency Node scripts — no `npm install` needed. The renderer resolves the scaffolds from the sibling `.orchestrator/html-templates/`, so copy step-2 scaffolds and these scripts together.
 
-   Re-copy all six on every bootstrap (including `--setup` re-runs) so they stay in sync with the installed skill version. If the scaffolds/scripts are missing, `output_format=html` silently degrades to md because roles cannot render the `.html`.
+   Re-copy all eight on every bootstrap (including `--setup` re-runs) so they stay in sync with the installed skill version. If the scaffolds/scripts are missing, `output_format=html` silently degrades to md because roles cannot render the `.html`.
 
 3. **Write the state-tracking contract** (`.orchestrator/.gitignore`). Bootstrap materializes run state and skill copies into the same directory a human keeps `config.json` and `PROJECT-CONTEXT.md` in, so the project cannot tell them apart unless this file says so. Write it as an **allow-list** — everything under `.orchestrator/` is ignored unless named — so a state file added by a *later* skill version defaults to ignored instead of silently entering the next feature commit:
 
@@ -233,7 +233,7 @@ delta={cycle delta file list}       ← reviewer spawns on cycle >= 2 ONLY; omit
 - `ID to use:` is included for the roles that create a numbered artifact (brainstormer→SPEC, architect→FEAT/FIX/QAF, tester→TEST, reviewer→CR, qa→QA). The coder creates no new artifact, so it gets the preamble WITHOUT an `ID to use:` line.
 - Always emit the `.md` artifact; when `output_format=html`, the producing role ALSO renders the paired `.html` by running `node .orchestrator/render-artifact.cjs <artifact.md>` (per `artifact-format.md`) — HTML is never hand-authored.
 - `lane=` and `contract=` are the **single authoritative source of lane membership at every depth**, resolved by the orchestrator exactly like the two keys above. A role never infers its lane, its governing contract, or its depth from plan prose, a file path, or an ID: the lines are present ⇒ this is a leaf invocation; absent ⇒ it is not. On a sequential run both lines are omitted, which is what keeps an `off` run's prompts byte-identical to a pre-feature run's. `lane=` carries the **qualified leaf name** (`backend/data` for a sub-lane, `backend` for an unsplit lane) and `contract=` the leaf's **governing** contract — see Step 3L.p.
-- `leaves=` carries the run's **resolved leaf set** — every leaf `FEAT` ID, in dispatch order — on the three join-level spawns (tester, reviewer, qa). The orchestrator dispatched those leaves and already holds the list, so a role that receives it **uses it as given and does not walk the contract tree**. Without it, each of the three would re-read the parent contract plus every sub-contract to rebuild a set the orchestrator never lost, once per role and again on every review and QA cycle. The `PACT` ID resolution walk in `.orchestrator/artifact-format.md` stays the **fallback** for a **legacy** run — one started before the orchestrator emitted this line — where it is absent. A **resumed** run is not a fallback case: Step 0r rebuilds the leaf set from the parent contract's `Sub-contract` column and emits `leaves=` like any other run.
+- `leaves=` carries the run's **resolved leaf set** — every leaf `FEAT` ID, in dispatch order — on the three join-level spawns (tester, reviewer, qa). The orchestrator dispatched those leaves and already holds the list, so a role that receives it **uses it as given and does not walk the contract tree**. Without it, each of the three would re-read the parent contract plus every sub-contract to rebuild a set the orchestrator never lost, once per role and again on every review and QA cycle. The `PACT` ID resolution walk in `.orchestrator/artifact-format-parallel.md` stays the **fallback** for a **legacy** run — one started before the orchestrator emitted this line — where it is absent. A **resumed** run is not a fallback case: Step 0r rebuilds the leaf set from the parent contract's `Sub-contract` column and emits `leaves=` like any other run.
 
 - `tree=` carries the working tree's hash, minted with Step 0a's recipe **immediately before this spawn** — never an earlier boundary's value, because the coder writes code and the tester writes tests between them. It goes to the **two roles that execute whole-app suites**, the tester and QA, and to nobody else; the reviewer runs nothing, so it does not get the line. Its sole use is the suite-inheritance match (Step 0a → *Suite inheritance*), and it is emitted on **both** paths — a sequential run duplicates suites exactly as a parallel one does.
 
@@ -524,11 +524,22 @@ Remaining: {the steps not reached}
 Status: STALLED
 ```
 
-**This is a stop, not a kill.** Every artifact written so far stays on disk, the plan keeps its
-status, and a later invocation resumes under the family budget as usual. The point is that the run
-can answer *how long have I been going* at all: cycle counts are a proxy for spend that stops
-tracking the moment one cycle costs ten times another, and a run that reached every one of its cycle
-caps can still have spent fifteen hours without a single mechanism noticing.
+**Evaluate it at each of the five boundary mints — Steps 3, 3j, 4c, 5d and 0a — not "wherever a
+boundary is written".** 0a is the run's own start and can only print `0m`. The other four are the
+decision points: each sits immediately before the run would open another cycle, which is the only
+place stopping is both safe and useful.
+
+**This is a stop, not a kill, but be honest about what resumes.** Every artifact written so far stays
+on disk and the plan keeps its status. What does **not** happen is automatic re-entry: `--resume` is
+defined for a halted **parallel** run (Step 0r) and re-enters from the run manifest; a sequential run
+stopped here has no such path and is continued by invoking the orchestrator again on the same spec,
+which starts a fresh run under the family budget — and if that budget is now exhausted, under
+`--override-family-budget`. Say which of the two applies in the banner rather than implying a resume
+the run shape may not have. **Run Step 7c before stopping**, as the scope band does.
+
+The point is that the run can answer *how long have I been going* at all: cycle counts are a proxy
+for spend that stops tracking the moment one cycle costs ten times another, and a run that reached
+every one of its cycle caps can still have spent fifteen hours without a single mechanism noticing.
 
 **Off by default** (`max_run_minutes: 0`), because a badly chosen bound stops good runs. Set it once
 the project has a baseline for what its runs cost.
@@ -556,18 +567,41 @@ Read cycle caps from config:
 **Bind `review_budget` with the eval's remediation reserved:**
 
 ```
-eval_reserve   = (max_eval_cycles > 0 and spec-driven-eval resolved) ? max_eval_cycles : 0
-review_budget  = max(1, min(max_review_cycles, max_family_cycles − family_cr_count − eval_reserve))
+family_remainder = max_family_cycles − family_cr_count
+eval_reserve     = (max_eval_cycles > 0 and spec_eval_live) ? max_eval_cycles : 0
+
+# What Step 4's REQUEST_CHANGES branch tests. The reserve is withheld from it.
+review_budget           = max(1, min(max_review_cycles, family_remainder − eval_reserve))
+# What Step 4e's remediation tests. It may spend into the reserve; nothing else may.
+eval_remediation_budget = max(review_budget, min(max_review_cycles, family_remainder))
 ```
 
-**Why the reserve exists.** Step 4e fires on every reviewer `APPROVED` and, on `ISSUES`, remediates
-through the ordinary review loop — so eval findings spend the *same* budget the reviewer just
-converged inside. Without a reserve the reviewer can legitimately spend the family's last slot, and
-the eval then raises a finding that nothing is left to fix: the run ships with the gap recorded and
-the next invocation stops at the family gate. Reserving up front makes the eval's remediation a cost
-the run planned for rather than one it discovers it cannot pay. The `max(1, …)` floor keeps a run
-startable when the reserve would otherwise consume the whole remainder — a run with one review and no
-eval headroom is worth more than a run that cannot begin.
+**`spec_eval_live` is resolved here, at Step 0b, not inherited from bootstrap.** B2's dependency
+check does not run on an ordinary invocation, so a predicate reading "spec-driven-eval resolved"
+would bind differently depending on whether this run bootstrapped. Resolve it the way Step 4e item 2
+does — `max_eval_cycles > 0` **and** a resolvable `spec-driven-eval` skill — and print the resolved
+value in the banner so the two numbers below are reproducible from the transcript.
+
+**Two budgets, because there are two spenders and one of them was being starved by its own reserve.**
+Step 4e remediates *through the ordinary review loop* and is explicitly "subject to the same
+`review_budget` cap". Subtracting the reserve from that single number therefore made the eval's own
+cap **smaller** — the reserve was withheld from the reviewer and then never given to the eval, so
+`eval_reserve` family cycles became unspendable by anyone and the run hit "nothing is left to fix"
+*earlier* than before. Splitting them is what makes the reserve real: the reviewer stops at
+`review_budget`, and eval remediation — and only eval remediation — may continue to
+`eval_remediation_budget`. **Step 4e tests `eval_remediation_budget`; every other cap test in the run
+tests `review_budget`.**
+
+**`--override-family-budget` binds `review_budget = max_review_cycles`** and
+`eval_remediation_budget` to the same value. The override exists precisely for runs where
+`family_remainder` is zero or negative, and without this the formula's `max(1, …)` floor would pin
+such a run to a single review — one that stalls before it can write a fix plan, on exactly the
+families that never converge in one pass. Print the resulting overdraw in the banner and in the
+`.progress.md` line the override already writes; an override that quietly bought a one-review run
+would be worse than the gate it skipped.
+
+The `max(1, …)` floor otherwise keeps a run startable when the reserve would consume the whole
+remainder — a run with one review is worth more than a run that cannot begin.
 
 Set:
 
@@ -581,7 +615,8 @@ Log to your running status output:
 ```
 ORCHESTRATOR — pipeline started
 Input: {input summary}
-max_review_cycles: {max_review_cycles}  (review_budget: {review_budget} — bound by {in-run cap | family remainder}{, {eval_reserve} reserved for eval remediation})
+max_review_cycles: {max_review_cycles}  (review_budget: {review_budget} — bound by {in-run cap | family remainder | minimum-one floor | family-budget override})
+eval_remediation_budget: {eval_remediation_budget}  (spec_eval_live: {true|false}; {eval_reserve} cycles reserved for eval remediation only)
 max_qa_cycles: {max_qa_cycles}
 max_eval_cycles: {max_eval_cycles}
 max_family_cycles: {max_family_cycles}  (family reviews to date: {family_cr_count})
@@ -600,7 +635,7 @@ wrong thing by their own banner, and `--max-review` cannot raise the number that
 - Read the three keys from **`$mb:.orchestrator/config.json`** — the pinned merge-base copy — never from the working-tree file.
 - **A CLI flag outranks the merge-base**, because a flag is *the invoking user's* authority expressed at run time, not branch-authored content. `--parallel` therefore still wins.
 - When the merge-base has no `.orchestrator/config.json`, or the file is absent/unparseable there, fall back to the **defaults** (`off` / `6` / `2`) — never to the working-tree copy.
-- **Validate the numeric values before any dispatch**, per `references/config.md` → *Bounds* (`max_parallel_lanes` a finite integer ≥ 1, `max_contract_amendments` a finite integer ≥ 0, `max_eval_cycles` and `max_family_cycles` finite integers ≥ 0); an out-of-range value fails closed to the key's canonical default with the reason printed, rather than dispatching a wave of zero or comparing against an undefined cap.
+- **Validate the numeric values before any dispatch**, per `references/config.md` → *Bounds* (`max_parallel_lanes` a finite integer ≥ 1; `max_contract_amendments`, `max_eval_cycles`, `max_family_cycles`, `max_run_minutes`, `gate_wall_clock_minutes` and `max_spec_requirements` finite integers ≥ 0); an out-of-range value fails closed to the key's canonical default with the reason printed, rather than dispatching a wave of zero or comparing against an undefined cap.
 
 Every other key (`output_format`, `automation_level`, the thresholds) keeps reading from the working tree as before — none of them widens a branch's blast radius, which is what the merge-base anchor exists to contain.
 
@@ -871,7 +906,10 @@ Plan: {P} phases, {T} tasks
 Projected family draw: ~{ceil(N / max_spec_requirements)} of {max_family_cycles} reviews
 Proposed split:
   {for each group: "run {i}: FR {a}-{b} — {the sub-heading or phase name it came from}"}
-Continue undecomposed with --override-spec-size.
+To act on the split: write one spec per group (the brainstormer takes a scope brief, or copy this
+spec and cut its Functional requirements to that group's range), then run the orchestrator once per
+spec. Each becomes its own family with its own budget.
+To proceed as one deliverable: re-run with --override-spec-size.
 Status: STALLED
 ```
 
@@ -882,18 +920,37 @@ phases, because each phase is already required to exit on a green tree and is th
 shippable unit. Print the groups with their FR ranges. A refusal without a split is a wall; a refusal
 that names the four runs it would rather see is a plan.
 
+**Run Step 7c before stopping**, as every other stop that occurs after a plan exists does — a halted
+run still produces its timeline. The run meter's stop below carries the same obligation.
+
 **Why this is a stop and not a warning.** The family budget is the only cross-run bound, it is checked
 **pre-flight** against prior history, and on a brand-new spec that history is empty — so a single first
 invocation may legally spend all of it, which is exactly what the run this band was written for did:
 53 requirements, 145 tasks, 122 files admitted as one deliverable, six of six family reviews consumed,
-and every follow-up item now needing `--override-family-budget` to start. The band converts that from
-something discovered at the end into a decision made at the cheapest possible moment — before the
-architect has written a task and before anything has touched the workspace.
+and every follow-up item now needing `--override-family-budget` to start.
+
+**Be exact about what has been spent when it fires.** This step validates a plan the architect has
+already written, so the stop discards one architect pass — not zero. It is still the cheapest stop
+available: nothing has touched the workspace, no coder has run, and no review has been consumed. Say
+that in the banner rather than claiming nothing was spent, and keep the plan on disk so a run that
+proceeds under `--override-spec-size` reuses it instead of re-planning.
+
+**This band is sequential-path only, and that is a real gap, not a decision.** Step 2 does not run
+when `parallelism` is not `off` — Steps 2p/2c/2L replace it — so a parallel run of any size is
+admitted unbanded today. Lane slicing is not a substitute: it divides the work across lanes without
+bounding the total, and the family budget it draws on is the same one. Until the band is stated for
+2c, a project that wants this bound on parallel runs must set `max_spec_requirements` **and** run
+sequentially; a parallel run simply does not consult the key. Say so rather than letting an operator
+believe it is covered.
 
 **`--override-spec-size` skips this band for one invocation**, on the record: append
 `ORCHESTRATOR — spec size overridden ({N}/{max_spec_requirements})` to the plan's `.progress.md`, the
 same shape `--override-family-budget` uses. It is the invoking user's authority over this run, and
-like every other override it is recorded rather than silent.
+like every other override it is recorded rather than silent. **A spec above the band needs it on
+every invocation**, including each remediation run in the family — the band reads the spec's
+requirement count, which never shrinks. That is the intended shape: the override is the operator
+saying "yes, this size, again", and it is recorded each time. A project that decides the size is
+correct should raise `max_spec_requirements` rather than carry the flag forever.
 
 **Size is a multiplier, not a threshold — calibrate accordingly.** Across 218 specs on the reference
 machine the median is 14 requirements and p75 is ~25, and larger specs do draw more reviews (mean 2.0
@@ -1077,7 +1134,7 @@ If `review_cycle >= review_budget`:
 
 ```
 ORCHESTRATOR — review cycle limit reached ({review_budget})
-Bound by: {in-run cap max_review_cycles | family remainder max_family_cycles − family_cr_count}
+Bound by: {in-run cap max_review_cycles | family remainder max_family_cycles − family_cr_count − eval_reserve | minimum-one floor | family-budget override}
 Last CR: {cr_path}
 Status: STALLED — human intervention required
 ```
@@ -1226,7 +1283,7 @@ eval or has no `spec-driven-eval` installed does not report cycles it never spen
    auto-selects the qa-report scaffold for `plans/eval/` sources). Never create any directory
    other than `plans/eval/` for eval output.
    Record `eval_path` and `eval_status`. **Derive `eval_status` by the rule below before you write
-   the frontmatter**, and if the reconciliation below flips it to `PASS`, update the persisted
+   the frontmatter**, and if the reconciliation **or the remediation floor** below flips it to `PASS`, update the persisted
    `status:` in place — otherwise the artifact linked from the final report contradicts the run that
    shipped. (`SKIPPED` never reaches this item: items 1 and 2 both return to Step 5 before any file
    is written. It stays in the enum for a standalone invocation that writes one.)
@@ -1286,21 +1343,35 @@ so did its remediation at **0.98**. Re-entering the loop on that alone spends th
 re-litigating a diff the reviewer has already approved. An actionable item earns a remediation cycle
 only when it is one of:
 
-- an **Engineering Gate confirmed red** that this run caused (a `not-run` gate never qualifies — see above);
 - a requirement the root plan's map marks **`Met-by-plan`** that the eval scores **unmet** — the map
   promised it and the code does not deliver it, which is a broken commitment rather than a missing
   refinement;
-- a gap naming an **untested security or authentication obligation** — an unasserted guard on
-  credentials, transport trust, access control, or a boundary the spec calls out. This carve-out is
-  not decoration: on the run this floor was written for, the eval's top-ranked gap was the only
-  assertion that mTLS validates its CA, and any floor expressed as a number would have discarded it.
+- a gap naming an **untested security or authentication obligation**. Resolve this the same way the
+  two triggers around it are resolved — against something on disk, not against judgement. It
+  qualifies when the gap names a behaviour the **spec** states as a security, authentication,
+  authorization, or transport-trust obligation, **or** when the root plan's `## Requirement Coverage`
+  map maps it to such a requirement. Quote the spec line you matched in the 4a prompt. If you cannot
+  point at one, it is not this trigger — fall through and record it. This carve-out is not
+  decoration: on the run this floor was written for, the eval's top-ranked gap was the only assertion
+  that mTLS validates its CA, and any floor expressed as a number would have discarded it.
+
+**A confirmed red Engineering Gate is not an item in this set and this floor never applies to it.**
+It is not a gap-list row; it reaches `eval_status` through its own term in the derivation and is
+handled by the `If any Engineering Gate is a confirmed red` branch below, which this floor must never
+pre-empt. **Evaluate that branch first.** Only when no gate is a confirmed red may any of the PASS
+normalizations here or in the reconciliation above be applied — otherwise a run whose gap list is
+empty but whose gate is red derives `ISSUES`, has its (already empty) actionable set "emptied" by
+this floor, normalizes to `PASS`, and ships the red gate having skipped the branch that exists to
+catch it.
 
 **Everything else is recorded, not remediated.** Carry it verbatim into Step 7b's `Issues found:`
 list with its rank and reason, so the run ships with the gap visible and the operator decides. State
-the split in the eval line of the final report — `{N} actionable, {M} recorded` — because a gap that
-was seen and consciously not fixed must not read the same as a gap that was never found. **If the
-floor empties the actionable set, set `eval_status = PASS`** by the same normalization the
-deferred-by-decision rule above uses, and go to Step 5.
+the split on Step 7b's `Spec eval:` line as `{N} actionable, {M} recorded` — because a gap that was
+seen and consciously not fixed must not read the same as a gap that was never found. **If no gate is
+a confirmed red and the floor empties the actionable set, set `eval_status = PASS`** by the same
+normalization the deferred-by-decision rule above uses, **update the persisted `status:` in the EVAL
+artifact in place** exactly as item 4 requires for the reconciliation's flip — the artifact linked
+from the final report must not say `ISSUES` on a run that reports `PASS` — and go to Step 5.
 
 #### If any Engineering Gate is a confirmed red `✗`:
 
@@ -1363,8 +1434,11 @@ the eval has graded the current code — not on step entry, which would halt on 
 the last remediation ran, and not after the dispatch, which 4c exits before ever reaching.
 
 Otherwise, remediate through the **existing** review loop — Steps 4a, 4b, 4b2 and 4c, unchanged — **subject to
-the same `review_budget` cap**: apply Step 4's `review_cycle >= review_budget` check before
-4a exactly as its `REQUEST_CHANGES` branch does. If it trips, print that banner with two lines added —
+`eval_remediation_budget`, not `review_budget`**: apply Step 4's cap check before 4a exactly as its
+`REQUEST_CHANGES` branch does, but against that number. This is the one place in the run that tests
+the larger of the two budgets bound at Step 0b, and it is what makes the eval reserve real — the
+reviewer stops at `review_budget` so that these cycles remain available for the gap the reviewer
+could not see. If it trips, print that banner with two lines added —
 `Last eval: {eval_path}` and `Unresolved criteria: {the actionable set, one per line}` — and keep its
 `review cycle limit reached` header and its `Status: STALLED` line. **`Status: STALLED` is the one
 `product-manager` actually keys on** — its stop rule matches that line and nothing else, and the causes
@@ -1428,12 +1502,27 @@ Follow your full QA workflow and print the structured output summary.
 
 Parse QA's output to extract:
 
-- `qa_status` — `READY_TO_COMMIT`, `READY_WITH_WARNINGS`, `BLOCKED`, or `BLOCKED_STALE`
+- `qa_status` — `READY_TO_COMMIT`, `READY_WITH_WARNINGS`, or `BLOCKED` (the three the qa agent emits)
 - `qa_report_path` — e.g. `plans/qa/QA-003-slug.md` (from line `Report: {path}`)
+
+**`BLOCKED_STALE` is not one of them, and must not be looked for here.** The qa agent never prints
+it; the orchestrator synthesizes it after reading the report. Do the synthesis in the file
+verification below, once the frontmatter is in hand:
+
+> **After reading the report, read its `stale_gates:` frontmatter. If it is a non-empty list,
+> set `qa_status = BLOCKED_STALE`, overriding what stdout said.** An absent key means a report
+> written before `templates/qa.md` Step 0 existed — treat it as `[]` and leave `qa_status` alone.
+> **`BLOCKED` outranks `BLOCKED_STALE`:** a report carrying both a measured failure and a stale gate
+> is `BLOCKED`, because a measured failure is something a fix plan can act on and is the more
+> actionable of the two. Synthesize `BLOCKED_STALE` only from `READY_TO_COMMIT` or
+> `READY_WITH_WARNINGS`, and say in the banner which one it replaced.
 
 **File verification (mandatory before continuing):**
 
-Read the QA report file at `qa_report_path` (expect `.md` or `.html` extension per `output_format` in config). If the file does not exist or is empty, re-invoke the QA subagent once more with the same plan ID. If still missing after retry, stop and report to user. Also confirm the plan's `.progress.md` has been updated with a `QA` log entry.
+Read the QA report file at `qa_report_path`. **Read the `.md` for this, always** — `stale_gates:` is
+`.md` frontmatter and the rendered `.html` view does not carry it, so reading the html in `html` mode
+would make the status unreachable on exactly the runs that configure it (expect the `.md` to exist in
+both modes; `artifact-format.md` → *Core rule* guarantees it). If the file does not exist or is empty, re-invoke the QA subagent once more with the same plan ID. If still missing after retry, stop and report to user. Also confirm the plan's `.progress.md` has been updated with a `QA` log entry.
 
 #### If READY_TO_COMMIT → proceed to the Final report (Step 7). The spec eval already ran at Step 4e.
 
@@ -1540,6 +1629,7 @@ leaves={comma-separated leaf FEAT IDs, in dispatch order}   ← parallel path ON
 aggregate={path to .orchestrator/join-digest.md}   ← parallel path ONLY, and only when the digest built and its integrity check passed; omit the line entirely otherwise
 delta={path to the cycle delta file list}   ← review cycles >= 2 ONLY; omit the line entirely on cycle 1
 MAESTRO_REVIEW_BASE={base_sha}   ← the Step 0a pre-flight base; the reviewer snapshots the working tree against it
+budget: review_cycle={review_cycle} review_budget={review_budget} family_cr_count={family_cr_count}   ← stamp these into the CR frontmatter; emitted on EVERY reviewer spawn, Step 4 and Step 5c alike
 
 Review plan {qaf_plan_id}. The plan is in DONE status.
 Follow your full reviewer workflow and print the structured output summary.
@@ -1664,10 +1754,13 @@ Final plan: {plan_id}
 Final report: plans/final/FINAL-{NNN}-{slug}.md
 Tester: {tester_status} (coverage {after} — stmts/branches per stack)
 QA report: {qa_report_path}
-Spec eval: {PASS | ISSUES | SKIPPED}{, graded before {qa_cycle} QA remediation(s) — see Step 4e}
+Spec eval: {PASS | ISSUES | SKIPPED}{ — {N} actionable, {M} recorded}{, graded before {qa_cycle} QA remediation(s) — see Step 4e}
 Deferred by decision: {criterion — reason, one per line, or "none"}
 Issues found:
   - {issue} (or "none")
+  {Step 4e's recorded-not-remediated gaps belong here, each with its eval rank and the
+   reason the remediation floor did not select it. Omit the annotation when the eval was
+   SKIPPED or the floor selected everything.}
 
 Proposed commit message:
   {Conventional-Commit subject + body derived from the spec + diff}

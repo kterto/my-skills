@@ -201,7 +201,7 @@ Rules for this sub-step:
    base="{the MAESTRO_REVIEW_BASE value from your orchestrator preamble}"
    git rev-parse --verify --quiet "$base" >/dev/null || echo "MISSING_TOOL: base ref does not resolve"
    git update-index --refresh >/dev/null 2>&1 || true
-   { git diff --name-only --relative "$base" -- . ':(exclude,top)plans/'; git ls-files --others --exclude-standard -- . ':(exclude,top)plans/'; } | sort -u
+   { git diff --name-only --relative "$base" -- . ':(exclude,top)plans/' ':(exclude,top).orchestrator/'; git ls-files --others --exclude-standard -- . ':(exclude,top)plans/' ':(exclude,top).orchestrator/'; } | sort -u
    ```
 
    **Never a two-dot range** (`base..HEAD`): with nothing committed it resolves to zero files and hands

@@ -114,9 +114,17 @@ Categorize every finding:
 
 **Before you file, ask whether a finding is an instance or a class.** A defect with a *shape* — a
 scan, a guard, an assertion idiom, a call pattern — almost never occurs once. When two or more of
-your findings share a root cause, or when one of them plainly could, **grep the tree for every other
-site of that shape and report the census**, not just the sites you happened to open. File the class
-once with its full site list rather than one finding per site.
+your findings share a root cause, or when one of them plainly could, **grep for every other site of
+that shape and report the census**, not just the sites you happened to open. File the class once with
+its full site list rather than one finding per site.
+
+**Search the change set first, then the files it touches, then stop.** The subject of your review is
+still the change set — the census does not widen what you are reviewing, it widens where you *look
+for repeats of one shape you already found there*. A site outside the change set that matches is
+reported in the census as **pre-existing** and is not a finding against this plan; it tells the fix
+architect the true size of the class and lets the run decide deliberately whether to close it here.
+A whole-repository sweep is not required and a census that says which scope it covered is worth more
+than one that implies it swept everything.
 
 This is the cheapest thing in the whole review, and skipping it is expensive in a way that is
 invisible from inside a single cycle: the fix architect scopes a task to the lines you cited, the
@@ -145,8 +153,8 @@ root_plan: {ROOT-PLAN-ID, or the reviewed plan ID when no root_plan= line was gi
 must_fix_count: {N}
 should_fix_count: {N}
 requirements_unmet: {U}
-review_budget: {the `review_budget: N` value from your prompt's budget line, or `n/a` when absent}
-family_cr_count: {the `family_cr_count: N` value from your prompt's budget line, or `n/a` when absent}
+review_budget: {the `review_budget=` value from your prompt's `budget:` line; omit this key entirely when that line is absent}
+family_cr_count: {the `family_cr_count=` value from the same line; omit this key entirely when that line is absent}
 ---
 
 ## Summary

@@ -107,7 +107,7 @@ The single-plan-ID path is otherwise **unchanged** — same steps, same statuses
 
 ### Parallel-mode lines (additive — only when `parallelism` is not `off`)
 
-These lines exist only on the parallel path. Every row in the table above is **unchanged byte-for-byte**; nothing below replaces or reformats an existing line.
+These lines exist only on the parallel path. Every row of the base table — `artifact-format.md` → *Stdout header-line contract*, which stayed in the core file — is **unchanged byte-for-byte**; nothing below replaces or reformats an existing line.
 
 | Step | Printed by | Line |
 | ---- | ---------- | ---- |

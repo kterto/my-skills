@@ -16,9 +16,13 @@
         "__tests__/fixtures/g6-dart-mutant-no-score.json",
         "__tests__/fixtures/g6-dart-mutant-pass.json",
         "__tests__/fixtures/g6-dart-mutant-zero-mutants.json",
+        "__tests__/fixtures/g6-mutation-test-empty-scope.junit.xml",
+        "__tests__/fixtures/g6-mutation-test-four-outcomes.junit.xml",
+        "__tests__/fixtures/g6-mutation-test-killed-then-survived.junit.xml",
         "__tests__/g1-absent-coverage.test.cjs",
         "__tests__/g5-inline.test.cjs",
         "__tests__/g5.test.cjs",
+        "__tests__/g6-mutation-test.test.cjs",
         "__tests__/gate-selection.test.cjs",
         "__tests__/monorepo-roots.test.cjs",
         "__tests__/node-ts-exempt.test.cjs",
@@ -96,6 +100,8 @@
     {
       "name": "orchestrator",
       "files": [
+        "references/artifact-format-html.md",
+        "references/artifact-format-parallel.md",
         "references/artifact-format.md",
         "references/config-parallel.md",
         "references/config.md",

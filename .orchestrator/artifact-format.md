@@ -2,7 +2,9 @@
 
 All six role templates (brainstormer, architect, coder, tester, reviewer, qa) write artifacts using the format controlled by `output_format`. This document is the single source of truth — role templates reference it instead of duplicating emission rules.
 
-> **Materialized location.** Bootstrap (Step B3) copies this file to `.orchestrator/artifact-format.md` and the html scaffolds to `.orchestrator/html-templates/`. Subagents read those `.orchestrator/` paths — they do NOT have access to the skill's own `references/` or `templates/html/` directories. Always reference the `.orchestrator/` copies in role prompts.
+> **Materialized location.** Bootstrap (Step B3) copies this file to `.orchestrator/artifact-format.md`, the html scaffolds to `.orchestrator/html-templates/`, and the runtime scripts (`render-artifact.cjs`, `check-artifact-pairing.cjs`, `check-artifact-links.cjs`, `gate-scope.cjs`) into `.orchestrator/`. Subagents read those `.orchestrator/` paths — they do NOT have access to the skill's own `references/`, `templates/html/`, or `scripts/` directories. Always reference the `.orchestrator/` copies in role prompts.
+
+> **HTML is rendered, never hand-written.** In `html` mode the `.html` view is produced by running `node .orchestrator/render-artifact.cjs <artifact.md>` — the renderer fills the correct scaffold, mirrors the frontmatter into `<main data-*>`, escapes every attribute/URL, and self-validates the structure before writing. Roles and the orchestrator NEVER author HTML by hand; they write the `.md` and invoke the renderer. This is the single source of the one-source/two-render guarantee, and its escaping is what keeps generated artifacts XSS-safe.
 
 ## Core rule — markdown is always the source of truth
 
@@ -14,7 +16,7 @@ This means:
 - State mutation (status flips, `[ ] → [x]`) always targets the `.md` first — it is authoritative.
 - The `.html` view is a snapshot rendered from the `.md` at write time.
 
-**One exception — the coder keeps the plan html task state live.** While executing a plan in `html` mode (and only when the plan `<ID>-<slug>.html` exists beside the `.md`), the coder mirrors each `[ ] → [x]`, the progress overview, and `data-status`/`data-updated-at` into that one plan html view as it goes, so the rendered plan tracks reality instead of freezing at creation time. The `.md` still wins on any disagreement, and every other artifact's `.html` remains a read-only render regenerated downstream. See the coder role template, Step 4b-html.
+**One exception — the coder keeps the plan html task state live.** While executing a plan in `html` mode (and only when the plan `<ID>-<slug>.html` exists beside the `.md`), the coder keeps the rendered plan in sync with reality instead of freezing it at creation time by **re-running the renderer on the plan** — `node .orchestrator/render-artifact.cjs plans/<dir>/<ID>-<slug>.md` — after it flips checkboxes and updates `status`/`updated_at` in the authoritative `.md`. The renderer regenerates the `.html` from the current `.md`, so task state, progress overview, and `data-*` all follow automatically. The `.md` still wins on any disagreement, and every other artifact's `.html` is likewise a render of its `.md`. See the coder role template, Step 4b-html.
 
 ## md artifact (always written)
 
@@ -37,27 +39,10 @@ Body: free-form markdown with headings, lists, and fenced code blocks as appropr
 
 ## html rendered view (additional, only when output_format=html)
 
-Written IN ADDITION to the `.md`, never instead of it.
+**When `output_format=html`, read `.orchestrator/artifact-format-html.md` before writing any
+artifact** — the html view's authoring rules and its two blocking validation gates live there. On an
+`md` run this section is the whole of what you need: write the `.md` and render nothing.
 
-- Filename: `<ID>-<slug>.html` (same `<ID>-<slug>` stem as the `.md`, sitting beside it).
-- One self-contained file — no external assets, no CDN links.
-- The root element is `<main>` with `data-*` attributes mirroring the md frontmatter (the `.md` is authoritative if the two ever disagree):
-
-```html
-<main
-  data-id="<ID>"
-  data-status="<status>"
-  data-created-at="<ISO-8601>"
-  data-updated-at="<ISO-8601>"
-  data-cycle="<integer>"
->
-```
-
-- Sections are wrapped in `<details><summary>Section Title</summary>…</details>` to make them collapsible.
-- Task lists rendered as `<input type="checkbox" disabled>` checkboxes.
-- Cycle counters displayed as inline `<span class="badge">cycle N</span>` badges; style the badge inline (no external CSS).
-
-**Styled scaffolds.** In `html` mode, each role fills the matching self-contained scaffold in `.orchestrator/html-templates/<artifact>.template.html` (spec, plan, test-report, code-review, qa-report, final-report, progress-timeline). These define the Editorial Design System v1 look and the required `<main data-*>` shell; roles replace the sample content with the real artifact content, preserving the `data-*` attributes, `<details><summary>` sections, disabled checkboxes, and the `<span class="badge">cycle N</span>` badge. `progress-timeline.template.html` is wired: in `html` mode the orchestrator renders `<plan-path-without-.md>.progress.html` from a plan's `.progress.md` append-log at each pipeline terminal state. `.progress.md` remains the markdown source-of-truth log (roles append to it); the html file is a regenerated read-only view.
 
 ## Canonical directories & prefixes (allow-list — load-bearing)
 
@@ -72,10 +57,64 @@ The ONLY directories permitted under `plans/`. No role or step may invent any ot
 | test report   | `plans/test/`        | `TEST`  | tester                         |
 | code review   | `plans/code-review/` | `CR`    | reviewer                       |
 | qa report     | `plans/qa/`          | `QA`    | qa                             |
-| spec eval     | `plans/eval/`        | `EVAL`  | orchestrator (Step 7a)         |
+| spec eval     | `plans/eval/`        | `EVAL`  | orchestrator (Step 4e)         |
 | final report  | `plans/final/`       | `FINAL` | orchestrator (Step 7b)         |
+| interface contract | `plans/feat/`   | `PACT`  | architect (type `contract`)    |
 
 `QNA-{NNN}` files (brainstormer, non-interactive mode) share the paired SPEC's **ID token** (the `{NNN}` part only, without the `SPEC-` prefix) and live in `plans/specs/`.
+
+**The no-new-top-level-directory ban stands.** `PACT` is a new *prefix*, not a new directory: it is written into the existing `plans/feat/` alongside the lane `FEAT` plans it governs, exactly as `FIX` co-locates with `CR` in `plans/code-review/` and `QAF` with `QA` in `plans/qa/`. The table above remains the complete allow-list of directories under `plans/`; no role or step may invent another.
+
+### `PACT`, lane contracts, and the parallel path
+
+**When the resolved `parallelism` is not `off`, read `.orchestrator/artifact-format-parallel.md`.**
+It carries the `PACT` frontmatter contract, the one-level-down sub-contract, inherited interface
+assignments, `PACT` ID resolution, and the additive parallel-mode stdout lines. Every cross-reference
+of the form `artifact-format-parallel.md` → *`PACT` ID resolution* resolves there, under that same name.
+
+On a sequential run none of it applies: no `PACT` is ever written, so a plan ID appears everywhere a
+`PACT` ID could have.
+
+
+## The run family — every artifact answering one spec
+
+A **run family** is every artifact under `plans/` that answers the same `SPEC-*`, across **all** the
+orchestrator runs that touched it. It is not the same as a run: the cycle caps (`max_review_cycles`,
+`max_qa_cycles`, `max_eval_cycles`) are scoped to one invocation and reset to zero when a new run
+starts on the same spec, so work that overflows a run leaves the reach of every counter that was
+watching it. One measured feature produced 13 code reviews and 8 post-approval runs across 11 distinct
+slugs this way, while no in-run counter ever passed 4 of a permitted 10. The family is the scope at
+which that is visible.
+
+**Membership is one grep, not a graph walk.** Every artifact a run writes names that run's `SPEC-*` id
+in `related_to`, alongside its immediate parent — the plan it fixes, the CR it answers, the contract it
+governs. So the family resolves in a single pass:
+
+```bash
+grep -rl "{spec_id}" plans --include='*.md' --exclude='*.progress.md'
+```
+
+Use `grep -r`, never a `**` glob: globstar is off by default in bash and does not exist in bash 3.2,
+where `**` silently means `*` and misses every artifact below the first level; zsh aborts the command
+outright on zero matches. A plan and its `.progress.md` sidecar are **one** artifact — count the plan.
+
+**The grep resolves the plans; the reviews resolve by provenance.** `grep` matches the id anywhere in
+a file, so it also pulls in artifacts that merely cite the spec in prose, and it misses every `CR`
+written before this rule existed — 0 of 222 code reviews across both reference projects carry
+`related_to` at all. A `CR` belongs to the family when its `plan:` frontmatter names a family plan,
+which every reviewer has always written:
+
+```bash
+grep -rl "^plan: {plan_id}" plans/code-review --include='CR-*.md'
+```
+
+One pass per family plan. Using the bare grep as the denominator scored three already-shipped families
+as blocking and missed a fourth that was genuinely over the line.
+
+**This is why the rule is load-bearing rather than cosmetic.** An artifact that omits the spec id is
+invisible to the family — it does not count toward the rework ratio, it does not count toward the
+family budget, and the run it belongs to can therefore restart indefinitely without any gate noticing.
+When you write an artifact and the run has a spec, its id belongs in `related_to`.
 
 ## ID allocation — timestamp-based, collision-free
 
@@ -116,7 +155,8 @@ Edges (each role fills the links it knows the paths of; omit a link when that ar
 | Artifact | Related links |
 |---|---|
 | spec | none |
-| plan (FEAT/FIX/QAF) | source spec (and source CR/QA for fix/qa plans) |
+| plan (FEAT/FIX/QAF) | source spec (and source CR/QA for fix/qa plans; and the **governing** `PACT` for a leaf plan — the parent contract for an unsplit lane, that lane's sub-contract for a sub-lane) |
+| interface contract (PACT) | source spec; and the superseded `PACT` when this one is an amendment; and the parent `PACT` when this one is a sub-contract |
 | test report | the plan |
 | code-review | the plan |
 | qa report | the plan |
@@ -140,3 +180,8 @@ Required header lines per role:
 | qa           | `QA — QA-{NNN} created`                    | `Status: READY_TO_COMMIT \| BLOCKED \| READY_WITH_WARNINGS`   | `Report: {path}`    |
 
 Roles that have a path line also print it immediately after the Status line (or after the ID line for architect, which has no Status line). Additional informational lines (e.g. `Coverage:`, `Next:`) may follow but are not parsed by the orchestrator for control flow.
+
+### Parallel-mode lines (additive — only when `parallelism` is not `off`)
+
+Moved to `.orchestrator/artifact-format-parallel.md`, under this same name. Every row in the table
+above is unchanged on the parallel path; those lines are additive and never replace one.

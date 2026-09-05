@@ -82,7 +82,7 @@ One row per lane (or, in a sub-contract, one row per **sub-lane**). Every lane t
 - A **flat** lane carries its `Lane plan ID` and an **empty** `Sub-contract` cell (`—`).
 - A **sub-split** lane carries `—` for `Lane plan ID` (a split lane has **no lane-level plan** — its plans are its sub-lanes') and its child's `PACT` ID in `Sub-contract`.
 
-This column is the run's single machine-readable index of the nesting; it is what `PACT` ID resolution walks (`.orchestrator/artifact-format.md`). When the orchestrator passed you no sub-contract IDs, no lane is sub-split — emit the column with every cell `—`, or omit it entirely; an absent column is read as all-flat, never as an error.
+This column is the run's single machine-readable index of the nesting; it is what `PACT` ID resolution walks (`.orchestrator/artifact-format-parallel.md`). When the orchestrator passed you no sub-contract IDs, no lane is sub-split — emit the column with every cell `—`, or omit it entirely; an absent column is read as all-flat, never as an error.
 
 **In a sub-contract**, the map is a **sub-lane map** — same four base columns with sub-lane names in qualified form (`backend/data`), and **no `Sub-contract` column** (depth is capped at 2).
 

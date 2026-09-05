@@ -16,9 +16,22 @@ A plan ID (e.g. `FEAT-001`). The plan must have `status: DONE` and a correspondi
 ## Step 0 — Gate wall-clock budget (mandatory)
 
 Read `gate_wall_clock_minutes` from `.orchestrator/config.json` (integer ≥ 0; default `15`; `0`
-disables the bound). **Run every suite and every gate command in Steps 3, 4 and 4b under that
-bound.** On a command that exceeds it: stop it, record that gate's verdict as `UNMEASURED`, and add
-the gate to the report's `stale_gates:` frontmatter list with the elapsed minutes.
+disables the bound). **Run each Clean Code gate command in Step 4b under that bound.** On a command
+that exceeds it: stop it, record that gate's verdict as `UNMEASURED`, and add the gate to the
+report's `stale_gates:` frontmatter list with the elapsed minutes.
+
+**The bound is on Step 4b's gate commands only — not on the Step 3 test suite and not on Step 4's
+lint, type or format checks.** Two reasons, and both matter. A gate has an **id** (`G1`…`G7`), a row
+in the report's gate table, and `UNMEASURED` in its verdict vocabulary; a test suite has none of
+those, so "record it as UNMEASURED against its gate" has nothing to write. And a full suite
+legitimately runs longer than a gate: at the default of 15 minutes this would kill ordinary suites on
+any large project, turning a bound meant to catch a wedged tool into one that fails healthy runs.
+A suite that truly hangs is a project defect the run should surface by hanging visibly, not one QA
+should paper over by inventing a verdict for it.
+
+**Never record a command you stopped in `suites[]`.** A killed command produced no result, and the
+verification ledger's inheritance rule would otherwise let that non-execution be inherited as a
+recorded outcome at that tree for the rest of the run.
 
 A stale gate is **not** a failure. It is a gate whose result is unknown, and the difference matters:
 a fail is something a fix plan can act on, while a timeout is an operator decision about tooling or
@@ -410,6 +423,13 @@ stale_gates: []   # or [{gate: G6, elapsed_minutes: 43}, ...] — gates that exc
 
 **A `MISSING_TOOL` or `UNMEASURED` verdict does not block on its own.** It is not a failure and not a pass: it means no value exists to compare, so blocking on it asks the pipeline to fix something no plan can reach — a stack with no mutation runner never installs one mid-run, and `flutter test --coverage` will not start emitting branch records. Report it prominently, name it in the verdict rationale, and let the run proceed on the gates that *were* measured. Adjudicating it case by case is what let two QA reports on the same feature, hours apart, reach opposite verdicts on an identical unmeasured gate.
 - **READY_WITH_WARNINGS**: All blocking checks pass but the family's G8 ratio is in `0.5 < r ≤ 1.5` (HIGH_REWORK). Plan can ship; flag in report so the human investigates root cause.
+
+**A non-empty `stale_gates:` is never `READY_TO_COMMIT`.** A gate stopped on the clock is unmeasured
+*because this run ran out of time on it*, which is not the same as a gate that could never be
+measured here — the distinction Step 0 exists to draw. Set `READY_WITH_WARNINGS` at best, name every
+stale gate and its elapsed minutes in the verdict rationale, and never print "all checks pass" over
+one. The orchestrator reads the key and synthesizes `BLOCKED_STALE` from it; a report that buries a
+timeout inside a clean verdict defeats that.
 
 ## Step 7 — Update plan and progress files
 

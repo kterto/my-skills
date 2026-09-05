@@ -28,7 +28,7 @@ A plan ID (e.g. `FEAT-001`). The plan must have `status: DONE` from the coder.
 
 **The original artifact always wins.** The digest is derived data: it saves the analysis, never the checking. Every way it can be wrong produces a *stronger* verdict rather than an error, so a disagreement you notice is the only runtime signal that it dropped something. If what you open disagrees with it, say so in your report, record it in `.progress.md`, and treat the digest as unusable for the rest of this run.
 
-When the ID you were given carries the `PACT-` prefix, you were invoked **at the outer join** over a leaf fan-out. **When your preamble carries a `leaves=` line, that is the leaf plan set — use it as given.** Only when it is absent — a **legacy** run, started before the orchestrator emitted the line — resolve the set yourself. A resumed run is not such a case: Step 0r rebuilds the leaf set centrally and emits it. Either way, `.orchestrator/artifact-format.md` → **`PACT` ID resolution** is the single normative rule for resolving it, for what to evaluate, and for where to write back — **that rule is your entire knowledge of nesting.**
+When the ID you were given carries the `PACT-` prefix, you were invoked **at the outer join** over a leaf fan-out. **When your preamble carries a `leaves=` line, that is the leaf plan set — use it as given.** Only when it is absent — a **legacy** run, started before the orchestrator emitted the line — resolve the set yourself. A resumed run is not such a case: Step 0r rebuilds the leaf set centrally and emits it. Either way, `.orchestrator/artifact-format-parallel.md` → **`PACT` ID resolution** is the single normative rule for resolving it, for what to evaluate, and for where to write back — **that rule is your entire knowledge of nesting.**
 
 Your one addition on top of that: add the `PACT`'s **interface points** to your critical-flow triage input. An interface row is by construction a seam no single leaf's own tests exercise end-to-end, which makes it high-criticality e2e material. Include the rows of every adopted **sub-contract** alongside the parent's — an intra-lane seam between two sub-lanes is the same kind of untested boundary as a cross-lane one. One triage, one e2e selection, one coverage run, one report — **never once per lane and never once per sub-lane.**
 
@@ -48,7 +48,7 @@ Using the e2e framework from PROJECT-CONTEXT, write e2e tests for the selected f
 ```bash
 base="${MAESTRO_REVIEW_BASE:-$(git merge-base HEAD origin/main)}"
 git update-index --refresh >/dev/null 2>&1 || true
-{ git diff --name-only --relative "$base" -- . ':(exclude,top)plans/'; git ls-files --others --exclude-standard -- . ':(exclude,top)plans/'; } | sort -u
+{ git diff --name-only --relative "$base" -- . ':(exclude,top)plans/' ':(exclude,top).orchestrator/'; git ls-files --others --exclude-standard -- . ':(exclude,top)plans/' ':(exclude,top).orchestrator/'; } | sort -u
 ```
 
 The pipeline never commits, so `base..HEAD` resolves to zero files and would hand you a vacuous pass.

@@ -1,0 +1,10 @@
+# --- BEGIN orchestrator-managed (rewritten on every bootstrap) ---
+# Allow-list. Ignored by default; tracked only by explicit exception below.
+*
+!*/
+!.gitignore
+!config.json
+!PROJECT-CONTEXT.md
+!eval-baselines/**
+# --- END orchestrator-managed ---
+# Project additions go below this line; bootstrap preserves them.
