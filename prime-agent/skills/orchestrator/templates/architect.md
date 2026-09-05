@@ -29,7 +29,7 @@ A `Type: contract` invocation whose **preamble carries a non-empty `lane=`** (or
 | `qa`       | `plans/qa/`          | `QAF`  | `plans/qa/QAF-*.md`          |
 | `contract` | `plans/feat/`        | `PACT` | `plans/feat/PACT-*.md`       |
 
-> **The `contract` row covers both the parent contract and a sub-contract.** A sub-contract is the *same* artifact one level down — same type value, same directory, same prefix, same renderer scaffold, same five frontmatter keys (`.orchestrator/artifact-format.md` → *Sub-contract*). Do **not** add a row for it, and do not invent a `subcontract` type.
+> **The `contract` row covers both the parent contract and a sub-contract.** A sub-contract is the *same* artifact one level down — same type value, same directory, same prefix, same renderer scaffold, same five frontmatter keys (`.orchestrator/artifact-format-parallel.md` → *Sub-contract*). Do **not** add a row for it, and do not invent a `subcontract` type.
 
 **Hard rules — non-negotiable:**
 
@@ -333,6 +333,7 @@ Status: PLANNED. Ready for coder.
 
 - Read `.orchestrator/PROJECT-CONTEXT.md` before writing any plan to extract relevant constraints.
 - For `fix` plans: read the referenced CR file fully. Every "Must Fix" becomes a task pair (test + implementation). Every "Should Fix" becomes an optional task pair annotated `(optional)`.
+- **When a finding names a defective *idiom* rather than a defective line, the task's scope is every occurrence of that idiom — not the `file:line` the CR cited.** A CR that carries a `## Defect class` section is telling you the cited sites are a sample: that section is the reviewer's census, and its `Sites:` count — not the `**File**:` lines of the findings it lists — is the scope of your task pair. When a CR carries no such section but two or more of its findings plainly share one root cause, treat it the same way and say in `## Technical Notes` that you derived the class yourself. Enumerate the class across the tree, put the census and its count in the plan's `## Technical Notes`, and scope the task pair to the census. A fix that repairs fewer sites than the census must say which it left and why. **Repairing exactly the cited lines is what turns one defect class into one review cycle per instance** — the run this rule was written for spent five cycles discovering fourteen instances of a single defeatable-guard shape, one or two per cycle, while the one cycle that swept the class exhaustively closed it in 59 minutes and the next review found none.
 - For a `fix` plan sourced from an **`EVAL` report** instead of a CR: your prompt carries `Source eval report:`, `root_plan=`, an `Actionable items:` list and a `Deferred-by-decision (do NOT plan):` list. **Those two lists are authoritative — the eval file itself is persisted verbatim and carries no such markings**, so never re-derive the split by reading the eval's gap list yourself. Turn each **actionable** item into one task pair. **Deferred-by-decision** — the orchestrator's term for an eval finding that grades a requirement the root plan's coverage map already marked `Deferred`, i.e. a gap the run chose on purpose rather than a defect — **is not a task**: the root plan's `## Requirement Coverage` map deferred those requirements on purpose, and planning them would re-open a decision the run already recorded — and the reviewer, which treats a `Deferred` row as not-a-finding, will not catch it. **List the deferred-by-decision items verbatim, with their stated reasons, in the plan's `## Overview`** — that is the only on-disk trace the reconciliation leaves, and it is what tells the reviewer their absence from the diff is a recorded decision rather than a gap. If the actionable list is empty, report the mismatch and stop rather than authoring an empty plan. `related_to` names the `EVAL` and the `root_plan` ID from the prompt.
 - For `qa` plans: read the referenced QA report fully. Each BLOCKED item becomes a task.
 - Tasks must be independently completable and ordered: tests always precede implementation.
@@ -370,7 +371,7 @@ Print `Verification: per-phase — gates {ids}`, where `{ids}` lists the gate id
 
 The `Requirements:` line reports the `## Requirement Coverage` map: `{M}` is the total row count — which equals the number of numbered requirements in the source spec, or in lane-plan mode the size of the lane's assigned set — and `{D}` is how many of those rows are `Deferred`. Print `Requirements: n/a` on a `FIX`, `QAF`, or `PACT`, which carry no map.
 
-For type `contract` the path label is `Contract:` rather than `Plan:`, and the counts describe the contract (per `.orchestrator/artifact-format.md` → Parallel-mode lines):
+For type `contract` the path label is `Contract:` rather than `Plan:`, and the counts describe the contract (per `.orchestrator/artifact-format-parallel.md` → Parallel-mode lines):
 
 ```
 ARCHITECT — PACT-{NNN} created

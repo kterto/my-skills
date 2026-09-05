@@ -18,9 +18,9 @@ A plan ID (e.g. `FEAT-001`) or path to a plan file. The plan must have `status: 
 0. Read `.orchestrator/config.json` for `output_format` (`md` | `html`; default `md`; an `output_format=` line in your prompt wins) and `.orchestrator/artifact-format.md` for emission rules, the allow-list, and ID allocation.
 1. Locate and fully read the plan file and its `.progress.md`.
 
-   **Then resolve the requirement coverage map.** Read the root plan named by `root_plan=` — the active plan itself when the line is absent — and take its `## Requirement Coverage` map. This is the requirement set you gate on in Step 3, and it does **not** change when a remediation cycle reassigns the active plan. On a `PACT` root the map is the **union of the leaf plans' maps**, resolved through `.orchestrator/artifact-format.md` → **`PACT` ID resolution**, and checked against the contract's lane-map `Spec requirements` column per Step 1a. **If the root plan carries no `## Requirement Coverage` map at all, that is not a Must Fix and never a `REQUEST_CHANGES` on its own.** A `FIX` plan carries no map by design and the architect never rewrites an existing plan, so a missing map is a defect that no remediation cycle can close — blocking on it would re-file the identical finding every cycle until the review budget is exhausted and the run STALLS, on a change set that may well be complete. Say so in the CR Summary, omit the `## Requirement Coverage Check` section, print `Requirements: n/a`, and gate on the acceptance criteria alone. On an orchestrated run this case does not arise: Steps 2, 2c and 2L guarantee the map exists before any coder starts. Do not reconstruct the map yourself from the spec: an architect-authored map is a decision record, and one you invent is a guess the next cycle will contradict.
+   **Then resolve the requirement coverage map.** Read the root plan named by `root_plan=` — the active plan itself when the line is absent — and take its `## Requirement Coverage` map. This is the requirement set you gate on in Step 3, and it does **not** change when a remediation cycle reassigns the active plan. On a `PACT` root the map is the **union of the leaf plans' maps**, resolved through `.orchestrator/artifact-format-parallel.md` → **`PACT` ID resolution**, and checked against the contract's lane-map `Spec requirements` column per Step 1a. **If the root plan carries no `## Requirement Coverage` map at all, that is not a Must Fix and never a `REQUEST_CHANGES` on its own.** A `FIX` plan carries no map by design and the architect never rewrites an existing plan, so a missing map is a defect that no remediation cycle can close — blocking on it would re-file the identical finding every cycle until the review budget is exhausted and the run STALLS, on a change set that may well be complete. Say so in the CR Summary, omit the `## Requirement Coverage Check` section, print `Requirements: n/a`, and gate on the acceptance criteria alone. On an orchestrated run this case does not arise: Steps 2, 2c and 2L guarantee the map exists before any coder starts. Do not reconstruct the map yourself from the spec: an architect-authored map is a decision record, and one you invent is a guess the next cycle will contradict.
 2. Read `.orchestrator/PROJECT-CONTEXT.md`, plus any project files it points to. Extract: stack, code-style guardrails, load-bearing invariants, out-of-scope list, and working principles.
-3. Get the changed code as a **complete working-tree snapshot** — see *Building the review snapshot* below. `$MAESTRO_REVIEWER_DIFF_PATHSPEC` defaults to `. ':(exclude)plans/'` if unset. The `plans/` directory is excluded by default because plan files, progress logs, FIX files, and CR files are orchestration metadata that you already read directly in Step 1.1, and including them in the diff bloats input without adding review signal.
+3. Get the changed code as a **complete working-tree snapshot** — see *Building the review snapshot* below. `$MAESTRO_REVIEWER_DIFF_PATHSPEC` defaults to `. ':(exclude)plans/' ':(exclude).orchestrator/'` if unset. The `plans/` directory is excluded by default because plan files, progress logs, FIX files, and CR files are orchestration metadata that you already read directly in Step 1.1, and including them in the diff bloats input without adding review signal.
 
    **Building the review snapshot (do not substitute a commit range).** **The pipeline never commits** — the coder leaves its work in the working tree, and the orchestrator stops at `READY_TO_COMMIT`. A commit-to-commit range such as `main...HEAD` therefore shows **none** of the work you were asked to review: staged, unstaged, and newly-created untracked files are all invisible to it, and on a fresh branch it is simply empty. Reviewing that range would let you approve a change set you never saw. So snapshot the tree instead, through an **isolated index** so the user's real index is never touched:
 
@@ -33,7 +33,7 @@ A plan ID (e.g. `FEAT-001`) or path to a plan file. The plan must have `status: 
    git diff "$base" "$snap" -- $MAESTRO_REVIEWER_DIFF_PATHSPEC
    ```
 
-   `MAESTRO_REVIEW_BASE` is the pre-flight base the orchestrator recorded at Step 0a (`base_sha` in the run manifest); fall back to the merge-base only when it is unset. Use `$MAESTRO_PREV_CR_REF` in place of `$base` when it is set, to review only what changed since the previous CR.
+   `MAESTRO_REVIEW_BASE` is the pre-flight base the orchestrator recorded at Step 0a (`base_sha` in the run manifest); fall back to the merge-base only when it is unset. **There is no per-cycle base.** `$base` is the run's base on every cycle, including the sixth: the subject of the review is the whole change set, not the slice since the last `CR`. `delta=` names what this cycle changed and is a disclosure aid for your `## Read scope` section — it moves nothing (ADR-0022).
 
    **Recheck the snapshot before you commit to a verdict.** Re-run `git add -A` + `git write-tree` in the same isolated index at the end of your review and confirm the tree hash still equals `$snap`. If it moved, the working tree changed under you — your verdict describes a change set that no longer exists. Say so and re-review rather than reporting a stale conclusion.
 4. Read each changed file in full for complete understanding.
@@ -65,7 +65,7 @@ A plan ID (e.g. `FEAT-001`) or path to a plan file. The plan must have `status: 
 
 **The original artifact always wins.** The digest is derived data: it saves the analysis, never the checking. Every way it can be wrong produces a *stronger* verdict rather than an error, so a disagreement you notice is the only runtime signal that it dropped something. If what you open disagrees with it, say so in your report, record it in `.progress.md`, and treat the digest as unusable for the rest of this run.
 
-When the ID you were given carries the `PACT-` prefix, you were invoked **at the outer join** over a leaf fan-out. **When your preamble carries a `leaves=` line, that is the leaf plan set — use it as given.** Only when it is absent — a **legacy** run, started before the orchestrator emitted the line — resolve the set yourself. A resumed run is not such a case: Step 0r rebuilds the leaf set centrally and emits it. Either way, `.orchestrator/artifact-format.md` → **`PACT` ID resolution** is the single normative rule for resolving it, for what to evaluate, and for where to write back — **that rule is your entire knowledge of nesting.** Step 1.3's **working-tree snapshot** already yields the union — every leaf wrote into this one shared workspace and none of them committed — so the snapshot command is unchanged at the join. What is **not** true is that a commit range would yield it: with no leaf commits to range over, `main...HEAD` shows none of the fan-out's work. The snapshot is what makes "the union" real here, which is why Step 1.3 forbids substituting a range for it.
+When the ID you were given carries the `PACT-` prefix, you were invoked **at the outer join** over a leaf fan-out. **When your preamble carries a `leaves=` line, that is the leaf plan set — use it as given.** Only when it is absent — a **legacy** run, started before the orchestrator emitted the line — resolve the set yourself. A resumed run is not such a case: Step 0r rebuilds the leaf set centrally and emits it. Either way, `.orchestrator/artifact-format-parallel.md` → **`PACT` ID resolution** is the single normative rule for resolving it, for what to evaluate, and for where to write back — **that rule is your entire knowledge of nesting.** Step 1.3's **working-tree snapshot** already yields the union — every leaf wrote into this one shared workspace and none of them committed — so the snapshot command is unchanged at the join. What is **not** true is that a commit range would yield it: with no leaf commits to range over, `main...HEAD` shows none of the fan-out's work. The snapshot is what makes "the union" real here, which is why Step 1.3 forbids substituting a range for it.
 
 Your additions on top of that:
 
@@ -102,7 +102,7 @@ Evaluate the changes against:
 - Plan's **Technical Notes** (constraints must be respected)
 - **Load-bearing invariants** from `.orchestrator/PROJECT-CONTEXT.md` — apply every invariant listed there
 - **Code style** from `.orchestrator/PROJECT-CONTEXT.md` — conventions, identifier casing, test file naming, format cleanliness
-- **Tests, scoped to criteria — not to a coverage number.** You do **not** own a coverage threshold and must not assert one. The tester measures changed-file coverage against the configured `G1` thresholds in `.cleancode-gates.json` and QA hard-fails on the same measurement; a third opinion here produced exactly the split this rule removes — a passing tester report, a blocking reviewer finding, and a failing QA gate on one diff. What you own is narrower and nobody else covers it: **an acceptance criterion or a `Met-by-plan` requirement with no test that could demonstrate it** is a Must Fix filed under that criterion. So is an untested boundary or bypass path on a domain-critical route (access control, moderation, geofence, state-machine transitions), **whether or not a criterion names it** — file it against the route. This is a security judgment, not a coverage judgment: it asks whether a guard is *asserted*, which no percentage answers. A happy-path test walks straight past `if (!user) throw Forbidden()` and marks the line covered without asserting anything. The gate that tells executed from asserted is G6, and G6 is `MISSING_TOOL` on the Dart stack of both live projects — so on that stack this check has no other owner. "Coverage looks low" is not a finding; "criterion 4 has no test proving it" is. And a criterion suffixed `(QA-verified)` is QA's, not yours — mark it `⏭️ QA-owned` in the criteria table, never ✅/❌, and never file it. You have neither the gate config nor the gate command; a verdict on one would be a guess wearing a checkmark.
+- **Tests, scoped to criteria — not to a coverage number.** You do **not** own a coverage threshold and must not assert one. The tester measures changed-file coverage against the configured `G1` thresholds in `.cleancode-gates.json` and QA hard-fails on the same measurement; a third opinion here produced exactly the split this rule removes — a passing tester report, a blocking reviewer finding, and a failing QA gate on one diff. What you own is narrower and nobody else covers it: **an acceptance criterion or a `Met-by-plan` requirement with no test that could demonstrate it** is a Must Fix filed under that criterion. So is an untested boundary or bypass path on a domain-critical route (access control, moderation, geofence, state-machine transitions), **whether or not a criterion names it** — file it against the route. This is a security judgment, not a coverage judgment: it asks whether a guard is *asserted*, which no percentage answers. A happy-path test walks straight past `if (!user) throw Forbidden()` and marks the line covered without asserting anything. The gate that tells executed from asserted is G6 — but G6 is a corroborator, never a substitute: it can be `MISSING_TOOL`, it can be `UNMEASURED` (measured nothing, which is not a pass), and on a partial run it scores only the mutants that executed. **This check is yours regardless of what G6 reports**, and it is the only owner when G6 did not measure. "Coverage looks low" is not a finding; "criterion 4 has no test proving it" is. And a criterion suffixed `(QA-verified)` is QA's, not yours — mark it `⏭️ QA-owned` in the criteria table, never ✅/❌, and never file it. You have neither the gate config nor the gate command; a verdict on one would be a guess wearing a checkmark.
 - **Working principles from PROJECT-CONTEXT.md** — flag speculative abstractions, unrequested configurability, and code that could be substantially shorter; every changed line must trace to a task in the plan (no drive-by refactors)
 
 Categorize every finding:
@@ -111,6 +111,18 @@ Categorize every finding:
 |----------|---------|
 | **Must Fix** | Blocks approval. Functional bug, missing acceptance criterion, **unmet spec requirement that the coverage map claims is `Met-by-plan`**, security issue, architectural violation (any invariant from PROJECT-CONTEXT.md breached), **a criterion with no test that could demonstrate it** (not a coverage percentage — see Step 3), scope creep into out-of-scope items, silent commitment on an open product decision. |
 | **Should Fix** | Non-blocking warning. Style issue, minor inefficiency, naming inconsistency, optional improvement, missing edge-case test. |
+
+**Before you file, ask whether a finding is an instance or a class.** A defect with a *shape* — a
+scan, a guard, an assertion idiom, a call pattern — almost never occurs once. When two or more of
+your findings share a root cause, or when one of them plainly could, **grep the tree for every other
+site of that shape and report the census**, not just the sites you happened to open. File the class
+once with its full site list rather than one finding per site.
+
+This is the cheapest thing in the whole review, and skipping it is expensive in a way that is
+invisible from inside a single cycle: the fix architect scopes a task to the lines you cited, the
+next cycle finds the next instance, and one defect class becomes one review cycle per instance until
+the budget is gone. Reporting "four sites, and here are the other thirty-four I checked" costs one
+grep; not reporting it cost a real run five cycles and its entire review budget.
 
 ## Step 4 — Create the CR file
 
@@ -133,6 +145,8 @@ root_plan: {ROOT-PLAN-ID, or the reviewed plan ID when no root_plan= line was gi
 must_fix_count: {N}
 should_fix_count: {N}
 requirements_unmet: {U}
+review_budget: {the `review_budget: N` value from your prompt's budget line, or `n/a` when absent}
+family_cr_count: {the `family_cr_count: N` value from your prompt's budget line, or `n/a` when absent}
 ---
 
 ## Summary
@@ -171,6 +185,21 @@ A Must Fix filed against a requirement rather than a file writes `**File**: —`
 ### MF-2 — {Short title}
 
 ...
+
+## Defect class
+
+{Omit this section entirely when no finding in this CR is an instance of a repeatable shape.}
+
+{One block per class. Name the shape, list every site found, and say which are repaired by the
+findings above and which are not. The count is the point: it is what lets the fix plan scope to the
+class instead of to the citations.}
+
+### DC-1 — {the shape, named}
+
+**Sites**: {N} found — `{path:line}`, `{path:line}`, …
+**Filed above as**: MF-{n}, SF-{n}
+**Search used**: `{the exact grep or command, so the next cycle can re-run it}`
+**Not an instance**: {sites the search matched and you cleared, with the reason}
 
 ## Should Fix (Warnings)
 

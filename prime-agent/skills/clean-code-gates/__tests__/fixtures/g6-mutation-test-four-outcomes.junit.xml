@@ -1,0 +1,84 @@
+<?xml version="1.0"?>
+<testsuites>
+  <testsuite id="24" name="builtin.arith.add" package="builtin.arith.add" tests="2" failures="0" errors="1" time="0.853" timestamp="2026-09-04T15:58:43" hostname="192.168.0.107">
+    <properties>
+      <property name="test_runner" value="mutation_test"/>
+      <property name="version" value="mutation-test version: 1.8.0"/>
+    </properties>
+    <testcase name="Line20_builtin.arith.add_0" classname="lib/strong.dart" time="0.853"/>
+    <testcase name="Line2_builtin.arith.add_0" classname="lib/uncov.dart" time="0.0">
+      <error type="not covered by tests" message="The line is not covered by tests">
+File: lib/uncov.dart
+Line: 2
+Original line:   return a + b;
+Mutation:   return a - b;
+</error>
+    </testcase>
+    <system-out/>
+    <system-err/>
+  </testsuite>
+  <testsuite id="12" name="builtin.if" package="builtin.if" tests="2" failures="1" errors="1" time="31.679000000000002" timestamp="2026-09-04T15:58:43" hostname="192.168.0.107">
+    <properties>
+      <property name="test_runner" value="mutation_test"/>
+      <property name="version" value="mutation-test version: 1.8.0"/>
+    </properties>
+    <testcase name="Line20_builtin.if_0" classname="lib/weak.dart" time="0.855">
+      <failure type="undetected" message="All tests passed despite changing the code!">
+File: lib/weak.dart
+Line: 20
+Original line:   if (a > b) {
+Mutation:   if (!(a > b)) {
+</failure>
+    </testcase>
+    <testcase name="Line2_builtin.if_0" classname="lib/slow2.dart" time="30.823">
+      <error type="timeout" message="The test command timed out after 30.823 s">
+File: lib/slow2.dart
+Line: 2
+Original line:   if (n &lt;= 0) {
+Mutation:   if (!(n &lt;= 0)) {
+</error>
+    </testcase>
+    <system-out/>
+    <system-err/>
+  </testsuite>
+  <testsuite id="10" name="builtin.op.leq" package="builtin.op.leq" tests="2" failures="2" errors="0" time="1.6540000000000001" timestamp="2026-09-04T15:58:43" hostname="192.168.0.107">
+    <properties>
+      <property name="test_runner" value="mutation_test"/>
+      <property name="version" value="mutation-test version: 1.8.0"/>
+    </properties>
+    <testcase name="Line2_builtin.op.leq_0" classname="lib/slow2.dart" time="0.8160000000000001">
+      <failure type="undetected" message="All tests passed despite changing the code!">
+File: lib/slow2.dart
+Line: 2
+Original line:   if (n &lt;= 0) {
+Mutation:   if (n == 0) {
+</failure>
+    </testcase>
+    <testcase name="Line2_builtin.op.leq_1" classname="lib/slow2.dart" time="0.837">
+      <failure type="undetected" message="All tests passed despite changing the code!">
+File: lib/slow2.dart
+Line: 2
+Original line:   if (n &lt;= 0) {
+Mutation:   if (n &lt; 0) {
+</failure>
+    </testcase>
+    <system-out/>
+    <system-err/>
+  </testsuite>
+  <testsuite id="25" name="builtin.arith.sub" package="builtin.arith.sub" tests="1" failures="0" errors="1" time="30.948" timestamp="2026-09-04T15:58:43" hostname="192.168.0.107">
+    <properties>
+      <property name="test_runner" value="mutation_test"/>
+      <property name="version" value="mutation-test version: 1.8.0"/>
+    </properties>
+    <testcase name="Line6_builtin.arith.sub_0" classname="lib/slow2.dart" time="30.948">
+      <error type="timeout" message="The test command timed out after 30.948 s">
+File: lib/slow2.dart
+Line: 6
+Original line:   return countDown(n - 1);
+Mutation:   return countDown(n + 1);
+</error>
+    </testcase>
+    <system-out/>
+    <system-err/>
+  </testsuite>
+</testsuites>

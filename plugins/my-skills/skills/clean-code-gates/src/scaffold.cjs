@@ -86,6 +86,22 @@ function nodeTsTools(root) {
   return tools;
 }
 
+/**
+ * True when a package is activated with `dart pub global`. Checked by listing
+ * the pub cache's bin directory rather than shelling out to `dart`, so the
+ * scaffold stays fast and works when no SDK is on PATH.
+ */
+function dartGlobalPkg(name) {
+  const home = process.env.HOME || process.env.USERPROFILE || '';
+  const cache = process.env.PUB_CACHE || (home ? path.join(home, '.pub-cache') : null);
+  if (!cache) return false;
+  try {
+    return fs.existsSync(path.join(cache, 'bin', name));
+  } catch {
+    return false;
+  }
+}
+
 function dartFlutterTools(root) {
   return [
     {
@@ -102,9 +118,16 @@ function dartFlutterTools(root) {
     },
     {
       gates: 'G6',
-      label: 'dart_mutant (external CLI)',
+      label: 'mutation_test (default)',
+      present: dartGlobalPkg('mutation_test'),
+      install: 'dart pub global activate mutation_test',
+    },
+    {
+      gates: 'G6',
+      label: 'dart_mutant (only with gates.G6.tool: "dart_mutant")',
       present: onPath('dart_mutant'),
       install: 'brew install dart_mutant',
+      optional: true,
     },
   ];
 }
@@ -133,11 +156,16 @@ function formatAdvice(advice, stacks) {
   for (const stack of stacks) {
     lines.push(`\n[${stack}]`);
     for (const a of advice.filter((x) => x.stack === stack)) {
-      lines.push(`  ${a.present ? 'ok  ' : 'MISS'} ${a.gates.padEnd(6)} ${a.label}`);
+      // `opt` is a third state, not a softer MISS: an optional entry is a
+      // fallback its gate does not need, so an absent one is not a gap. G6 runs
+      // on mutation_test and falls back to dart_mutant — counting the fallback
+      // as missing tells every Dart project to install a tool it will never use.
+      const mark = a.present ? 'ok  ' : (a.optional ? 'opt ' : 'MISS');
+      lines.push(`  ${mark} ${a.gates.padEnd(6)} ${a.label}`);
       if (!a.present) lines.push(`         ↳ ${a.install}`);
     }
   }
-  const missing = advice.filter((a) => !a.present).length;
+  const missing = advice.filter((a) => !a.present && !a.optional).length;
   lines.push(
     missing
       ? `\n${missing} tool group(s) missing — install the above, then re-run the gates. G5 (no-comments) needs no tooling.`

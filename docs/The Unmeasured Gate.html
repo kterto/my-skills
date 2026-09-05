@@ -1,0 +1,777 @@
+<title>The Unmeasured Gate</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,600;0,700;1,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+  :root {
+    --paper:        #F2F4F7;
+    --surface:      #FBFCFD;
+    --surface-sunk: #E7EBF1;
+    --ink:          #171B22;
+    --ink-soft:     #4A5262;
+    --ink-faint:    #737C8C;
+    --rule:         #D3D9E2;
+    --rule-strong:  #B4BCCA;
+    --indigo:       #2B3A67;
+    --indigo-soft:  #52649B;
+    --broken:       #B23A22;
+    --broken-bg:    #F6E4DF;
+    --confirm:      #1B6553;
+    --confirm-bg:   #DEEBE6;
+    --weaken:       #8A6110;
+    --weaken-bg:    #F3EADA;
+    --neutral-chip: #5A6373;
+    --neutral-bg:   #E3E7ED;
+    --shadow:       0 1px 2px rgba(23,27,34,.06), 0 6px 18px rgba(23,27,34,.05);
+
+    --display: "Spectral", Georgia, "Times New Roman", serif;
+    --body: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:        #10131A;
+      --surface:      #171B24;
+      --surface-sunk: #1E232E;
+      --ink:          #E4E8EF;
+      --ink-soft:     #A9B2C1;
+      --ink-faint:    #7C8698;
+      --rule:         #2A303C;
+      --rule-strong:  #3C4453;
+      --indigo:       #9DAEE4;
+      --indigo-soft:  #7B8DC4;
+      --broken:       #E88468;
+      --broken-bg:    #35201B;
+      --confirm:      #6FC3A7;
+      --confirm-bg:   #16302A;
+      --weaken:       #D5A852;
+      --weaken-bg:    #322818;
+      --neutral-chip: #98A2B3;
+      --neutral-bg:   #242A35;
+      --shadow:       0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.3);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:        #10131A;
+    --surface:      #171B24;
+    --surface-sunk: #1E232E;
+    --ink:          #E4E8EF;
+    --ink-soft:     #A9B2C1;
+    --ink-faint:    #7C8698;
+    --rule:         #2A303C;
+    --rule-strong:  #3C4453;
+    --indigo:       #9DAEE4;
+    --indigo-soft:  #7B8DC4;
+    --broken:       #E88468;
+    --broken-bg:    #35201B;
+    --confirm:      #6FC3A7;
+    --confirm-bg:   #16302A;
+    --weaken:       #D5A852;
+    --weaken-bg:    #322818;
+    --neutral-chip: #98A2B3;
+    --neutral-bg:   #242A35;
+    --shadow:       0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.3);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 16px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 28px 120px; }
+  .col  { max-width: 68ch; }
+
+  /* ---------- masthead ---------- */
+  .masthead {
+    border-bottom: 2px solid var(--ink);
+    padding: 44px 0 20px;
+    margin-bottom: 34px;
+  }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    letter-spacing: .13em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    margin-bottom: 18px;
+  }
+  h1 {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: clamp(2.6rem, 6.2vw, 4.1rem);
+    line-height: 1.02;
+    letter-spacing: -.022em;
+    margin: 0 0 14px;
+    text-wrap: balance;
+  }
+  .standfirst {
+    font-family: var(--display);
+    font-size: clamp(1.06rem, 2.1vw, 1.28rem);
+    line-height: 1.5;
+    color: var(--ink-soft);
+    max-width: 62ch;
+    margin: 0;
+  }
+  .standfirst em { color: var(--ink); font-style: italic; }
+
+  /* ---------- verdict pair ---------- */
+  .verdicts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+    gap: 18px;
+    margin: 34px 0 52px;
+  }
+  .verdict {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-left: 4px solid var(--rule-strong);
+    border-radius: 3px;
+    padding: 22px 24px 24px;
+    box-shadow: var(--shadow);
+  }
+  .verdict.good { border-left-color: var(--confirm); }
+  .verdict.bad  { border-left-color: var(--broken); }
+  .verdict h2 {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    letter-spacing: .13em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin: 0 0 10px;
+    font-weight: 500;
+  }
+  .verdict .call {
+    font-family: var(--display);
+    font-size: 1.42rem;
+    font-weight: 600;
+    line-height: 1.24;
+    margin: 0 0 10px;
+    text-wrap: balance;
+  }
+  .verdict.good .call { color: var(--confirm); }
+  .verdict.bad  .call { color: var(--broken); }
+  .verdict p { margin: 0; font-size: 14.6px; color: var(--ink-soft); }
+  .verdict p + p { margin-top: 9px; }
+
+  /* ---------- sections ---------- */
+  section { margin: 0 0 58px; }
+  .part-label {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--indigo);
+    border-top: 2px solid var(--indigo);
+    padding-top: 8px;
+    margin: 0 0 20px;
+    display: block;
+  }
+  h2.sec {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: clamp(1.6rem, 3.3vw, 2.15rem);
+    line-height: 1.16;
+    letter-spacing: -.014em;
+    margin: 0 0 14px;
+    text-wrap: balance;
+  }
+  h3 {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: 1.24rem;
+    line-height: 1.28;
+    margin: 38px 0 10px;
+    text-wrap: balance;
+  }
+  h4 {
+    font-family: var(--body);
+    font-weight: 600;
+    font-size: 15px;
+    margin: 26px 0 8px;
+    color: var(--ink);
+  }
+  p { margin: 0 0 15px; }
+  a { color: var(--indigo); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  strong { font-weight: 600; }
+  ul, ol { margin: 0 0 16px; padding-left: 1.2em; }
+  li { margin-bottom: 7px; }
+  li::marker { color: var(--ink-faint); }
+
+  code, .m {
+    font-family: var(--mono);
+    font-size: .875em;
+    background: var(--surface-sunk);
+    padding: .1em .34em;
+    border-radius: 2px;
+    word-break: break-word;
+  }
+
+  /* ---------- chips ---------- */
+  .chip {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 2px;
+    white-space: nowrap;
+    vertical-align: 1px;
+  }
+  .chip.confirmed { background: var(--confirm-bg); color: var(--confirm); }
+  .chip.weakened  { background: var(--weaken-bg);  color: var(--weaken); }
+  .chip.refuted   { background: var(--neutral-bg); color: var(--neutral-chip); }
+  .chip.broken    { background: var(--broken-bg);  color: var(--broken); }
+
+  /* ---------- data blocks ---------- */
+  .scroll { overflow-x: auto; margin: 0 0 20px; }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 540px;
+    font-size: 14.4px;
+    font-variant-numeric: tabular-nums;
+  }
+  caption {
+    caption-side: top;
+    text-align: left;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    padding-bottom: 8px;
+  }
+  th, td {
+    text-align: left;
+    padding: 9px 14px 9px 0;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+  th {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 500;
+    border-bottom: 1px solid var(--rule-strong);
+    white-space: nowrap;
+  }
+  td.num, th.num { text-align: right; padding-right: 20px; font-family: var(--mono); }
+  tbody tr:last-child td { border-bottom: none; }
+
+  pre {
+    font-family: var(--mono);
+    font-size: 12.7px;
+    line-height: 1.62;
+    background: var(--surface-sunk);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 15px 17px;
+    overflow-x: auto;
+    margin: 0 0 20px;
+    color: var(--ink);
+  }
+  pre b { color: var(--broken); font-weight: 600; }
+  pre i { color: var(--confirm); font-style: normal; font-weight: 600; }
+  pre .dim { color: var(--ink-faint); }
+
+  blockquote {
+    margin: 0 0 20px;
+    padding: 2px 0 2px 18px;
+    border-left: 2px solid var(--rule-strong);
+    color: var(--ink-soft);
+    font-family: var(--display);
+    font-size: 1.02rem;
+  }
+
+  .callout {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 18px 20px;
+    margin: 0 0 22px;
+    font-size: 14.8px;
+  }
+  .callout.alert { border-color: var(--broken); background: var(--broken-bg); }
+  .callout.alert strong { color: var(--broken); }
+  .callout > :last-child { margin-bottom: 0; }
+  .callout .hd {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: .11em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin: 0 0 8px;
+  }
+  .callout.alert .hd { color: var(--broken); }
+
+  /* ---------- findings ---------- */
+  .finding {
+    border-top: 1px solid var(--rule);
+    padding: 20px 0 4px;
+  }
+  .finding:first-of-type { border-top: 1px solid var(--rule-strong); }
+  .fhead {
+    display: flex;
+    gap: 14px;
+    align-items: baseline;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+  }
+  .rank {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--indigo);
+    letter-spacing: .04em;
+    flex: none;
+  }
+  .ftitle {
+    font-family: var(--display);
+    font-size: 1.13rem;
+    font-weight: 600;
+    line-height: 1.3;
+    margin: 0;
+    flex: 1 1 300px;
+  }
+  .fmeta {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--ink-faint);
+    margin: 0 0 10px;
+    word-break: break-word;
+  }
+  .finding p { font-size: 15px; }
+
+  /* ---------- timeline ---------- */
+  figure { margin: 0 0 26px; }
+  figcaption {
+    font-size: 13.4px;
+    color: var(--ink-faint);
+    margin-top: 10px;
+    max-width: 72ch;
+  }
+  .tl { width: 100%; height: auto; display: block; }
+  .tl-band { opacity: .9; }
+  .tl-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    fill: var(--ink-soft);
+  }
+  .tl-tick { font-family: var(--mono); font-size: 10px; fill: var(--ink-faint); }
+  .tl-ev   { font-family: var(--mono); font-size: 10.5px; fill: var(--ink); }
+
+  .footnote {
+    font-size: 13.6px;
+    color: var(--ink-faint);
+    border-top: 1px solid var(--rule);
+    padding-top: 22px;
+    margin-top: 46px;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    a { transition: color .15s ease; }
+  }
+  a:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--indigo);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+</style>
+
+<div class="wrap">
+
+<header class="masthead">
+  <div class="eyebrow">
+    <span>Orchestrator · degradation forensics</span>
+    <span>b3-app · SPEC-20260904T000644Z-875d</span>
+    <span>branch feat/clean-code-gates-mutation-test</span>
+  </div>
+  <h1>The Unmeasured Gate</h1>
+  <p class="standfirst">A 15-hour run spent every budget it had and shipped anyway. Its one gate for test <em>quality</em> reported <span class="m">UNMEASURED</span>. The branch written to fix that gate makes it report a number instead — and the number is wrong in the direction that hides bugs.</p>
+</header>
+
+<div class="verdicts">
+  <div class="verdict good">
+    <h2>The pipeline</h2>
+    <p class="call">Containment worked. Convergence didn't.</p>
+    <p>The P1–P8 fixes from the last forensics all shipped and all held: the cascade stayed inside one family, cycles were stamped honestly, the eval ran in-loop. Nothing escaped.</p>
+    <p>What replaced escape is saturation. Review 6/6, eval 2/2, family 6/6 — every ceiling reached inside one invocation, and <strong>no meter anywhere counts anything but cycles.</strong></p>
+  </div>
+  <div class="verdict bad">
+    <h2>The mutation_test integration</h2>
+    <p class="call">Not ready to be the default.</p>
+    <p>Three defects reproduced against reports the real tool emits. The worst scores un-run mutants as kills, so G6 can return <span class="m">pass</span> on code where most mutants survived.</p>
+    <p>The swap away from <span class="m">dart_mutant</span> is <strong>correct and well-founded</strong> — that tool was silently unusable here. The replacement just isn't finished.</p>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<section>
+  <span class="part-label">Part I · The run</span>
+  <h2 class="sec">What the last round of fixes actually bought</h2>
+
+  <div class="col">
+    <p>This is the third forensic pass on the same symptom. The first two — <em>The Rework Cascade</em> over lotery_oracle and toodls, and the run-cost audit over toodls' 75-hour run — produced eight ranked fixes. All eight are in the tree: requirement-coverage maps (<code>4313210</code>), the eval moved inside the review loop (<code>c59432c</code>), thresholds single-sourced from config (<code>967a9e4</code>), phase-exit gates (<code>93989e9</code>), the family rework budget (<code>f830043</code>), the parallel path demoted (<code>59e1887</code>), one protocol injection per session (<code>de6ca06</code>).</p>
+
+    <p>b3-app is the first full run after all of them, and it is the right test. The failure mode changed shape.</p>
+  </div>
+
+  <div class="scroll">
+    <table>
+      <caption>Same symptom, two eras</caption>
+      <thead>
+        <tr><th>&nbsp;</th><th>lotery_oracle · before P1–P8</th><th>b3-app · after</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Cascade shape</td><td>8 runs <strong>escaped</strong> the caps; 8 of 13 CRs stamped <code>cycle: 0</code></td><td>1 family, cycles stamped 1–5 honestly</td></tr>
+        <tr><td>Budgets</td><td>Never fired</td><td><strong>All three exhausted</strong> — review 6/6, eval 2/2, family 6/6</td></tr>
+        <tr><td>Rework detector</td><td>G8 = 3.00, advisory, shipped</td><td>G8 = 1.50, advisory, shipped</td></tr>
+        <tr><td>Spec → reviewer</td><td>52.6% retention (269 of 511)</td><td>53 of 53, verified every cycle</td></tr>
+        <tr><td>Ship verdict</td><td>READY_WITH_WARNINGS</td><td>READY_WITH_WARNINGS</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col">
+    <p>The leak is closed. The requirement map carried all 53 requirements to every reviewer pass, and the reviewer re-verified them against the run's root plan on each cycle exactly as designed. What the fixes did not touch is the thing that made six cycles necessary in the first place — and one of them, the eval moved in-loop, now spends from the same budget the reviewer just converged inside.</p>
+  </div>
+
+  <h3>Where the 904 minutes went</h3>
+
+  <figure>
+    <svg class="tl" viewBox="0 0 1000 232" role="img" aria-label="Timeline of the 15-hour run showing the build phase, the review loop, the lib/ freeze at 07:24, the reviewer approval at 09:28, and the eval-driven tail.">
+      <!-- axis -->
+      <line x1="40" y1="196" x2="980" y2="196" stroke="var(--rule-strong)" stroke-width="1"></line>
+      <g class="tl-tick" text-anchor="middle">
+        <line x1="40"    y1="196" x2="40"    y2="201" stroke="var(--rule-strong)"></line><text x="40"    y="215">00:06</text>
+        <line x1="164.8" y1="196" x2="164.8" y2="201" stroke="var(--rule-strong)"></line><text x="164.8" y="215">02:06</text>
+        <line x1="289.6" y1="196" x2="289.6" y2="201" stroke="var(--rule-strong)"></line><text x="289.6" y="215">04:06</text>
+        <line x1="414.4" y1="196" x2="414.4" y2="201" stroke="var(--rule-strong)"></line><text x="414.4" y="215">06:06</text>
+        <line x1="539.2" y1="196" x2="539.2" y2="201" stroke="var(--rule-strong)"></line><text x="539.2" y="215">08:06</text>
+        <line x1="664"   y1="196" x2="664"   y2="201" stroke="var(--rule-strong)"></line><text x="664"   y="215">10:06</text>
+        <line x1="788.8" y1="196" x2="788.8" y2="201" stroke="var(--rule-strong)"></line><text x="788.8" y="215">12:06</text>
+        <line x1="913.6" y1="196" x2="913.6" y2="201" stroke="var(--rule-strong)"></line><text x="913.6" y="215">14:06</text>
+        <line x1="980"   y1="196" x2="980"   y2="201" stroke="var(--rule-strong)"></line><text x="980"   y="215">15:10</text>
+      </g>
+
+      <!-- band 1: phases -->
+      <text class="tl-label" x="40" y="30">RUN</text>
+      <rect class="tl-band" x="40"    y="38" width="195.5" height="20" fill="var(--indigo-soft)" opacity=".38"></rect>
+      <rect class="tl-band" x="235.5" y="38" width="608.3" height="20" fill="var(--indigo)"></rect>
+      <rect class="tl-band" x="843.8" y="38" width="136.2" height="20" fill="var(--indigo-soft)" opacity=".38"></rect>
+      <text class="tl-ev" x="46"  y="52.5" fill="var(--ink)">build 188m</text>
+      <text class="tl-ev" x="242" y="52.5" fill="#FBFCFD">review loop · 585m · 64.7% of the run</text>
+      <text class="tl-ev" x="850" y="52.5" fill="var(--ink)">eval2 · QA · final</text>
+
+      <!-- band 2: lib/ movement -->
+      <text class="tl-label" x="40" y="86">lib/</text>
+      <rect class="tl-band" x="40"    y="94" width="455.4" height="20" fill="var(--confirm)" opacity=".55"></rect>
+      <rect class="tl-band" x="495.4" y="94" width="484.6" height="20" fill="var(--surface-sunk)" stroke="var(--rule-strong)" stroke-width="1"></rect>
+      <text class="tl-ev" x="46"  y="108.5">production code moves · +2538/−21 then +226/−26</text>
+      <text class="tl-ev" x="501" y="108.5" fill="var(--ink-soft)">byte-identical through HEAD · 51.5% of the run</text>
+
+      <!-- band 3: what drove each cycle -->
+      <text class="tl-label" x="40" y="142">CYCLES</text>
+      <rect class="tl-band" x="278.1" y="150" width="216.4" height="20" fill="var(--weaken)" opacity=".45"></rect>
+      <rect class="tl-band" x="495.4" y="150" width="129"   height="20" fill="var(--weaken)" opacity=".72"></rect>
+      <rect class="tl-band" x="624.4" y="150" width="219.4" height="20" fill="var(--broken)" opacity=".55"></rect>
+      <text class="tl-ev" x="284" y="164.5">cy 1–2 · code fixes</text>
+      <text class="tl-ev" x="501" y="164.5">cy 3 · sweep</text>
+      <text class="tl-ev" x="630" y="164.5">cy 4–5 · after APPROVED · eval-driven · 215.8m · 23.9%</text>
+
+      <!-- markers -->
+      <g>
+        <line x1="495.4" y1="34" x2="495.4" y2="180" stroke="var(--ink)" stroke-width="1" stroke-dasharray="3 3"></line>
+        <line x1="624.4" y1="34" x2="624.4" y2="180" stroke="var(--broken)" stroke-width="1.4"></line>
+        <text class="tl-ev" x="624.4" y="28" text-anchor="middle" fill="var(--broken)">09:28 reviewer APPROVED · 0 must-fix</text>
+        <text class="tl-ev" x="495.4" y="186" text-anchor="middle" fill="var(--ink-soft)">07:24 lib/ freeze</text>
+      </g>
+    </svg>
+    <figcaption>Every boundary is a tree hash in <code>.orchestrator/verification-ledger.json</code>, and all eight trees still resolve as git objects — so the per-cycle diffs below are measured, not inferred.</figcaption>
+  </figure>
+
+  <div class="col">
+    <p>Two numbers carry the whole diagnosis. The review loop ran <strong>9h45m — 64.7% of the run</strong> — and moved <code>lib/</code> by <strong>+226/−26 net</strong> against the build phase's +2538/−21. <strong>Under 9%.</strong> Three of the five remediation cycles changed zero files under <code>lib/</code>, and production code is byte-identical from 07:24:40 through <code>HEAD</code>.</p>
+
+    <p>The coupling hypothesis — fixes breaking each other — is dead on its own terms. All 17 suite rows in the ledger are <code>pass</code> or <code>flake</code>; not one RED exists in the run, and every flake is the same grpc-dart TLS teardown race the eval characterised as <em>"a false RED under concurrency, never a false green."</em> The run's genuine architecture findings (three copies of <code>PinnedChannelCredentials</code>, session-expiry implemented twice) were filed in the first review and never touched in six cycles.</p>
+
+    <p>What the loop was actually doing was raising assertion adequacy — finding, one or two per cycle, guards that could not fail. That work was real and it found fourteen live defects. The defect is the <em>scheduling</em>, not the method.</p>
+  </div>
+
+  <h3>Ranked: what generated the cycles</h3>
+
+  <div class="col">
+    <p>Each claim below was put to an independent verifier instructed to default to <span class="chip refuted">refuted</span> and to re-derive every number from source. One survived intact; nine were weakened. The materiality figures are the verifiers' corrected ones, not the finders'.</p>
+  </div>
+
+  <div class="finding">
+    <div class="fhead">
+      <span class="rank">01</span>
+      <p class="ftitle">The eval re-opens a loop the reviewer has already closed, and its PASS bar is a perfect score</p>
+      <span class="chip weakened">weakened</span>
+    </div>
+    <p class="fmeta">SKILL.md Step 4e · spec-driven-eval/SKILL.md · 215.8 min · 23.9% of the run · 2 of 6 review slots</p>
+    <p>At 09:28:34 the reviewer returned <code>APPROVED</code> with <code>must_fix_count: 0</code>. Three minutes later the spec eval returned <code>ISSUES</code> at <strong>0.94, "Spec-complete"</strong>, with 53 of 53 requirements verified and none unmet — and reopened the loop for two more full FIX→TEST→CR cycles that changed nothing under <code>lib/</code> and moved the score to 0.98.</p>
+    <p>The mechanism is not "no severity floor" — it is that the gap list is <em>defined</em> as "the fixes needed to reach 1.00", so <code>ISSUES</code> derives from that list being non-empty. On any non-trivial spec, <code>PASS</code> is practically unreachable. Both cycles spent from the same budget the reviewer had just converged inside, and the two items the eval itself left open (FR1, FR5) now need <code>--override-family-budget</code> to close.</p>
+    <p><strong>What cuts against it:</strong> that cost bought the run's only assertion that mTLS validates the CA. A naive score floor would have suppressed a real security gap. The floor has to be on <em>kind</em>, not on grade.</p>
+  </div>
+
+  <div class="finding">
+    <div class="fhead">
+      <span class="rank">02</span>
+      <p class="ftitle">Nothing meters anything but cycles</p>
+      <span class="chip confirmed">confirmed</span>
+    </div>
+    <p class="fmeta">All nine bounds count cycles or lane width · no token, cost, or wall-clock meter exists</p>
+    <p>Review 10, QA 5, eval 2, family 6, amendments 2, lanes 6 — every budget in the harness meters <em>rework</em> or <em>concurrency</em>. None meters spend. A run cannot answer "how long have I been going" or "how much has this cost", so nothing can stop on either.</p>
+    <p>The one wall-clock bound the skill claims to own is dead code. <code>BLOCKED_STALE</code> is accepted as a <code>qa_status</code> at SKILL.md:1258, given a stop banner at :1282, routed to the timeline render at :1529, styled in <code>render-artifact.cjs</code>, and branched on by <em>both</em> product-manager and validation-fixer — while its sole producer, a <code>stale_gates:</code> frontmatter key, is written by nothing in the repository. <code>templates/qa.md</code> has no Step 0 and no timeout rule. That is exactly the bound that would have stopped the 43-minute dart_mutant hang.</p>
+    <p><strong>Correction to the finder:</strong> timeouts <em>do</em> exist in the gate runner — <code>dart-flutter.cjs:142</code> and <code>:566</code>, both 120 s. They bound tool-availability probes, never the gate body.</p>
+  </div>
+
+  <div class="finding">
+    <div class="fhead">
+      <span class="rank">03</span>
+      <p class="ftitle">Spec size is admitted without a ceiling, and it is a real risk multiplier</p>
+      <span class="chip weakened">weakened</span>
+    </div>
+    <p class="fmeta">53 requirements · 145 tasks · 122 files · 22,587 insertions, as one run</p>
+    <p>SKILL.md Step 2 counts the spec's numbered requirements at what it calls <em>"the cheapest point in the whole run"</em>, uses the count for an equality check against the plan's coverage map, and throws the magnitude away. The requirement count is taken at three separate sites and ceilinged at none.</p>
+    <p>Rebuilding the corpus — <strong>218 specs across the orchestrator projects on this machine</strong> — 53 requirements is the <strong>96.6th percentile</strong> (median 14, p75 ≈ 25, p90 40, max 86). Size shifts review volume: mean CRs per family rises 2.0 → 3.2–3.5, Spearman ρ = 0.43, and the share of families needing 3+ review rounds climbs from 23% to 68–75% (p = 1.9e-4).</p>
+    <p><strong>What cuts against it:</strong> the finder's headline "3% → 29% runaway rate" does not reproduce under any family definition tried — at the 4+ round mark the effect vanishes entirely (p = 0.41). The corpus's worst family is a <em>12</em>-requirement spec that took 13 CRs; its largest spec (86 requirements) took 3. The corpus predicts ~3 CRs for a 53-requirement spec and this run took 6, so <strong>at most half this run's review cost is attributable to size.</strong> Size is a multiplier, not a threshold.</p>
+  </div>
+
+  <div class="finding">
+    <div class="fhead">
+      <span class="rank">04</span>
+      <p class="ftitle">A first run on a fresh spec can legally spend the entire cross-run family budget</p>
+      <span class="chip weakened">weakened</span>
+    </div>
+    <p class="fmeta">SKILL.md:296 · review_budget = min(10, max_family_cycles − 0) = 6</p>
+    <p><code>max_review_cycles: 10</code> is non-binding on every fresh spec, and <code>--max-review</code> can only lower the effective number, never raise it. That subordination is intended and it worked. The defect is that <strong>the binding number is invisible while it is being spent</strong>: printed once at Step 0b, once in the FINAL, persisted in no artifact — <code>grep -rn review_budget</code> over b3-app's <code>plans/</code> returns zero hits — with no proximity warning anywhere.</p>
+    <p>The consequence is now live: all eight items in the FINAL's follow-up backlog must either override the family gate or evade it by minting a fresh spec, which is precisely the cascade that gate exists to stop.</p>
+  </div>
+
+  <div class="finding">
+    <div class="fhead">
+      <span class="rank">05</span>
+      <p class="ftitle">No role is asked to generalise a finding to its class</p>
+      <span class="chip weakened">weakened</span>
+    </div>
+    <p class="fmeta">templates/*.md · 0 hits for sweep / inventory / same-class / exhaustive · ~1 cycle, not five</p>
+    <p>The contract is instance-shaped throughout: <code>architect.md:335</code> turns each Must Fix into exactly one task pair, <code>coder.md:336</code> forbids work outside the plan's tasks, and <code>architect.md:147</code> authorises narrowing but never widening. Cycle 1 filed the class as a class — four sites in one Should Fix — the FIX plan closed exactly those four, and cycle 2's own acceptance row records the result verbatim: <em>"All four closed… The class of defect is not closed."</em></p>
+    <p><strong>I overstated this earlier and the verifier is right to cut it.</strong> The pipeline generalised anyway, without being asked: a 39-row guard inventory existed by cycle 2 and was rebuilt to 38 call sites by cycle 4. The missing contract cost roughly <em>one</em> cycle, not five. The remaining cost belongs to bypass proofs that were <em>inherited rather than executed</em> — and to G6, the gate that would have caught exactly this, producing nothing.</p>
+    <p>The counterfactual is still worth having: cycle 3's exhaustive sweep — 38 call sites, 46 executed mutations, 10 guards repaired — took <strong>59 minutes</strong>, and the next CR found zero new instances of the class.</p>
+  </div>
+
+  <div class="finding">
+    <div class="fhead">
+      <span class="rank">06</span>
+      <p class="ftitle">The reviewer re-reads the whole tree every cycle, and this — not the protocol text — is the dominant read cost</p>
+      <span class="chip weakened">weakened</span>
+    </div>
+    <p class="fmeta">Step 1.3 snapshot: 4,967,756 B over six cycles vs a ~1.97 MB protocol floor</p>
+    <p>The finder's headline was a 2.1 MB fixed scaffolding floor re-read by all 26 role invocations, 39% of it one 29 KB file. That floor is real (~1.97 MB recomputed), and 21.8% of it is measurably dead weight — the html-view and parallel-mode blocks of <code>artifact-format.md</code>, structurally inapplicable to this run's <code>output_format: md</code> sequential mode.</p>
+    <p>But it is only 13–25% of read volume. <strong>The reviewer's per-cycle whole-tree snapshot is 12× larger.</strong> <code>MAESTRO_PREV_CR_REF</code> is referenced in the reviewer template and set by nothing — the snapshot base never moves, so cycle 6 re-reads the same union cycle 1 did. The repo already knows: SKILL.md:502 and ADR-0018:73 both name it as the canonical example of "a line every role carries and none uses". Five of six CRs record <em>"narrowed nothing"</em>; reviewers narrowed anyway, on their own judgement, from cycle 4.</p>
+  </div>
+
+  <div class="finding">
+    <div class="fhead">
+      <span class="rank">07</span>
+      <p class="ftitle">Suite inheritance is nearly unreachable — but pinning .gitignore would not have helped</p>
+      <span class="chip refuted">causally refuted</span>
+    </div>
+    <p class="fmeta">17 ledger rows · 17 distinct (suite, tree) pairs · 1 inheritance opportunity, taken</p>
+    <p>The mechanism is real: <code>flutter test</code> re-appends <code>.build/</code> and <code>.swiftpm/</code> to the tracked <code>.gitignore</code>, which sits inside ADR-0018's tree-hash recipe, so a test run can move the boundary hash by itself. It did — <em>once</em>, at the final tester→QA handoff.</p>
+    <p>It is not why inheritance was rare. The <code>.gitignore</code> blob is <strong>constant across six consecutive recorded trees</strong>, covering cycles 1–5 and at least ten <code>flutter test</code> executions. Seven of eight tree transitions moved because 2–105 source files changed, where re-executing is correct. The 1-of-17 ratio is not a miss rate — the run offered exactly one inheritance opportunity and took it. <strong>Pinning those two lines saves approximately zero.</strong> Worth doing for hygiene; do not bill it as a cost fix.</p>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section>
+  <span class="part-label">Part II · The gate</span>
+  <h2 class="sec">mutation_test, measured against the tool it wraps</h2>
+
+  <div class="col">
+    <p>First, the premise: <strong>the swap is justified.</strong> <code>dart_mutant</code> 0.4.0 was not hanging — it was silently ignoring the flags the adapter depends on. <code>--test-command</code> is a dead option; the binary hardcodes <code>dart test --reporter=compact</code>. <code>--glob</code> is a no-op — an impossible glob still walks the whole tree — and because the adapter's <code>--exclude</code> list <em>replaces</em> the tool's defaults (which contain <code>**/test/**</code>), the workload inflated from 1,185 to 6,815 mutants.</p>
+
+    <p>On b3-app, <code>dart test</code> cannot run at all — the project has no direct <code>test</code> dev-dependency, only <code>flutter_test</code> — so every mutant fails in ~3 s with exit 65, which dart_mutant scores as <strong>Killed</strong>. Reproduced on a scratch copy: 986 mutants, 986 killed, 0 survived, <strong>mutation score 100.0</strong>.</p>
+  </div>
+
+  <div class="callout">
+    <p class="hd">The most important thing in this report about the old tool</p>
+    <p>If <code>dart_mutant</code> had <em>finished</em>, G6 would have reported a perfect score on a suite it never ran. <span class="chip broken">UNMEASURED was the better outcome.</span> The 43-minute non-convergence protected the run from a fabricated green. "0.4–1.4% CPU, zero child test processes" was an observation artefact — the parent is a supervisor, and its children are <code>dart</code>, never the <code>flutter</code> the QA agent grepped for.</p>
+  </div>
+
+  <h3>Three defects, one reproduction</h3>
+
+  <div class="col">
+    <p>The adapter parses the junit report with a regex over <code>&lt;testsuite&gt;</code> attributes and <code>&lt;testcase&gt;</code> pairs. Reading mutation_test 1.8.0's own writer settles what those mean:</p>
+  </div>
+
+  <div class="scroll">
+    <table>
+      <caption>xunit_report.dart:98–105 and _addTestCases:132–168</caption>
+      <thead><tr><th>Outcome</th><th>Markup the tool emits</th><th>Counted in</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Detected</strong> (killed)</td><td><em>no child element</em> — the testcase is <strong>self-closing</strong></td><td><code>tests</code></td></tr>
+        <tr><td><strong>Undetected</strong> (survived)</td><td><code>&lt;failure type="undetected"&gt;</code></td><td><code>tests</code>, <code>failures</code></td></tr>
+        <tr><td><strong>Timeout</strong></td><td><code>&lt;error type="timeout"&gt;</code></td><td><code>tests</code>, <code>errors</code></td></tr>
+        <tr><td><strong>Not covered</strong></td><td><code>&lt;error type="not covered by tests"&gt;</code></td><td><code>tests</code>, <code>errors</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col">
+    <p>The adapter computes <code>(tests − failures) / tests</code> and never reads <code>errors</code>. Feeding it a document shaped exactly as the writer produces — one killed, one survived, one not-covered, one timed out:</p>
+  </div>
+
+<pre><span class="dim">$ node -e '…parseMutationTestJunit(realShapedReport)'</span>
+
+ADAPTER  score: <b>75.0%</b>   total: 4   byFile: <b>{"lib/strong.dart":[20]}</b>
+TRUTH    detected = 1 of 4 → <i>25.0%</i> ;  the only survivor is <i>lib/weak.dart:20</i></pre>
+
+  <div class="callout alert">
+    <p class="hd">Both halves of that output are wrong, and both fail safe-side-down</p>
+    <p><strong>The score is inflated.</strong> Timed-out and not-covered mutants are scored as kills. With the configured threshold of 70, this document <strong>passes</strong> — on code where three of four mutants survived. A mutant that was never executed is not a mutant the tests killed.</p>
+    <p><strong>The file attribution is inverted.</strong> Killed mutants are self-closing, so the paired-tag regex takes the killed mutant's <code>classname</code> and swallows forward to the <em>next</em> real <code>&lt;/testcase&gt;</code>, pairing it with a later survivor's failure body. The well-tested file gets blamed; the weak file gets a clean bill. On a three-file probe the attribution was measured <strong>100% wrong and perfectly inverted</strong> — and this output is what steers a fixer agent.</p>
+  </div>
+
+  <div class="col">
+    <p>Third: a scope yielding no mutants emits a 35-byte <code>&lt;testsuites/&gt;</code>, which fails the parser's <code>/&lt;testsuite\b/</code> guard, so the gate returns <code>error</code> and exit 4. <strong>31 of b3-app's 95 <code>lib</code> files — 32.6% — yield zero mutants</strong>, so a third of the project is a false error today.</p>
+
+    <p>These three are one defect surface: the parser pairs text where it needs to walk elements. Nothing about the score arithmetic is salvageable from attributes alone, because <code>errors=</code> fuses timeout and not-covered and no attribute separates them.</p>
+  </div>
+
+  <h3>Four more, structural</h3>
+
+  <div class="scroll">
+    <table>
+      <caption>Verified by reading and by executed experiment</caption>
+      <thead><tr><th>&nbsp;</th><th>Defect</th><th>Evidence</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="num"><span class="chip broken">D4</span></td>
+          <td><strong>No timeout on the mutation run.</strong> The stall class this branch exists to fix is unmitigated.</td>
+          <td><code>dart-flutter.cjs:658</code> — <code>execFileSync</code> with <code>cwd</code>, <code>stdio</code>, <code>maxBuffer</code>, and no <code>timeout</code>. The tool's own <code>&lt;command timeout=&gt;</code> is not a substitute: it bounds <code>exitCode</code> only, and measured overshoot on a 12 s cap was <strong>30.8 s — 2.57×</strong>, because the runner still awaits stdout drain from a SIGTERM'd VM.</td>
+        </tr>
+        <tr>
+          <td class="num"><span class="chip broken">D5</span></td>
+          <td><strong>A plain SIGTERM leaves a live mutation in the source tree.</strong> mutation_test edits in place; the restore lives in a <code>finally</code>.</td>
+          <td>Measured: with no signal listener, SIGTERM during a blocking <code>execFileSync</code> exits 143 and runs <em>neither</em> <code>finally</code> nor <code>process.on('exit')</code> — log file empty. And <code>timeout 900</code>, which the skill's own docs suggest, sends SIGTERM. Two concurrent G6 runs corrupt the tree permanently, 5/5 reproductions, both reporting success.</td>
+        </tr>
+        <tr>
+          <td class="num"><span class="chip broken">D6</span></td>
+          <td><strong>There is no fallback to dart_mutant</strong> — the behaviour you asked for.</td>
+          <td><code>runG6:865</code> — <code>if (!hasMutationTest(flutter)) return missingTool('G6', stackCfg);</code></td>
+        </tr>
+        <tr>
+          <td class="num"><span class="chip broken">D7</span></td>
+          <td><strong>Cost is unbounded and unpredicted.</strong> mutation_test re-runs the whole test command per mutation.</td>
+          <td>Live run on a copy of b3-app: <code>grpc_call_funnel.dart</code> converged in <strong>184.3 s for 6 mutants</strong> — 29–31 s each, because each mutant re-runs all 523 tests. <code>--scope project</code> is 826 mutants ≈ <strong>6.65 hours</strong> sequential, and one <code>flutter test</code> leaks two <code>mock_server</code> process trees at ~97 MB.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Why the test suite is green anyway</h3>
+
+  <div class="col">
+    <p>258 of 258 pass in 2.36 s. That green means very little for the code this branch added. All four new <code>runG6</code> tests inject fakes through the <code>deps</code> seam, so <code>runMutationTest</code> — 89 lines of config generation, CLI invocation, lcov wiring, snapshot/restore and temp cleanup — plus <code>mutationTestAvailable</code>, <code>xmlEscape</code> and <code>dartInvocation</code> have <strong>zero executed coverage</strong> (adapter measured at 61.72% line, 59.09% functions). The snapshot/restore block — the only path that can corrupt a user's tree — has no test at all.</p>
+
+    <p><code>parseMutationTestJunit</code> is tested only against a hand-written fixture, and the fixture is why both parser bugs are invisible:</p>
+  </div>
+
+<pre><span class="dim">__tests__/dart-flutter.test.cjs:297</span>
+&lt;testsuite tests="2" failures="1" <b>errors="0"</b>&gt;
+
+<span class="dim">__tests__/dart-flutter.test.cjs:290</span>
+assert.ok(Math.abs(parsed.score - <b>95.8333</b>) &lt; 0.01);</pre>
+
+  <div class="callout">
+    <p class="hd">One thing to correct in your notes</p>
+    <p>The <strong>"95.83% detection on b3-app"</strong> you recorded as validation is not a b3-app number. It is <code>(24−1)/24</code> from that synthetic fixture in the skill's own unit test. And the fixture hard-codes <code>errors="0"</code> — the one value that makes the scoring bug unobservable. The real b3-app tree is untouched: after every experiment, <code>git status --porcelain</code> is byte-identical to baseline, HEAD still <code>b48998e</code>.</p>
+  </div>
+
+  <h3>Also on this branch</h3>
+
+  <ul class="col">
+    <li><strong>The parity gate is RED.</strong> <code>node scripts/check-host-parity.mjs</code> fails: commit <code>89afe46</code> deleted the skill-dir bullet from <code>clean-code-gates/SKILL.md</code>, leaving <code>prime-agent/overlays/clean-code-gates.json</code> matching zero occurrences. <code>parity.sh</code> dies on its first of 33 assertions, blinding the other 32. Deleting the orphaned entry in a scratch copy makes the build print <em>"prime-agent/skills is up to date (11 skills, 158 files)"</em>, so the rest of the mirror is faithful — 45/47 and 29/33 files byte-identical, differences exactly the overlay-intended ones.</li>
+    <li><strong>The generated config has a silent typo.</strong> <code>expected-return="0"</code> — the attribute mutation_test reads is <code>expected</code> (<code>configuration.dart:339</code>). Harmless only because the default happens to be 0.</li>
+    <li><strong>The default flip is a no-op for every project that has already run the gates</strong>, because the config writer freezes the full default set into <code>.cleancode-gates.json</code> on first run. Exactly the projects that need the switch won't get it, and nothing announces that.</li>
+    <li><strong>SKILL.md contradicts itself two lines apart</strong> — "Both tools sandbox their mutations" at :75, "mutation_test edits in place" at :77. And <code>reviewer.md</code> still asserts "G6 is MISSING_TOOL on the Dart stack", the exact claim this branch invalidates.</li>
+    <li><strong>mutation_test's builtin rules exclude loops entirely</strong> (<code>builtin_rules.dart:216</code>, to stop tests running forever). Loop bodies are never mutated, so the score systematically ignores that class of logic. Worth knowing before the number is trusted.</li>
+  </ul>
+</section>
+
+<!-- ============================================================ -->
+<section>
+  <span class="part-label">Part III · What to do</span>
+  <h2 class="sec">The fix, in order</h2>
+
+  <div class="col">
+    <p>Ordered by impact over effort, with the gate before the harness — one of these ships a wrong number today, the rest cost time.</p>
+  </div>
+
+  <h3>Before this branch merges</h3>
+
+  <ol class="col">
+    <li><strong>Replace the junit regex with a tag walker.</strong> Node ships no XML parser and this <code>.cjs</code> takes no dependencies, but a 44-line tag-level tokeniser is enough: it makes self-closing and paired elements the same event, which is what lets "detected" be inferred from the <em>absence</em> of a child. Score becomes <code>detected / total</code> — the pessimistic bound, so a pass holds even if every timed-out mutant had survived — with <code>measuredScore</code> reported beside it. Guard on <code>&lt;testsuites</code>, not <code>&lt;testsuite</code>, so an empty scope passes instead of erroring. Cross-check <code>Σtests</code> against the elements counted and return <code>null</code> on mismatch, so a truncated report is an error rather than "zero mutants".</li>
+    <li><strong>Report the four outcomes as four rules</strong> — <code>mutation/survived</code>, <code>mutation/not-covered</code>, <code>mutation/timeout</code>, <code>mutation/blocked</code>. Survived and not-covered are both real debt but the fix differs: write a stronger assertion, versus write any test at all. Route an unrecognised <code>type</code> string to "unmeasured", never to "killed", so a future 1.9.0 degrades safely.</li>
+    <li><strong>Bound the run, then bound the tree.</strong> A <code>timeout</code> on the <code>execFileSync</code> with <code>killSignal: 'SIGKILL'</code> — ETIMEDOUT is cleanly distinguishable from mutation_test's own non-zero quality-gate exit, so the partial report gets discarded rather than scored. Then register SIGINT/SIGTERM/SIGHUP listeners: <em>registering</em> is the fix, not the handler body — a listener makes the signal non-fatal so the blocking call returns and <code>finally</code> restores. Residual after that is SIGKILL only, and the doc that suggests bare <code>timeout 900</code> becomes wrong and must change to <code>timeout -k 30</code>.</li>
+    <li><strong>Add the preflight, and let the gate decline.</strong> <code>mutation_test -d</code> loads the same config and the same lcov, runs no tests, and returns the exact count the scoring run would produce — <strong>0.52 s</strong>. Multiply chargeable mutants by the per-mutant cap and refuse the run when it exceeds the budget. b3-app's <code>lib</code> then gets declined in about a second with <code>reason: 'mutant-cap', mutants: 826, worstCaseSeconds: 99120</code>, instead of being discovered 43 minutes into a hang. Use the cap, not a mean — measured mean was 0.85 s/mutant against two mutants costing 30.8 s each.</li>
+    <li><strong>Make <code>UNMEASURED</code> a first-class state.</strong> A pass that measured nothing must not be byte-identical to a real pass. <code>measurement.state ∈ {empty, measured, partial, unmeasured}</code> beside <code>status</code>: a consumer asking "did it pass" reads <code>status</code>; one asking "was this actually verified" reads <code>state</code>. This is the repo's own stated invariant and the gate currently violates it.</li>
+    <li><strong>Add the fallback you asked for</strong> — unpinned resolves mutation_test, then dart_mutant, then <code>missingTool</code>; an <em>explicit</em> pin never silently switches tools; and <code>g6Verdict</code> is told which one ran so the report never attributes one tool's score to the other.</li>
+    <li><strong>Fix the parity gate</strong> — restore the skill-dir bullet and re-point the overlay, rather than deleting the overlay entry and stranding <code>&lt;skill-dir&gt;</code>, which SKILL.md uses twice and defines nowhere. Then correct the sandboxing contradiction, <code>expected="0"</code>, the dart_mutant install hint, and <code>reviewer.md</code>'s stale MISSING_TOOL claim in the same change.</li>
+  </ol>
+
+  <div class="callout">
+    <p class="hd">And say this in the docs</p>
+    <p>G6 over <code>--scope project</code> on a suite of b3-app's size is <strong>not a per-change gate</strong>. What fits an 1800 s budget is <code>--scope diff</code> and narrow modules. A project-wide mutation score is a scheduled artifact.</p>
+  </div>
+
+  <h3>For the pipeline</h3>
+
+  <ol class="col" start="8">
+    <li><strong>Give the run a meter.</strong> <code>max_run_minutes</code> (default 0 = off), bound at Step 0b from <code>boundaries[0].at</code>, evaluated at every boundary the run already mints. Not to kill the run — to make it able to say what it has spent, which is the precondition for every other stop rule.</li>
+    <li><strong>Either wire <code>BLOCKED_STALE</code> or delete it.</strong> Wiring it means a real <code>## Step 0 — Gate wall-clock budget</code> in <code>qa.md</code> that writes <code>stale_gates:</code>. Leaving vestigial machinery branched on by three downstream skills is the worse option.</li>
+    <li><strong>Reserve eval headroom and floor the loop on kind.</strong> <code>review_budget = min(max_review_cycles, max_family_cycles − family_cr_count − max_eval_cycles)</code>, so eval remediation cannot strand its own findings. Then let Step 4e reopen only for a confirmed red, a requirement the root map marks Met-by-plan that the eval scores unmet, or an explicitly security-classed gap — everything else lands in the FINAL's issues list. The mTLS gap this run found would still pass that filter; the eleven "missing assertions over already-correct behaviour" would not.</li>
+    <li><strong>Make the binding budget visible.</strong> Stamp <code>review_budget</code> and <code>family_cr_count</code> into every CR's frontmatter, and warn at two remaining. The run only learned its budget was gone by reading its own final report.</li>
+    <li><strong>Add a scope band at Step 2</strong>, where the count is already taken: silent to p75 (~25 requirements), advisory to ~35 with the percentile printed, and above that a stop that prints a <em>mechanical</em> split derived from the spec's own sub-headings and the plan's phase boundaries — each of which already exits on a green tree. Calibrate against the corpus, and state honestly that size predicts about half the effect.</li>
+    <li><strong>Require a class census on repeat findings.</strong> When a CR files two or more findings sharing a root cause, the FIX plan's scope is every occurrence of that idiom in the tree, enumerated with a count — not the <code>file:line</code> the CR cited. Cheap, and worth about one cycle.</li>
+    <li><strong>Set <code>MAESTRO_PREV_CR_REF</code></strong> from the previous 4c boundary tree, which the ledger already records. This is the 12× read cost, not the protocol text — though splitting the html-view and parallel-mode blocks out of <code>artifact-format.md</code> is a free 21.8% off the floor for <code>md</code>-format sequential runs.</li>
+  </ol>
+
+  <p class="col"><strong>Not worth doing:</strong> pinning <code>.gitignore</code> for inheritance. Real mechanism, ~zero saving. Do it as hygiene if you like, but it is not a cost fix.</p>
+</section>
+
+<!-- ============================================================ -->
+<section>
+  <span class="part-label">Coda</span>
+  <h2 class="sec">What I could not settle</h2>
+
+  <ul class="col">
+    <li><strong>Whether the six cycles were avoidable at all.</strong> Fourteen real defects were found, and every one was caught by executing a mutation rather than by reading. If G6 had worked, most of them would have surfaced in one QA pass instead of six review cycles — but G6 has never produced a number on this stack, so that counterfactual is untested. It is also the strongest argument for finishing this branch properly.</li>
+    <li><strong>The "at most 14 of 59 findings are regressions" figure does not reproduce.</strong> Under a loose definition it is 40 of 59; under a tight one, 1 of 45. The finder's number sits in neither place and had no stated operationalisation. The conclusion it supported survives on other evidence; the number should not be quoted.</li>
+    <li><strong>Whether <code>parallelism: "ask"</code> ever evaluated this run.</strong> It was armed, 145 tasks across 10 phases were admitted, and no trace exists that the viability step ran. If it ran and declined, that is a data point about the split heuristics pointing at concurrency rather than at size.</li>
+    <li><strong>Progress-log timestamps are model-authored.</strong> They cannot be used to attribute cost. Every timing in this report comes from ledger boundaries and artifact frontmatter instead.</li>
+  </ul>
+
+  <p class="footnote">Method — 22 agents across two workflows: 11 investigation dimensions over the run artifacts, the harness, and the adapter; then 10 adversarial verifiers instructed to default to refuted and to re-derive every cited number from source, plus one patch designer that generated real mutation_test 1.8.0 reports on a throwaway package and executed each fix against them. Nine of ten claims came back weakened; the corrections are in the text above rather than in a footnote. The three parser defects and the parity failure were reproduced by hand before publication. Nothing in b3-app or my-skills was modified — <code>git status --porcelain</code> in both is unchanged, and b3-app's HEAD is still <code>b48998e</code>.</p>
+</section>
+
+</div>
