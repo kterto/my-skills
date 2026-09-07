@@ -112,6 +112,8 @@ Categorize every finding:
 | **Must Fix** | Blocks approval. Functional bug, missing acceptance criterion, **unmet spec requirement that the coverage map claims is `Met-by-plan`**, security issue, architectural violation (any invariant from PROJECT-CONTEXT.md breached), **a criterion with no test that could demonstrate it** (not a coverage percentage — see Step 3), scope creep into out-of-scope items, silent commitment on an open product decision. |
 | **Should Fix** | Non-blocking warning. Style issue, minor inefficiency, naming inconsistency, optional improvement, missing edge-case test. |
 
+**Then ask what would close the finding.** A finding whose repair — the repair *you* would accept, not the one you would prefer — is an edit to a plan, a progress log or a `CR` is a **Should Fix** or a `## Record-only note`, never a blocker. Two exceptions carry the whole safety of this rule. A record defect that breaches a load-bearing invariant named in `.orchestrator/PROJECT-CONTEXT.md` stays a Must Fix under this table's invariant clause: a project that forbids restating a gate threshold anywhere means *anywhere*, and a log that restates three of them under an attestation saying it restates none is a real breach, not bookkeeping. And so does a finding that violates an acceptance criterion the **active** plan explicitly sets over its own record. Everything else is a note. The test is deliberately about the fix and not about the file the finding names, because the file is a bad proxy — a run once filed two Must Fixes against `.progress.md` bookkeeping, one of them a set of published line numbers that the log's own append had shifted by exactly fifty-six, and bought a plan, a log and a full review to close them, for `requirements_unmet: 0`, four insertions in one file, and a byte-identical `lib/`. That is a cycle of the run's remaining budget spent correcting a record no downstream decision reads. Write the note; keep the budget for the code.
+
 **Before you file, ask whether a finding is an instance or a class.** A defect with a *shape* — a
 scan, a guard, an assertion idiom, a call pattern — almost never occurs once. When two or more of
 your findings share a root cause, or when one of them plainly could, **grep for every other site of
@@ -148,7 +150,7 @@ status: APPROVED | REQUEST_CHANGES
 created_at: {ISO 8601 datetime}
 updated_at: {ISO 8601 datetime}
 reviewer: reviewer-agent
-cycle: 0
+cycle: {the `review_cycle=` value from your prompt's `budget:` line; `0` when that line is absent}
 root_plan: {ROOT-PLAN-ID, or the reviewed plan ID when no root_plan= line was given}
 must_fix_count: {N}
 should_fix_count: {N}
@@ -209,6 +211,18 @@ class instead of to the citations.}
 **Search used**: `{the exact grep or command, so the next cycle can re-run it}`
 **Not an instance**: {sites the search matched and you cleared, with the reason}
 
+## Record-only notes (no `FIX` plan can close these)
+
+{Omit this section entirely when it is empty. One bullet per finding that is real, that you
+checked, and that no remediation cycle can close — a defect whose only repair is an edit to a
+`DONE` plan's prose, to a closed progress log, or to an earlier `CR`. Name it, say where it is,
+say what closing it would take, and say you are not filing it. This is a report, not a deferral:
+it is what lets the next reader see what you saw without the run buying a cycle to change a
+record no downstream decision reads.}
+
+- **{The claim, stated plainly.}** {Where it is, what is wrong, and why no `FIX` plan can close
+  it.} Noted, not filed.
+
 ## Should Fix (Warnings)
 
 {If none: write "None — no warnings found."}
@@ -237,6 +251,8 @@ class instead of to the citations.}
 - **REQUEST_CHANGES**: Any acceptance criterion unmet OR any `Met-by-plan` requirement unverified OR any Must Fix item present.
 
 A `Deferred` requirement never blocks approval — that is the whole point of recording it. Neither does a *document-level* coverage defect (a missing map, a requirement no leaf claims, a leaf claiming another lane's requirement): those are reported, not looped on, because the remediation loop produces code and cannot amend a plan or a frozen contract.
+
+Neither do criteria the plan places under `## Optional (non-gating)`. Those are the previous cycle's **Should Fix** items — warnings the fix architect chose to plan rather than decline — and gating on them would make every warning a blocker one cycle after it was filed, which is the opposite of what filing it as a warning meant. Mark each `⏭️ optional` in the `## Acceptance Criteria Check` table, say whether it was met, and leave it out of the verdict. The convention is the one already used for a `(QA-verified)` criterion in Step 3: a row you report on and do not own.
 
 ## Step 6 — Update plan and progress files
 

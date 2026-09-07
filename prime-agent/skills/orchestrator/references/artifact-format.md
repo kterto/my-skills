@@ -31,7 +31,9 @@ id: <ID>
 status: <status>          # e.g. DRAFT | READY | APPROVED | BLOCKED
 created_at: <ISO-8601>
 updated_at: <ISO-8601>
-cycle: <integer>          # review or qa cycle number (0-based)
+cycle: <integer>          # the review or qa cycle this artifact was produced in, as the
+                          # orchestrator counts it (first review cycle is 1); 0 when the role
+                          # runs outside a loop, or when no budget line was supplied
 ---
 ```
 
