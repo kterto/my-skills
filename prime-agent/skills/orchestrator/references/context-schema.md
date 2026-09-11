@@ -1,6 +1,6 @@
 # Orchestrator — Context Schema Reference
 
-The orchestrator requires a `PROJECT-CONTEXT.md` file at the repo root before the pipeline starts. The context gate (Step 0) measures coverage against these required sections and blocks if coverage is below `context_threshold`.
+The orchestrator requires a `PROJECT-CONTEXT.md` file at `.orchestrator/PROJECT-CONTEXT.md` before the pipeline starts. It is written by the `context-builder` skill (ADR-0023), or — when that skill has not been run — by this skill's own bootstrap context gate (Step B1), which measures coverage against these required sections and blocks if coverage is below `context_threshold`. B1 skips its interview when a complete file is already present.
 
 ## Required Sections
 

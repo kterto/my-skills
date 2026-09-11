@@ -79,6 +79,15 @@ Bootstrap runs when `--setup` is passed, when `.orchestrator/config.json` is abs
 
 ### B1 — Context gate
 
+> **Already curated?** If `.orchestrator/PROJECT-CONTEXT.md` exists and carries all nine
+> required headings from `references/context-schema.md`, **skip steps 1–4**: report the
+> coverage you measured and continue to B2. Do not re-interview. That file is written by
+> the `context-builder` skill, which runs before this one and converges with the user
+> (ADR-0023). Re-running the gate here would ask the same questions a second time and
+> then discard its own answer at step 5, which never overwrites an existing file. When
+> the file is absent, or present but missing a required heading, run steps 1–4 as
+> written.
+
 1. **Context scan** (the only child in the gate): admit a **read-only scan child** named `context-scan` (see *The read-only scan subagent type* below) with the prompt:
    > "Scan this repo and return a structured digest of stack, build/test/lint/e2e/coverage commands, directory layout, naming conventions, and any documented domain rules. Read CLAUDE.md, AGENTS.md, README, and config/manifest files."
    Collect the digest.
