@@ -45,7 +45,7 @@ The goal of this step is to reach holistic confidence ≥ `context_threshold` on
 
 Check whether `.orchestrator/PROJECT-CONTEXT.md` exists.
 
-- **If it exists:** read it as the base context. Do not edit it — it is orchestrator-owned. When `/roadmap/CONTEXT.md` is written later, write it as a **roadmap addendum** (milestones, sequencing decisions, release targets, and what "done" means per milestone) — not a full duplicate of the base context.
+- **If it exists:** read it as the base context. Do not edit it — it is context-builder-owned (ADR-0023). When `/roadmap/CONTEXT.md` is written later, write it as a **roadmap addendum** (milestones, sequencing decisions, release targets, and what "done" means per milestone) — not a full duplicate of the base context.
 - **If it is absent:** run the own gate:
   1. Spawn an `Explore`/`explore` subagent: `"Scan this repo and return a structured digest of stack, build/test/lint commands, directory layout, naming conventions, documented domain rules, and any existing specs or PRD files. Read CLAUDE.md, AGENTS.md, README, and config/manifest files."`
   2. Using the digest, run structured user-question rounds (`AskUserQuestion` in Claude Code, `question` in opencode) to fill gaps the scan left ambiguous. Do not re-ask what the scan already covered.

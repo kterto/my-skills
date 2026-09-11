@@ -63,6 +63,17 @@
       ]
     },
     {
+      "name": "context-builder",
+      "files": [
+        "references/convergence.md",
+        "references/ingestion.md",
+        "SKILL.md",
+        "templates/ACTORS.template.md",
+        "templates/INTENT.template.md",
+        "templates/NON-GOALS.template.md"
+      ]
+    },
+    {
       "name": "design-to-code",
       "files": [
         "references/contract-template.md",

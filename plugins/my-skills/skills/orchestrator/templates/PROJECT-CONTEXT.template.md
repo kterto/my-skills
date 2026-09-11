@@ -1,6 +1,7 @@
 # PROJECT-CONTEXT
 
-<!-- This file is written by the orchestrator bootstrap (Step B1) via the host's structured question tool (AskUserQuestion in Claude Code, question in opencode).
+<!-- This file is written by the context-builder skill (ADR-0023), or — when that skill has not
+     been run — by the orchestrator bootstrap (Step B1) via the host's structured question tool (AskUserQuestion in Claude Code, question in opencode).
      Fill every section before running the pipeline. The context gate checks that all
      required headings are present and rates holistic confidence >= context_threshold.
 
@@ -48,3 +49,26 @@
 ## Out of scope
 
 <!-- fill: deferred or explicitly forbidden items -->
+
+<!-- BEGIN context-builder-managed (rewritten on refresh) -->
+
+## Intent
+
+<!-- OPTIONAL, written by the context-builder skill. Not a required section — the coverage
+     check in references/context-schema.md still counts nine, and a project without this
+     block is complete. One paragraph: the problem, who has it, and what success looks
+     like. Keep the RULE here; the reasoning lives in docs/foundation/INTENT.md, which the
+     roles reach by following the pointer. -->
+
+## Users
+
+<!-- OPTIONAL, written by the context-builder skill. The actor/role taxonomy the
+     brainstormer role expects to find here, one line each. Detail in
+     docs/foundation/ACTORS.md. -->
+
+## Non-goals
+
+<!-- OPTIONAL, written by the context-builder skill. What this project deliberately will
+     not do, one line each with its reason. Detail in docs/foundation/NON-GOALS.md. -->
+
+<!-- END context-builder-managed -->

@@ -260,7 +260,11 @@ tree_files="$(printf '%s\n' "$tree_out" | sed -n 's/^lint-prime-fences ok: \([0-
 tree_fences="$(printf '%s\n' "$tree_out" | sed -n 's/.* \([0-9]*\) python fences.*/\1/p')"
 [[ -n "$tree_files" && -n "$tree_fences" ]] || fail "linter printed no coverage summary for the emitted tree: $tree_out"
 [[ "$tree_files" -ge 55 ]] || fail "linter modeled only $tree_files files of the emitted tree (expected at least 55) — the walk is not reaching the distribution"
-[[ "$tree_fences" == "17" ]] || fail "linter modeled $tree_fences python fences in the emitted tree, expected 17 — fence selection changed, or a fence was added without review"
+# 17 -> 19: prime-agent/overlays/protocol.context-builder.md adds two fences (the
+#     agent_message completion contract and the gather/by_name wave binding), the same
+#     pair protocol.explain-codebase.md and protocol.rlm-dispatch.md each contribute.
+#     Reviewed when context-builder shipped; see ADR-0023.
+[[ "$tree_fences" == "19" ]] || fail "linter modeled $tree_fences python fences in the emitted tree, expected 19 — fence selection changed, or a fence was added without review"
 
 # 4f-bis. Cross-file section pointers resolve. Splitting SKILL.md and config.md into
 #     parallel/config-parallel references left 18 pointers naming a file that no longer
