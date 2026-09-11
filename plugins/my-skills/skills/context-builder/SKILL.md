@@ -173,3 +173,63 @@ Next:  /roadmap
 
 This skill **never commits and never pushes**. The files are left in the working tree for
 the user to review and commit.
+
+## Output contract
+
+| Path | Content |
+|---|---|
+| `.orchestrator/PROJECT-CONTEXT.md` | the nine required sections + the managed intent block |
+| `docs/foundation/INTENT.md` | problem, vision, success criteria, decisions resolved by default, open product decisions |
+| `docs/foundation/ACTORS.md` | actor/role taxonomy, domain entities, canonical data stores |
+| `docs/foundation/NON-GOALS.md` | non-goals, deferred items, one-way doors |
+| `docs/foundation/_digest.md` | one record per ingested source |
+
+Render the last three from `templates/INTENT.template.md`, `templates/ACTORS.template.md`
+and `templates/NON-GOALS.template.md`. Every claim in them carries a `source:` naming the
+document or interview turn it came from.
+
+**Never write auxiliary files under `.orchestrator/`.** That directory's `.gitignore` is
+an allow-list — `*`, then `!.gitignore`, `!config.json`, `!PROJECT-CONTEXT.md`,
+`!eval-baselines/**` — and the orchestrator's bootstrap **rewrites it on every run**.
+Anything else dropped there is untracked, absent from the merge-base, invisible to
+`pr-review-report`, and missing from a teammate's clone.
+
+**Keep the rule inline; move the reasoning out.** Each intent heading in
+`PROJECT-CONTEXT.md` holds one paragraph and a pointer to `docs/foundation/`. The
+orchestrator's role templates read `PROJECT-CONTEXT.md` **plus any project files it
+points to**, so a pointer is followed, not lost. The file's existing 12 KB target and
+20 KB move-it-out line are unchanged, and the intent block is written to fit inside them.
+
+**Who actually sees what.** Pointer-following belongs to the six orchestrator role
+templates only:
+
+| Consumer | Reads | Follows pointers |
+|---|---|---|
+| the six orchestrator roles | working tree, whole file | **yes** |
+| `roadmap` | whole file, as read-only base context | no |
+| `pr-review-report` | **merge-base** copy, extracts only `Out of scope` + `Invariants` | no |
+| `product-manager`, `spec-driven-eval` | — | no |
+
+So anything `pr-review-report` must honour has to be **inline** under those two exact
+headings. A non-goal that only exists behind a pointer will not stop it filing a
+"you didn't build X" finding.
+
+### The managed fence
+
+The intent block is delimited:
+
+```text
+<!-- BEGIN context-builder-managed (rewritten on refresh) -->
+...
+<!-- END context-builder-managed -->
+```
+
+**Inside the fence:** regenerated wholesale on `--refresh`.
+**Outside the fence:** never rewritten. In refresh mode, differences are **proposed** to
+the user section by section and applied only on approval.
+
+If an existing `PROJECT-CONTEXT.md` has no fence, the first refresh **adds** one — it
+does not go looking for intent-shaped prose to absorb. Curated text stays curated.
+
+This is the same idiom `.orchestrator/.gitignore` already uses for its
+orchestrator-managed region. Reuse it; do not invent a second convention.
