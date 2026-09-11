@@ -1,6 +1,7 @@
 # PROJECT-CONTEXT
 
-<!-- This file is written by the orchestrator bootstrap (Step B1) via the host's structured question tool (AskUserQuestion in Claude Code, question in opencode).
+<!-- This file is written by the context-builder skill (ADR-0023), or — when that skill has not
+     been run — by the orchestrator bootstrap (Step B1) via the host's structured question tool (AskUserQuestion in Claude Code, question in opencode).
      Fill every section before running the pipeline. The context gate checks that all
      required headings are present and rates holistic confidence >= context_threshold.
 
