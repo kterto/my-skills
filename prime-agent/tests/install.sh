@@ -7,7 +7,7 @@ mkdir "$tmp/project" "$tmp/home"
 HOME="$tmp/home" "$root/install.sh" --global
 HOME="$tmp/home" "$root/install.sh" --project "$tmp/project"
 for base in "$tmp/home/.prime/agent/skills" "$tmp/project/.prime/agent/skills"; do
-  test "$(find "$base" -mindepth 2 -maxdepth 2 -name SKILL.md | wc -l | tr -d ' ')" = 11
+  test "$(find "$base" -mindepth 2 -maxdepth 2 -name SKILL.md | wc -l | tr -d ' ')" = 12
   test -f "$base/orchestrator/templates/brainstormer.md"
   test -f "$base/explain-codebase/references/vendor/mermaid.min.js"
 done
@@ -109,8 +109,8 @@ for fail_at in 5 6; do
   fi
   skills="$(find "$tmp/rollback/.prime/agent/skills" -mindepth 2 -maxdepth 2 -name SKILL.md | wc -l | tr -d ' ')"
   markers="$(find "$tmp/rollback/.prime/agent/skills" -mindepth 2 -maxdepth 2 -name PREEXISTING | wc -l | tr -d ' ')"
-  test "$skills" = 11 || { echo "a failed mv (call $fail_at) left $skills of 11 skills installed" >&2; exit 1; }
-  test "$markers" = 11 || { echo "a failed mv (call $fail_at) replaced $((11 - markers)) live skills" >&2; exit 1; }
+  test "$skills" = 12 || { echo "a failed mv (call $fail_at) left $skills of 12 skills installed" >&2; exit 1; }
+  test "$markers" = 12 || { echo "a failed mv (call $fail_at) replaced $((12 - markers)) live skills" >&2; exit 1; }
   test "$(find "$tmp/rollback/.prime/agent/skills" -mindepth 1 -maxdepth 1 -name '.*' | wc -l | tr -d ' ')" = 0
 done
 
@@ -162,6 +162,6 @@ grep -q 'Install failed — the destination was restored to its previous state\.
 # ...and the natural next move after a failed install — a plain retry, no
 # --force — must succeed, because a true rollback left nothing to collide with.
 HOME="$tmp/home" "$root/install.sh" --project "$tmp/fresh" >/dev/null
-test "$(find "$tmp/fresh/.prime/agent/skills" -mindepth 2 -maxdepth 2 -name SKILL.md | wc -l | tr -d ' ')" = 11
+test "$(find "$tmp/fresh/.prime/agent/skills" -mindepth 2 -maxdepth 2 -name SKILL.md | wc -l | tr -d ' ')" = 12
 
 echo "install ok: preflight, containment, all-or-nothing install, and mid-loop rollback verified"

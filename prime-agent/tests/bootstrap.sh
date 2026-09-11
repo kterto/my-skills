@@ -46,8 +46,8 @@ mkdir -p "$tmp/home" "$tmp/project"
 
 # --- 1. explicit --project installs into that project, cloning on the way -----
 out="$(run "$tmp/checkout" "$tmp/home" "$tmp" --project "$tmp/project")"
-test "$(skill_count "$tmp/project/.prime/agent/skills")" = 11 \
-  || fail "--project did not install the eleven skills"
+test "$(skill_count "$tmp/project/.prime/agent/skills")" = 12 \
+  || fail "--project did not install the twelve skills"
 test -f "$tmp/project/.prime/agent/skills/orchestrator/templates/brainstormer.md" \
   || fail "--project install lost a bundled template"
 test -d "$tmp/checkout/.git" || fail "bootstrap did not create a git checkout"
@@ -59,12 +59,12 @@ esac
 # --- 2. no arguments installs into the current directory ---------------------
 mkdir -p "$tmp/cwd-project"
 run "$tmp/checkout" "$tmp/home" "$tmp/cwd-project" >/dev/null
-test "$(skill_count "$tmp/cwd-project/.prime/agent/skills")" = 11 \
+test "$(skill_count "$tmp/cwd-project/.prime/agent/skills")" = 12 \
   || fail "argument-less run did not install into the current directory"
 
 # --- 3. --global installs into HOME ------------------------------------------
 run "$tmp/checkout" "$tmp/home" "$tmp" --global >/dev/null
-test "$(skill_count "$tmp/home/.prime/agent/skills")" = 11 \
+test "$(skill_count "$tmp/home/.prime/agent/skills")" = 12 \
   || fail "--global did not install into HOME"
 
 # --- 4. the second run updates the checkout instead of re-cloning ------------
@@ -73,7 +73,7 @@ touch "$tmp/checkout/.git/BOOTSTRAP-MARKER"
 run "$tmp/checkout" "$tmp/home" "$tmp" --project "$tmp/project" --force >/dev/null
 test -f "$tmp/checkout/.git/BOOTSTRAP-MARKER" \
   || fail "bootstrap re-cloned an existing checkout instead of updating it"
-test "$(skill_count "$tmp/project/.prime/agent/skills")" = 11 \
+test "$(skill_count "$tmp/project/.prime/agent/skills")" = 12 \
   || fail "--force re-install did not leave the skills in place"
 
 # --- 5. the collision refusal is not swallowed -------------------------------
@@ -103,7 +103,7 @@ pinned="$(git -C "$repo_root" rev-parse HEAD)"
 run "$tmp/ref-checkout" "$tmp/home" "$tmp" --project "$tmp/untouched" --ref "$pinned" >/dev/null
 test "$(git -C "$tmp/ref-checkout" rev-parse HEAD)" = "$pinned" \
   || fail "--ref did not pin the checkout"
-test "$(skill_count "$tmp/untouched/.prime/agent/skills")" = 11 \
+test "$(skill_count "$tmp/untouched/.prime/agent/skills")" = 12 \
   || fail "--ref run did not install the skills"
 
 # --- 8. --help neither clones nor installs -----------------------------------

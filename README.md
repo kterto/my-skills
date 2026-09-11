@@ -325,7 +325,7 @@ my-skills/
 │           ├── explain-codebase/SKILL.md
 │           └── spec-driven-eval/    # vendored, CC-BY-4.0 — see its UPSTREAM.md
 ├── prime-agent/               # self-contained Prime Agent distribution
-│   ├── skills/                 # generated — the eleven Prime-compatible skill directories
+│   ├── skills/                 # generated — the twelve Prime-compatible skill directories
 │   ├── overlays/               # per-skill Prime adaptations the generator applies
 │   ├── tests/                  # install + bootstrap + build-parity tests (npm test)
 │   ├── install.sh              # project/global installer (runs from a checkout)
@@ -403,7 +403,7 @@ minus the fetch:
 ./prime-agent/install.sh --global
 ```
 
-Either way the eleven skills are copied, and an existing skill is never replaced
+Either way the twelve skills are copied, and an existing skill is never replaced
 unless `--force` is passed. Restart Prime Agent or run `/reload`, then invoke a
 skill with `/skill:<name>` — for example `/skill:orchestrator`.
 
