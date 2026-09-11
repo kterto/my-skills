@@ -1,0 +1,17 @@
+{
+  "skill": "context-builder",
+  "dropFrontmatterKeys": [
+    "allowed-tools"
+  ],
+  "insertAfterFrontmatter": [
+    "preamble.md"
+  ],
+  "replacements": [
+    {
+      "why": "The dual-host paragraph names Claude Code and opencode, neither of which is the Prime Agent host, and claims an allowed-tools frontmatter this overlay drops.",
+      "count": 1,
+      "find": "**Dual-host.** This single `SKILL.md` serves both Claude Code and opencode via the\nin-place dual-host pattern — there is **no** `.opencode/skills/context-builder/` override\nport. Where a host construct differs, both variants are named inline: `AskUserQuestion`\n(Claude) / `question` (opencode); `Agent` (Claude) / `task` (opencode) with a\n`subagent_type`. The `allowed-tools` frontmatter lists both host variants of every tool\nthe body uses.",
+      "replace": "**Host.** This is the Prime Agent port of a skill whose source serves several hosts from\none `SKILL.md`. Where the body below names a host construct, use the Prime equivalent:\nask the user normally in the conversation instead of `AskUserQuestion`/`question`. This\nport carries **no** `allowed-tools` frontmatter — Prime Agent does not read one — so the\ntools the body uses are the ordinary shell, file, and Python tools the session already\nhas. The skill still never commits and never pushes."
+    }
+  ]
+}

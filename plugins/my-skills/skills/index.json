@@ -63,6 +63,12 @@
       ]
     },
     {
+      "name": "context-builder",
+      "files": [
+        "SKILL.md"
+      ]
+    },
+    {
       "name": "design-to-code",
       "files": [
         "references/contract-template.md",
