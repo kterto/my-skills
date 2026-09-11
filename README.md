@@ -6,6 +6,7 @@ Authored agent skills for [Claude Code](https://code.claude.com), [opencode](htt
 
 | Skill | What it does |
 |---|---|
+| `context-builder` | **Start here.** Bootstraps a new project's shared context: ingests pre-existing materials (pitch, PRD, specs, mockups) from `docs/foundation/` or `--from <path>` via a read-only digest fan-out, grills the user until project intent converges two-sided (self-rated threshold **plus** a confirmed restatement), then writes `.orchestrator/PROJECT-CONTEXT.md` — nine required sections plus an optional intent block — with auxiliary docs under `docs/foundation/` the pipeline roles follow by pointer. Re-runnable: `--refresh` proposes per-section updates and never rewrites curated prose outside its managed fence. Stops at a handoff line; never commits. |
 | `clean-code-gates` | Runs Clean Code quality gates (G1–G7: coverage, complexity, length/nesting, naming, no-comments, mutation, dependency-structure) and emits an agnostic JSON + Markdown report. Portable across stacks (node-ts, dart-flutter). |
 | `spec-driven-eval` | Scores a spec-driven implementation requirement by requirement, with separately evidenced implementation and test coverage grades. Two report profiles — `full` for cross-implementation benchmarking, `in-loop` for a pipeline caller — selecting sections only: no scoring rule, threshold, or number changes between them. |
 | `commit-pr` | Stage, commit, push the current branch, and open a PR targeting `main`. Confirms before any remote mutation. |
@@ -17,6 +18,80 @@ Authored agent skills for [Claude Code](https://code.claude.com), [opencode](htt
 | `product-manager` | Autonomously drives roadmap stories to completion and manages roadmap planning PRs — runs story briefs through the orchestrator, commits with `Roadmap-Story:`, syncs the roadmap, pushes/opens PRs, and exposes `assign`/`park`/`add-spec`/`add-milestone`/`add-phase`/`add-ticket`/`revise`/release-management verbs. |
 | `pr-review-report` | Reviews the current branch against an auto-detected base and emits paired `docs/reviews/<branch_slug>-<date>.{html,md}` artifacts — a self-contained interactive HTML report (architecture with recommend-only ADR flags, security, bugs/improvements lenses; rendered diff with inline annotations; severity-coded findings) plus a Markdown findings backlog shaped to hand off to `validation-fixer`. Reconciles triage across runs via a reviewer-local `.pr-review/review-state.json`, merges an existing backlog by fingerprint on re-review, and proposes optional review memory. |
 | `explain-codebase` | Read-only: reads a target project's source (never running, committing, or mutating it) and emits ONE self-contained, CSP-safe interactive HTML report at `docs/explain/<scope-slug>-<date>.html` explaining how the software works across four lenses — data model, business logic, data flow, and inferred user stories. A four-phase subagent fan-out analyzes the scope module by module; every asserted claim links to a `file:line` source anchor. Dual-host (Claude Code + opencode) from a single SKILL.md. |
+
+## Getting started
+
+These skills compose in an order. Run them in it.
+
+| # | Command | What it settles |
+|---|---|---|
+| 1 | `/context-builder` | **What the project is.** Ingests whatever already exists, grills until intent converges, writes `.orchestrator/PROJECT-CONTEXT.md` + `docs/foundation/`. Every skill below reads its output. |
+| 2 | `/roadmap` | **What order to build it in.** Decomposes the project into milestone → phase → user story, each story an orchestrator-ready brief. |
+| 3 | `/orchestrator "<task>"` | **One change, end to end.** brainstormer → architect → coder → tester → reviewer → qa. Stops at `READY_TO_COMMIT`. |
+| 4 | `/product-manager complete <scope>` | **Many changes, unattended.** Drives roadmap stories through the orchestrator one at a time, committing and opening a PR per story. |
+| 5 | `/pr-review-report` → `/validation-fixer` | **Close the loop.** Review the branch, then route the findings back through a framework. |
+
+**Start with `/context-builder` even if the project already has code.** It runs in refresh
+mode against an existing `PROJECT-CONTEXT.md`, proposes per-section updates, and never
+rewrites curated prose. Running it first is also what lets the orchestrator's bootstrap
+skip its own interview instead of asking you the same questions twice (ADR-0023).
+
+If you skip it, nothing breaks — `/orchestrator` bootstraps its own context on first run.
+You just answer the questions inside the pipeline instead of before it, and the project
+gets no `docs/foundation/` and no recorded product intent.
+
+## context-builder
+
+The first skill to run on a project. It establishes the shared context every other skill
+here reads, and it is the only place product intent is recorded.
+
+### Usage
+
+```bash
+/context-builder                      # ingest docs/foundation/, then grill
+/context-builder --from docs/pitch/   # ingest only this path
+/context-builder --refresh            # re-run against an existing context file
+/context-builder --threshold 0.9      # lower the convergence bar
+```
+
+### How it works
+
+1. **Locate** — `--from <path>`, else `docs/foundation/`, else the union of paths this
+   framework already uses (`docs/superpowers/specs/`, `plans/specs/`, `docs/adr/`,
+   `docs/design-prompts/`, root `PRD-*` / `SPEC-*`), else ask.
+2. **Ingest** — one read-only digest subagent per document, fanned out concurrently. The
+   document stays on disk and only a ≤30-word record travels back, so the cost does not
+   grow with how much material the project already has. Images are never opened — their
+   meaning becomes a question in step 4 instead.
+3. **Scan** — brownfield only, reusing the orchestrator bootstrap's own scan prompt rather
+   than a second copy of it.
+4. **Grill** — the brainstormer role's interview technique at project scope: highest
+   uncertainty first, a recommended default you can accept by replying `default`, **no cap
+   on questions**, and an ambiguity gate that refuses to infer a requirement.
+5. **Converge and write** — two-sided: the self-rated threshold **and** your explicit yes
+   to a numbered restatement. An early exit records the confidence actually achieved and
+   names the sections still thin.
+
+### Output
+
+| Path | Content |
+|---|---|
+| `.orchestrator/PROJECT-CONTEXT.md` | nine required sections + an optional intent block |
+| `docs/foundation/INTENT.md` | problem, vision, success criteria, open product decisions |
+| `docs/foundation/ACTORS.md` | actor taxonomy, domain entities, canonical data stores |
+| `docs/foundation/NON-GOALS.md` | non-goals, deferred items, one-way doors |
+| `docs/foundation/_digest.md` | one record per ingested source |
+
+The context file stays small and human-readable: each intent heading holds one paragraph
+and a pointer, and the orchestrator's roles read `PROJECT-CONTEXT.md` **plus any project
+files it points to**, so the detail is reachable without being resident.
+
+### Handoff
+
+It stops and prints what it wrote, the confidence achieved, and the next command. It
+invokes nothing and never commits. On your next `/orchestrator` run, that skill's
+bootstrap sees a complete context file and skips its own interview instead of asking you
+the same questions again (ADR-0023).
 
 ## orchestrator
 
@@ -313,6 +388,7 @@ my-skills/
 │       │   └── plugin.json      # plugin manifest
 │       └── skills/
 │           ├── index.json       # opencode remote skill index
+│           ├── context-builder/SKILL.md
 │           ├── clean-code-gates/SKILL.md
 │           ├── commit-pr/SKILL.md
 │           ├── validation-fixer/SKILL.md
