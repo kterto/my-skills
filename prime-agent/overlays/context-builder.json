@@ -4,7 +4,8 @@
     "allowed-tools"
   ],
   "insertAfterFrontmatter": [
-    "preamble.md"
+    "preamble.md",
+    "protocol.context-builder.md"
   ],
   "replacements": [
     {
@@ -12,6 +13,12 @@
       "count": 1,
       "find": "**Dual-host.** This single `SKILL.md` serves both Claude Code and opencode via the\nin-place dual-host pattern — there is **no** `.opencode/skills/context-builder/` override\nport. Where a host construct differs, both variants are named inline: `AskUserQuestion`\n(Claude) / `question` (opencode); `Agent` (Claude) / `task` (opencode) with a\n`subagent_type`. The `allowed-tools` frontmatter lists both host variants of every tool\nthe body uses.",
       "replace": "**Host.** This is the Prime Agent port of a skill whose source serves several hosts from\none `SKILL.md`. Where the body below names a host construct, use the Prime equivalent:\nask the user normally in the conversation instead of `AskUserQuestion`/`question`. This\nport carries **no** `allowed-tools` frontmatter — Prime Agent does not read one — so the\ntools the body uses are the ordinary shell, file, and Python tools the session already\nhas. The skill still never commits and never pushes."
+    },
+    {
+      "why": "The Phase 2 fan-out names Claude/opencode subagent tools; only the dispatch mechanism changes, and every bound below is preserved by the protocol block inserted in this same file.",
+      "count": 1,
+      "find": "**Fan out when the host can.** Dispatch **one read-only digest subagent per document**\nvia the host's subagent tool — `Agent` in Claude Code (`subagent_type: Explore` or\n`general-purpose`), `task` in opencode — **emitted together in a single message** so they\nrun concurrently. Pass each one exactly one document path and the digest record schema\nfrom `references/ingestion.md`. They read; they do not edit, and they never write into\nthe project.",
+      "replace": "**Fan out when the session can.** Admit **one read-only RLM child per document** per the\nPrime Agent fan-out protocol above — building `jobs` as a list of `(name, prompt)` pairs\nand binding the handles — so they run concurrently. Pass each child exactly one document\npath and the digest record schema from `references/ingestion.md`. They read; they do not\nedit, and they never write into the project."
     }
   ]
 }

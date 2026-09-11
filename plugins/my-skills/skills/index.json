@@ -65,6 +65,7 @@
     {
       "name": "context-builder",
       "files": [
+        "references/ingestion.md",
         "SKILL.md"
       ]
     },
