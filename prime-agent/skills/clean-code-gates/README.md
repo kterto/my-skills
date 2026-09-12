@@ -28,6 +28,7 @@ All flags consume the next positional argument as their value unless noted.
 | `--out <dir\|->` | `./.cleancode` | Output directory for `report.json` and `report.md`. Pass `-` to write JSON to stdout instead. |
 | `--scaffold` | false | Advice mode — detect the stacks and print the exact install commands for any missing gate tooling, then exit 0. Read-only: it inspects the project and makes no changes. |
 | `--require-tools` | false | Exit 2 (instead of 0) when any gate reports `missing_tool`. Useful for CI hard-gates. |
+| `--base-ref <ref>` | from the scope | Anchor the instrument to `<ref>` — see *The instrument is merge-base anchored*. A `diff` scope anchors to its own base without this flag; passing it explicitly outranks the scope and anchors a `project`, `module` or `files` run too. |
 
 ---
 
@@ -84,6 +85,33 @@ Detection results are used to auto-create `.cleancode-gates.json` in the project
 
 Only files under the configured `roots` are scored. Files outside any known stack root are silently dropped from the scope.
 
+### The instrument is merge-base anchored
+
+`.cleancode-gates.json` decides what the gates measure and how hard, it is deep-merged user-wins, and it lives inside the tree being measured. So the cheapest path to a green gate does not run through the code — it runs through the config: widen `exempt`, drop a `root`, lower a threshold, inside the very change under review.
+
+When the run knows a base ref — any `diff` scope, or an explicit `--base-ref` — four field families are read from that ref's copy of the file, and the gates run on **those** values:
+
+| Anchored to the base ref | Read from the working tree |
+|---|---|
+| `stacks.<s>.roots` | `gates.<id>.tool` |
+| `stacks.<s>.exclude` | `gates.<id>.runner` |
+| `stacks.<s>.gates.<id>.exempt` | `gates.<id>.budget` |
+| `stacks.<s>.gates.<id>.thresholds` | `stacks.<s>.baseline`, everything else |
+
+The line between the columns is *what is measured and how hard* versus *how the measurement is performed*. A branch legitimately swaps a test runner or raises a G6 time budget. A branch that lowers `mutationScore` is editing the verdict it is about to be judged by.
+
+Every anchored field the working tree disagrees on is named once — on stderr, and as a blockquote in `report.md`. There is no flag that suppresses it:
+
+```
+INSTRUMENT MOVED — node-ts.gates.G2.exempt +3 globs (loosening), node-ts.gates.G1.thresholds.statements 85 → 60 (loosening) — measured against merge-base (origin/main) values
+```
+
+Direction is derived per key: a **floor** (`statements`, `branches`, `lines`, `functions`, `mutationScore`) loosens when it falls; a **ceiling** (`complexity`, `maxDepth`, `maxLinesPerFunction`, `maxParams`, `maxStatements`, `cyclomatic-complexity`, `maximum-nesting-level`, `number-of-parameters`, `source-lines-of-code`) loosens when it rises; a glob list loosens when `exempt`/`exclude` grow or `roots` shrink. A threshold key neither table knows is reported as `changed` with both values rather than characterised by guess.
+
+**A base ref with no readable `.cleancode-gates.json` anchors to the built-in defaults — never to the working-tree copy.** That is also what the base actually measured at, since the file is auto-created from those defaults; the same applies when it is unparseable there. `project`, `module` and `files` scopes have no base, report `anchored: false`, and claim nothing.
+
+A legitimate threshold change still works. Land it in its own commit, where the moved line is informative rather than damning.
+
 ---
 
 ## Report
@@ -105,6 +133,12 @@ Full schema at `schema/report.schema.json`. Top-level shape:
   "generatedAt": "<ISO-8601>",
   "tool": { "name": "clean-code-gates", "version": "0.1.0" },
   "scope": { "kind": "project|diff|module|files", "files": [...], "stacks": [...] },
+  "instrument": {
+    "anchored": true,
+    "baseRef": "origin/main",
+    "source": "merge-base|defaults|working-tree",
+    "moves": [ { "key": "node-ts.gates.G1.thresholds.statements", "from": 85, "to": 60, "direction": "loosening" } ]
+  },
   "summary": {
     "status": "pass|warn|blocked|error",
     "gatesRun": [...],

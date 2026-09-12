@@ -174,7 +174,7 @@ Check for a resolvable **`simplify`** skill the same way, and record its availab
 
    `*` ignores every file; `!*/` lets git descend into subdirectories so the exceptions below can re-include paths inside them (without it, an excluded parent directory makes re-inclusion impossible). **Rewrite only the region between the markers**, preserving anything the project added underneath — the same "the project's choice wins" shape step 4 uses for `config.json` keys. If the markers are absent and the file exists, prepend the managed block rather than overwriting.
 
-   **What is tracked, and why only these.** `config.json` must be tracked: Step 0b reads `parallelism`, `max_parallel_lanes`, and `max_contract_amendments` from the **merge-base** copy (`$mb:.orchestrator/config.json`), so an untracked file makes those three keys unreachable and they fail closed to defaults forever. `PROJECT-CONTEXT.md` is hand-curated shared project knowledge that a teammate's fresh clone must already have. Everything else is either **per-run state** (`run-manifest.json`, `verification-ledger.json`, `tmp/`) — branch-scoped, rewritten whole each run, and therefore unmergeable — or a **copy of the installed skill** (`artifact-format.md` and its `-html` / `-parallel` companions, `config.md`, `gate-config.md`, `lane-protocol.md`, `html-templates/`, the four `.cjs`, the rendered role files), which Lifecycle item 2 re-materializes the moment it goes missing. Tracking the copies lands a four-figure diff in a product PR on every skill upgrade; ignoring them costs nothing, because a fresh clone missing them simply triggers bootstrap.
+   **What is tracked, and why only these.** `config.json` must be tracked: Step 0b reads the three execution-policy keys and the six instrument keys (`references/config.md` → *The anchored set*) from the **merge-base** copy (`$mb:.orchestrator/config.json`), so an untracked file makes all nine unreachable and they fail closed to defaults forever — which silently returns every cycle cap and gate bound to a value the branch cannot be held to. `PROJECT-CONTEXT.md` is hand-curated shared project knowledge that a teammate's fresh clone must already have. Everything else is either **per-run state** (`run-manifest.json`, `verification-ledger.json`, `tmp/`) — branch-scoped, rewritten whole each run, and therefore unmergeable — or a **copy of the installed skill** (`artifact-format.md` and its `-html` / `-parallel` companions, `config.md`, `gate-config.md`, `lane-protocol.md`, `html-templates/`, the four `.cjs`, the rendered role files), which Lifecycle item 2 re-materializes the moment it goes missing. Tracking the copies lands a four-figure diff in a product PR on every skill upgrade; ignoring them costs nothing, because a fresh clone missing them simply triggers bootstrap.
 
    **This file is additive, never destructive.** `.gitignore` has no effect on paths git already tracks, so writing it into a project that currently commits its run state changes nothing on its own. Say so in the summary and print the one-line remedy rather than running it — the orchestrator never mutates the index:
 
@@ -628,12 +628,14 @@ read it** — the tester and QA — and to no other role: a line every role carr
 
 Read cycle caps from config:
 
-- `max_review_cycles` — from `.orchestrator/config.json`; default 10 if absent. **`review_budget` is derived from it here** — see the binding rule below — and every cap test in the run uses the derived value, never the raw key.
-- `max_qa_cycles` — from `.orchestrator/config.json`; default 5 if absent.
-- `max_eval_cycles` — from `.orchestrator/config.json`; default 2 if absent.
-- `max_family_cycles` — from `.orchestrator/config.json`; default 6 if absent.
-- `max_run_minutes` — from `.orchestrator/config.json`; default `0` (disabled) if absent.
-- `gate_wall_clock_minutes` — from `.orchestrator/config.json`; default `15` if absent. Passed through to QA; the orchestrator itself only forwards it.
+- `max_review_cycles` — from **`$mb:.orchestrator/config.json`**; default 10 if absent. **`review_budget` is derived from it here** — see the binding rule below — and every cap test in the run uses the derived value, never the raw key.
+- `max_qa_cycles` — from **`$mb`**; default 5 if absent.
+- `max_eval_cycles` — from **`$mb`**; default 2 if absent.
+- `max_family_cycles` — from **`$mb`**; default 6 if absent.
+- `max_run_minutes` — from `.orchestrator/config.json`; default `0` (disabled) if absent. Not anchored: it caps nothing the branch is graded on, and the meter reports whatever it is set to.
+- `gate_wall_clock_minutes` — from **`$mb`**; default `15` if absent. Passed through to QA; the orchestrator itself only forwards it.
+
+**`$mb` above is the merge-base copy, and it is not optional** — the six anchored cycle and bound keys are read there and nowhere else, per *the anchored set* below. Read them once, here, and print the moved line before the banner.
 
 **Bind `review_budget` with the eval's remediation reserved:**
 
@@ -704,18 +706,37 @@ wrong thing by their own banner, and `--max-review` cannot raise the number that
 
 **Resolve `parallelism`** with the standard precedence — CLI `--parallel` > `.orchestrator/config.json` > default `off`. Also read `max_contract_amendments` (default `2`) and set `amendment_count = 0`, and read `max_parallel_lanes` (default `6`). Every key's values, semantics, and absent-key tolerance are normative in **`references/config.md`** — read them there; they are deliberately not restated here.
 
-**These three keys are execution policy, so they load from the merge-base — not the working tree.** `parallelism`, `max_parallel_lanes`, and `max_contract_amendments` decide **how many command-capable coders run concurrently** against a shared workspace, and `.orchestrator/config.json` is a contributor-editable file inside the branch under review. Reading them from the working tree would let a branch grant itself nested execution and a wide fan-out as part of the very change being reviewed. Per the project's **two-trust-anchors invariant** (`PROJECT-CONTEXT.md`), policy and config load from the **merge-base (`$mb`)**:
+**Nine keys are anchored to the merge-base — not the working tree.** `.orchestrator/config.json` is a contributor-editable file inside the branch under review, so any key read from it is a key the change can set for its own run. Two families must not be:
 
-- Read the three keys from **`$mb:.orchestrator/config.json`** — the pinned merge-base copy — never from the working-tree file.
-- **A CLI flag outranks the merge-base**, because a flag is *the invoking user's* authority expressed at run time, not branch-authored content. `--parallel` therefore still wins.
-- When the merge-base has no `.orchestrator/config.json`, or the file is absent/unparseable there, fall back to the **defaults** (`off` / `6` / `2`) — never to the working-tree copy.
+| Family | Keys | What a working-tree read would buy the branch |
+|---|---|---|
+| **Execution policy** | `parallelism`, `max_parallel_lanes`, `max_contract_amendments` | Nested execution and a wide fan-out of command-capable coders against a shared workspace. |
+| **The instruments** | `max_eval_cycles`, `max_family_cycles`, `max_qa_cycles`, `max_review_cycles`, `gate_wall_clock_minutes`, `max_spec_requirements` | A weaker measurement of itself, or a larger budget than the trunk permits — `max_eval_cycles: 0` ships the spec ungraded, and the only cross-run cost control is a single integer in the same file. |
+
+Per the project's **two-trust-anchors invariant** (`PROJECT-CONTEXT.md`), both families load from the **merge-base (`$mb`)**:
+
+- Read all nine from **`$mb:.orchestrator/config.json`** — the pinned merge-base copy — never from the working-tree file, and **run on the merge-base value**, whichever direction it moved.
+- **A CLI flag outranks the merge-base**, because a flag is *the invoking user's* authority expressed at run time, not branch-authored content. `--parallel`, `--max-review` and `--max-qa` therefore still win, and are not moves.
+- When the merge-base has no `.orchestrator/config.json`, or the file is absent/unparseable there, fall back to the **defaults** (`off` / `6` / `2` / `2` / `6` / `5` / `10` / `15` / `0`) — never to the working-tree copy.
 - **Validate the numeric values before any dispatch**, per `references/config.md` → *Bounds* (`max_parallel_lanes` a finite integer ≥ 1; `max_contract_amendments`, `max_eval_cycles`, `max_family_cycles`, `max_run_minutes`, `gate_wall_clock_minutes` and `max_spec_requirements` finite integers ≥ 0); an out-of-range value fails closed to the key's canonical default with the reason printed, rather than dispatching a wave of zero or comparing against an undefined cap.
 
-Every other key (`output_format`, `automation_level`, the thresholds) keeps reading from the working tree as before — none of them widens a branch's blast radius, which is what the merge-base anchor exists to contain.
+**Where the working tree disagrees, print one line and never suppress it** — before the counters banner, on every run including `off`:
+
+```
+INSTRUMENT MOVED — max_eval_cycles 2 → 0 (loosening), max_qa_cycles 5 → 8 (loosening) — measured against merge-base values
+```
+
+Name every key that moved, in config order, with its merge-base value, its working-tree value, and its direction. `references/config.md` → *The anchored set* holds the per-key direction table; a key that moved and is not in it prints `(changed)` rather than a guessed direction. **A loosening move inside the change under review is a reviewer finding, not a config read** — carry the line verbatim into the FINAL report's Issues-found list so it reaches the PR body, and do not summarise it. A tightening move prints too: the operator who wrote it needs to know it did not take effect on this run.
+
+The escape is to move the instrument in a separate, earlier PR. That is a much higher bar, it is visible in history, and it is the same bar a human faces.
+
+**The gate config is anchored the same way, by the gate runner rather than here.** `.cleancode-gates.json` holds every blocking number and is auto-written into the repo; its `roots`, `exclude`, per-gate `exempt` and `thresholds` resolve from `$mb` and print the same line — see `references/gate-config.md` → *The instrument is anchored to the merge-base*.
+
+Every other key (`output_format`, `automation_level`, `context_threshold`, `clarity_threshold`) keeps reading from the working tree as before — none of them widens a branch's blast radius or weakens what the run measures, which is what the merge-base anchor exists to contain.
 
 **But `output_format` is project policy, not a per-developer preference — do not let its trust anchor suggest otherwise.** Reading it from the working tree is correct (a branch cannot escalate concurrency with it); *diverging* on it across a team is not. `scripts/check-artifact-pairing.cjs` never reads `output_format` or `config.json` at all: it scopes via `branchScope({auditPath: 'plans', ext: '.md', baseRef})` — **every** changed `.md` on the branch, whoever authored it — and unconditionally requires each one's `.html` sibling. So a developer running `html` is blocked by every md-only artifact a teammate added to the same branch, and cannot clear the gate without re-rendering work that is not theirs. The key therefore belongs in the **tracked** `.orchestrator/config.json`, identical for everyone on the branch, and a project that wants to change it should change it once, deliberately, for the whole team. `automation_level` and the thresholds are genuinely per-developer; `output_format` is not.
 
-**If the resolved value is `off` (including by default), the run is finished with parallel mode.** **Steps 0c, 0r, 2p, 2c, 2s, 2L, 3L, 3s, and 3j do not exist for this run**: skip them entirely and follow Steps 1 → 2 → 3 → 3b → 4 → 5 → 7 exactly as written. Do not print a parallelism line in the banner above, and emit nothing else — an `off` run's stdout is byte-identical to a pre-feature run's.
+**If the resolved value is `off` (including by default), the run is finished with parallel mode.** **Steps 0c, 0r, 2p, 2c, 2s, 2L, 3L, 3s, and 3j do not exist for this run**: skip them entirely and follow Steps 1 → 2 → 3 → 3b → 4 → 5 → 7 exactly as written. Do not print a parallelism line in the banner above, and emit nothing else — an `off` run's stdout is byte-identical to a pre-feature run's, the `INSTRUMENT MOVED` line excepted: that one is a disclosure about the run's own settings, not a parallel-mode artifact, and a run that suppressed it to preserve byte-parity would be preserving the wrong thing.
 
 Add one line to the status output **only when `parallelism` is not `off`**:
 
@@ -1845,6 +1866,7 @@ QA report: {qa_report_path}
 Spec eval: {PASS | ISSUES | SKIPPED}{ — {N} actionable, {M} recorded}{, graded before {qa_cycle} QA remediation(s) — see Step 4e}
 Delivered: {m} / {t} spec requirements carry passing evidence
 Unmeasured: {gate — state, comma-separated, e.g. "G2 — MISSING_TOOL, G6 — UNMEASURED (no denominator)"} (or "none")
+Instrument moved: {key old → new (direction), comma-separated — config keys and gate-config fields together} (or "none")
 Deferred by decision: {criterion — reason, one per line, or "none"}
 Issues found:
   - {issue} (or "none")
@@ -1889,6 +1911,15 @@ what the run has to show for it, and both come from evidence already on disk:
   verdicts as non-failures (`templates/qa.md` → Step 6) — which is defensible *only* if the terminal
   banner says which gates never ran. Three of seven gates silently unmeasured under a green banner is
   the exact shape this framework exists to prevent one level down.
+
+- **`Instrument moved:`** — every anchored key whose working-tree value disagreed with the merge-base:
+  the nine config keys resolved at Step 0b (`references/config.md` → *The anchored set*) and the four
+  `.cleancode-gates.json` field families the gate runner reports in `report.instrument.moves`
+  (`references/gate-config.md`). Copy the values and directions; do not re-derive them and do not
+  summarise the list. The run already executed on the merge-base values, so this line changes no
+  verdict — it exists because a branch that moved its own instrument, in either direction, is
+  something a reviewer must see before reading anything else on this banner. `none` when nothing
+  moved; `not anchored — no merge-base` when the run had none to read.
 
 **`Run cost:` is not optional and not exclusive to this banner.** Print it on **every terminal
 banner the run can end on** — this one, `STALLED` in all its forms, `BLOCKED`, `BLOCKED_STALE`, and

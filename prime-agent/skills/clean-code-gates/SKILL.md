@@ -35,6 +35,7 @@ node <skill-dir>/bin/gates.cjs [flags]
 - `--skip G6` — exclude gates (G6 mutation is slow)
 - `--out <dir|->` — report dir (default `./.cleancode`); `-` prints JSON to stdout
 - `--require-tools` — exit 2 if any gate is `missing_tool`
+- `--base-ref <ref>` — anchor the instrument to `<ref>` (see *The instrument is merge-base anchored*). A `diff` scope anchors to its own base automatically; this flag sets it explicitly and outranks the scope.
 - `--scaffold` — advice mode: detect stacks and print the exact install commands for any missing gate tooling, then exit 0 (read-only, changes nothing)
 
 ### Exit codes
@@ -54,6 +55,30 @@ A gate reports `status: "missing_tool"` with an install hint (never crashes) whe
 ## Config
 
 On first run it auto-creates `.cleancode-gates.json` in the target project root from detected stacks (per-stack gate commands + thresholds: coverage 85/80, complexity 8, length 30, nesting 2, mutation 70). Edit it to override roots, thresholds, commands, or exemptions. Delete it to regenerate.
+
+### The instrument is merge-base anchored
+
+The config lives inside the tree it measures, so the cheapest path to a green gate runs through the config rather than through the code: widen `exempt`, drop a `root`, lower a threshold — all inside the change under review, all silent.
+
+When the run knows a base ref — any `diff` scope, or an explicit `--base-ref` — four field families are read from **that ref's** copy of `.cleancode-gates.json` and the gates run on those values:
+
+| Anchored | Left to the working tree |
+|---|---|
+| `stacks.<s>.roots` · `stacks.<s>.exclude` · `gates.<id>.exempt` · `gates.<id>.thresholds` | `tool` · `runner` · `budget` · `baseline` · everything else |
+
+The split is *what is measured and how hard* versus *how the measurement is performed*. A branch legitimately swaps a runner or raises a G6 budget; a branch that lowers `mutationScore` is changing the verdict it is about to be judged by.
+
+Every field that disagrees is named once, on stderr and in `report.md`, and the line cannot be suppressed:
+
+```
+INSTRUMENT MOVED — node-ts.gates.G2.exempt +3 globs (loosening), node-ts.gates.G1.thresholds.statements 85 → 60 (loosening) — measured against merge-base (origin/main) values
+```
+
+`report.instrument` carries the same as data: `{ anchored, baseRef, source, moves[] }`, present on every report including `anchored: false`. Direction is derived per key — a floor (`statements`, `branches`, `mutationScore`) loosens when it falls, a ceiling (`complexity`, `maxDepth`, `source-lines-of-code`, …) loosens when it rises, and a key neither table knows is reported `changed` with both values rather than guessed at.
+
+**No config at the base ref anchors to the built-in defaults, never to the working-tree copy** — that is also what the merge-base measured at, since the file is auto-created from those defaults. The same applies when it is unparseable there.
+
+A legitimate threshold change still works: land it in its own commit, where the moved line is informative rather than damning. Project, module and files scopes have no base, report `anchored: false`, and claim nothing.
 
 ## Reading the report (for agents/orchestrators)
 

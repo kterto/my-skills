@@ -1,5 +1,6 @@
 'use strict';
-function buildReport({ scope, gateResults, now, version }) {
+const { formatInstrumentLine } = require('./instrument.cjs');
+function buildReport({ scope, gateResults, instrument, now, version }) {
   const blockers = gateResults.flatMap(g => g.findings || []).filter(f => f.severity === 'blocker').length;
   const warnings = gateResults.flatMap(g => g.findings || []).filter(f => f.severity === 'warning').length;
   const gatesMissingTool = gateResults.filter(g => g.status === 'missing_tool').map(g => g.gate);
@@ -17,6 +18,10 @@ function buildReport({ scope, gateResults, now, version }) {
     schemaVersion: '1.0', generatedAt: now,
     tool: { name: 'clean-code-gates', version },
     scope,
+    // Present on every report, `anchored: false` included. A report that simply
+    // omits the block when nothing was anchored reads exactly like one that
+    // anchored and found no move.
+    instrument: instrument || { anchored: false, baseRef: null, source: 'working-tree', moves: [] },
     summary: { status, gatesRun, gatesMissingTool, gatesErrored, blockers, warnings },
     gates: gateResults,
   };
@@ -26,6 +31,8 @@ function toMarkdown(r) {
   const lines = [`# Clean Code Gates — ${r.summary.status.toUpperCase()}`,
     `Scope: ${r.scope.kind} · ${r.scope.files.length} files · stacks: ${r.scope.stacks.join(', ') || 'none'}`,
     `Blockers: ${r.summary.blockers} · Warnings: ${r.summary.warnings} · Missing tools: ${r.summary.gatesMissingTool.join(', ') || 'none'} · Errored: ${(r.summary.gatesErrored || []).join(', ') || 'none'}`, ''];
+  const moved = formatInstrumentLine(r.instrument);
+  if (moved) lines.push(`> ${moved}`, '');
   for (const g of r.gates) {
     lines.push(`## ${g.gate} ${g.name} (${g.stack}) — ${g.status}`);
     if (g.installHint) lines.push(`> install: ${g.installHint}`);

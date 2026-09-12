@@ -321,7 +321,7 @@ ignored unless named. Two files are tracked, and only two.
 
 | Path | Tracked | Why |
 |---|---|---|
-| `config.json` | **yes** | Step 0b reads `parallelism`, `max_parallel_lanes`, `max_contract_amendments` from the **merge-base** copy (`$mb:.orchestrator/config.json`). Untracked, those three keys have no merge-base to read and fail closed to defaults permanently — the branch-cannot-widen-its-own-concurrency control stops working. |
+| `config.json` | **yes** | Step 0b reads the nine anchored keys (*The anchored set*) from the **merge-base** copy (`$mb:.orchestrator/config.json`). Untracked, none of them has a merge-base to read and all nine fail closed to defaults permanently — the branch-cannot-widen-its-own-concurrency control stops working, and so does every cycle cap and gate bound the branch could otherwise be held to. |
 | `PROJECT-CONTEXT.md` | **yes** | Hand-curated shared project knowledge a teammate's fresh clone must already have. Prose, so it three-way merges. |
 | `eval-baselines/**` | **yes** | Durable comparability anchors, not per-run output. |
 | `run-manifest.json`, `verification-ledger.json`, `tmp/` | no | Per-run, branch-scoped, rewritten **whole** on every run. Two branches hold two mutually exclusive snapshots, not two mergeable sets of rows — a silent three-way auto-merge would produce a state no run ever emitted. |
@@ -357,6 +357,36 @@ CLI arg > `.orchestrator/config.json` > default
 
 When `.orchestrator/config.json` is absent the canonical default object applies in full. Any key present in `.orchestrator/config.json` overrides only that key. A CLI arg overrides both the file and the default for the duration of the current run.
 
-**Which copy of the file — the trust anchor.** Most keys read the **working-tree** `.orchestrator/config.json`. The three **execution-policy** keys — `parallelism`, `max_parallel_lanes`, `max_contract_amendments` — read the **merge-base** copy (`$mb:.orchestrator/config.json`) instead, per the project's two-trust-anchors invariant: they govern how many command-capable coders run concurrently in a shared workspace, so a branch must not be able to widen its own concurrency as part of the change under review. A **CLI arg still wins over both**, because it carries the invoking user's authority rather than the branch's. Absent or unparseable at the merge-base ⇒ the canonical defaults, never the working-tree copy. The full statement of this rule lives in `SKILL.md` → Step 0b.
+**Which copy of the file — the trust anchor.** Most keys read the **working-tree** `.orchestrator/config.json`. **Nine read the merge-base copy** (`$mb:.orchestrator/config.json`) instead, per the project's two-trust-anchors invariant — the three **execution-policy** keys and the six **instrument** keys enumerated in *The anchored set* below. A **CLI arg still wins over both**, because it carries the invoking user's authority rather than the branch's. Absent or unparseable at the merge-base ⇒ the canonical defaults, never the working-tree copy. The full statement of this rule lives in `SKILL.md` → Step 0b.
+
+### The anchored set
+
+Nine keys resolve from `$mb:.orchestrator/config.json`. Two families, one rule.
+
+| Family | Keys | Why it cannot read the branch |
+|---|---|---|
+| **Execution policy** | `parallelism`, `max_parallel_lanes`, `max_contract_amendments` | They govern how many command-capable coders run concurrently in a shared workspace. A branch must not widen its own concurrency as part of the change under review. |
+| **The instruments** | `max_eval_cycles`, `max_family_cycles`, `max_qa_cycles`, `max_review_cycles`, `gate_wall_clock_minutes`, `max_spec_requirements` | They decide how hard the run is measured and how much it may spend measuring. `max_eval_cycles: 0` ships the spec ungraded; `max_family_cycles` is the *only* budget that survives a new run. Both are one integer in a file the change under review can edit. |
+
+The anchor's original rationale was blast radius. That is a narrower threat model than the one this repo's own forensics document: the cheapest path to a green number does not run through the code, it runs through the instrument — and unlike a human, an agent can edit the instrument mid-run.
+
+**The run uses the merge-base value in every case**, whichever direction the working tree moved it. A tightening the branch wanted does not take effect either; it takes effect once it lands, which is the point.
+
+#### Direction — which way is loosening
+
+| Key | Loosening | Why |
+|---|---|---|
+| `max_eval_cycles` | **decrease** (`0` disables the eval) | Fewer grading passes; at `0` Step 4e resolves to `SKIPPED` and the run ships with no delivery claim at all. |
+| `max_review_cycles` | **increase** | The in-run rework budget. Raising it lets one invocation spend more of the family. |
+| `max_qa_cycles` | **increase** | Same, at the QA barrier: more re-runs until something comes up green. |
+| `max_family_cycles` | **increase**, and `0` (disables the gate) | The only cross-run cost control. `0` is the pre-P5 behaviour — legitimate as a project decision, never as a branch decision. |
+| `gate_wall_clock_minutes` | **decrease**, and `0` (disables the bound) | A tighter bound turns slow gates into `UNMEASURED` and `BLOCKED_STALE`; `0` removes the bound that keeps a wedged gate from hanging the run. Both ends cost something, so both are named. |
+| `max_spec_requirements` | **increase**, and `0` (disables the gate) | The scope band. Raising it admits the oversized specs whose families need three or more review rounds 68–75% of the time. |
+
+A key that moved and is not in this table prints `(changed)` with both values. Guessing a direction for it would be the one failure the mechanism exists to prevent: a number that moved and read as though it had not.
+
+#### What is *not* anchored, and why
+
+`output_format`, `automation_level`, `context_threshold`, `clarity_threshold` and `max_run_minutes` read the working tree. None of them weakens what the run measures: the first two change how artifacts render and whether the brainstormer interviews, the thresholds govern an interview the branch cannot shorten into a pass, and `max_run_minutes` caps a **stop** while the meter reports unconditionally either way (see its entry above). A branch that sets `max_run_minutes: 0` buys itself a longer run and a fully reported cost — nothing is hidden by it.
 
 **Absent-key tolerance (backward compatibility).** Every key is nullable/absent-tolerant, and this is explicitly load-bearing for `parallelism`, `lanes`, `lanes[].sublanes`, `max_parallel_lanes`, and `max_contract_amendments`: an existing `.orchestrator/config.json` written before those keys existed resolves them to `"off"`, `[]`, absent (`[]`-equivalent — "derive per run"), `6`, and `2` respectively, and the pipeline behaves **exactly as it does today** — no `PACT` and no sub-contract is created, no new prompt fires, and Steps 2p/2c/2s/2L/3L/3s/3j are skipped entirely. **No migration is forced**; legacy config files and existing `plans/` trees render and execute unchanged. A legacy `PACT` artifact carrying no `Sub-contract` column likewise resolves as **all-flat**, never an error (`artifact-format-parallel.md` → `PACT` ID resolution).

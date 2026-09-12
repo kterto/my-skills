@@ -25,11 +25,13 @@ This template has TWO variants. Render exactly one per PR:
 
 ## Not delivered
 <!-- Copied verbatim from the orchestrator's final banner for this story: its `Delivered:`,
-     `Unmeasured:`, `Deferred by decision:` and `Issues found:` lines. The orchestrator produces an
-     honest miss report and this PR is where a human first reads it — dropping it here is how a
-     story with three ungraded requirements and three gates that never ran reaches review looking
-     identical to one with none. Render "nothing — every committed requirement carries passing
-     evidence and every gate was measured" only when all four lines are empty or "none". -->
+     `Unmeasured:`, `Instrument moved:`, `Deferred by decision:` and `Issues found:` lines. The
+     orchestrator produces an honest miss report and this PR is where a human first reads it —
+     dropping it here is how a story with three ungraded requirements and three gates that never ran
+     reaches review looking identical to one with none. `Instrument moved:` belongs here most of all:
+     a branch that widened its own thresholds or exemptions is a reviewer decision, and this PR is
+     where that reviewer is. Render "nothing — every committed requirement carries passing evidence,
+     every gate was measured, and no instrument moved" only when all five lines are empty or "none". -->
 {{not_delivered}}
 
 ---

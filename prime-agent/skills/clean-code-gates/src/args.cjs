@@ -20,7 +20,7 @@ function splitOnce(s, sep) {
 
 function parseArgs(argv) {
   const o = { scope: { kind: 'project' }, gates: null, skip: [], out: './.cleancode',
-              scaffold: false, requireTools: false };
+              scaffold: false, requireTools: false, baseRef: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const next = () => argv[++i];
@@ -31,6 +31,7 @@ function parseArgs(argv) {
       case '--out': o.out = next(); break;
       case '--scaffold': o.scaffold = true; break;
       case '--require-tools': o.requireTools = true; break;
+      case '--base-ref': o.baseRef = assertBaseRefShape(next()); break;
       default: throw new Error(`unknown argument: ${a}`);
     }
   }

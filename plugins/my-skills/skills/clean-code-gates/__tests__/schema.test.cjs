@@ -242,6 +242,28 @@ for (const [label, mutate] of negativeCases) {
   });
 }
 
+test('a report whose instrument moved conforms to report.schema.json', () => {
+  const moved = buildReport({
+    scope: { kind: 'diff', baseRef: 'origin/main', files: ['a.ts'], stacks: ['node-ts'] },
+    gateResults: [{ gate: 'G5', name: 'no-comments', stack: 'node-ts', status: 'pass', tool: 'builtin', findings: [] }],
+    instrument: {
+      anchored: true, baseRef: 'origin/main', source: 'merge-base',
+      moves: [
+        { key: 'node-ts.gates.G1.thresholds.statements', from: 85, to: 60, direction: 'loosening' },
+        { key: 'node-ts.gates.G2.exempt', added: 3, removed: 0, direction: 'loosening' },
+      ],
+    },
+    now: '2026-05-31T00:00:00Z', version: '0.1.0',
+  });
+  assert.deepStrictEqual(validate(moved, schema), []);
+});
+
+test('a report built with no instrument still carries the unanchored block', () => {
+  assert.deepStrictEqual(sampleReport.instrument,
+    { anchored: false, baseRef: null, source: 'working-tree', moves: [] });
+  assert.deepStrictEqual(validate(sampleReport, schema), []);
+});
+
 test('schema: gate finding required fields and severity enum', () => {
   const finding = sampleReport.gates[0].findings[0];
   assert.ok('id' in finding);

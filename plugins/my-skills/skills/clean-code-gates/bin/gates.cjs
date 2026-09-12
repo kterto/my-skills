@@ -23,6 +23,12 @@ function main() {
   try { result = run({ root, options, io: { version: require('../package.json').version } }); }
   catch (e) { process.stderr.write(`error: ${e.message}\n`); process.exit(3); }
   const { report, exitCode } = result;
+  // Non-suppressible, and on stderr so it survives `--out -` being piped into a
+  // consumer. There is no flag that turns it off: a disclosure a run can silence
+  // is the loophole with one more step in it.
+  const { formatInstrumentLine } = require('../src/instrument.cjs');
+  const moved = formatInstrumentLine(report.instrument);
+  if (moved) process.stderr.write(moved + '\n');
   if (options.out === '-') { process.stdout.write(JSON.stringify(report, null, 2) + '\n'); }
   else {
     fs.mkdirSync(path.join(root, options.out), { recursive: true });
