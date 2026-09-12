@@ -32,6 +32,7 @@ Each log entry records the following fields. The order here is the column order 
 | `human_validation` | `none` \| `flagged: <source>` | Detection result from `references/human-validation.md`. Source is `acceptance` or `qa-report`. |
 | `notes` | Free text | Unmet dependencies, warnings, stop reason, or any other context recorded at entry time. Empty string if nothing to note. |
 | `cost` | Integer minutes | Wall-clock minutes of this story's PM span, branch cut to log row. Recorded on every story regardless of `max_queue_minutes`, which caps the queue but does not enable the measurement. The queue total is the sum of this column over the rows of the current scope, which is also how it is recovered on resume. Absent on rows written before the column existed — treat a missing cell as unknown, not as zero, and say so when totalling. |
+| `spec` | `SPEC-*` id, or `—` | The spec the orchestrator ran this story under, read from the `Spec:` line of whichever terminal banner it printed. `—` only when the run stopped before Step 1 minted one. **This is the only durable link between a story and its run family**, and a retry that cannot recover it re-types the brief, mints a fresh `SPEC-*`, and starts `max_family_cycles` at zero — the documented cascade vector, reproduced by the retry path itself. Absent on rows written before the column existed; treat a missing cell as unknown and say so rather than assuming the story never had a spec. |
 
 ---
 
@@ -51,7 +52,11 @@ On re-run, PM performs the following steps from scratch to reconstruct its execu
    - If the dependency's `roadmap.lock.json` status is `done`, its work is already in the run base → stack the dependent on the **run base** (`--base` value, else the branch PM started on). This is the normal, non-error path.
    - Only **error** if the predecessor branch is absent **AND** the dependency is **not** `done` (its work exists nowhere reachable). Report the missing predecessor and stop.
 
-4. **Resume the queue.** The re-resolved, filtered, ordered queue (see scope-resolution ordering algorithm) is the queue PM processes, starting from the first non-`done` story. No state file is consulted; no in-memory state from the previous run is required.
+4. **Recover the prior attempt's spec id and cost, per remaining story.** For each story still in the queue, scan `/roadmap/pm-progress.md` for rows whose `story` field carries that id and take the **most recent** row's `spec` cell. A non-empty `SPEC-*` there means this story has already been attempted and already has a run family: pass that id positionally to the orchestrator (SKILL.md per-story loop, step 2) instead of letting a re-typed brief mint a new one. An empty cell, a `—`, or no row at all means a first attempt — invoke with the brief as normal. The same scan sums the `cost` column over the current scope to recover the queue total.
+
+   **This is the one thing PM reads its own log for.** `roadmap.lock.json` remains the sole source of *which stories are done*; the log is the only place *what the last attempt of this story was called* survives a restart, and without it the framework's own retry path unbinds the only cross-run budget it has.
+
+5. **Resume the queue.** The re-resolved, filtered, ordered queue (see scope-resolution ordering algorithm) is the queue PM processes, starting from the first non-`done` story. No state file is consulted; no in-memory state from the previous run is required.
 
 ### Resume walkthrough — stall then restart
 
@@ -60,7 +65,7 @@ Run: `/product-manager complete 001` over queue `001.1.1 → 001.1.2 → 001.1.3
 **First invocation.**
 - `001.1.1` — orchestrator `READY_TO_COMMIT` → committed (trailer), synced (`done`), sync-docs commit, pushed, PR #1 opened (`--base main`), `chore(pm): log` commit. Branch `pm/001.1.1-…`.
 - `001.1.2` — depends_on `001.1.1` (in scope, just done in this run) → base = `pm/001.1.1-…` (stacked) → `READY_TO_COMMIT` → committed, synced (`done`), PR #2 opened (`--base pm/001.1.1-…`), logged.
-- `001.1.3` — depends_on `001.1.2` → base = `pm/001.1.2-…` → orchestrator hits the qa-cycle limit and prints `Status: STALLED`. PM **halts**: reports the banner, story `001.1.3`, and the remaining queue (`001.1.3`). `pm-progress.md` still gets a row for `001.1.3` with `state=STALLED`, `commit=—`, `pr=—`, and the stall reason in `notes`.
+- `001.1.3` — depends_on `001.1.2` → base = `pm/001.1.2-…` → orchestrator hits the qa-cycle limit and prints `Status: STALLED`. PM **halts**: reports the banner, story `001.1.3`, and the remaining queue (`001.1.3`). `pm-progress.md` still gets a row for `001.1.3` with `state=STALLED`, `commit=—`, `pr=—`, the stall reason in `notes`, and **`spec=SPEC-042`** read from that banner's `Spec:` line.
 
 State now: lock has `001.1.1`, `001.1.2` = `done`, `001.1.3` = `todo` (sync never stamped it — no trailer commit). PRs #1, #2 live; branches present.
 
@@ -68,11 +73,12 @@ State now: lock has `001.1.1`, `001.1.2` = `done`, `001.1.3` = `todo` (sync neve
 1. Re-resolve scope `001` → `001.1.1, 001.1.2, 001.1.3`.
 2. Drop `done` → `001.1.1`, `001.1.2` removed. Queue = `001.1.3`.
 3. Reconstruct stack: `001.1.3` depends_on `001.1.2`; predecessor branch `pm/001.1.2-…` still exists (PR #2 not merged) → base = `pm/001.1.2-…`. (Had PR #2 already been merged and its branch deleted, `001.1.2` is `done` in the lock → base falls back to the **run base** per step 3 above.)
-4. Resume: process `001.1.3` from the top of the queue. No state file consulted — `roadmap.lock.json` is the sole source of "what's left."
+4. Recover `001.1.3`'s prior attempt from the log: its most recent row carries `spec=SPEC-042`, so this attempt is a **retry**, not a first run.
+5. Resume: process `001.1.3` from the top of the queue, invoking the orchestrator with `SPEC-042` positionally alongside the brief. The re-run therefore joins the family the first attempt built — its reviews count against the same `max_family_cycles`, and the budget that exists to stop a cascade can actually see the cascade. Without step 4 this second invocation re-types the brief, the brainstormer mints `SPEC-043`, and the family counter reads zero on a story that has already spent a run. No state file consulted — `roadmap.lock.json` is still the sole source of "what's left."
 
 ### What the run log is (and is not) used for
 
-The `/roadmap/pm-progress.md` log is an **audit trail for humans** — it records what PM did, when, and with what result. It is not read by PM itself during resume. The source of truth for "which stories are done" is always `roadmap.lock.json`, not the log.
+The `/roadmap/pm-progress.md` log is an **audit trail for humans** — it records what PM did, when, and with what result. **The source of truth for "which stories are done" is always `roadmap.lock.json`, never the log.** PM reads the log for exactly two things, both recovered per-story in Resume algorithm step 4 and neither of them a queue decision: the `spec` cell of the story's last attempt, and the `cost` column's sum over the current scope. Everything else in it is for a human.
 
 ---
 

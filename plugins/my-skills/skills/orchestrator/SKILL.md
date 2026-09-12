@@ -536,6 +536,7 @@ remained:
 
 ```
 ORCHESTRATOR — run budget exhausted
+Spec: {spec_path}
 Elapsed: {elapsed_minutes}m / {max_run_minutes}m
 Stopped at: {step}, {loop} cycle {cycle}
 Remaining: {the steps not reached}
@@ -1106,6 +1107,7 @@ Read the test report file at `test_report_path` (expect `.md` or `.html` extensi
 
   ```
   ORCHESTRATOR — tester blocked
+  Spec: {spec_path}
   Plan: {plan_id}
   Test report: {test_report_path}
   Status: STALLED — tooling gap; human intervention required before continuing
@@ -1188,6 +1190,7 @@ If `review_cycle >= review_budget`:
 
 ```
 ORCHESTRATOR — review cycle limit reached ({review_budget})
+Spec: {spec_path}
 Bound by: {in-run cap max_review_cycles | family remainder max_family_cycles − family_cr_count − eval_reserve | minimum-one floor | family-budget override}
 Last CR: {cr_path}
 Status: STALLED — human intervention required
@@ -1469,6 +1472,7 @@ Sending it round the remediation loop spends a cycle on a plan that cannot addre
 
 ```
 ORCHESTRATOR — spec eval blocked on a red engineering gate
+Spec: {spec_path}
 Last eval: {eval_path}
 Gate: {gate name} — {the exact command recorded in the report}
 Status: STALLED — human intervention required
@@ -1484,6 +1488,7 @@ one the run is permitted, and an unremediated finding it just graded is a decisi
 
 ```
 ORCHESTRATOR — spec eval cycle limit reached ({max_eval_cycles})
+Spec: {spec_path}
 Last eval: {eval_path}
 Unresolved criteria: {the actionable set, one per line}
 Status: STALLED — human intervention required
@@ -1608,6 +1613,7 @@ A `BLOCKED_STALE` status means one or more gates exceeded their wall-clock budge
 
 ```
 ORCHESTRATOR — QA stale
+Spec: {spec_path}
 QA report: {qa_report_path}
 Stale gates: {list from report frontmatter `stale_gates:`}
 Status: STALLED — operator decision required
@@ -1623,6 +1629,7 @@ Check `qa_cycle`. If `qa_cycle >= max_qa_cycles`:
 
 ```
 ORCHESTRATOR — QA cycle limit reached ({max_qa_cycles})
+Spec: {spec_path}
 Last QA report: {qa_report_path}
 Status: STALLED — human intervention required
 ```
@@ -1786,6 +1793,7 @@ status results:
 
 ```
 ORCHESTRATOR — spec eval artifact missing or incomplete
+Spec: {spec_path}
 Expected: plans/eval/EVAL-* with `plan: {root_plan_id}`, an evidence matrix, and a final grade
 Last eval: {eval_path, or "none persisted"}
 Status: STALLED — human intervention required
@@ -1873,9 +1881,22 @@ what the run has to show for it, and both come from evidence already on disk:
   something a reviewer must see before reading anything else on this banner. `none` when nothing
   moved; `not anchored — no merge-base` when the run had none to read.
 
-**`Run cost:` is not optional and not exclusive to this banner.** Print it on **every terminal
-banner the run can end on** — this one, `STALLED` in all its forms, `BLOCKED`, `BLOCKED_STALE`, and
-the scope-band and family-budget refusals — using the same line. A stopped run is the case where the
+**Two lines are required on every terminal banner the run can end on** — this one, `STALLED` in all
+its forms, `BLOCKED`, `BLOCKED_STALE`, and the scope-band and family-budget refusals: `Run cost:` and
+`Spec: {spec_path}`.
+
+**`Spec:` is what makes the run re-enterable under its own budget.** `max_family_cycles` is the only
+budget that survives a run, it resolves from spec provenance, and the positional `SPEC-*` argument is
+the only thing that binds a re-run to the family it belongs to (`references/config.md` → *Accepted
+CLI Args*). A stop banner that does not name its spec forces whoever resumes — a person or
+`product-manager` — to re-type the brief, which mints a fresh `SPEC-*`, which starts the family at
+zero. That is the documented cascade vector, reproduced by the framework's own retry path, and the
+banner that omits one line is what causes it. The complete banner above already carries it; the stop
+banners must too, and it costs nothing at any of them — every stop that can happen after Step 1 has
+`spec_path` bound, and a stop before Step 1 has no run to resume.
+
+**`Run cost:` is not optional and not exclusive to this banner** either. Print it on every banner in
+that same list, using the same line. A stopped run is the case where the
 number matters most, and it is the case where a banner assembled ad hoc is most likely to omit it.
 `{boundary_count}` is the number of rows in `boundaries[]` at the time of the stop, so the reader can
 see whether fifteen hours bought five boundaries or fifty. When `max_run_minutes` is `0` the budget
