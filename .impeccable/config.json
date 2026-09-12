@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "docs/measurement-alignment-audit-2026-09-11.html"
+        ],
+        "createdAt": "2026-09-11T23:58:58.665Z",
+        "reason": "model: .scroll is a horizontal-scroll wrapper around a table whose own th/td padding is 11px/14px; text is never flush with the border"
+      }
+    ]
+  }
+}

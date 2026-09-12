@@ -1,0 +1,565 @@
+<title>The Unreported Delivery</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+  :root{
+    --ground:#e9edef; --surface:#fdfefe; --surface-2:#f2f5f6;
+    --ink:#141a1f; --ink-2:#39464f; --muted:#4e5c66; --rule:#ced7db; --rule-soft:#dde4e7;
+    --accent:#1f5f7a; --accent-soft:#dceaf1;
+    --ok:#276749; --ok-bg:#dfeee6;
+    --partial:#8a6212; --partial-bg:#f5e9cf;
+    --bad:#96302c; --bad-bg:#f6dedc;
+    --unmeasured:#5a6a74; --unmeasured-bg:#e2e8ea;
+  }
+  :root:not([data-theme="light"]){
+    @media (prefers-color-scheme: dark){
+      --ground:#0e1317; --surface:#151d23; --surface-2:#1b252c;
+      --ink:#e7eef2; --ink-2:#b6c4cc; --muted:#8598a3; --rule:#2b3840; --rule-soft:#222d34;
+      --accent:#74b6d4; --accent-soft:#1a2f3c;
+      --ok:#7dc9a1; --ok-bg:#17301f;
+      --partial:#d8b264; --partial-bg:#332811;
+      --bad:#e5918c; --bad-bg:#33191a;
+      --unmeasured:#93a4ae; --unmeasured-bg:#222c33;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#0e1317; --surface:#151d23; --surface-2:#1b252c;
+    --ink:#e7eef2; --ink-2:#b6c4cc; --muted:#8598a3; --rule:#2b3840; --rule-soft:#222d34;
+    --accent:#74b6d4; --accent-soft:#1a2f3c;
+    --ok:#7dc9a1; --ok-bg:#17301f;
+    --partial:#d8b264; --partial-bg:#332811;
+    --bad:#e5918c; --bad-bg:#33191a;
+    --unmeasured:#93a4ae; --unmeasured-bg:#222c33;
+  }
+
+  *{box-sizing:border-box}
+  body{
+    background:var(--ground); color:var(--ink);
+    font-family:"Public Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    font-size:16px; line-height:1.6; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:74rem; margin:0 auto; padding-inline:20px; padding-block:0 96px}
+  .col{max-width:38rem}
+  p{margin:0 0 1em}
+  a{color:var(--accent)}
+  code,.mono{font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
+  code{font-size:.86em; background:var(--surface-2); border:1px solid var(--rule-soft); border-radius:3px; padding:.08em .32em}
+  h1,h2,h3{text-wrap:balance; margin:0}
+  .eyebrow{
+    font-family:"JetBrains Mono",monospace; font-size:11px; letter-spacing:.16em;
+    text-transform:uppercase; color:var(--muted); margin:0
+  }
+
+  /* ---- masthead ---- */
+  header.mast{border-bottom:1px solid var(--rule); padding-block:56px 32px; margin-bottom:56px}
+  header.mast h1{
+    font-family:"Instrument Serif",Georgia,serif; font-weight:400;
+    font-size:clamp(40px,7vw,76px); line-height:1.02; letter-spacing:-.015em;
+    margin:18px 0 0; max-width:16ch
+  }
+  .standfirst{font-size:clamp(17px,2.4vw,21px); line-height:1.5; color:var(--ink-2); max-width:44rem; margin:22px 0 0}
+  .meta{display:flex; flex-wrap:wrap; gap:8px 28px; margin-top:28px; font-family:"JetBrains Mono",monospace; font-size:12px; color:var(--muted)}
+  .meta b{color:var(--ink-2); font-weight:500}
+
+  section{margin-bottom:72px}
+  h2{
+    font-family:"Instrument Serif",Georgia,serif; font-weight:400;
+    font-size:clamp(27px,4vw,38px); line-height:1.15; letter-spacing:-.01em; margin:0 0 6px
+  }
+  h2 + .sub{color:var(--muted); margin:0 0 28px; max-width:38rem}
+  h3{font-size:17px; font-weight:700; letter-spacing:-.005em; margin:0 0 8px}
+
+  /* ---- chain ---- */
+  .chain{display:grid; gap:2px; margin:0 0 28px}
+  .link{
+    display:grid; grid-template-columns:9.5rem 1fr auto; align-items:center; gap:16px;
+    background:var(--surface); border:1px solid var(--rule-soft); padding:12px 16px
+  }
+  .link .name{display:flex; flex-direction:column; gap:1px}
+  .link .name b{font-size:15px}
+  .link .name span{font-size:12px; color:var(--muted)}
+  .bar{height:14px; background:var(--surface-2); border:1px solid var(--rule-soft); position:relative; overflow:hidden}
+  .bar i{display:block; height:100%; background:var(--accent); opacity:.85}
+  .link[data-k="impact"] .bar i{background:var(--bad)}
+  .count{font-family:"JetBrains Mono",monospace; font-variant-numeric:tabular-nums; font-size:13px; color:var(--ink-2); white-space:nowrap}
+  .count b{font-size:16px; color:var(--ink)}
+  .chain-note{font-size:14px; color:var(--muted); max-width:40rem}
+
+  /* ---- holds / breaks ---- */
+  .split{display:grid; grid-template-columns:repeat(auto-fit,minmax(17rem,1fr)); gap:20px}
+  .panel{background:var(--surface); border:1px solid var(--rule-soft); padding:22px 22px 6px}
+  .panel > .eyebrow{margin-bottom:14px}
+  .panel ul{margin:0; padding:0; list-style:none}
+  .panel li{border-top:1px solid var(--rule-soft); padding:12px 0; font-size:14.5px; line-height:1.5}
+  .panel li:first-child{border-top:0; padding-top:0}
+  .panel li b{display:block; font-size:13px; letter-spacing:.01em}
+
+  /* ---- scorecard ---- */
+  .scroll{overflow-x:auto; border:1px solid var(--rule-soft); background:var(--surface)}
+  table{border-collapse:collapse; width:100%; min-width:46rem; font-size:14px}
+  th,td{text-align:left; padding:11px 14px; border-bottom:1px solid var(--rule-soft); vertical-align:top}
+  thead th{
+    font-family:"JetBrains Mono",monospace; font-size:11px; letter-spacing:.13em; text-transform:uppercase;
+    color:var(--muted); font-weight:500; background:var(--surface-2); border-bottom:1px solid var(--rule)
+  }
+  tbody tr:last-child td{border-bottom:0}
+  td.p{font-family:"JetBrains Mono",monospace; color:var(--muted); white-space:nowrap}
+  td.ev{font-family:"JetBrains Mono",monospace; font-size:12px; color:var(--ink-2); line-height:1.55}
+  .pill{
+    display:inline-block; font-family:"JetBrains Mono",monospace; font-size:11px; letter-spacing:.1em;
+    text-transform:uppercase; padding:3px 8px; border-radius:2px; white-space:nowrap
+  }
+  .pill.ok{background:var(--ok-bg); color:var(--ok)}
+  .pill.partial{background:var(--partial-bg); color:var(--partial)}
+  .pill.bad{background:var(--bad-bg); color:var(--bad)}
+  .pill.un{background:var(--unmeasured-bg); color:var(--unmeasured)}
+  .check{color:var(--ok); font-weight:700}
+
+  /* ---- diagnosis ---- */
+  .diagnosis p{font-size:17px; line-height:1.62; max-width:38rem}
+  .diagnosis p.lead::first-line{font-weight:600}
+  blockquote{
+    margin:32px 0; padding:0 0 0 22px; border-left:2px solid var(--accent);
+    font-family:"Instrument Serif",Georgia,serif; font-size:clamp(21px,3vw,27px); line-height:1.3;
+    color:var(--ink); max-width:32rem
+  }
+
+  /* ---- recommendations ---- */
+  .recs{display:grid; gap:14px}
+  .rec{background:var(--surface); border:1px solid var(--rule-soft)}
+  .rec > summary{
+    display:grid; grid-template-columns:3.2rem 1fr auto; gap:14px; align-items:baseline;
+    padding:16px 20px; cursor:pointer; list-style:none
+  }
+  .rec > summary::-webkit-details-marker{display:none}
+  .rec > summary:focus-visible{outline:2px solid var(--accent); outline-offset:-2px}
+  .rec[open] > summary{border-bottom:1px solid var(--rule-soft)}
+  .rid{
+    font-family:"JetBrains Mono",monospace; font-size:13px; font-weight:700; color:var(--accent);
+    letter-spacing:.04em
+  }
+  .rtitle{font-weight:600; font-size:15.5px; line-height:1.35}
+  .rtitle small{display:block; font-weight:400; font-size:12.5px; color:var(--muted); font-family:"JetBrains Mono",monospace; margin-top:5px; letter-spacing:.01em}
+  .rbody{padding:18px 20px 22px; display:grid; gap:14px; max-width:44rem}
+  .rbody p{margin:0; font-size:15px}
+  .rbody pre{
+    margin:0; padding:14px 16px; background:var(--surface-2); border:1px solid var(--rule-soft);
+    overflow-x:auto; font-family:"JetBrains Mono",monospace; font-size:12.5px; line-height:1.65; color:var(--ink-2)
+  }
+  .kv{display:grid; grid-template-columns:6.5rem 1fr; gap:6px 14px; font-size:14px; border-top:1px solid var(--rule-soft); padding-top:14px}
+  .kv dt{font-family:"JetBrains Mono",monospace; font-size:11px; letter-spacing:.11em; text-transform:uppercase; color:var(--muted); padding-top:3px}
+  .kv dd{margin:0; color:var(--ink-2)}
+  .tags{display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end}
+
+  /* ---- skills ---- */
+  .skill{background:var(--surface); border:1px solid var(--rule-soft); padding:24px; display:grid; gap:14px}
+  .skill h3{font-family:"JetBrains Mono",monospace; font-size:19px; letter-spacing:-.01em}
+  .skill h3 span{color:var(--muted)}
+  .skill pre{
+    margin:0; padding:14px 16px; background:var(--surface-2); border:1px solid var(--rule-soft);
+    overflow-x:auto; font-family:"JetBrains Mono",monospace; font-size:12.5px; line-height:1.6; white-space:pre-wrap
+  }
+  .skill p{margin:0; font-size:15px}
+
+  /* ---- don't ---- */
+  .dont{display:grid; gap:0; border-top:1px solid var(--rule)}
+  .dont > div{display:grid; grid-template-columns:minmax(0,19rem) 1fr; gap:24px; padding:18px 0; border-bottom:1px solid var(--rule-soft)}
+  .dont h3{margin:0; font-size:15px; line-height:1.4}
+  .dont p{margin:0; font-size:14.5px; color:var(--ink-2)}
+
+  footer{border-top:1px solid var(--rule); padding-top:24px; color:var(--muted); font-size:13.5px; max-width:44rem}
+
+  @media (max-width:720px){
+    .link{grid-template-columns:1fr auto; gap:8px 12px}
+    .link .bar{grid-column:1 / -1; order:3}
+    .rec > summary{grid-template-columns:2.6rem 1fr; }
+    .rec > summary .tags{grid-column:2; justify-content:flex-start}
+    .dont > div{grid-template-columns:1fr; gap:6px}
+    .kv{grid-template-columns:1fr}
+  }
+  @media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
+</style>
+
+<div class="wrap">
+
+<header class="mast">
+  <h1>The Unreported Delivery</h1>
+  <p class="standfirst">Beck and Orosz argue that what you measure is what you get, and that measuring effort gets you gamed effort. This pipeline measures itself with unusual rigour — and never states what it delivered, what it cost, or which of its gates never ran.</p>
+  <div class="meta">
+    <span><b>Scope</b> my-skills @ 5084026</span>
+    <span><b>Source</b> Measuring developer productivity? A response to McKinsey — Orosz &amp; Beck, Aug 2023</span>
+    <span><b>Method</b> 11 principles · 7 inventory passes · 371 measurements · 86 findings</span>
+    <span><b>Date</b> 2026-09-11</span>
+  </div>
+</header>
+
+<section>
+  <h2>Where the numbers sit on the chain</h2>
+  <p class="sub">The article's backbone: effort → output → outcome → impact. Measuring earlier is cheaper, more attributable, and more distorting. Every measurement this framework emits, classified.</p>
+
+  <div class="chain">
+    <div class="link" data-k="effort">
+      <span class="name"><b>Effort</b><span>cycles, minutes, reviews, lanes</span></span>
+      <span class="bar"><i style="width:38.9%"></i></span>
+      <span class="count"><b>82</b> · 50 blocking</span>
+    </div>
+    <div class="link" data-k="output">
+      <span class="name"><b>Output</b><span>diffs, coverage, gate verdicts, artifacts</span></span>
+      <span class="bar"><i style="width:100%"></i></span>
+      <span class="count"><b>211</b> · 121 blocking</span>
+    </div>
+    <div class="link" data-k="outcome">
+      <span class="name"><b>Outcome</b><span>behaviour of the built thing</span></span>
+      <span class="bar"><i style="width:27.5%"></i></span>
+      <span class="count"><b>58</b> · 44 blocking</span>
+    </div>
+    <div class="link" data-k="impact">
+      <span class="name"><b>Impact</b><span>value returned to a user</span></span>
+      <span class="bar"><i style="width:0.8%"></i></span>
+      <span class="count"><b>0</b> · none</span>
+    </div>
+    <div class="link" data-k="unclear">
+      <span class="name"><b>Unclassifiable</b><span>position not derivable from source</span></span>
+      <span class="bar"><i style="width:9.5%"></i></span>
+      <span class="count"><b>20</b> · 10 blocking</span>
+    </div>
+  </div>
+  <p class="chain-note">Impact at zero is structurally correct, not a defect: the loop has no revenue signal and no user. The defect is that nothing in the framework says so — and that the 58 outcome-adjacent measurements never reach the artifact a human reads.</p>
+</section>
+
+<section>
+  <h2>The analogy, honestly</h2>
+  <p class="sub">The article is about human teams inside a hierarchy. Half its argument transfers to an agent pipeline; half of it inverts. Getting this wrong produces confident, wrong advice.</p>
+  <div class="split">
+    <div class="panel">
+      <p class="eyebrow">What transfers</p>
+      <ul>
+        <li><b>Goodhart, not Beck</b>Optimising a proxy displaces the goal. The Facebook survey story runs on money and status; an agent has no rating to trade. Cite the mechanism, not the anecdote.</li>
+        <li><b>Gates are the incentive system</b>There is no separate reward channel, so every gate reaches the terminal stage of that story on the day it ships.</li>
+        <li><b>The metric's own bill is real</b>Uber's diff dashboard didn't change lines of code; it changed CI cost. Here a mutation gate priced at 826 mutants is 6.65 hours of compute.</li>
+        <li><b>Output presented as verdict</b>A green gate suite is a claim about the artifact, never about whether the thing works.</li>
+      </ul>
+    </div>
+    <div class="panel">
+      <p class="eyebrow">What inverts</p>
+      <ul>
+        <li><b>"Measure less" is unavailable</b>A human team steers through unmeasured channels. Here, every instruction is a measurement or it does not exist.</li>
+        <li><b>Attribution is trivial; alignment is impossible</b>Every role invocation has a cost, a span and a diff. No role has a customer.</li>
+        <li><b>Spend must be metered</b>For agents, cost is not a proxy for value — it is the bill. The agent has no wallet and will not economise unprompted.</li>
+        <li><b>Reward hacking isn't bad faith</b>An agent taking the cheapest path is reading the spec literally. The repair is to close the specification, not to change incentives — and unlike a human, it can edit the instrument mid-run.</li>
+        <li><b>No world-produced event</b>A deal closing happens independently of the salesperson. Every signal this loop reads is one it generated.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Scorecard</h2>
+  <p class="sub">Eleven principles against the repo. <span class="check">✓</span> marks evidence re-verified by hand after the audit passes.</p>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Principle</th><th>Verdict</th><th>Evidence</th></tr></thead>
+    <tbody>
+      <tr><td class="p">P1 · chain position stated</td><td><span class="pill partial">partial</span></td><td class="ev">config.md:32-40 argues each budget's position <span class="check">✓</span> · no artifact labels any number</td></tr>
+      <tr><td class="p">P2 · measure as late as attribution survives</td><td><span class="pill bad">violated</span></td><td class="ev">READY_TO_COMMIT is suite/lint/gate state only <span class="check">✓</span> qa.md:421 · no outcome column anywhere</td></tr>
+      <tr><td class="p">P3 · measuring changes the thing</td><td><span class="pill partial">partial</span></td><td class="ev">dart G6 routes un-run mutants away from killed <span class="check">✓</span> · node-ts G6 scores 100 on an empty denominator <span class="check">✓</span> node-ts.cjs:547</td></tr>
+      <tr><td class="p">P4 · attribution/alignment decided in writing</td><td><span class="pill ok">aligned</span></td><td class="ev">G8 advisory with calibration attached <span class="check">✓</span> qa.md:386 · eval forbids volume from the grade</td></tr>
+      <tr><td class="p">P5 · budget the metric's own cost</td><td><span class="pill partial">partial</span></td><td class="ev">dart G6 preflight declines with arithmetic · node-ts Stryker spawn has no timeout <span class="check">✓</span> node-ts.cjs:614</td></tr>
+      <tr><td class="p">P6 · diagnostic ≠ judgement</td><td><span class="pill partial">partial</span></td><td class="ev">G1 diagnostic at tester, blocking at QA · eval floors on kind, not score · no registry of what blocks</td></tr>
+      <tr><td class="p">P7 · whole customer-facing increment</td><td><span class="pill partial">partial</span></td><td class="ev">per-story 1:1:1:1 cadence is real · "each phase exits on a green tree" <span class="check">✓</span> SKILL.md:931 is false against architect.md:146 <span class="check">✓</span></td></tr>
+      <tr><td class="p">P8 · report against the commitment</td><td><span class="pill partial">partial</span></td><td class="ev">Requirement Coverage is a genuine pre-registered promise · the PR body a human reads has no field for a miss <span class="check">✓</span></td></tr>
+      <tr><td class="p">P9 · unmeasured ≠ pass</td><td><span class="pill partial">partial</span></td><td class="ev">assertNonEmptyScope is exemplary <span class="check">✓</span> run.cjs:71-84 · QA's gate table offers no UNMEASURED cell <span class="check">✓</span> qa.md:380-386</td></tr>
+      <tr><td class="p">P10 · non-resettable denominator</td><td><span class="pill partial">partial</span></td><td class="ev">family resolved by provenance, override written twice — best in repo · a fresh brief still mints a fresh family</td></tr>
+      <tr><td class="p">P11 · meter spend</td><td><span class="pill bad">violated</span></td><td class="ev">only wall-clock, ships 0 <span class="check">✓</span> config.template.json · no cost field in any artifact <span class="check">✓</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section class="diagnosis">
+  <h2>The diagnosis</h2>
+  <p class="lead">This framework measures the pipeline, not the software. Of the numbers it emits, the great majority are effort or output. One measurement reaches toward outcome — the tester's e2e on a high-criticality flow — and one reaches toward the commitment — the requirement-coverage map graded by the spec eval. Neither is what the terminal artifact reports. <code>ORCHESTRATOR — pipeline complete</code> prints four cycle counters, a rework ratio and a coverage number. A reader of that banner cannot tell whether the change works, what it cost, or which of the seven gates never ran.</p>
+
+  <p>That is the predictable shape of a system built by someone doing forensics on their own runaway runs. Every control exists because a run escaped: <code>max_family_cycles</code> because one spec absorbed 13 reviews across 11 slugs; <code>max_run_minutes</code> because a run reached all three cycle caps and still ran fifteen hours; <code>gate_wall_clock_minutes</code> because a mutation runner spent 43 minutes at 1% CPU. These are better than most engineering organisations achieve — provenance-resolved denominators, loud overrides, calibration data beside every threshold, an explicit refusal to let G8's rework ratio block because the ratio converges as a family worsens and therefore cannot discriminate. But they are all <em>containment</em> metrics. They answer "did this run get out of control", never "did this run deliver what it promised".</p>
+
+  <blockquote>Containment worked. Convergence didn't. — the repo's own forensics, on a run that spent every budget it had and shipped anyway</blockquote>
+
+  <p>The gap shows at the three handoffs. At the QA boundary, the four-value vocabulary that can honestly say "we did not verify this" collapses to a binary: <code>READY_TO_COMMIT</code> correctly admits <code>MISSING_TOOL</code> and <code>UNMEASURED</code> as non-failures, but the gate table QA fills offers no <code>UNMEASURED</code> cell for G1–G7, and the banner has no field for the unmeasured set. A project with no complexity linter, no mutation runner and no dependency analyser gets a green-looking ship verdict on three gates that never executed. At the PR boundary, the orchestrator's honest miss report — <code>Deferred by decision</code>, <code>Issues found</code>, the eval's recorded-not-remediated gaps — reaches the FINAL and dies there: the story PR body carries Summary, Story, Test plan and Human validation, and nothing else. At the roadmap boundary, <code>READY(r)</code> is legended "the release is shippable" and computes to a count of commit trailers; moving the one laggard to <code>backlog</code> removes it from the matrix and flips the release green.</p>
+
+  <p>Underneath all three sits the structural problem: <strong>the instrument is inside the tree being measured.</strong> <code>.cleancode-gates.json</code> holds every blocking number, is deep-merged user-wins, is auto-written into the repo on first run, and is not among the three keys anchored to the merge-base. The anchor's stated rationale is blast radius — a narrower threat model than the repo's own forensics justify. A branch that sets <code>max_eval_cycles: 0</code>, or adds its own paths to <code>gates.G2.exempt</code>, weakens the measurement of itself from inside the change under review, and no artifact says so. That is the McKinsey dynamic in its agent form: not a person gaming a score, but a system whose cheapest path to a green number runs through the instrument. And the one effort metric the article's argument does <em>not</em> forbid — spend, which for an agent is the actual bill — is the one that ships disabled.</p>
+</section>
+
+<section>
+  <h2>Recommendations</h2>
+  <p class="sub">Ranked. Each traces to a principle and to a failure it prevents. S ≈ an hour or two, M ≈ a day. Open one for the design.</p>
+
+  <div class="recs">
+
+    <details class="rec" open>
+      <summary>
+        <span class="rid">R1</span>
+        <span class="rtitle">Make the terminal artifacts state delivery, cost, and what was not measured
+          <small>MODIFY orchestrator · product-manager</small></span>
+        <span class="tags"><span class="pill un">S</span><span class="pill un">P1 P2 P8 P9 P11</span></span>
+      </summary>
+      <div class="rbody">
+        <p>The FINAL banner gains four lines; the PM story PR body gains one section fed from them.</p>
+        <pre>Delivered:   {m} / {t} spec requirements with passing evidence
+Not delivered: {requirement} — {deferred | eval-recorded, not remediated} — {follow-up | none}
+Unmeasured:  G2 MISSING_TOOL, G6 UNMEASURED (no denominator), G1.branches UNMEASURED
+Run cost:    {elapsed} min across {n} boundaries</pre>
+        <p><code>Delivered</code> comes from the eval evidence matrix over the root plan's <code>## Requirement Coverage</code> denominator — both already exist. <code>Unmeasured</code> is the set QA already computes. Nothing new is measured; four things already known stop dying at a boundary.</p>
+        <dl class="kv">
+          <dt>Acceptance</dt><dd>A run on a project with no mutation runner prints a non-empty <code>Unmeasured:</code> line, and its PR body carries the same list. Three deferred requirements appear in <code>Not delivered</code> with follow-up ids, in both places.</dd>
+          <dt>Gaming</dt><dd>A clean banner is reachable by deferring less and measuring more — the behaviour wanted. Watch <code>Delivered</code>: it must never be computable from the plan alone, or it becomes a self-graded number.</dd>
+        </dl>
+      </div>
+    </details>
+
+    <details class="rec">
+      <summary>
+        <span class="rid">R2</span>
+        <span class="rtitle">Anchor the instruments to the merge-base
+          <small>MODIFY orchestrator Step 0b · clean-code-gates</small></span>
+        <span class="tags"><span class="pill un">M</span><span class="pill un">P3 P6 P10</span></span>
+      </summary>
+      <div class="rbody">
+        <p>Extend the merge-base rule from "keys that widen blast radius" to "keys that weaken the measurement". Add <code>max_eval_cycles</code>, <code>max_family_cycles</code>, <code>max_qa_cycles</code>, <code>max_review_cycles</code>, <code>gate_wall_clock_minutes</code>, <code>max_spec_requirements</code> to the anchored set, and resolve <code>.cleancode-gates.json</code> thresholds, <code>exempt</code>, <code>exclude</code> and <code>roots</code> from <code>$mb</code> too. Where the two disagree, run on the merge-base value and print one non-suppressible line:</p>
+        <pre>INSTRUMENT MOVED — gates.G2.exempt +3 globs (loosening),
+  max_eval_cycles 2 → 0 (loosening) — measured against merge-base values</pre>
+        <p>A loosening move inside the change under review becomes a reviewer finding rather than a silent config read. Legitimate threshold changes still work — they land in their own commit, where the line is informative rather than damning. This unifies two audit proposals into one mechanism and reuses the two-trust-anchors invariant already in PROJECT-CONTEXT.md.</p>
+        <dl class="kv">
+          <dt>Acceptance</dt><dd>A branch adding <code>"max_eval_cycles": 0</code> runs with the eval live and prints the moved-instrument line. A branch adding its own files to <code>gates.G1.exempt</code> is measured without the exemption.</dd>
+          <dt>Gaming</dt><dd>The escape is to move the instrument in a separate earlier PR — a much higher bar, visible in history, and the same bar a human faces.</dd>
+        </dl>
+      </div>
+    </details>
+
+    <details class="rec">
+      <summary>
+        <span class="rid">R3</span>
+        <span class="rtitle">Close node-ts G6's fail-open and bound it
+          <small>MODIFY clean-code-gates</small></span>
+        <span class="tags"><span class="pill un">S/M</span><span class="pill un">P3 P5 P9</span></span>
+      </summary>
+      <div class="rbody">
+        <p>Two defects, one of them the exact class <code>run.cjs:71-78</code> exists to forbid.</p>
+        <pre>// node-ts.cjs:547
+return { score: denom ? (100 * killed) / denom : 100, undetected, survivors };
+//                                              ^^^ empty mutant set → perfect score → pass</pre>
+        <p>A file whose mutants were all excluded, or for which Stryker generated none, scores 100 and passes. It must return the <code>unmeasured</code> state the dart adapter already has. Second: the Stryker spawn at <code>node-ts.cjs:614</code> carries <code>maxBuffer</code> and no <code>timeout</code> and no <code>killSignal</code>, while the dart runner carries both with a comment naming the 43-minute hang that motivated them. Port <code>gates.G6.budget</code>, the preflight that declines with arithmetic, and the hard timeout — the shared G6 contract already documents all of it; one adapter implements it.</p>
+        <p>While there: eight of nine adapter spawns carry no timeout, including both whole-suite runs — and <code>config.md:38</code> claims <code>gate_wall_clock_minutes</code> covers the suite while <code>qa.md:23</code> forbids it. Fix the doc too.</p>
+        <dl class="kv">
+          <dt>Acceptance</dt><dd><code>--gates G6</code> on a file with zero generated mutants reports UNMEASURED, not pass. A wedged Stryker run returns UNMEASURED (timeout) inside the budget instead of blocking the QA subagent forever.</dd>
+        </dl>
+      </div>
+    </details>
+
+    <details class="rec">
+      <summary>
+        <span class="rid">R4</span>
+        <span class="rtitle">Generalise the measurement block to every gate and stack
+          <small>MODIFY clean-code-gates · orchestrator/templates/qa.md</small></span>
+        <span class="tags"><span class="pill un">M</span><span class="pill un">P9</span></span>
+      </summary>
+      <div class="rbody">
+        <p>The dart G6 result already carries <code>measurement.state ∈ {empty, measured, partial, unmeasured}</code> beside <code>status</code>, so "did it pass" and "was this actually verified" are two fields. Make it universal: every gate result carries it, <code>report.schema.json</code> permits it (today it does not), the run summary carries <code>unmeasuredFiles</code>, and QA's gate table gains the UNMEASURED cell it is elsewhere required to write — today it offers <code>✅ / ❌ / MISSING_TOOL</code> for G1, G2, G6, G7 and <code>✅ / ❌</code> for G4 and G5. The QA progress-log vocabulary needs the same value; today it has an undefined <code>WARN</code> where UNMEASURED belongs.</p>
+        <p>One special case deserves its own line: dart G4 returns <code>pass</code> when the project enables no naming lints. The tool ran, measured nothing, and is indistinguishable from a clean measurement.</p>
+      </div>
+    </details>
+
+    <details class="rec">
+      <summary>
+        <span class="rid">R5</span>
+        <span class="rtitle">Grade the story's pre-registered Acceptance, not only the derived spec
+          <small>MODIFY product-manager · orchestrator</small></span>
+        <span class="tags"><span class="pill un">S/M</span><span class="pill un">P7 P8</span></span>
+      </summary>
+      <div class="rbody">
+        <p>The roadmap story is where a promise is made in advance — <code>## Acceptance</code> — and it is not what gets graded. PM hands the orchestrator the Brief; the brainstormer writes a spec; the eval grades the spec. The story's acceptance criteria can go unmentioned end to end, and the story is stamped <code>done</code> by the presence of a commit trailer.</p>
+        <p>Pass <code>## Acceptance</code> verbatim into the story brief with an instruction that the spec's numbered requirements must cover it; report a per-criterion verdict in the FINAL; stamp <code>done</code> on a trailer <em>plus</em> a FINAL whose acceptance verdicts are all met-or-explicitly-deferred. This is the single most doctrine-aligned change available: it makes the pre-registered commitment the graded unit.</p>
+      </div>
+    </details>
+
+    <details class="rec">
+      <summary>
+        <span class="rid">R6</span>
+        <span class="rtitle">Meter spend unconditionally; aggregate it across the PM queue
+          <small>MODIFY orchestrator · product-manager</small></span>
+        <span class="tags"><span class="pill un">S</span><span class="pill un">P11</span></span>
+      </summary>
+      <div class="rbody">
+        <p><code>max_run_minutes</code> caps; it should not also <em>enable</em>. The run already binds <code>run_started_at</code> unconditionally and mints five timestamped boundaries — compute and print elapsed at each one and in every terminal banner regardless of the cap, and persist it in the FINAL. Default <code>0</code> then means "no stop", not "no number".</p>
+        <p>Same at the PM level: per-story minutes in the progress row, a running sum across the resolved queue, an opt-in <code>max_queue_minutes</code>. A twenty-story milestone where every run is under its 60-minute cap still legally consumes twenty hours, and nothing anywhere can say so. Add a token field where the host exposes it; where it does not, say so in the artifact rather than leaving the field absent.</p>
+      </div>
+    </details>
+
+    <details class="rec">
+      <summary>
+        <span class="rid">R7</span>
+        <span class="rtitle">An outcome observation before READY_TO_COMMIT — disclosure first
+          <small>MODIFY orchestrator/templates/qa.md · tester.md</small></span>
+        <span class="tags"><span class="pill un">S/M</span><span class="pill un">P2 P7</span></span>
+      </summary>
+      <div class="rbody">
+        <p>For each critical flow the diff touches, QA records whether the built thing was executed through the user-visible path it was changed for: the verbatim command, its exit code, and the behaviour observed. Where it was not executed, that non-observation and its reason go into the QA report, the banner and the PR body.</p>
+        <p><strong>Keep it a disclosure, not a blocker, in the first iteration.</strong> A hard gate on "did you run it" is satisfiable by <code>--version</code>; a required disclosure a human reads is not. Promote it to blocking once a few runs show what honest observations look like — the same discipline <code>config.md:36</code> already applies to <code>max_run_minutes</code>. This is also the honest place to write the framework's ceiling: a closed loop can observe execution, never outcome. The report should say which is which.</p>
+      </div>
+    </details>
+
+    <details class="rec">
+      <summary>
+        <span class="rid">R8</span>
+        <span class="rtitle">Delete the false "green tree" warrant
+          <small>MODIFY orchestrator/SKILL.md:931</small></span>
+        <span class="tags"><span class="pill un">S</span><span class="pill un">P7</span></span>
+      </summary>
+      <div class="rbody">
+        <p>The scope-band refusal tells the operator to split on phase boundaries "because each phase is already required to exit on a green tree and is therefore already a shippable unit". The actual rule is "EVERY applicable command was run and its verdict recorded — exit 0, <em>or a carried GATE entry</em>" (architect.md:146), and coder.md:177 says in terms that a gate finding is not a stop: record what you cannot clear and proceed. A phase can exit red, by design and for good reasons.</p>
+        <p>Attribute verification to the boundary that performs it — the run's tester/reviewer/QA barriers — and give each proposed split group a <code>needs:</code> token naming what it depends on. One paragraph of text; it is on the list because a false warrant inside a refusal banner is exactly the kind of claim that gets believed.</p>
+      </div>
+    </details>
+
+    <details class="rec">
+      <summary>
+        <span class="rid">R9</span>
+        <span class="rtitle">READY means landed
+          <small>MODIFY roadmap</small></span>
+        <span class="tags"><span class="pill un">M</span><span class="pill un">P1 P4 P7</span></span>
+      </summary>
+      <div class="rbody">
+        <p><code>READY(r)</code> is a count of trailer commits found by <code>git log --grep</code> on any branch, legended "the release is shippable", and a story moved to <code>backlog</code> leaves the matrix entirely — so parking the laggard flips the release green. Make <code>done</code> require the story's commit to be an ancestor of a declared integration ref, and render a non-suppressible departure list: stories that carried the release band and left it without landing. Keep the trailer as the identity mechanism; change the predicate from "a commit exists" to "the code reached the trunk".</p>
+      </div>
+    </details>
+
+    <details class="rec">
+      <summary>
+        <span class="rid">R10</span>
+        <span class="rtitle">A retry reuses the SPEC id
+          <small>MODIFY product-manager</small></span>
+        <span class="tags"><span class="pill un">S</span><span class="pill un">P10</span></span>
+      </summary>
+      <div class="rbody">
+        <p>The family budget is the only cross-run cost control, and it resolves from spec provenance. PM invokes the orchestrator with story brief prose; a re-run after a STALLED story re-types the brief, mints a fresh <code>SPEC-*</code>, and starts the family at zero — the documented cascade vector, reproduced by the framework's own retry path. PM already logs per story; log the <code>SPEC-*</code> id too and pass it positionally on any retry of the same story.</p>
+      </div>
+    </details>
+
+    <details class="rec">
+      <summary>
+        <span class="rid">R11</span>
+        <span class="rtitle">A deferral needs a correction
+          <small>MODIFY orchestrator/templates/architect.md + reviewer/eval</small></span>
+        <span class="tags"><span class="pill un">S</span><span class="pill un">P8</span></span>
+      </summary>
+      <div class="rbody">
+        <p><code>Deferred</code> is written by the architect, exempts the requirement from structural completeness and from the grade, and its follow-up field legally reads <code>none yet</code>. The article's accountability unit is "I take accountability for the miss, here is the cause, here is the change." Require every deferred row to carry a follow-up id or an explicit <code>accepted — {reason}</code>, and surface the deferral count where someone reads it (R1).</p>
+      </div>
+    </details>
+
+  </div>
+</section>
+
+<section>
+  <h2>Two new skills</h2>
+  <p class="sub">Only two gaps genuinely cannot live inside an existing skill. Both sit at the boundary where the closed loop has to open.</p>
+  <div class="split">
+    <div class="skill">
+      <h3><span>/</span>uat</h3>
+      <pre>description: Walks a human through the pending validation spots the
+  pipeline recorded, captures pass/fail with evidence, stamps the
+  stories, and writes the failures as a validation file
+  /validation-fixer can consume.</pre>
+      <p>The producer exists and the consumer does not. PM appends to <code>/roadmap/human-validation-queue.md</code> — an append-only file that accumulates flagged spots while "the operator works the queue" by hand — and in conservative mode halts asking for exactly this. Meanwhile <code>validation-fixer</code> consumes a hand-written markdown file of bullets.</p>
+      <p><code>/uat</code> is the missing middle: read the queue and the story's Acceptance, present each check with its PR URL, record the human's verdict and evidence, stamp passes into the story's audit log, write failures in validation-fixer's own input shape, hand off. It is the only place a signal the pipeline did not generate can enter — which is precisely the article's point about sales: outcome is measurable because the world, not the worker, produces the event.</p>
+    </div>
+    <div class="skill">
+      <h3><span>/</span>delivery-ledger</h3>
+      <pre>description: Read-only. Aggregates every FINAL report, QA report and
+  PM log into one append-only delivery ledger — per run: requirements
+  committed, delivered, deferred, gates unmeasured, validations
+  outstanding, and cost — and renders the trend.</pre>
+      <p>Nothing owns the cross-run view. The orchestrator is per-run, roadmap is doc-only planning, PM is per-story, pr-review-report is per-branch. So the question the article ends on — <em>deliver the impact committed to</em> — has no artifact here at all, and the question the repo's own forensics keeps asking (what did that family cost, how much was rework) is answerable only by hand-reading <code>.progress.md</code> files.</p>
+      <p>It writes no gate and blocks nothing, and the skill text should say so: this is the diagnostic tier, and promoting any of its numbers to a gate is a deliberate, reviewed change. Its rows are R1's four lines plus provenance — which is why R1 comes first. The ledger is cheap once runs state their own delivery, and impossible before.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>What not to do</h2>
+  <div class="dont">
+    <div>
+      <h3>Don't build a pipeline-metrics dashboard</h3>
+      <p>Cycle counts, tokens per role, diffs per run, gate-pass rates over time: all effort, all cheap, all optimisable by an agent that reads them. This is the Uber CI-cost anecdote waiting to happen — the metric didn't change the code, it changed the bill. The ledger reports delivery and cost per run; it must not rank roles.</p>
+    </div>
+    <div>
+      <h3>Don't gate on G8</h3>
+      <p>The rework ratio is already correctly advisory, with the argument attached: it converges as a family worsens, so it cannot discriminate — the eight-hour cascade scores 0.67. That analysis is better than the metric that would replace it.</p>
+    </div>
+    <div>
+      <h3>Don't make R7 blocking on day one</h3>
+      <p>A hard "did you execute it" gate is satisfiable by the cheapest possible execution, and the agent has no way to know that is not what was wanted. Disclosure first, blocking later, with runs to calibrate against.</p>
+    </div>
+    <div>
+      <h3>Counting Stryker's Timeout as killed is not a defect</h3>
+      <p>A correction to one audit finding. Stryker's own mutation score counts timeouts as <em>detected</em> — a mutant that sends the suite into an infinite loop was caught by it. <code>mutation_test</code>'s timeouts mean the opposite, which is why dart routes them to <code>G6_UNRUN</code>. The adapters correctly follow different tools' semantics; document the divergence in the shared G6 contract so the next reader does not "fix" one into the other.</p>
+    </div>
+    <div>
+      <h3>Don't add a token-cost cap before a baseline</h3>
+      <p><code>config.md:36</code> already makes this argument for <code>max_run_minutes</code> and it is right: a number chosen badly stops good runs. Report first, cap once the distribution is known.</p>
+    </div>
+    <div>
+      <h3>Don't build a metric-registry skill</h3>
+      <p>The registry P6 asks for is a table in <code>orchestrator/references/config.md</code> listing every number, its chain position, and whether it blocks — a reference doc with a linter, not a skill.</p>
+    </div>
+    <div>
+      <h3>Don't try to measure impact inside the loop</h3>
+      <p>The pipeline has no revenue signal and no user; anything claiming to measure impact internally is measuring something else. P8 is a handoff obligation, not a gate.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Verdict</h2>
+  <p class="sub">Would following these make the framework more efficient? Mostly no — and that is the answer, not an evasion.</p>
+  <div class="col" style="max-width:38rem">
+    <p>Efficiency means cost per run, and four items touch it: R3 (a wedged mutation runner blocks a QA subagent indefinitely), R10 (a retry unbinds the only cross-run budget), R2 (a false green ships a defect that costs a whole later family), R6 (nothing can be stopped that is not measured). R8 is negative cost — it deletes a false sentence. Everything else <em>adds</em> work: runs get slower and reds go up. If the success metric is "pipeline complete", these make the framework look worse. That is the point. A system optimises what it can measure; this one measures completion, so it completes.</p>
+  </div>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Confidence</th><th>Items</th><th>Reasoning</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill ok">ship now</span></td><td class="p">R3 · R10 · R8 · R6</td><td>A bug, a cascade vector, a false claim, and blindness. Small, verified by hand, no added ceremony.</td></tr>
+      <tr><td><span class="pill ok">high</span></td><td class="p">R1 · R2</td><td>R1 is the highest value per byte here. R2 closes the structural hole — an agent that can edit the instrument makes every other gate advisory.</td></tr>
+      <tr><td><span class="pill partial">uncertain</span></td><td class="p">R5 · R7 · /uat</td><td>Right in principle, but each widens a loop whose documented failure mode is not converging. Ship R1, run ten stories, decide with data.</td></tr>
+      <tr><td><span class="pill bad">hold</span></td><td class="p">/delivery-ledger</td><td>Proposed here and least certain. One product decision away from being the dashboard this report warns against.</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="col" style="max-width:38rem; margin-top:24px">
+    <p><strong>The risk worth naming loudest:</strong> the repo's own rework analysis lists skill size as a contributing factor, and nine of eleven items add text to files past 150KB, read by every agent on every run. R4 and R7 are likeliest to pay for themselves in clarity and least likely to pay for themselves in tokens.</p>
+    <p><strong>And the honest bottom line:</strong> this question is unanswerable today, because the framework cannot state what a run cost or delivered. Ship R6 and R1, run a milestone, and it is answerable from the project's own numbers instead of anyone's opinion — the doctrine applied to the doctrine.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Sequencing</h2>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>When</th><th>Items</th><th>Why together</th></tr></thead>
+    <tbody>
+      <tr><td class="p">First</td><td class="p">R1 · R3 · R6 · R8 · R10</td><td>All S, all verified by hand, no cross-skill coordination. R1 alone changes what every future run reports; R3 closes a live fail-open in shipped code.</td></tr>
+      <tr><td class="p">Next</td><td class="p">R2 · R4 · R11</td><td>The integrity layer: anchor the instrument, make "unmeasured" universal, make a deferral cost something. R4 wants R1's banner field in place.</td></tr>
+      <tr><td class="p">Then</td><td class="p">R5 · R7</td><td>Both touch role contracts and want a few runs of R1 output to calibrate against.</td></tr>
+      <tr><td class="p">After</td><td class="p">/uat · R9</td><td>uat closes the loop PM opens; R9 makes READY mean landed, which uat results can then gate.</td></tr>
+      <tr><td class="p">Last</td><td class="p">/delivery-ledger</td><td>Cheap once every run states its own delivery and cost; near-impossible before.</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<footer>
+  <p>The through-line: the framework's containment metrics are excellent and should not be touched. What is missing is a delivery statement — what was promised, what landed, what was never measured, what it cost — and a way for a signal the pipeline did not generate to get back in.</p>
+  <p>Full report with every citation: <code>docs/measurement-alignment-audit-2026-09-11.md</code></p>
+</footer>
+
+</div>
