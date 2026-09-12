@@ -29,6 +29,9 @@ function main() {
   const { formatInstrumentLine } = require('../src/instrument.cjs');
   const moved = formatInstrumentLine(report.instrument);
   if (moved) process.stderr.write(moved + '\n');
+  const { formatRigorLine } = require('../src/report.cjs');
+  const rigorLine = formatRigorLine(report.rigor);
+  if (rigorLine) process.stderr.write(rigorLine + '\n');
   if (options.out === '-') { process.stdout.write(JSON.stringify(report, null, 2) + '\n'); }
   else {
     fs.mkdirSync(path.join(root, options.out), { recursive: true });

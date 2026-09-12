@@ -56,6 +56,32 @@ Resolve it like this, per gate:
    Note it is consumed by **the project's own lint command**, not by the gate runner — a plausible
    path in that key is not evidence the mechanism is wired. Confirm against `PROJECT-CONTEXT.md`.
 
+### Rigor decides block-or-report — never measure-or-not
+
+The run's `rigor` (preamble line `rigor=`, resolved once at Step 0b) sets **which gates stop the work**. It never sets which gates run, and it never sets what gets written down.
+
+| Gate | `sketch` | `delivery` | `hardened` |
+|---|---|---|---|
+| G1 coverage | report | **blocks** | **blocks** |
+| G2 · G4 · G5 · G7 | report | report | **blocks** |
+| G6 mutation | skipped — `UNMEASURED (rigor-sketch)` | skipped — `UNMEASURED (rigor-delivery)` | **blocks** |
+
+Three rules, and they are the whole contract:
+
+1. **A report-only gate still runs, and its findings are still written.** They are recorded at `warning` severity, marked `demoted from blocker by rigor <level>`, and they appear in the coder's progress log, the QA gate table and the CR exactly as a blocking finding would — with their file, line, rule and fix hint intact. A fixer agent can act on them; the phase simply does not stop for them.
+2. **G6's skip is a disclosure, not a silence.** It is recorded `UNMEASURED` with the reason `rigor-<level>`, it lands in QA's unmeasured set, and it reaches the FINAL banner's `Unmeasured:` line like any other gate that did not produce a verdict. It is never reported as a pass.
+3. **The level changes no threshold.** `.cleancode-gates.json` is read identically at every level; a demoted G2 finding is the *same* finding at the *same* complexity limit, reported differently. A role that "relaxes a threshold because the run is a sketch" has misread this section.
+
+**When `clean-code-gates` runs the gate, pass the level through** — `--rigor <level>`, alongside the `--base-ref` the changed-file set below is computed from. The runner applies the table above, stamps `report.rigor`, and prints one line when the level changed a verdict:
+
+```
+RIGOR sketch — 3 blockers demoted to warning (G2, G5); G6 skipped
+```
+
+**When you run the project's own gate command by hand, apply the same table yourself** and write the same annotation into your report. The two paths must not disagree about what a green means.
+
+**No role may change the level.** A coder that finds `sketch` too low for what it is touching, or a reviewer that judges the opposite, records that as a finding and proceeds at the level it was given. A pipeline that can choose its own standard has no standard (ADR-0024).
+
 ### The instrument is anchored to the merge-base
 
 `.cleancode-gates.json` holds every blocking number, it is deep-merged user-wins, and it sits **inside the tree being measured**. So the cheapest path to a green gate does not run through the code — it runs through the config: widen `exempt`, drop a `root`, lower a threshold, all inside the change under review, all silent. That is the same failure `SKILL.md` Step 0b anchors `.orchestrator/config.json` against, one level down.

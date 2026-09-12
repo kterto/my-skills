@@ -26,6 +26,7 @@ All flags consume the next positional argument as their value unless noted.
 | `--out <dir\|->` | `./.cleancode` | Output directory for `report.json` and `report.md`. Pass `-` to write JSON to stdout instead. |
 | `--scaffold` | false | Advice mode — detect the stacks and print the exact install commands for any missing gate tooling, then exit 0. Read-only: it inspects the project and makes no changes. |
 | `--require-tools` | false | Exit 2 (instead of 0) when any gate reports `missing_tool`. Useful for CI hard-gates. |
+| `--rigor <sketch\|delivery\|hardened>` | `hardened` | How hard this run's verdict is — see *Rigor*. `hardened` is the pre-rigor behaviour: every gate blocks. Lower levels demote findings to warnings and skip G6; nothing is hidden. Outranks the config's `rigor` field. |
 | `--base-ref <ref>` | from the scope | Anchor the instrument to `<ref>` — see *The instrument is merge-base anchored*. A `diff` scope anchors to its own base without this flag; passing it explicitly outranks the scope and anchors a `project`, `module` or `files` run too. |
 
 ---
@@ -83,6 +84,28 @@ Detection results are used to auto-create `.cleancode-gates.json` in the project
 
 Only files under the configured `roots` are scored. Files outside any known stack root are silently dropped from the scope.
 
+### Rigor
+
+A run's **rigor** is how hard its verdict is. Three levels, each named by what a green run at that level **claims** rather than by the effort it spent:
+
+| Level | The promise a green run makes | G1 | G2 · G4 · G5 · G7 | G6 |
+|---|---|---|---|---|
+| `sketch` | It runs. Nothing is claimed about quality. | report | report | skipped |
+| `delivery` | It does what the Acceptance says, and the happy path is proven. | **blocks** | report | skipped |
+| `hardened` (default) | Plus: the gates hold and the mutants die. | **blocks** | **blocks** | **blocks** |
+
+**It scales the work, never the disclosure.** Every gate runs at every level and every finding is reported; only whether a finding *blocks* moves.
+
+- A report-only gate's blockers are **demoted, not deleted** — same file, line, rule and fix hint, plus `demotedFrom: "blocker"` and the level. The gate's status falls `fail` → `warn`.
+- G6 is the only gate a lower level skips, and it is reported `status: "skipped"` with `measurement.state: "unmeasured"`, `reason: "rigor-<level>"` — never as a pass.
+- A run that exits `0` because of its level says so on stderr and in `report.md`:
+  `RIGOR sketch — 1 blocker demoted to warning (G5); G6 skipped`. A `hardened` run is silent.
+- `report.rigor` is stamped on every report, `hardened` included.
+
+Set it with `--rigor`, or with a top-level `"rigor"` in `.cleancode-gates.json`. Precedence is `--rigor` > config > `hardened`; an unrecognised config value fails closed to `hardened`, never to the lowest bar. The config field is merge-base anchored (below), so a branch cannot lower the bar it is about to be measured against.
+
+---
+
 ### The instrument is merge-base anchored
 
 `.cleancode-gates.json` decides what the gates measure and how hard, it is deep-merged user-wins, and it lives inside the tree being measured. So the cheapest path to a green gate does not run through the code — it runs through the config: widen `exempt`, drop a `root`, lower a threshold, inside the very change under review.
@@ -91,10 +114,11 @@ When the run knows a base ref — any `diff` scope, or an explicit `--base-ref` 
 
 | Anchored to the base ref | Read from the working tree |
 |---|---|
-| `stacks.<s>.roots` | `gates.<id>.tool` |
-| `stacks.<s>.exclude` | `gates.<id>.runner` |
-| `stacks.<s>.gates.<id>.exempt` | `gates.<id>.budget` |
-| `stacks.<s>.gates.<id>.thresholds` | `stacks.<s>.baseline`, everything else |
+| `rigor` | `gates.<id>.tool` |
+| `stacks.<s>.roots` | `gates.<id>.runner` |
+| `stacks.<s>.exclude` | `gates.<id>.budget` |
+| `stacks.<s>.gates.<id>.exempt` | `stacks.<s>.baseline` |
+| `stacks.<s>.gates.<id>.thresholds` | everything else |
 
 The line between the columns is *what is measured and how hard* versus *how the measurement is performed*. A branch legitimately swaps a test runner or raises a G6 time budget. A branch that lowers `mutationScore` is editing the verdict it is about to be judged by.
 
@@ -131,6 +155,13 @@ Full schema at `schema/report.schema.json`. Top-level shape:
   "generatedAt": "<ISO-8601>",
   "tool": { "name": "clean-code-gates", "version": "0.1.0" },
   "scope": { "kind": "project|diff|module|files", "files": [...], "stacks": [...] },
+  "rigor": {
+    "level": "sketch|delivery|hardened",
+    "source": "cli|config|default",
+    "demoted": { "G2": 3 },
+    "reportOnly": ["G2"],
+    "skipped": ["G6"]
+  },
   "instrument": {
     "anchored": true,
     "baseRef": "origin/main",

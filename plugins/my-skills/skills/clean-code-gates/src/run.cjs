@@ -7,6 +7,7 @@ const { resolveScope, fileStack, defaultBaseRef } = require('./scope.cjs');
 const { selectGates, assertRequestedGates, assertResolvedGates } = require('./gates/registry.cjs');
 const { scanNoComments } = require('./gates/g5-no-comments.cjs');
 const { buildReport } = require('./report.cjs');
+const { resolveRigor, applyRigor, gateAction, skippedResult } = require('./rigor.cjs');
 /** Plan 2/3: register real adapters here. */
 let ADAPTERS = {};
 function registerAdapter(stack, adapter) { ADAPTERS[stack] = adapter; }
@@ -103,13 +104,25 @@ function run({ root, options, io }) {
   const cfg = loadConfig(root, detected, { baseRef, readBase: io.readBase });
   const scope = resolveScope(options, cfg, { root, gitDiff: io.gitDiff, listFiles: io.listFiles });
   assertNonEmptyScope(scope, sourcePredicate(cfg));
-  const gateResults = [];
+  const level = resolveRigor(options, cfg);
+  const raw = [];
+  const skipped = [];
   for (const { stack, gates } of resolveGatePlan(options, cfg, scope)) {
     const stackCfg = cfg.stacks[stack];
     const stackFiles = scope.files.filter(f => fileStack(f, cfg) === stack);
-    for (const gate of gates) gateResults.push(runGate(gate, stack, stackFiles, stackCfg, io));
+    for (const gate of gates) {
+      if (gateAction(level.level, gate) === 'skip') {
+        skipped.push(gate);
+        raw.push(skippedResult(gate, stack, level.level, stackCfg));
+        continue;
+      }
+      raw.push(runGate(gate, stack, stackFiles, stackCfg, io));
+    }
   }
-  const report = buildReport({ scope, gateResults, instrument: cfg.instrument, now: io.now || new Date().toISOString(), version: io.version || '0.1.0' });
+  const { gateResults, rigor } = applyRigor(level.level, raw);
+  const report = buildReport({ scope, gateResults, instrument: cfg.instrument,
+    rigor: { ...level, ...rigor, skipped },
+    now: io.now || new Date().toISOString(), version: io.version || '0.1.0' });
   // A gate that could not execute produced no verdict at all. Folding that into
   // 0 makes "measured nothing" read exactly like "measured everything and found
   // it clean", so an errored gate gets its own code — and unlike missing_tool it

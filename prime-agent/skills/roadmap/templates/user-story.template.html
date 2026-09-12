@@ -246,6 +246,28 @@ h1 .h1__pill { align-self: center; display: inline-flex; gap: var(--sp-2); align
 .system-badge--cross-cutting { color: var(--status-warning); background: var(--status-warning-bg); border-color: transparent; }
 .system-badge[hidden] { display: none; }  /* stay hidden pre-JS (avoids a flash of the empty badge) */
 
+/* Rigor band badge — [sketch] / [delivery] / [hardened]. What a green run on this story
+   CLAIMS, not how much effort it spent. Orthogonal to the other two bands; all three may
+   render together. The vocabulary is closed, so the three modifiers below cover every
+   value that can reach the page; JS hides the badge when rigor is null/absent/unresolved,
+   which means "runs at the project default and claims nothing beyond it". `sketch` reads
+   muted on purpose — a badge that says nothing is claimed should not look like a medal. */
+.rigor-badge {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+  background: var(--accent-subtle);
+  color: var(--accent);
+  border: 1px solid var(--rule-heavy);
+  padding: 1px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.rigor-badge--sketch   { color: var(--status-muted); background: var(--status-muted-bg); border-color: transparent; }
+.rigor-badge--delivery { color: var(--status-warning); background: var(--status-warning-bg); border-color: transparent; }
+.rigor-badge--hardened { color: var(--status-success); background: var(--status-success-bg); border-color: transparent; }
+.rigor-badge[hidden] { display: none; }  /* stay hidden pre-JS (avoids a flash of the empty badge) */
+
 /* ============================================================
    Field rows (depends / spec refs)
    ============================================================ */
@@ -527,7 +549,7 @@ code {
 </style>
 </head>
 <body>
-<main data-id="{{id}}" data-kind="user-story" data-status="{{status}}" data-release="{{release}}" data-system-state="{{system_state}}" data-system="{{system}}"
+<main data-id="{{id}}" data-kind="user-story" data-status="{{status}}" data-release="{{release}}" data-system-state="{{system_state}}" data-system="{{system}}" data-rigor="{{rigor}}"
       data-created-at="{{created_at}}" data-updated-at="{{updated_at}}">
 
   <nav class="crumbs"><a href="../../README.html">Roadmap</a><span class="sep">/</span><a href="../README.html">{{milestone}}</a><span class="sep">/</span><a href="README.html">{{phase}}</a><span class="sep">/</span><span>{{id}}</span></nav>
@@ -551,6 +573,7 @@ code {
       <span class="h1__pill"><span class="pill pill--active">{{status}}</span></span>
       <span class="h1__pill"><span class="release-badge" data-release="{{release}}" hidden>[{{release}}]</span></span>
       <span class="h1__pill"><span class="system-badge" data-system-state="{{system_state}}" data-system="{{system}}" hidden>[{{system}}]</span></span>
+      <span class="h1__pill"><span class="rigor-badge" data-rigor="{{rigor}}" hidden>[{{rigor}}]</span></span>
     </h1>
 
     <!-- 2. ID / meta header block -->
@@ -696,6 +719,28 @@ code {
     if (release === "backlog") badge.classList.add("release-badge--backlog");
   }
 
+  function syncRigorBadge() {
+    var root = document.querySelector('main[data-kind="user-story"]');
+    if (!root) return;
+    var badge = document.querySelector(".rigor-badge");
+    if (!badge) return;
+    // The rigor vocabulary is CLOSED — sketch | delivery | hardened — so unlike the system
+    // band there is no state attribute and no unknown case: an unrecognised value cannot
+    // reach a rendered story because the `rigor` op rejects it on write. Anything not in
+    // the set (null, absent, an unresolved token, a hand-edited typo) means "no band
+    // declared": the story runs at the project default and claims nothing beyond it, so
+    // the badge stays hidden rather than asserting a level nobody chose.
+    var LEVELS = { sketch: 1, delivery: 1, hardened: 1 };
+    var rigor = root.getAttribute("data-rigor");
+    if (!rigor || !LEVELS[rigor]) {
+      badge.hidden = true;
+      return;
+    }
+    badge.hidden = false;
+    badge.textContent = "[" + rigor + "]"; // textContent = injection-safe
+    badge.classList.add("rigor-badge--" + rigor);
+  }
+
   function syncSystemBadge() {
     var root = document.querySelector('main[data-kind="user-story"]');
     if (!root) return;
@@ -717,7 +762,7 @@ code {
     }
   }
 
-  function init() { syncHeaderPill(); syncReleaseBadge(); syncSystemBadge(); }
+  function init() { syncHeaderPill(); syncReleaseBadge(); syncSystemBadge(); syncRigorBadge(); }
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);

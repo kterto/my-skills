@@ -258,6 +258,25 @@ test('a report whose instrument moved conforms to report.schema.json', () => {
   assert.deepStrictEqual(validate(moved, schema), []);
 });
 
+test('a report whose rigor demoted and skipped gates conforms to report.schema.json', () => {
+  const r = buildReport({
+    scope: { kind: 'diff', baseRef: 'origin/main', files: ['a.ts'], stacks: ['node-ts'] },
+    gateResults: [{
+      gate: 'G2', name: 'complexity', stack: 'node-ts', status: 'warn', tool: 'eslint',
+      findings: [{ id: 'G2-a.ts:4', severity: 'warning', file: 'a.ts', line: 4, rule: 'complexity',
+        message: 'too complex', demotedFrom: 'blocker', rigor: 'sketch' }],
+    }],
+    rigor: { level: 'sketch', source: 'cli', demoted: { G2: 1 }, reportOnly: ['G2'], skipped: ['G6'] },
+    now: '2026-05-31T00:00:00Z', version: '0.1.0',
+  });
+  assert.deepStrictEqual(validate(r, schema), []);
+});
+
+test('a report built with no rigor still carries the hardened stamp', () => {
+  assert.deepStrictEqual(sampleReport.rigor,
+    { level: 'hardened', source: 'default', demoted: {}, reportOnly: [], skipped: [] });
+});
+
 test('a report built with no instrument still carries the unanchored block', () => {
   assert.deepStrictEqual(sampleReport.instrument,
     { anchored: false, baseRef: null, source: 'working-tree', moves: [] });

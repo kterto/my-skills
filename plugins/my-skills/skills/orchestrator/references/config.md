@@ -15,6 +15,7 @@
 | `max_run_minutes` | integer ≥ 0 (finite) | `0` (no stop; the meter always reports) | — |
 | `gate_wall_clock_minutes` | integer ≥ 0 (finite) | `15` | — |
 | `max_spec_requirements` | integer ≥ 0 (finite) | `0` (off) | — |
+| `rigor` | string (`sketch` \| `delivery` \| `hardened`) | `"hardened"` | `--rigor` |
 | `agent_sync_targets` | array of strings | `[]` | — (tooling-only) |
 | `parallelism` | string (`off` \| `ask` \| `lanes` \| `full`) | `"off"` | `--parallel` |
 | `lanes` | array of `{name: string, path: string, sublanes?: [{name, path}]}` | `[]` | — |
@@ -43,6 +44,65 @@ cost. The meter itself: Every other budget here counts cycles or lane width, whi
 `gate_wall_clock_minutes` bounds each individual suite or gate command in QA Steps 3, 4 and 4b (`templates/qa.md` → Step 0). Exceeding it makes that gate `UNMEASURED` and records it in the report's `stale_gates:` list, which is the **only** producer of that key and therefore the only path to the orchestrator's `BLOCKED_STALE` status (SKILL.md Step 5d). Without it a gate that never returns simply hangs the run: a mutation runner that spends forty-three minutes at 1% CPU spawning no child processes is indistinguishable, from here, from one about to finish. `0` disables the bound. The default of `15` is generous for a lint or a type-check and tight for a whole-project mutation run — which is the intended asymmetry, since a mutation gate that cannot finish inside it should be narrowed or scheduled, not waited on.
 
 `max_spec_requirements` is a **scope** budget, and it is the only one. Every other numeric key here meters rework after the fact; this one is checked once, at SKILL.md Step 2, where the spec's numbered requirements are already counted for the coverage-map equality check and the magnitude is otherwise discarded. Above the value it stops and prints a proposed split derived from the spec's own sub-headings. Calibrated against 218 specs across the orchestrator projects on this machine: median **14** requirements, p75 ≈ **25**, p90 **40**. Size is a real risk multiplier and not a threshold — mean reviews per family rise from 2.0 to 3.2–3.5 between the smallest and largest buckets (Spearman ρ = 0.43) and the share of families needing three or more review rounds climbs from 23% to 68–75%, but the worst family in that corpus is a **12**-requirement spec and its largest spec at 86 requirements took three reviews. So this gate is off by default (`0`) and `35` is the suggested starting value for a project that wants it: high enough that it fires on the tail rather than on ordinary work, low enough to catch the run that admitted 53 requirements, 145 tasks and 122 files as one deliverable and spent its entire family budget on them.
+
+### `rigor`
+
+`rigor` is **how hard a green run's claim is** — one named level over knobs that already exist, so a hackathon POC, an MVP under a deadline and a load-bearing module can run the same pipeline at a cost proportional to what the work is worth. Each level is named by what a green run at that level **claims**, never by the effort it spent: naming them by effort would make effort the unit, which is the failure the measurement doctrine is about.
+
+| Level | The promise a green run makes | Typical use |
+|---|---|---|
+| `sketch` | It runs. Nothing is claimed about quality. | POC, hackathon, spike, throwaway |
+| `delivery` | It does what the story's Acceptance says, and the happy path is proven. | MVP under a deadline |
+| `hardened` (**default**) | Plus: the gates hold, mutants die, the spec is graded, a human validated what needed validating. | mature project, anything load-bearing |
+
+**The default is `hardened`, and it is today's behaviour key for key.** An absent `rigor` resolves to it, so no existing project changes behaviour; the feature is a set of subtractions from a known state rather than a new state of its own.
+
+> **Rigor scales the work, never the disclosure.** Every level runs every gate, prints every banner line, and reports every result. What a lower level changes is whether a red **blocks** — never whether it is **measured**, and never whether it is **said**. The invariant disclosure set is enumerated and frozen in **ADR-0024**; moving an item out of it is a change to that ADR, not a change to a preset.
+
+#### The presets
+
+| Knob | `sketch` | `delivery` | `hardened` |
+|---|---|---|---|
+| `max_review_cycles` | `1` | `2` | `6` |
+| `max_qa_cycles` | `1` | `2` | `4` |
+| `max_eval_cycles` | `0` (eval `SKIPPED`, said out loud) | `1` | `2` |
+| `max_family_cycles` | `2` | `3` | `6` |
+| `automation_level` | `autonomous` | `autonomous` | `manual` |
+| G1 coverage | report | **blocks** | **blocks** |
+| G2 · G4 · G5 · G7 | report | report | **blocks** |
+| G6 mutation | skipped (`UNMEASURED`) | skipped (`UNMEASURED`) | **blocks** |
+| e2e / outcome observation | report | report | required |
+| `spec-driven-eval` in-loop | off | on | on |
+| human validation | none | flagged stories queued | flagged stories block `done` |
+| `simplify` / `pr-review-report` | skip | optional | run |
+| `parallelism` | `off` | `off` / `lanes` | as configured |
+
+An explicit key in `.orchestrator/config.json` **overrides its preset** — the preset is a default set, not a lock. A project that runs `delivery` with `max_qa_cycles: 4` gets 4, and the resolved values are printed at Step 0b either way.
+
+#### Calibration — the four cycle caps
+
+The cycle presets are derived, not chosen. Corpus: every orchestrator project on this machine — 9 projects, **266 specs** (258 with a countable `## Functional requirements`), **251 run families** carrying at least one review, 605 attributed `CR`s, 400 `QA` reports, 186 `EVAL`s, family membership resolved by the same provenance chain the family budget uses. It reproduces the published `max_family_cycles` calibration on a corpus four times the size: median **2** reviews per family, and the 13-review cascade that key was written for is still the maximum.
+
+| Measure | n | median | p75 | p90 | p95 | max |
+|---|---|---|---|---|---|---|
+| reviews per **family** | 251 | 2 | 3 | 5 | 6 | 13 |
+| reviews per **root plan** (the in-run figure) | 280 | 1 | 1 | 1 | 2 | 6 |
+| QA reports per family | 251 | 1 | 2 | 3 | 4 | 9 |
+| eval reports per family | 251 | 1 | 1 | 1 | 2 | 6 |
+
+`max_review_cycles` follows the in-run row (`sketch` p90, `delivery` p95, `hardened` max); `max_qa_cycles` follows the QA row at 66% / 88% / 95%; `max_eval_cycles` at 92% / 98% of families needing one and two; `max_family_cycles` at the family row's median / p75 / p95. **What each level's family budget covers, measured:** `sketch` at `2` completes 65% of the corpus's families inside its budget, `delivery` at `3` completes 80%, `hardened` at `6` completes 96% and fires on 10 of 251.
+
+**The derived review budget is consistent at every level.** `review_budget = max(1, min(max_review_cycles, max_family_cycles − family_cr_count − eval_reserve))` binds to `1` at `sketch`, `2` at `delivery` and `4` at `hardened` on a fresh spec — and 99% of root plans in the corpus finished inside 4 reviews. No level lands on the `max(1, …)` floor by accident.
+
+#### What is deliberately *not* preset
+
+`max_spec_requirements` is a **scope** budget, orthogonal to rigor — a sketch and a hardened module can both be oversized, and the corpus's worst family is a **12**-requirement spec. `gate_wall_clock_minutes` bounds a command's runtime, not the standard applied to it, and nothing in the artifact corpus records gate durations, so there is no data to calibrate against. Both keep their existing values at every level. Adding either to a preset later requires the data first, per this reference's standing rule that every threshold carries its calibration.
+
+#### Who may set it
+
+**Two sources, and no third.** The **invoking human** via `--rigor`, which carries run-time authority and therefore outranks the file as every CLI arg does; and **roadmap metadata** — a story's `rigor` band, written by the `roadmap` skill on a planning branch and passed through by `product-manager`. **No role, no subagent and no remediation loop may set it.** A role that finds the level too low records that as a finding; it does not raise the level, and it may never lower one. A pipeline that can choose its own standard has no standard.
+
+`rigor` is in **the anchored set** below: it resolves from `$mb:.orchestrator/config.json`, a working-tree demotion prints `INSTRUMENT MOVED — rigor hardened → sketch (loosening)` and does not take effect, and the same field in `.cleancode-gates.json` is anchored by the gate runner so the gates cannot be demoted independently of the pipeline that calls them. Without that, dropping the level would be the cheapest path to green in the whole framework.
 
 `baseline_sweep` governs Step 0d, the one sweep taken against the untouched tree so that every later role can tell a pre-existing red from one this run caused (`SKILL.md` Step 0d; consumed via `gate-config.md` → *Attributing a finding to the stage that owns it*). `auto` runs it when the resolved `parallelism` is not `off` — a deliberate proxy for "this run will be long enough to pay for it", chosen because the leaf count does not exist yet at Step 0 and by the time it does the tree has moved and no baseline is takeable. `always` and `off` are the honest overrides: set `always` on a project whose sequential runs are routinely long, `off` on one doing many small fixes. The sweep is advisory in every mode — it records, prints, and never blocks, so an unrecognised value resolving to `auto` can cost at most one wasted sweep.
 
@@ -267,6 +327,7 @@ Declaring a key "integer" constrains its **type**, not its **usability**, and bo
 | `max_run_minutes` | a **finite integer ≥ 0** | `0` disables the run **stop**, which is the default; the elapsed number is reported either way. A **negative** budget is spent before the run starts, so it would stop every run at its first boundary — the intent it expresses is already `0`'s, without `0`'s explicit disable. |
 | `gate_wall_clock_minutes` | a **finite integer ≥ 0** | `0` disables the per-gate bound, restoring the unbounded behavior for a project whose gates are trusted to terminate. A **negative** bound makes every gate stale before it runs, which would report `BLOCKED_STALE` on a run where nothing timed out. |
 | `max_spec_requirements` | a **finite integer ≥ 0** | `0` disables the scope gate, which is the default. A **negative** ceiling stops every spec including an empty one, so it expresses nothing `0` does not. |
+| `rigor` | one of `sketch`, `delivery`, `hardened` | The set is closed — there is nothing a project can invent, so an unrecognised value is a typo, not an intent. It fails closed to **`hardened`**, never to the lowest bar: a config that cannot be read must not be the cheapest way to clear a gate. |
 | `max_contract_amendments` | a **finite integer ≥ 0** | `0` is meaningful and supported: amendment is disabled, and the first `contract violation` falls straight back to sequential. A **negative** cap makes the `amendment_count` comparison undefined — already at or past the cap before any amendment is attempted — so the intent it expresses is already `0`'s. |
 
 Non-integers, non-finite values (`NaN`, `Infinity`), and non-numeric types are rejected the same way an out-of-range integer is.
@@ -288,7 +349,7 @@ A lane coder may never unilaterally change the contract: discovering a frozen in
 ## Canonical Default Object
 
 ```json
-{ "context_threshold": 0.95, "clarity_threshold": 0.99, "output_format": "md", "automation_level": "manual", "max_review_cycles": 10, "max_qa_cycles": 5, "max_eval_cycles": 2, "max_family_cycles": 6, "agent_sync_targets": [], "parallelism": "off", "lanes": [], "max_parallel_lanes": 6, "max_contract_amendments": 2 }
+{ "context_threshold": 0.95, "clarity_threshold": 0.99, "output_format": "md", "automation_level": "manual", "max_review_cycles": 10, "max_qa_cycles": 5, "max_eval_cycles": 2, "max_family_cycles": 6, "max_run_minutes": 0, "gate_wall_clock_minutes": 15, "max_spec_requirements": 0, "rigor": "hardened", "agent_sync_targets": [], "parallelism": "off", "lanes": [], "max_parallel_lanes": 6, "max_contract_amendments": 2, "baseline_sweep": "auto", "join_digest": true }
 ```
 
 `sublanes` does not appear in the default object because it is a **property of a `lanes[]` entry**, not a top-level key, and `lanes` defaults to `[]` — so there is no entry to carry it. `templates/config.template.json` is byte-identical to the object above in key set and defaults.
@@ -304,6 +365,7 @@ A lane coder may never unilaterally change the contract: discovering a frozen in
 | `--max-review` | `max_review_cycles` |
 | `--max-qa` | `max_qa_cycles` |
 | `--parallel` | `parallelism` |
+| `--rigor` | `rigor` |
 | `--setup` | Force bootstrap (does not map to a config key) |
 | `--resume` | Opt into resuming a prior halted parallel run (does not map to a config key) |
 | `--override-family-budget` | Skip the family budget gate for one invocation. Maps to no config key — a per-invocation intent, like `--resume`. Recorded in the plan's `.progress.md` and in the FINAL report. |
@@ -361,12 +423,12 @@ When `.orchestrator/config.json` is absent the canonical default object applies 
 
 ### The anchored set
 
-Nine keys resolve from `$mb:.orchestrator/config.json`. Two families, one rule.
+Ten keys resolve from `$mb:.orchestrator/config.json`. Two families, one rule.
 
 | Family | Keys | Why it cannot read the branch |
 |---|---|---|
 | **Execution policy** | `parallelism`, `max_parallel_lanes`, `max_contract_amendments` | They govern how many command-capable coders run concurrently in a shared workspace. A branch must not widen its own concurrency as part of the change under review. |
-| **The instruments** | `max_eval_cycles`, `max_family_cycles`, `max_qa_cycles`, `max_review_cycles`, `gate_wall_clock_minutes`, `max_spec_requirements` | They decide how hard the run is measured and how much it may spend measuring. `max_eval_cycles: 0` ships the spec ungraded; `max_family_cycles` is the *only* budget that survives a new run. Both are one integer in a file the change under review can edit. |
+| **The instruments** | `max_eval_cycles`, `max_family_cycles`, `max_qa_cycles`, `max_review_cycles`, `gate_wall_clock_minutes`, `max_spec_requirements`, `rigor` | They decide how hard the run is measured and how much it may spend measuring. `max_eval_cycles: 0` ships the spec ungraded; `max_family_cycles` is the *only* budget that survives a new run; `rigor` sets all four caps and every gate's block-or-report in one word. Each is one line in a file the change under review can edit. |
 
 The anchor's original rationale was blast radius. That is a narrower threat model than the one this repo's own forensics document: the cheapest path to a green number does not run through the code, it runs through the instrument — and unlike a human, an agent can edit the instrument mid-run.
 
@@ -382,11 +444,12 @@ The anchor's original rationale was blast radius. That is a narrower threat mode
 | `max_family_cycles` | **increase**, and `0` (disables the gate) | The only cross-run cost control. `0` is the pre-P5 behaviour — legitimate as a project decision, never as a branch decision. |
 | `gate_wall_clock_minutes` | **decrease**, and `0` (disables the bound) | A tighter bound turns slow gates into `UNMEASURED` and `BLOCKED_STALE`; `0` removes the bound that keeps a wedged gate from hanging the run. Both ends cost something, so both are named. |
 | `max_spec_requirements` | **increase**, and `0` (disables the gate) | The scope band. Raising it admits the oversized specs whose families need three or more review rounds 68–75% of the time. |
+| `rigor` | **down the ladder** (`hardened` → `delivery` → `sketch`) | One word that lowers all four cycle caps and turns every gate but G1 into a report. It is the single largest loosening the config can express, which is why it is anchored and why no role may set it. |
 
 A key that moved and is not in this table prints `(changed)` with both values. Guessing a direction for it would be the one failure the mechanism exists to prevent: a number that moved and read as though it had not.
 
 #### What is *not* anchored, and why
 
-`output_format`, `automation_level`, `context_threshold`, `clarity_threshold` and `max_run_minutes` read the working tree. None of them weakens what the run measures: the first two change how artifacts render and whether the brainstormer interviews, the thresholds govern an interview the branch cannot shorten into a pass, and `max_run_minutes` caps a **stop** while the meter reports unconditionally either way (see its entry above). A branch that sets `max_run_minutes: 0` buys itself a longer run and a fully reported cost — nothing is hidden by it.
+`output_format`, `automation_level`, `context_threshold`, `clarity_threshold` and `max_run_minutes` read the working tree. (`automation_level` has a per-level preset, but it is not itself anchored: it decides whether the brainstormer interviews, which a branch cannot turn into a pass.) None of them weakens what the run measures: the first two change how artifacts render and whether the brainstormer interviews, the thresholds govern an interview the branch cannot shorten into a pass, and `max_run_minutes` caps a **stop** while the meter reports unconditionally either way (see its entry above). A branch that sets `max_run_minutes: 0` buys itself a longer run and a fully reported cost — nothing is hidden by it.
 
 **Absent-key tolerance (backward compatibility).** Every key is nullable/absent-tolerant, and this is explicitly load-bearing for `parallelism`, `lanes`, `lanes[].sublanes`, `max_parallel_lanes`, and `max_contract_amendments`: an existing `.orchestrator/config.json` written before those keys existed resolves them to `"off"`, `[]`, absent (`[]`-equivalent — "derive per run"), `6`, and `2` respectively, and the pipeline behaves **exactly as it does today** — no `PACT` and no sub-contract is created, no new prompt fires, and Steps 2p/2c/2s/2L/3L/3s/3j are skipped entirely. **No migration is forced**; legacy config files and existing `plans/` trees render and execute unchanged. A legacy `PACT` artifact carrying no `Sub-contract` column likewise resolves as **all-flat**, never an error (`artifact-format-parallel.md` → `PACT` ID resolution).

@@ -94,6 +94,39 @@
         }
       }
     },
+    "rigor": {
+      "type": "object",
+      "description": "How rigorously this run was verified, and what that changed. Rigor scales the work, never the disclosure: every gate still runs and every finding is still reported — what a lower level changes is whether a finding blocks. Stamped on every report, `hardened` included, so a reader never has to infer the level from a missing line. See docs/adr/0024.",
+      "required": ["level", "source"],
+      "additionalProperties": false,
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": ["sketch", "delivery", "hardened"],
+          "description": "sketch: it runs, nothing is claimed about quality. delivery: it does what the Acceptance says and the happy path is proven. hardened: plus the gates hold and the mutants die."
+        },
+        "source": {
+          "type": "string",
+          "enum": ["cli", "config", "default"],
+          "description": "Where the level came from. `config` is the merge-base anchored `.cleancode-gates.json` value; `default` is hardened."
+        },
+        "demoted": {
+          "type": "object",
+          "description": "Gate id to number of blockers this level demoted to warnings. The findings themselves are kept, marked `demotedFrom`, and reported.",
+          "additionalProperties": true
+        },
+        "reportOnly": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Gates that found blockers this level does not stop on."
+        },
+        "skipped": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Gates this level did not run at all; each carries measurement.state \"unmeasured\" with reason rigor-<level>."
+        }
+      }
+    },
     "summary": {
       "type": "object",
       "required": ["status", "gatesRun", "gatesMissingTool", "gatesErrored", "blockers", "warnings"],
@@ -227,6 +260,16 @@
                 "baselineGrandfathered": {
                   "type": "boolean",
                   "description": "True when the finding was pre-existing in the baseline manifest."
+                },
+                "demotedFrom": {
+                  "type": "string",
+                  "enum": ["blocker"],
+                  "description": "Set when the run's rigor level lowered this finding's severity. The finding was found and is reported; it did not stop the run."
+                },
+                "rigor": {
+                  "type": "string",
+                  "enum": ["sketch", "delivery", "hardened"],
+                  "description": "The level that demoted this finding. Present only alongside demotedFrom."
                 }
               }
             }

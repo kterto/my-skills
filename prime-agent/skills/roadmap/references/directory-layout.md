@@ -61,7 +61,7 @@ Items link to each other by relative path derived from the ID scheme: a mileston
   "last_synced_sha": "<sha or null>",
   "releases": ["mvp", "v1.1"],
   "items": [
-    { "id": "001.1.1", "kind": "user-story", "status": "todo", "release": "mvp", "system": "backend", "content_hash": "<sha256>", "sequence": 1 }
+    { "id": "001.1.1", "kind": "user-story", "status": "todo", "release": "mvp", "system": "backend", "rigor": "hardened", "content_hash": "<sha256>", "sequence": 1 }
   ]
 }
 ```
@@ -79,10 +79,14 @@ Keys:
 | `items[].status` | string | Current status (see item-schema.md for the status enum). |
 | `items[].release` | string \| null | Release band for this item (see item-schema.md → `release`). `null`/absent = active untiered; `backlog` = parked; any other value must appear in the top-level `releases[]` registry. For `kind: milestone`/`kind: phase` entries this stored value is **non-authoritative for rendering** — the badge is derived from not-done descendants (see item-schema.md → derived display, mutation-ops.md → Cascade); release-scope matching (`scope-resolution.md`) reads this field only for `kind: user-story` items. |
 | `items[].system` | string \| null | **System band** for this item (see item-schema.md → `system`). `null`/absent = untagged; any other value must be a `name` declared in `config.systems` (see `config.md`). The lock stores only the per-item value — scope matching reads this field without opening every story file. For `kind: milestone`/`kind: phase` entries the stored value is **non-authoritative for rendering** — the badge is derived from not-done descendants (`[<system>]`/`[cross-cutting]`/none), consistent with `release`. The systems *set* lives in config, not the lock — see the section below. |
+| `items[].rigor` | string \| null | **Rigor band** for this story (see item-schema.md → `rigor`). `null`/absent = no band; the story runs at the project default. Otherwise exactly one of `sketch`, `delivery`, `hardened` — a **closed** set, so there is no registry anywhere to declare it against and an unrecognised value is a typo the `rigor` op rejects on write. Backward compatible: legacy items without the key are unbanded and render unchanged. |
 | `items[].content_hash` | string | SHA-256 of the item file body, used for change detection during re-evaluation. |
 | `items[].sequence` | integer | Logical execution order within the parent scope. |
 
 ### `releases[]` registry rules
+
+
+**A release entry may carry an optional `rigor_floor`** (`sketch | delivery | hardened`) — the level this release's stories are expected to reach. It is a **disclosure, not a gate**: the readiness matrix renders `READY (below floor: n)` plus a departure list naming the stories below it, and nothing refuses to ship. A floor that could block would put the cheapest path to green through the floor itself. Absent = no expectation stated.
 
 - **Ordered, not a set.** Position is meaningful: it is the render order and the cross-band "runs before" order. `backlog` is reserved, is never a registry entry, and always sorts after every named band.
 - **Implicit create on first use.** The first time the `set-release` op assigns a release name that is not already present, that name is appended to `releases[]` in order. Re-ordering and renaming are done explicitly via the `release` op (see `mutation-ops.md`).

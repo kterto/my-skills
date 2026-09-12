@@ -36,6 +36,16 @@ Your one addition on top of that: add the `PACT`'s **interface points** to your 
 
 From the plan's acceptance criteria and PROJECT-CONTEXT Critical flows, list candidate flows. For each, score criticality (user impact × breakage likelihood × not-covered-by-unit). Select ONLY high-criticality flows for e2e — e2e is expensive; justify each inclusion and each deliberate exclusion in the report.
 
+**Rigor decides whether an unobserved flow stops you — never whether the triage is written.** At every level, list the candidates, score them, and record every inclusion and every deliberate exclusion with its reason: that list is the report's most honest section and it costs nothing to produce.
+
+| `rigor` | What is required of a high-criticality flow |
+|---|---|
+| `sketch` | Nothing is required. Record the triage and say which flows have no e2e. |
+| `delivery` | The happy path of each selected flow is executed and its observation recorded. A flow you chose not to execute is named, with the reason. |
+| `hardened` | Every high-criticality flow the diff touches is executed, or its non-observation is a finding the report carries forward. |
+
+`rigor` reaches you on the preamble line of the same name. You never set it: a tester that judges the level too low for what it is testing writes that judgement into the report as a finding and tests at the level it was given.
+
 ## Step 3 — Implement selected e2e tests
 
 Using the e2e framework from PROJECT-CONTEXT, write e2e tests for the selected flows only. Run them; they must pass. Touch test files only.

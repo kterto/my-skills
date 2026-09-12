@@ -28,6 +28,7 @@ node <skill-dir>/bin/gates.cjs [flags]
 - `--out <dir|->` — report dir (default `./.cleancode`); `-` prints JSON to stdout
 - `--require-tools` — exit 2 if any gate is `missing_tool`
 - `--base-ref <ref>` — anchor the instrument to `<ref>` (see *The instrument is merge-base anchored*). A `diff` scope anchors to its own base automatically; this flag sets it explicitly and outranks the scope.
+- `--rigor <sketch|delivery|hardened>` — how hard this run's verdict is (see *Rigor*). Default `hardened`, which is the pre-rigor behaviour: every gate blocks.
 - `--scaffold` — advice mode: detect stacks and print the exact install commands for any missing gate tooling, then exit 0 (read-only, changes nothing)
 
 ### Exit codes
@@ -48,6 +49,25 @@ A gate reports `status: "missing_tool"` with an install hint (never crashes) whe
 
 On first run it auto-creates `.cleancode-gates.json` in the target project root from detected stacks (per-stack gate commands + thresholds: coverage 85/80, complexity 8, length 30, nesting 2, mutation 70). Edit it to override roots, thresholds, commands, or exemptions. Delete it to regenerate.
 
+### Rigor — what a green run at this level claims
+
+`--rigor` (or a top-level `"rigor"` in `.cleancode-gates.json`) selects one of three levels. Each is named by what a green run at that level **claims**, not by how much effort it spent:
+
+| Level | The promise | G1 | G2 · G4 · G5 · G7 | G6 |
+|---|---|---|---|---|
+| `sketch` | It runs. Nothing is claimed about quality. | report | report | skipped |
+| `delivery` | It does what the Acceptance says, and the happy path is proven. | **blocks** | report | skipped |
+| `hardened` (default) | Plus: the gates hold and the mutants die. | **blocks** | **blocks** | **blocks** |
+
+**Rigor scales the work, never the disclosure.** Every gate still runs at every level and every finding is still reported — what moves is whether a finding *blocks*:
+
+- A **report-only** gate's blockers are **demoted, not deleted**. Each keeps its file, line, rule and fix hint, and gains `demotedFrom: "blocker"` plus the level that demoted it. The gate's `status` falls from `fail` to `warn`; the finding is still in `report.gates[].findings[]` for a fixer to act on.
+- **G6 is the one gate a lower level skips**, because its cost is prohibitive rather than merely real. A skipped gate is `status: "skipped"` with `measurement.state: "unmeasured"` and `reason: "rigor-<level>"` — it is never reported as a pass.
+- A run whose exit code is `0` **because of its level** says so, on stderr and in `report.md`: `RIGOR sketch — 1 blocker demoted to warning (G5); G6 skipped`. A `hardened` run prints nothing, because nothing about its exit code needs explaining.
+- `report.rigor` carries `{ level, source, demoted, reportOnly, skipped }` on **every** report, `hardened` included — a reader must never infer the level from a missing line.
+
+**Precedence: `--rigor` > the config's `rigor` > `hardened`.** An unrecognised value in the config fails closed to `hardened`, never to the lowest bar. The config field is **merge-base anchored** like the thresholds below it, so a branch that sets itself to `sketch` prints `INSTRUMENT MOVED — rigor hardened → sketch (loosening)` and runs at the merge-base level. `docs/adr/0024` in the authoring repo is normative for the level contract.
+
 ### The instrument is merge-base anchored
 
 The config lives inside the tree it measures, so the cheapest path to a green gate runs through the config rather than through the code: widen `exempt`, drop a `root`, lower a threshold — all inside the change under review, all silent.
@@ -56,7 +76,7 @@ When the run knows a base ref — any `diff` scope, or an explicit `--base-ref` 
 
 | Anchored | Left to the working tree |
 |---|---|
-| `stacks.<s>.roots` · `stacks.<s>.exclude` · `gates.<id>.exempt` · `gates.<id>.thresholds` | `tool` · `runner` · `budget` · `baseline` · everything else |
+| `rigor` · `stacks.<s>.roots` · `stacks.<s>.exclude` · `gates.<id>.exempt` · `gates.<id>.thresholds` | `tool` · `runner` · `budget` · `baseline` · everything else |
 
 The split is *what is measured and how hard* versus *how the measurement is performed*. A branch legitimately swaps a runner or raises a G6 budget; a branch that lowers `mutationScore` is changing the verdict it is about to be judged by.
 

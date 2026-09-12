@@ -44,6 +44,7 @@ updated_at: <ISO-8601>
 | `status` | string | One of: `todo | in_progress | done | superseded | blocked`. |
 | `release` | string \| null | **Release band** — classification metadata orthogonal to `status`. Absent or `null` = active but untiered; the reserved value `backlog` = parked / out of the active plan; any other value = a named release train (e.g. `mvp`, `v1.1`). Editable on an item of **any** status (including `done`/`superseded`) — a band change never alters `status`. Named bands are registered, in order, in `roadmap.lock.json` → `releases[]` (see `directory-layout.md`); `backlog` is reserved and never listed there. Optional and nullable for backward compatibility: legacy items with no `release` key render and execute unchanged (untiered, badge omitted). |
 | `system` | string \| null | **System band** — a **second classification axis orthogonal to both `status` and `release`** (a monorepo story belongs to one deployable system, e.g. `backend`, and to one release train, e.g. `mvp`, at the same time). Absent or `null` = **untagged**; any other value must be a `name` declared in `config.systems` (see `config.md`). Unlike `release`, the set is **config-declared, not lazily created**: assigning a value not in `config.systems` is an **error** (typo guard); `null` (untag) is always permitted. Renaming/removing a declared system is done via the `system` op, which cascades to referencing stories (see `mutation-ops.md` → `system`). If a **manual `roadmap.config.json` edit** removes or renames a `name` a story still carries, that value becomes an **orphan** (non-null but undeclared); it is not silently dropped — the readiness matrix renders it in a dedicated **`(unknown)` column** and `system list` reports it (see `SKILL.md` → Release readiness → Derivation and `mutation-ops.md` → Orphan handling). Editable on an item of **any** status (including `done`/`superseded`) — a band change never alters `status`. Optional and nullable for backward compatibility: legacy items with no `system` key render and execute unchanged (untagged, badge omitted). Everything not called out here matches the `release` band's shape (nullable per-item field, cascade to not-done descendants, derived phase/milestone badge, editable on frozen items). The orthogonal-band decision is recorded in [ADR-0001](../../../../../docs/adr/0001-orthogonal-system-band.md). |
+| `rigor` | string \| null | **Rigor band** — a **third classification axis, orthogonal to `status`, `release` and `system`**: what a green run on this story **claims**. Absent or `null` = the project default (the orchestrator resolves it from its merge-base config). Otherwise one of exactly three values — `sketch` (it runs; nothing is claimed about quality), `delivery` (it does what this story's `## Acceptance` says, and the happy path is proven), `hardened` (plus: the gates hold, mutants die, the spec is graded, a human validated what needed validating). **The vocabulary is closed** — unlike `system` there is nothing a project can declare, so there is no `rigor add`, no rename cascade and no orphan state; an unrecognised value is a typo and is rejected on write. Set it with the `rigor` op (`mutation-ops.md`); `product-manager` forwards it to the orchestrator as `--rigor` and never chooses or lowers it. **Lowering a story's rigor is a recorded event** — the audit row below is mandatory and the `roadmap` skill is the only writer. Unlike `release` and `system` it derives **no** phase/milestone badge: a phase's mix is already rendered in the release matrix, and a fourth badge in every README header is noise. The level contract is [ADR-0024](../../../../../docs/adr/0024-rigor-levels-and-the-invariant-disclosure-set.md). |
 | `milestone` | string | Parent milestone ID (e.g. `"001"`). |
 | `phase` | string | Parent phase ID (e.g. `"001.1"`). |
 | `sequence` | integer | Logical execution order within the phase. Carries order after re-eval inserts. |
@@ -172,6 +173,19 @@ Example — the same story later untagged (`set-system null`) by a direct roadma
 ```
 
 Like the release row, the system row is additive and never replaces a status row; a story may accumulate both a release-change row and a system-change row over its life. A system-band change is permitted on a frozen (`done`/`superseded`) item too (see `mutation-ops.md` → Structural immutability), so migration can tag completed work.
+
+### Rigor-change audit row (rigor-band convention)
+
+A `rigor` change writes one audit row on the story, in the same shape as the release- and system-band rows, and **the direction is part of the evidence**:
+
+| when (ISO-8601) | status | who | evidence |
+|---|---|---|---|
+| `2026-09-12T10:04:00Z` | `todo` | `roadmap-skill` | `rigor hardened → sketch (lowered) — /roadmap rigor sketch 001.2.1` |
+| `2026-09-12T10:31:00Z` | `todo` | `roadmap-skill` | `rigor null → hardened (raised) — /roadmap rigor hardened 001.2.1` |
+
+`status` is the story's status at the time of the change and is **not** altered by it, exactly as for the other two bands. The parenthesised direction is `lowered`, `raised` or `set` — `set` when the previous value was `null`, since the project default it stood for is resolved at run time and is not knowable here.
+
+**A lowering row is never omitted and never abbreviated.** A story demoted to `sketch` to get it out the door is a decision someone made, and this row is the only place that decision survives the merge.
 
 ### Creation audit row (`add-item`)
 

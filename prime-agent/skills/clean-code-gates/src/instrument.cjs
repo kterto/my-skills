@@ -1,4 +1,5 @@
 'use strict';
+const { LEVELS, DEFAULT_LEVEL } = require('./rigor.cjs');
 
 /**
  * The instrument sits inside the tree it measures. `.cleancode-gates.json` is
@@ -42,6 +43,19 @@ function listMove(key, from, to, loosensBy) {
   return { key, added, removed, direction: loosened ? 'loosening' : 'tightening' };
 }
 
+/**
+ * `rigor` is top-level rather than per-stack, and ordinal rather than numeric:
+ * a demotion down the ladder is the loosening. It is anchored for the same
+ * reason the thresholds are, and more urgently — a branch that can set itself
+ * to `sketch` has a one-line path past every gate in the change under review.
+ */
+function rigorMove(anchor, working) {
+  const from = LEVELS.includes(anchor.rigor) ? anchor.rigor : DEFAULT_LEVEL;
+  const to = working.rigor;
+  if (!LEVELS.includes(to) || to === from) return null;
+  return { key: 'rigor', from, to, direction: LEVELS.indexOf(to) < LEVELS.indexOf(from) ? 'loosening' : 'tightening' };
+}
+
 function stackMoves(stack, anchor, working) {
   const moves = [];
   const roots = listMove(`${stack}.roots`, anchor.roots, working.roots, 'removed');
@@ -72,6 +86,9 @@ function stackMoves(stack, anchor, working) {
 function anchorInstrument(working, anchor) {
   const cfg = { ...working, stacks: { ...(working.stacks || {}) } };
   const moves = [];
+  const rigor = rigorMove(anchor, working);
+  if (rigor) { moves.push(rigor); cfg.rigor = rigor.from; }
+  else if (LEVELS.includes(anchor.rigor)) cfg.rigor = anchor.rigor;
   for (const stack of Object.keys(anchor.stacks || {})) {
     const a = anchor.stacks[stack];
     const w = (working.stacks || {})[stack];

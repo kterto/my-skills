@@ -153,7 +153,7 @@ After the orchestrator completes implementation and produces its proposed commit
 6. **Write and commit PM's logs (needs `PR_URL`).**
    Now that the PR URL is known, append PM's own audit rows and commit them in a dedicated commit so the working tree is clean before the next story's branch is cut:
 
-   - Append the `pm-progress.md` row (see `references/resume-and-logging.md` → Entry fields), filling `commit` from step 1's SHA, `pr` from `PR_URL`, and `state`, `cost` and `spec` from the orchestrator's terminal banner — `spec` is that banner's `Spec:` line, and it is what a retry of this story hands back positionally.
+   - Append the `pm-progress.md` row (see `references/resume-and-logging.md` → Entry fields), filling `commit` from step 1's SHA, `pr` from `PR_URL`, and `state`, `cost`, `spec` and `rigor` from the orchestrator's terminal banner — `spec` is that banner's `Spec:` line and is what a retry hands back positionally; `rigor` is its `Rigor:` line and is what tells a later reader what this row's green claimed.
    - In autonomous mode, if the story was flagged, append the `human-validation-queue.md` row embedding `(PR ${PR_URL})` (see `references/human-validation.md` → autonomous mode).
 
    ```bash
@@ -215,7 +215,7 @@ rm -f "$root/.orchestrator/tmp/pm-pr-body-001.2.1.md"
 
 # 6. Now that PR_URL exists, write + commit logs
 #    pm-progress.md row: when | 001.2.1 Set up CI | main | pm/001.2.1-setup-ci |
-#                        READY_TO_COMMIT | 3a1b2c3 | $PR_URL | none | (empty) | 18 | SPEC-042
+#                        READY_TO_COMMIT | 3a1b2c3 | $PR_URL | none | (empty) | 18 | SPEC-042 | hardened
 #    (flagged: none -> no human-validation-queue row this story)
 git -C "$(git rev-parse --show-toplevel)" add roadmap/pm-progress.md
 git commit -m "chore(pm): log 001.2.1"
