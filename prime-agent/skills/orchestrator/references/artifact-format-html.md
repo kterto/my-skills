@@ -41,4 +41,4 @@ node .orchestrator/check-artifact-pairing.cjs   # every branch-added plans/**.md
 node .orchestrator/check-artifact-links.cjs     # every local link in a branch-added plans/**.html resolves on disk
 ```
 
-Each prints `<gate>: OK` and exits 0 on success, or lists violations and exits non-zero. A non-zero gate blocks completion — see SKILL.md → Step 7d. Scope is the branch's added/modified files under `plans/` vs the merge-base with the base branch; legacy artifacts are not re-audited. Pass an explicit base ref as the first argument, `-- <file>…` to check specific files, or `--allow-empty` to opt out of the fail-closed base guard.
+Each prints `<gate>: OK` and exits 0 on success, or lists violations and exits non-zero. A non-zero gate blocks completion — see references/html-mode.md → Step 7d. Scope is the branch's added/modified files under `plans/` vs the merge-base with the base branch; legacy artifacts are not re-audited. Pass an explicit base ref as the first argument, `-- <file>…` to check specific files, or `--allow-empty` to opt out of the fail-closed base guard.
