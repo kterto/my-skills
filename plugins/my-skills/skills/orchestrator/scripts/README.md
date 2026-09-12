@@ -1,7 +1,7 @@
 # Orchestrator runtime scripts
 
 These `.cjs` files are the load-bearing runtime for `output_format=html`. Bootstrap
-(SKILL.md → Step B3) copies the four non-test scripts verbatim into a target
+(references/bootstrap.md → B3 — Materialize) copies the four non-test scripts verbatim into a target
 project's `.orchestrator/`, where they run with `.orchestrator/` as `__dirname` and
 the repo root as their `ROOT` (`path.resolve(__dirname, '..')`). Zero dependencies —
 Node's built-ins only, so no `npm install` in the target project.

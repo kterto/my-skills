@@ -20,28 +20,10 @@
       "why": "Prime Agent writes host-runtime scaffolding into .prime/; without the exclude the tree reads permanently dirty. Deliberately shared across every occurrence — the replacement appends the same pathspec regardless of site, so it carries no site-specific text."
     },
     {
-      "why": "B2 resolves the bundled Prime copy; there is no external marketplace to fall back to.",
-      "count": 1,
-      "find": "Resolve the `spec-driven-eval` skill in this order, stopping at the first hit:\n\n1. **The copy bundled with this marketplace** (`plugins/my-skills/skills/spec-driven-eval/`) — `/my-skills:spec-driven-eval` in Claude Code, the `spec-driven-eval` skill in opencode. A plugin install already satisfies this, so on a normal install the check ends here.\n2. **A host-provided or separately installed copy** — anything the skills registry or the installed skill paths resolve under that name.\n3. **Nothing resolved** — the plugin is installed partially or the skill was invoked outside it. Offer the user `npx @tech-leads-club/agent-skills install --skill spec-driven-eval` as a fallback, and confirm with the user before executing. If the user declines, instruct them to run the command manually later.\n\nRecord availability in memory for the current run. Do **not** block bootstrap when nothing resolves or the user declines — the eval stage (Step 4e) degrades explicitly, exactly as the `simplify` step below does.\n",
-      "replace": "`spec-driven-eval` ships with this Prime Agent distribution. Check that it is\navailable in the installed Prime skill paths (`.prime/agent/skills/spec-driven-eval`\nfor a project install, `~/.prime/agent/skills/spec-driven-eval` for a global one).\nIf it is absent, report that the Prime Agent installation is incomplete — rerun\n`prime-agent/install.sh` — and continue without blocking: Step 4e handles a missing\nskill gracefully. Do **not** try to install a skill from an external marketplace.\n\nRecord availability for the current run.\n"
-    },
-    {
       "why": "Step 4e's degrade reason differs: Prime has no fallback install to decline.",
       "count": 1,
       "find": "2. If spec-driven-eval did not resolve at bootstrap B2 (nothing bundled, nothing installed,\n   and the user declined the fallback install) → set `eval_status = SKIPPED`, note \"eval skipped —\n   skill not installed\" for the report, and go to Step 5. An absent optional dependency reduces the\n   run's quality, never its correctness.",
       "replace": "2. If spec-driven-eval is unavailable (the Prime Agent installation is incomplete) → set\n   `eval_status = SKIPPED`, note \"eval skipped — skill not installed\" for the report, and go to\n   Step 5. An absent optional dependency reduces the run's quality, never its correctness."
-    },
-    {
-      "why": "arch-2: Prime Agent has no .claude/agents/ or .opencode/agent/ registry. Roles are materialized under .orchestrator/roles/ and dispatched as RLM children.",
-      "count": 1,
-      "find": "1. **Render agent templates**: materialize each of the six files `templates/{role}.md` (roles: brainstormer, architect, coder, tester, reviewer, qa) for the current host. In Claude Code, copy each template verbatim into `target/.claude/agents/{role}.md`. In opencode, write each role to `target/.opencode/agent/{role}.md` with opencode-compatible frontmatter (`description` copied from the template, `mode: subagent`, omit Claude-only shorthand model values like `model: opus` unless the user provided a valid `provider/model`), then copy the template body unchanged. The templates are project-agnostic and read `.orchestrator/PROJECT-CONTEXT.md` at runtime.",
-      "replace": "1. **Render role templates**: materialize each of the six files `templates/{role}.md` (roles: brainstormer, architect, coder, tester, reviewer, qa) into `target/.orchestrator/roles/{role}.md`, copying each template **body verbatim** — no frontmatter rewriting, no host-specific agent file. Prime Agent has no `.claude/agents/` or `.opencode/agent/` registry to write into: a role is dispatched by building a self-contained prompt from its `.orchestrator/roles/{role}.md` body and admitting it with `rlm()`, per the Prime Agent orchestration protocol above. Re-render all six on every bootstrap (including `--setup` re-runs) so they stay in sync with the installed skill version. The templates are project-agnostic and read `.orchestrator/PROJECT-CONTEXT.md` at runtime."
-    },
-    {
-      "why": "arch-2: the B3 summary must list the role directory it now creates.",
-      "count": 1,
-      "find": "5. **Print bootstrap summary**: list all created/updated paths (including `.orchestrator/.gitignore`, `.orchestrator/artifact-format.md`, `.orchestrator/artifact-format-html.md`, `.orchestrator/artifact-format-parallel.md`, `.orchestrator/config.md`, `.orchestrator/gate-config.md`, `.orchestrator/lane-protocol.md`, `.orchestrator/html-templates/`, and the four `.orchestrator/*.cjs` render/gate scripts) and the achieved context confidence.",
-      "replace": "5. **Print bootstrap summary**: list all created/updated paths (including `.orchestrator/.gitignore`, `.orchestrator/roles/`, `.orchestrator/artifact-format.md`, `.orchestrator/artifact-format-html.md`, `.orchestrator/artifact-format-parallel.md`, `.orchestrator/config.md`, `.orchestrator/gate-config.md`, `.orchestrator/lane-protocol.md`, `.orchestrator/html-templates/`, and the four `.orchestrator/*.cjs` render/gate scripts) and the achieved context confidence."
     },
     {
       "why": "bug-10: the pipeline preamble named the Claude/opencode subagent tools as the dispatch mechanism.",
@@ -62,12 +44,6 @@
       "replace": "### How to spawn a role child\n\nEvery role invocation admits a real RLM child, per the Prime Agent orchestration protocol above:\n\n```python\nhandle = await rlm(prompt, name=\"brainstormer\")  # or architect | coder | tester | reviewer | qa\n```\n\nFor a wave of independent children, admit the whole wave together rather than one at a time:\n\n```python\nhandles = await asyncio.gather(*(rlm(prompt, name=name) for name, prompt in jobs))\n```\n\n`rlm()` returns only an admission handle, never the child's result. Wait for each child's `agent_message` completion contract, validate the artifact it names, and only then join. `name` is the stable role-or-lane name this skill uses throughout — it is what a retry addresses with `receiver_name=handle.name`. Where a step below lists a `description`, use it as that child's `name` when no lane-qualified name is given.\n\nThe child prompt MUST be self-contained: it does not see this conversation. Build it from that role's `.orchestrator/roles/{role}.md` body and include the user's raw input, the spec/plan path or ID, and any locked decisions."
     },
     {
-      "why": "SF-3a: B2's simplify justification claimed a marketplace plugin install on both hosts, contradicting the already-rewritten Step 3 paragraph.",
-      "count": 1,
-      "find": "It ships in this marketplace, so a plugin install already satisfies it on both hosts; a host-provided `simplify` satisfies it equally.",
-      "replace": "It ships with this Prime Agent distribution, so `install.sh` already satisfies it; a session that provides its own `simplify` satisfies it equally."
-    },
-    {
       "why": "bug-9 + bug-13: the last marketplace path and the last /my-skills: slash form in the distribution.",
       "count": 1,
       "find": "**Which `simplify`, and what if there is none.** The skill ships in this marketplace (`plugins/my-skills/skills/simplify/`), so it is present on both hosts once the plugin is installed — `/my-skills:simplify` in Claude Code, the `simplify` skill in opencode. A host that also provides its own `simplify` (Claude Code has a built-in one) satisfies this step equally; the step needs the *behavior*, not a specific implementation.",
@@ -78,15 +54,41 @@
       "count": 1,
       "find": "Three steps spawn a **scan** subagent rather than a pipeline role: Bootstrap B1 (context digest), Step 2p.1 (slicing analysis), and Step 3j.4 (the join digest's leaf-derived regions). Unlike the six roles, this one is **not materialized by B3** — it is whatever read-only agent type the host already provides, and the name differs per host. Resolve it **once per run**, in this order, and use the first that exists:\n\n1. `Explore` — Claude Code's built-in read-only search agent.\n2. `explore` — the opencode equivalent, when the host registers one.\n3. `general-purpose` (Claude Code) / `general` (opencode) — the catch-all agent type.\n\n**Never let this resolution fail the run.** If none of the three exists, do **not** spawn: perform the scan inline in the orchestrator's own context using the host's read tools, and note in the step's stdout that the digest was gathered inline rather than in a subagent. The digest is untrusted input either way (Step 2p.1), so gathering it inline changes only *where* the reading happened, never how the result is treated.\n\nThis matters most at **Step 2p.1**, where a failed spawn would leave the run with no lane set at all. A scan-subagent failure is never a parallelization verdict — Step 2p.3 owns those, and it decides on the digest's content, not on how the digest was obtained.",
       "replace": "Three steps admit a **scan** child rather than a pipeline role: Bootstrap B1 (context digest), Step 2p.1 (slicing analysis), and Step 3j.4 (the join digest's leaf-derived regions). It is admitted exactly like any other child — `handle = await rlm(prompt, name=…)` — and, unlike the six roles, it is **not materialized by B3**: it has no role file under `.orchestrator/roles/`, so its whole brief is the prompt you build for it. There is no host agent type to resolve; there never is under Prime Agent.\n\n**A scan child is read-only, and its prompt must say so.** Per the Prime Agent orchestration protocol above, it is explicitly **forbidden from writes and from mutating commands**: it reads and reports, it produces no artifact, and it never creates, edits, or deletes a file. That prohibition is carried in the prompt, not assumed of the child.\n\n**Give each scan child a stable, per-caller `name`.** The three callers use **three different** names — `context-scan` for Bootstrap B1's context digest, `slicing-scan` for Step 2p.1's slicing analysis, `digest-scan` for Step 3j.4's leaf-derived regions — so a child that returns nothing usable can be addressed on retry with `receiver_name=handle.name`. One name shared across dispatch sites would leave a retry ambiguous about which scan it was re-asking, which is exactly the failure a stable per-child name exists to prevent.\n\n**Never let this fail the run.** If the host cannot admit a read-only child, do **not** keep retrying: perform the scan **inline** in the orchestrator's own context using the host's read tools, and note in the step's stdout that the digest was gathered inline rather than in a child. The digest is untrusted input either way (Step 2p.1), so gathering it inline changes only *where* the reading happened, never how the result is treated.\n\nThis matters most at **Step 2p.1**, where a failed admission would leave the run with no lane set at all. A scan-child failure is never a parallelization verdict — Step 2p.3 owns those, and it decides on the digest's content, not on how the digest was obtained."
-    },
-    {
-      "why": "Residual Explore host vocabulary at scan caller 1 (Bootstrap B1's step label): it names a Claude Code agent type in a port that has none.",
-      "count": 1,
-      "find": "1. **Explore scan** (the only subagent in the gate): spawn a **read-only scan subagent** (see *The read-only scan subagent type* below) with the prompt:",
-      "replace": "1. **Context scan** (the only child in the gate): admit a **read-only scan child** named `context-scan` (see *The read-only scan subagent type* below) with the prompt:"
     }
   ],
   "fileReplacements": {
+    "references/bootstrap.md": [
+      {
+        "why": "B2 resolves the bundled Prime copy; there is no external marketplace to fall back to.",
+        "count": 1,
+        "find": "Resolve the `spec-driven-eval` skill in this order, stopping at the first hit:\n\n1. **The copy bundled with this marketplace** (`plugins/my-skills/skills/spec-driven-eval/`) — `/my-skills:spec-driven-eval` in Claude Code, the `spec-driven-eval` skill in opencode. A plugin install already satisfies this, so on a normal install the check ends here.\n2. **A host-provided or separately installed copy** — anything the skills registry or the installed skill paths resolve under that name.\n3. **Nothing resolved** — the plugin is installed partially or the skill was invoked outside it. Offer the user `npx @tech-leads-club/agent-skills install --skill spec-driven-eval` as a fallback, and confirm with the user before executing. If the user declines, instruct them to run the command manually later.\n\nRecord availability in memory for the current run. Do **not** block bootstrap when nothing resolves or the user declines — the eval stage (Step 4e) degrades explicitly, exactly as the `simplify` step below does.\n",
+        "replace": "`spec-driven-eval` ships with this Prime Agent distribution. Check that it is\navailable in the installed Prime skill paths (`.prime/agent/skills/spec-driven-eval`\nfor a project install, `~/.prime/agent/skills/spec-driven-eval` for a global one).\nIf it is absent, report that the Prime Agent installation is incomplete — rerun\n`prime-agent/install.sh` — and continue without blocking: Step 4e handles a missing\nskill gracefully. Do **not** try to install a skill from an external marketplace.\n\nRecord availability for the current run.\n"
+      },
+      {
+        "why": "arch-2: Prime Agent has no .claude/agents/ or .opencode/agent/ registry. Roles are materialized under .orchestrator/roles/ and dispatched as RLM children.",
+        "count": 1,
+        "find": "1. **Render agent templates**: materialize each of the six files `templates/{role}.md` (roles: brainstormer, architect, coder, tester, reviewer, qa) for the current host. In Claude Code, copy each template verbatim into `target/.claude/agents/{role}.md`. In opencode, write each role to `target/.opencode/agent/{role}.md` with opencode-compatible frontmatter (`description` copied from the template, `mode: subagent`, omit Claude-only shorthand model values like `model: opus` unless the user provided a valid `provider/model`), then copy the template body unchanged. The templates are project-agnostic and read `.orchestrator/PROJECT-CONTEXT.md` at runtime.",
+        "replace": "1. **Render role templates**: materialize each of the six files `templates/{role}.md` (roles: brainstormer, architect, coder, tester, reviewer, qa) into `target/.orchestrator/roles/{role}.md`, copying each template **body verbatim** — no frontmatter rewriting, no host-specific agent file. Prime Agent has no `.claude/agents/` or `.opencode/agent/` registry to write into: a role is dispatched by building a self-contained prompt from its `.orchestrator/roles/{role}.md` body and admitting it with `rlm()`, per the Prime Agent orchestration protocol above. Re-render all six on every bootstrap (including `--setup` re-runs) so they stay in sync with the installed skill version. The templates are project-agnostic and read `.orchestrator/PROJECT-CONTEXT.md` at runtime."
+      },
+      {
+        "why": "arch-2: the B3 summary must list the role directory it now creates.",
+        "count": 1,
+        "find": "5. **Print bootstrap summary**: list all created/updated paths (including `.orchestrator/.gitignore`, `.orchestrator/artifact-format.md`, `.orchestrator/artifact-format-html.md`, `.orchestrator/artifact-format-parallel.md`, `.orchestrator/config.md`, `.orchestrator/gate-config.md`, `.orchestrator/lane-protocol.md`, `.orchestrator/html-templates/`, and the four `.orchestrator/*.cjs` render/gate scripts) and the achieved context confidence.",
+        "replace": "5. **Print bootstrap summary**: list all created/updated paths (including `.orchestrator/.gitignore`, `.orchestrator/roles/`, `.orchestrator/artifact-format.md`, `.orchestrator/artifact-format-html.md`, `.orchestrator/artifact-format-parallel.md`, `.orchestrator/config.md`, `.orchestrator/gate-config.md`, `.orchestrator/lane-protocol.md`, `.orchestrator/html-templates/`, and the four `.orchestrator/*.cjs` render/gate scripts) and the achieved context confidence."
+      },
+      {
+        "why": "SF-3a: B2's simplify justification claimed a marketplace plugin install on both hosts, contradicting the already-rewritten Step 3 paragraph.",
+        "count": 1,
+        "find": "It ships in this marketplace, so a plugin install already satisfies it on both hosts; a host-provided `simplify` satisfies it equally.",
+        "replace": "It ships with this Prime Agent distribution, so `install.sh` already satisfies it; a session that provides its own `simplify` satisfies it equally."
+      },
+      {
+        "why": "Residual Explore host vocabulary at scan caller 1 (Bootstrap B1's step label): it names a Claude Code agent type in a port that has none.",
+        "count": 1,
+        "find": "1. **Explore scan** (the only subagent in the gate): spawn a **read-only scan subagent** (see *The read-only scan subagent type* below) with the prompt:",
+        "replace": "1. **Context scan** (the only child in the gate): admit a **read-only scan child** named `context-scan` (see *The read-only scan subagent type* below) with the prompt:"
+      }
+    ],
     "templates/PROJECT-CONTEXT.template.md": [
       {
         "why": "Prime Agent has no structured question tool; the bootstrap interview is a normal conversation.",
@@ -161,6 +163,9 @@
     ]
   },
   "fileInsertAfterHeading": {
+    "references/bootstrap.md": [
+      "protocol.orchestrator.md"
+    ],
     "references/parallel.md": [
       "protocol.orchestrator.md"
     ]
