@@ -306,6 +306,7 @@ h1 .h1__times {
 
 .readiness__table thead th.readiness__col-release { text-align: left; }
 .readiness__table thead th.readiness__col-verdict { text-align: left; }
+.readiness__col-rigor { text-align: left; }
 
 .readiness__syspath {
   display: block;
@@ -420,6 +421,25 @@ h1 .h1__times {
 .readiness__verdict--lagging { color: var(--status-warning); }
 .readiness__verdict--lagging b { font-weight: 700; letter-spacing: 0.04em; }
 .readiness__verdict--lagging .laggards { color: var(--text-secondary); }
+
+/* A release that is done but carries stories below its declared rigor_floor is still
+   READY — the floor discloses, it never blocks — so this modifier qualifies the verdict
+   rather than replacing it. The stories are named in the integrity note below the table. */
+.readiness__verdict--below-floor { color: var(--status-warning); font-weight: 500; letter-spacing: 0; }
+
+/* Rigor mix cell — what this release's greens CLAIM, one cell per row rather than a third
+   axis of the table. `sketch` reads muted on purpose: a band that claims nothing about
+   quality should not look like a medal sitting next to READY. */
+.readiness__table tbody td.readiness__rigor {
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  white-space: normal;
+  color: var(--text-secondary);
+}
+.readiness__rigor-part--hardened { color: var(--status-success); }
+.readiness__rigor-part--delivery { color: var(--status-warning); }
+.readiness__rigor-part--sketch   { color: var(--text-muted); }
 
 /* Special row — untiered (release: null). No backlog row: parked work is excluded. */
 .readiness__table tbody tr.readiness__row--untiered th[scope="row"] {
@@ -604,7 +624,8 @@ code {
              declared system (config.systems) + an `(untagged)` column (system: null,
              class readiness__col--untagged) + an `(unknown)` column ONLY when ≥1 story
              carries a non-null, undeclared system — an orphan from a manual config edit —
-             (class readiness__col--unknown) + a trailing `READY?` column
+             (class readiness__col--unknown) + a `rigor` column
+             (<th class="readiness__col-rigor">) + a trailing `READY?` column
              (<th class="readiness__col-verdict">). A system column header may carry its
              config `path` in a <span class="readiness__syspath">.
              The synthetic `(untagged)`/`(unknown)` columns are identified by story STATE
@@ -625,9 +646,25 @@ code {
              .readiness__cell--lagging, a fully-done cell .readiness__cell--ready, a
              zero-total cell .readiness__cell--none; the `(untagged)` column cells carry
              .readiness__col--untagged and the `(unknown)` column cells
-             .readiness__col--unknown. The READY? cell is .readiness__verdict--ready (`READY`)
+             .readiness__col--unknown.
+             The rigor cell (.readiness__rigor) holds the release's rigor MIX — a count per band
+             over its stories, most rigorous first, e.g. `9 hardened · 3 sketch`, each count in a
+             <span class="readiness__rigor-part readiness__rigor-part--<band>"> — or `—` when no
+             story in the release declares a band. Rigor is NOT a third axis of this table: one
+             cell per release row. `READY(mvp)` where nine stories ran `delivery` and three ran
+             `sketch` is not one release, and this cell is what says so. The three band names are
+             a closed set written by this renderer, not contributor data, so they need no escaping
+             — unlike every system name and path above.
+             The READY? cell is .readiness__verdict--ready (`READY`)
              or .readiness__verdict--lagging (`lagging: <col>, …` naming the laggard columns,
              which may include `(untagged)` and `(unknown)`).
+             A release may declare a `rigor_floor` in roadmap.lock.json → releases[]. It never
+             blocks: a done release with stories below it renders `READY (below floor: <n>)`
+             (.readiness__verdict--ready plus .readiness__verdict--below-floor) and an integrity
+             note below the table, <p class="readiness__integrity">⚠ below rigor_floor <floor> —
+             <release>: <id> (<band>), …</p>, naming every below-floor story. Refusing to render
+             READY would put the cheapest path to green through the floor itself, so the matrix
+             states the shortfall rather than hiding it behind a verdict.
            - When an `(unknown)` column is present, render an integrity note below the table:
              <p class="readiness__integrity">⚠ unknown system(s): <value> — stories <ids>;
              fix via system rename / set-system null</p>.

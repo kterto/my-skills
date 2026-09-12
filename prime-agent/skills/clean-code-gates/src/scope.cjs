@@ -87,14 +87,25 @@ function assertBaseRefResolves(root, baseRef) {
  * vacuous green rather than a passing gate. Untracked files are included for
  * the same reason; a brand-new source file is exactly what most needs gating.
  */
+/**
+ * The base a bare `--scope diff` compares against. Exported because the
+ * instrument anchor must resolve to the *same* ref the file list does: a run
+ * that measures the diff against one base while reading its thresholds from
+ * another is the hole the anchor exists to close.
+ *
+ * Resolved in Node rather than via `$(...)` shell substitution: cmd.exe on
+ * Windows has no `$(...)`, `2>/dev/null`, or `echo` fallback, so the whole
+ * command would fail there.
+ */
+function defaultBaseRef(root) {
+  return gitProbe(root, ['merge-base', 'HEAD', 'origin/main'])[0]?.trim() || 'HEAD';
+}
+
 function realGitDiff(root) {
   return (baseRef) => {
-    // Resolve the base ref in Node rather than via `$(...)` shell substitution:
-    // cmd.exe on Windows has no `$(...)`, `2>/dev/null`, or `echo` fallback, so
-    // the whole command would fail there.
     let base;
     if (baseRef === null || baseRef === undefined) {
-      base = gitProbe(root, ['merge-base', 'HEAD', 'origin/main'])[0]?.trim() || 'HEAD';
+      base = defaultBaseRef(root);
     } else {
       base = assertBaseRefShape(baseRef);
       assertBaseRefResolves(root, base);
@@ -150,4 +161,4 @@ function resolveScope(options, cfg, io) {
   return result;
 }
 
-module.exports = { resolveScope, fileStack, realGitDiff, toPosix };
+module.exports = { resolveScope, fileStack, realGitDiff, defaultBaseRef, toPosix };

@@ -49,6 +49,84 @@
         }
       }
     },
+    "instrument": {
+      "type": "object",
+      "description": "Where the measurement's own settings came from. `.cleancode-gates.json` is deep-merged user-wins and lives inside the tree being measured, so the fields that decide what is measured and how hard — roots, exclude, per-gate exempt and thresholds — are read from the merge-base copy when a base ref is known, and the run happens on those values. Every disagreement with the working tree is listed in `moves`.",
+      "required": ["anchored", "baseRef", "source", "moves"],
+      "additionalProperties": false,
+      "properties": {
+        "anchored": {
+          "type": "boolean",
+          "description": "False when the run had no base to anchor to (project/module/files scope with no --base-ref); the working-tree config was used and no claim is made about it."
+        },
+        "baseRef": {
+          "type": ["string", "null"],
+          "description": "The ref the instrument was read from; null when anchored is false."
+        },
+        "source": {
+          "type": "string",
+          "enum": ["working-tree", "merge-base", "defaults"],
+          "description": "defaults: the base ref carried no readable config, so the built-in defaults were the anchor — never the working-tree copy."
+        },
+        "moves": {
+          "type": "array",
+          "description": "Anchored fields where the working tree disagreed with the anchor. Non-empty is a reviewer finding: the instrument moved inside the change under review.",
+          "items": {
+            "type": "object",
+            "required": ["key", "direction"],
+            "additionalProperties": false,
+            "properties": {
+              "key": {
+                "type": "string",
+                "description": "Dotted path, e.g. node-ts.gates.G2.thresholds.complexity."
+              },
+              "direction": {
+                "type": "string",
+                "enum": ["loosening", "tightening", "changed"],
+                "description": "changed: the key is not one whose direction this tool knows, so both values are reported and neither is characterised."
+              },
+              "from": { "type": ["number", "string", "boolean"] },
+              "to": { "type": ["number", "string", "boolean"] },
+              "added": { "type": "integer", "minimum": 0 },
+              "removed": { "type": "integer", "minimum": 0 }
+            }
+          }
+        }
+      }
+    },
+    "rigor": {
+      "type": "object",
+      "description": "How rigorously this run was verified, and what that changed. Rigor scales the work, never the disclosure: every gate still runs and every finding is still reported — what a lower level changes is whether a finding blocks. Stamped on every report, `hardened` included, so a reader never has to infer the level from a missing line. See docs/adr/0024.",
+      "required": ["level", "source"],
+      "additionalProperties": false,
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": ["sketch", "delivery", "hardened"],
+          "description": "sketch: it runs, nothing is claimed about quality. delivery: it does what the Acceptance says and the happy path is proven. hardened: plus the gates hold and the mutants die."
+        },
+        "source": {
+          "type": "string",
+          "enum": ["cli", "config", "default"],
+          "description": "Where the level came from. `config` is the merge-base anchored `.cleancode-gates.json` value; `default` is hardened."
+        },
+        "demoted": {
+          "type": "object",
+          "description": "Gate id to number of blockers this level demoted to warnings. The findings themselves are kept, marked `demotedFrom`, and reported.",
+          "additionalProperties": true
+        },
+        "reportOnly": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Gates that found blockers this level does not stop on."
+        },
+        "skipped": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Gates this level did not run at all; each carries measurement.state \"unmeasured\" with reason rigor-<level>."
+        }
+      }
+    },
     "summary": {
       "type": "object",
       "required": ["status", "gatesRun", "gatesMissingTool", "gatesErrored", "blockers", "warnings"],
@@ -118,6 +196,23 @@
             "description": "Thresholds used for this gate run.",
             "additionalProperties": true
           },
+          "measurement": {
+            "type": "object",
+            "description": "Whether this gate actually measured anything, independent of whether it passed. A consumer asking 'did it pass' reads status; one asking 'was this actually verified' reads measurement.state. Adapters add their own counts (mutants, measured, unrun, excluded, budgetSeconds, ...).",
+            "required": ["state"],
+            "additionalProperties": true,
+            "properties": {
+              "state": {
+                "type": "string",
+                "enum": ["empty", "measured", "partial", "unmeasured"],
+                "description": "empty: nothing in scope to measure. measured: the whole scope was measured. partial: some of it was not. unmeasured: the run produced no comparable value at all."
+              },
+              "reason": {
+                "type": "string",
+                "description": "Why the measurement is partial or unmeasured, e.g. killed-on-clock, no-report, nothing-ran, mutant-cap, time-budget."
+              }
+            }
+          },
           "findings": {
             "type": "array",
             "items": {
@@ -165,6 +260,16 @@
                 "baselineGrandfathered": {
                   "type": "boolean",
                   "description": "True when the finding was pre-existing in the baseline manifest."
+                },
+                "demotedFrom": {
+                  "type": "string",
+                  "enum": ["blocker"],
+                  "description": "Set when the run's rigor level lowered this finding's severity. The finding was found and is reported; it did not stop the run."
+                },
+                "rigor": {
+                  "type": "string",
+                  "enum": ["sketch", "delivery", "hardened"],
+                  "description": "The level that demoted this finding. Present only alongside demotedFrom."
                 }
               }
             }

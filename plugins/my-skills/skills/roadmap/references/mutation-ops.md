@@ -24,7 +24,7 @@ If the user rejects at the gate, **no files are written** and the op reports the
 
 ## Staged-diff marker set
 
-The mutation ops extend the existing re-eval markers (`+ new`, `~ changed`, `! superseded`) with two band markers:
+The mutation ops extend the existing re-eval markers (`+ new`, `~ changed`, `! superseded`) with three band markers:
 
 | Marker | Meaning |
 |---|---|
@@ -33,6 +33,7 @@ The mutation ops extend the existing re-eval markers (`+ new`, `~ changed`, `! s
 | `! superseded` | A not-done item retired via `status: superseded` (e.g. the old story replaced by a split/merge). |
 | `± release` | A **release-band** change on an item (the `set-release` op). Orthogonal to status; applies to items of any status. |
 | `⊞ system` | A **system-band** change on an item (the `set-system` op, and the bulk `migrate-systems` procedure). Orthogonal to status; applies to items of any status. |
+| `⊞ rigor` | A **rigor-band** change on a story (the `rigor` op). Orthogonal to status; applies to items of any status. A row that *lowers* a story's level is never collapsed into a summary line — it names the story, both levels, and the direction. |
 
 Every staged diff header lists the **exact resolved id set** the op will touch before any `+ ~ ! ± ⊞` rows.
 
@@ -43,19 +44,21 @@ Every staged diff header lists the **exact resolved id set** the op will touch b
 Reaffirms `sync-and-reeval.md` and the item schema:
 
 - `done` and `superseded` items are **structurally frozen**: their `id`, `sequence`, `depends_on`, title, `## Brief`, `## Acceptance`, and history never change.
-- **The mutations permitted on a frozen item are a `release`-band change (`± release`) or a `system`-band change (`⊞ system`)** — both bands are classification metadata orthogonal to status, so either may be edited on `done`/`superseded` items. (Tagging done work with a `system` is in fact required so the `release × system` readiness matrix counts completed stories — see `migrate-systems`.)
+- **The mutations permitted on a frozen item are a `release`-band change (`± release`), a `system`-band change (`⊞ system`), or a `rigor`-band change (`⊞ rigor`)** — both bands are classification metadata orthogonal to status, so either may be edited on `done`/`superseded` items. (Tagging done work with a `system` is in fact required so the `release × system` readiness matrix counts completed stories — see `migrate-systems`.)
 - Structural verbs — `reorder`, `revise`, and the split/merge folded into `revise` — apply to **not-done** items only (`todo`, `in_progress`, `blocked`). They never renumber and never touch done work; scope convergence happens by **appending** new stable IDs and **superseding** the old not-done stories.
 
 ---
 
 ## Cascade + derived `[mixed]` / `[cross-cutting]` badges
 
-Both bands are stored on items, but phase/milestone **rendering** derives its badge from children. The `release` and `system` bands cascade and derive identically — only the derived-"they-differ" badge label differs (`[mixed]` for release, `[cross-cutting]` for system):
+Both *badged* bands are stored on items, but phase/milestone **rendering** derives its badge from children. The `release` and `system` bands cascade and derive identically — only the derived-"they-differ" badge label differs (`[mixed]` for release, `[cross-cutting]` for system). **`rigor` cascades the same way and derives no badge at all** — see the note at the end of this section:
 
 - **`release`.** Assigning a band to a **phase or milestone** id cascades the band to **all not-done descendant stories** (done/superseded descendants keep their existing band; only a band change is allowed on them, and cascade does not force one). A phase/milestone **README shows a derived badge**: the shared band when all its not-done descendant stories agree (e.g. `[mvp]`), or `[mixed]` when they differ. An untiered scope (all not-done children `null`) shows **no badge**. Per-release progress and grouping in the READMEs derive from the same descendant bands (see the templates).
 - **`system`.** Assigning a system to a **phase or milestone** id cascades it to **all not-done descendant stories** exactly as `release` does (done/superseded descendants keep their existing system; a system change is still allowed on them, but cascade does not force one). A phase/milestone **README shows a derived system badge**: the shared system when all its not-done descendant stories agree (e.g. `[backend]`), or `[cross-cutting]` when they differ. An untagged scope (all not-done children `null`) shows **no badge**. `[cross-cutting]` is the system-band analog of `[mixed]`.
 
 ---
+
+**`rigor` cascades, and stops there.** Assigning a level to a phase or milestone id cascades it to all not-done descendant stories exactly as the other two bands do. It derives **no** phase or milestone badge: the mix a phase actually carries is already rendered in the release matrix's `rigor` cell, per release, and a fourth badge in every README header buys a reader nothing they cannot read there. A phase whose stories disagree therefore shows no `[mixed]` equivalent — by design, not by omission.
 
 ## Operations
 
@@ -79,6 +82,21 @@ Assign a system band to the selected items — **fully parallel to `set-release`
 - Editable on items of **any** status, including `done`/`superseded` (a system band is permitted on frozen items — this is what lets migration tag completed work). A band change appends the system-change audit row (`⊞ system`), leaving `status` unchanged (see `item-schema.md` → System-change audit row).
 - Writes the per-item `system` value into `roadmap.lock.json` `items[]` (see `directory-layout.md`); does **not** touch the `config.systems` set.
 - Diff marker: `⊞ system`.
+
+### `rigor <level> <ids…>`
+
+Set the rigor band on the selected stories — what a green run on each **claims**. Parallel to `set-release` and `set-system` in shape, with three deliberate differences that follow from a **closed vocabulary**:
+
+- **Story id** → set that story's `rigor` directly.
+- **Phase / milestone id** → cascade to all **not-done descendant stories** (see Cascade above). **No derived badge is rendered** on the phase or milestone — unlike the other two bands, a phase's mix is read off the release matrix's `rigor` cell, and a fourth badge in every README header is noise.
+- `<level>` is one of exactly `sketch`, `delivery`, `hardened`, or `null` to clear the band and fall back to the project default. **The set is closed**: there is no `rigor add`, no rename, no removal and no orphan state, so an unrecognised value is a typo, not an intent — the op stops and prints the three valid levels. It never lazily creates a value.
+- Editable on items of **any** status, including `done`/`superseded` — a band change never alters `status`.
+- **The audit row is mandatory and names the direction** (`lowered` / `raised` / `set`), per `item-schema.md` → Rigor-change audit row. **A lowering is never abbreviated and never batched into a summary line**: a story demoted to `sketch` to get it out the door is a decision someone made, and this row is the only place it survives the merge. When one invocation lowers several stories, every one of them gets its own row.
+- **Confirm a lowering before staging it.** Where raising or setting stages like any other band change, an op that lowers *n* stories prints them with their current and proposed levels and asks once, naming what stops applying at the new level (`hardened → sketch` turns G2/G4/G5/G7 into reports, skips mutation, and drops the spec eval). This is the one band whose change alters what a later green *means*, and the confirmation is what makes that a decision rather than a side effect.
+- Writes the per-item `rigor` value into `roadmap.lock.json` `items[]` (see `directory-layout.md`).
+- Diff marker: `⊞ rigor`.
+
+The level contract — the three promises, the presets they resolve to, and the disclosure set that is identical at every level — is [ADR-0024](../../../../../docs/adr/0024-rigor-levels-and-the-invariant-disclosure-set.md). This op sets the band; it never interprets it.
 
 ### `ingest-spec <path>`
 

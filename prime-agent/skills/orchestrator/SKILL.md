@@ -174,7 +174,7 @@ Check for a resolvable **`simplify`** skill the same way, and record its availab
 
    `*` ignores every file; `!*/` lets git descend into subdirectories so the exceptions below can re-include paths inside them (without it, an excluded parent directory makes re-inclusion impossible). **Rewrite only the region between the markers**, preserving anything the project added underneath — the same "the project's choice wins" shape step 4 uses for `config.json` keys. If the markers are absent and the file exists, prepend the managed block rather than overwriting.
 
-   **What is tracked, and why only these.** `config.json` must be tracked: Step 0b reads `parallelism`, `max_parallel_lanes`, and `max_contract_amendments` from the **merge-base** copy (`$mb:.orchestrator/config.json`), so an untracked file makes those three keys unreachable and they fail closed to defaults forever. `PROJECT-CONTEXT.md` is hand-curated shared project knowledge that a teammate's fresh clone must already have. Everything else is either **per-run state** (`run-manifest.json`, `verification-ledger.json`, `tmp/`) — branch-scoped, rewritten whole each run, and therefore unmergeable — or a **copy of the installed skill** (`artifact-format.md` and its `-html` / `-parallel` companions, `config.md`, `gate-config.md`, `lane-protocol.md`, `html-templates/`, the four `.cjs`, the rendered role files), which Lifecycle item 2 re-materializes the moment it goes missing. Tracking the copies lands a four-figure diff in a product PR on every skill upgrade; ignoring them costs nothing, because a fresh clone missing them simply triggers bootstrap.
+   **What is tracked, and why only these.** `config.json` must be tracked: Step 0b reads the three execution-policy keys and the six instrument keys (`references/config.md` → *The anchored set*) from the **merge-base** copy (`$mb:.orchestrator/config.json`), so an untracked file makes all nine unreachable and they fail closed to defaults forever — which silently returns every cycle cap and gate bound to a value the branch cannot be held to. `PROJECT-CONTEXT.md` is hand-curated shared project knowledge that a teammate's fresh clone must already have. Everything else is either **per-run state** (`run-manifest.json`, `verification-ledger.json`, `tmp/`) — branch-scoped, rewritten whole each run, and therefore unmergeable — or a **copy of the installed skill** (`artifact-format.md` and its `-html` / `-parallel` companions, `config.md`, `gate-config.md`, `lane-protocol.md`, `html-templates/`, the four `.cjs`, the rendered role files), which Lifecycle item 2 re-materializes the moment it goes missing. Tracking the copies lands a four-figure diff in a product PR on every skill upgrade; ignoring them costs nothing, because a fresh clone missing them simply triggers bootstrap.
 
    **This file is additive, never destructive.** `.gitignore` has no effect on paths git already tracks, so writing it into a project that currently commits its run state changes nothing on its own. Say so in the summary and print the one-line remedy rather than running it — the orchestrator never mutates the index:
 
@@ -273,6 +273,7 @@ The subagent cannot see `.orchestrator/config.json` semantics on its own, and se
 ORCHESTRATOR CONTEXT (authoritative — do not recompute):
 output_format={resolved output_format}
 automation_level={resolved automation_level}   ← brainstormer acts on this; other roles ignore it
+rigor={sketch|delivery|hardened}    ← the standard this run's green claims; every role reads it, no role may change it
 Artifact rules: read .orchestrator/artifact-format.md before writing any artifact.
 Artifact rules (html mode only): also read .orchestrator/artifact-format-html.md.
 Artifact rules (parallel path ONLY): also read .orchestrator/artifact-format-parallel.md; omit this line entirely on a sequential run.
@@ -288,6 +289,7 @@ delta={cycle delta file list}       ← reviewer spawns on cycle >= 2 ONLY; omit
 
 - `output_format` is resolved once per run (CLI arg > `.orchestrator/config.json` > default `md`).
 - `automation_level` is resolved once per run (CLI `--mode` > `.orchestrator/config.json` > default `manual`). Only the brainstormer changes behavior on it: `manual` interviews the user; `autonomous` resolves open questions with the brainstormer's own defaults and produces a READY spec without prompting. Include it in every preamble for consistency, but the other five roles ignore it.
+- `rigor` is resolved once per run at Step 0b (CLI `--rigor` > `$mb:.orchestrator/config.json` > `hardened`) and is **read-only for every role**. It names what a green run claims — `sketch`: it runs; `delivery`: it does what the Acceptance says and the happy path is proven; `hardened`: plus the gates hold and the mutants die. Roles branch on it where their template says so (the coder's phase-exit gates, the tester's e2e observation, QA's block-or-report and verdict, the reviewer's severity floor); the full table is `.orchestrator/config.md` → `rigor`. **A role may never set, raise or lower it** — one that judges the level wrong for the work records that as a finding and proceeds at the level it was given (ADR-0024). It scales what the run *does*, never what the run *reports*: every artifact's disclosure fields are required identically at all three levels.
 - `ID to use:` is included for the roles that create a numbered artifact (brainstormer→SPEC, architect→FEAT/FIX/QAF, tester→TEST, reviewer→CR, qa→QA). The coder creates no new artifact, so it gets the preamble WITHOUT an `ID to use:` line.
 - Always emit the `.md` artifact; when `output_format=html`, the producing role ALSO renders the paired `.html` by running `node .orchestrator/render-artifact.cjs <artifact.md>` (per `artifact-format.md`) — HTML is never hand-authored.
 - `lane=` and `contract=` are the **single authoritative source of lane membership at every depth**, resolved by the orchestrator exactly like the two keys above. A role never infers its lane, its governing contract, or its depth from plan prose, a file path, or an ID: the lines are present ⇒ this is a leaf invocation; absent ⇒ it is not. On a sequential run both lines are omitted, which is what keeps an `off` run's prompts byte-identical to a pre-feature run's. `lane=` carries the **qualified leaf name** (`backend/data` for a sub-lane, `backend` for an unsplit lane) and `contract=` the leaf's **governing** contract — see Step 3L.p.
@@ -563,12 +565,21 @@ over time** — and merging them would leave half the ledger unavailable to an `
 
 #### The run meter — evaluated at every boundary
 
-**Every boundary row already carries the timestamp this needs.** When `max_run_minutes > 0`, compute
-`elapsed = now − run_started_at` as each boundary is written, and print it beside the boundary:
+**Every boundary row already carries the timestamp this needs.** Compute
+`elapsed = now − run_started_at` as each boundary is written, and print it beside the boundary —
+**always, whatever `max_run_minutes` is set to**:
 
 ```
 ORCHESTRATOR — boundary {step}/{cycle}: {elapsed_minutes}m elapsed of {max_run_minutes}m
+ORCHESTRATOR — boundary {step}/{cycle}: {elapsed_minutes}m elapsed (no run budget set)
 ```
+
+**`max_run_minutes` caps the run; it does not enable the measurement.** The first form is printed
+when a budget is set, the second when it is `0`. A run that cannot state what it has spent cannot be
+reasoned about afterwards either, and the inputs are already on disk: Step 0a writes `boundaries[0].at`
+before the pipeline branches and Step 0b binds `run_started_at` from it unconditionally, so the number
+costs a subtraction. Reporting is not a policy decision; **stopping** is, and that is what the key
+governs.
 
 When `elapsed_minutes >= max_run_minutes`, **do not open another cycle.** Finish the step in flight,
 then stop with a `Status: STALLED` banner naming the elapsed time, the boundary reached, and what
@@ -576,6 +587,7 @@ remained:
 
 ```
 ORCHESTRATOR — run budget exhausted
+Spec: {spec_path}
 Elapsed: {elapsed_minutes}m / {max_run_minutes}m
 Stopped at: {step}, {loop} cycle {cycle}
 Remaining: {the steps not reached}
@@ -585,7 +597,8 @@ Status: STALLED
 **Evaluate it at each of the five boundary mints — Steps 3, 3j, 4c, 5d and 0a — not "wherever a
 boundary is written".** 0a is the run's own start and can only print `0m`. The other four are the
 decision points: each sits immediately before the run would open another cycle, which is the only
-place stopping is both safe and useful.
+place stopping is both safe and useful. **The comparison against the budget happens only when
+`max_run_minutes > 0`; the print happens at all five either way.**
 
 **This is a stop, not a kill, but be honest about what resumes.** Every artifact written so far stays
 on disk and the plan keeps its status. What does **not** happen is automatic re-entry: `--resume` is
@@ -599,8 +612,11 @@ The point is that the run can answer *how long have I been going* at all: cycle 
 for spend that stops tracking the moment one cycle costs ten times another, and a run that reached
 every one of its cycle caps can still have spent fifteen hours without a single mechanism noticing.
 
-**Off by default** (`max_run_minutes: 0`), because a badly chosen bound stops good runs. Set it once
-the project has a baseline for what its runs cost.
+**The stop is off by default** (`max_run_minutes: 0`), because a badly chosen bound stops good runs.
+Set it once the project has a baseline for what its runs cost — and the elapsed line printed at every
+boundary, plus the `Run cost:` line in the terminal banner (Step 7b), is how that baseline is
+acquired. Off-by-default is a defensible choice for a stop; it was never a defensible choice for a
+number, and for its first year this meter had no way to report one.
 
 **`suites[]` has consumers; `boundaries[]` does not yet.** The tester, QA and the outer join all read
 `suites[]` through the inheritance rule above. `boundaries[]` is read by the `delta=` line the reviewer
@@ -613,14 +629,20 @@ read it** — the tester and QA — and to no other role: a line every role carr
 
 #### 0b — Initialise counters
 
-Read cycle caps from config:
+**Resolve `rigor` first — it supplies the defaults every cap below falls back to.** CLI `--rigor` > **`$mb:.orchestrator/config.json`** > `hardened`. An unrecognised value fails closed to `hardened`, never to the lowest bar. The three levels, their promises and the full preset table are normative in **`references/config.md` → `rigor`**; do not restate a preset number here or in a role prompt.
 
-- `max_review_cycles` — from `.orchestrator/config.json`; default 10 if absent. **`review_budget` is derived from it here** — see the binding rule below — and every cap test in the run uses the derived value, never the raw key.
-- `max_qa_cycles` — from `.orchestrator/config.json`; default 5 if absent.
-- `max_eval_cycles` — from `.orchestrator/config.json`; default 2 if absent.
-- `max_family_cycles` — from `.orchestrator/config.json`; default 6 if absent.
-- `max_run_minutes` — from `.orchestrator/config.json`; default `0` (disabled) if absent.
-- `gate_wall_clock_minutes` — from `.orchestrator/config.json`; default `15` if absent. Passed through to QA; the orchestrator itself only forwards it.
+**`rigor` is never selectable by the pipeline.** Two sources set it and there is no third: the invoking human's `--rigor`, and roadmap metadata passed through by `product-manager`. No role, no subagent and no remediation loop may write it. A role that judges the level too low records that as a finding; it does not raise the level, and it may never lower one. The contract is **ADR-0024** in the authoring repo.
+
+Read cycle caps from config. **An absent key takes its value from the resolved level's preset, not from the historical default** — the historical defaults *are* `hardened`'s presets, so a project that never sets `rigor` reads exactly what it read before. An explicit key overrides its preset: the preset is a default set, not a lock.
+
+- `max_review_cycles` — from **`$mb:.orchestrator/config.json`**; default `1` / `2` / `6` by level (`hardened`'s `6` replaces the historical `10`, which the family remainder already clamped below in every real run). **`review_budget` is derived from it here** — see the binding rule below — and every cap test in the run uses the derived value, never the raw key.
+- `max_qa_cycles` — from **`$mb`**; default `1` / `2` / `4` by level.
+- `max_eval_cycles` — from **`$mb`**; default `0` / `1` / `2` by level. At `sketch` the eval is `SKIPPED` — which the banner must say, not omit.
+- `max_family_cycles` — from **`$mb`**; default `2` / `3` / `6` by level.
+- `max_run_minutes` — from `.orchestrator/config.json`; default `0` (disabled) if absent. Not anchored: it caps nothing the branch is graded on, and the meter reports whatever it is set to.
+- `gate_wall_clock_minutes` — from **`$mb`**; default `15` if absent. Passed through to QA; the orchestrator itself only forwards it.
+
+**`$mb` above is the merge-base copy, and it is not optional** — `rigor` and the six anchored cycle and bound keys are read there and nowhere else, per *the anchored set* below. Read them once, here, and print the moved line before the banner.
 
 **Bind `review_budget` with the eval's remediation reserved:**
 
@@ -676,6 +698,7 @@ Log to your running status output:
 ```
 ORCHESTRATOR — pipeline started
 Input: {input summary}
+rigor: {sketch | delivery | hardened} (from {--rigor | roadmap story | $mb config | default})
 max_review_cycles: {max_review_cycles}  (review_budget: {review_budget} — bound by {in-run cap | family remainder | minimum-one floor | family-budget override})
 eval_remediation_budget: {eval_remediation_budget}  (spec_eval_live: {true|false}; {eval_reserve} cycles reserved for eval remediation only)
 max_qa_cycles: {max_qa_cycles}
@@ -691,18 +714,37 @@ wrong thing by their own banner, and `--max-review` cannot raise the number that
 
 **Resolve `parallelism`** with the standard precedence — CLI `--parallel` > `.orchestrator/config.json` > default `off`. Also read `max_contract_amendments` (default `2`) and set `amendment_count = 0`, and read `max_parallel_lanes` (default `6`). Every key's values, semantics, and absent-key tolerance are normative in **`references/config.md`** — read them there; they are deliberately not restated here.
 
-**These three keys are execution policy, so they load from the merge-base — not the working tree.** `parallelism`, `max_parallel_lanes`, and `max_contract_amendments` decide **how many command-capable coders run concurrently** against a shared workspace, and `.orchestrator/config.json` is a contributor-editable file inside the branch under review. Reading them from the working tree would let a branch grant itself nested execution and a wide fan-out as part of the very change being reviewed. Per the project's **two-trust-anchors invariant** (`PROJECT-CONTEXT.md`), policy and config load from the **merge-base (`$mb`)**:
+**Ten keys are anchored to the merge-base — not the working tree.** `.orchestrator/config.json` is a contributor-editable file inside the branch under review, so any key read from it is a key the change can set for its own run. Two families must not be:
 
-- Read the three keys from **`$mb:.orchestrator/config.json`** — the pinned merge-base copy — never from the working-tree file.
-- **A CLI flag outranks the merge-base**, because a flag is *the invoking user's* authority expressed at run time, not branch-authored content. `--parallel` therefore still wins.
-- When the merge-base has no `.orchestrator/config.json`, or the file is absent/unparseable there, fall back to the **defaults** (`off` / `6` / `2`) — never to the working-tree copy.
+| Family | Keys | What a working-tree read would buy the branch |
+|---|---|---|
+| **Execution policy** | `parallelism`, `max_parallel_lanes`, `max_contract_amendments` | Nested execution and a wide fan-out of command-capable coders against a shared workspace. |
+| **The instruments** | `max_eval_cycles`, `max_family_cycles`, `max_qa_cycles`, `max_review_cycles`, `gate_wall_clock_minutes`, `max_spec_requirements`, `rigor` | A weaker measurement of itself, or a larger budget than the trunk permits — `max_eval_cycles: 0` ships the spec ungraded, the only cross-run cost control is a single integer in the same file, and `rigor` lowers all four caps and every gate's block-or-report in one word. |
+
+Per the project's **two-trust-anchors invariant** (`PROJECT-CONTEXT.md`), both families load from the **merge-base (`$mb`)**:
+
+- Read all ten from **`$mb:.orchestrator/config.json`** — the pinned merge-base copy — never from the working-tree file, and **run on the merge-base value**, whichever direction it moved.
+- **A CLI flag outranks the merge-base**, because a flag is *the invoking user's* authority expressed at run time, not branch-authored content. `--parallel`, `--max-review`, `--max-qa` and `--rigor` therefore still win, and are not moves.
+- When the merge-base has no `.orchestrator/config.json`, or the file is absent/unparseable there, fall back to the **defaults** (`off` / `6` / `2` / `hardened`, and from `hardened` its preset caps) — never to the working-tree copy.
 - **Validate the numeric values before any dispatch**, per `references/config.md` → *Bounds* (`max_parallel_lanes` a finite integer ≥ 1; `max_contract_amendments`, `max_eval_cycles`, `max_family_cycles`, `max_run_minutes`, `gate_wall_clock_minutes` and `max_spec_requirements` finite integers ≥ 0); an out-of-range value fails closed to the key's canonical default with the reason printed, rather than dispatching a wave of zero or comparing against an undefined cap.
 
-Every other key (`output_format`, `automation_level`, the thresholds) keeps reading from the working tree as before — none of them widens a branch's blast radius, which is what the merge-base anchor exists to contain.
+**Where the working tree disagrees, print one line and never suppress it** — before the counters banner, on every run including `off`:
+
+```
+INSTRUMENT MOVED — max_eval_cycles 2 → 0 (loosening), max_qa_cycles 5 → 8 (loosening) — measured against merge-base values
+```
+
+Name every key that moved, in config order, with its merge-base value, its working-tree value, and its direction. `references/config.md` → *The anchored set* holds the per-key direction table; a key that moved and is not in it prints `(changed)` rather than a guessed direction. **A loosening move inside the change under review is a reviewer finding, not a config read** — carry the line verbatim into the FINAL report's Issues-found list so it reaches the PR body, and do not summarise it. A tightening move prints too: the operator who wrote it needs to know it did not take effect on this run.
+
+The escape is to move the instrument in a separate, earlier PR. That is a much higher bar, it is visible in history, and it is the same bar a human faces.
+
+**The gate config is anchored the same way, by the gate runner rather than here.** `.cleancode-gates.json` holds every blocking number and is auto-written into the repo; its `roots`, `exclude`, per-gate `exempt` and `thresholds` resolve from `$mb` and print the same line — see `references/gate-config.md` → *The instrument is anchored to the merge-base*.
+
+Every other key (`output_format`, `automation_level`, `context_threshold`, `clarity_threshold`) keeps reading from the working tree as before — none of them widens a branch's blast radius or weakens what the run measures, which is what the merge-base anchor exists to contain.
 
 **But `output_format` is project policy, not a per-developer preference — do not let its trust anchor suggest otherwise.** Reading it from the working tree is correct (a branch cannot escalate concurrency with it); *diverging* on it across a team is not. `scripts/check-artifact-pairing.cjs` never reads `output_format` or `config.json` at all: it scopes via `branchScope({auditPath: 'plans', ext: '.md', baseRef})` — **every** changed `.md` on the branch, whoever authored it — and unconditionally requires each one's `.html` sibling. So a developer running `html` is blocked by every md-only artifact a teammate added to the same branch, and cannot clear the gate without re-rendering work that is not theirs. The key therefore belongs in the **tracked** `.orchestrator/config.json`, identical for everyone on the branch, and a project that wants to change it should change it once, deliberately, for the whole team. `automation_level` and the thresholds are genuinely per-developer; `output_format` is not.
 
-**If the resolved value is `off` (including by default), the run is finished with parallel mode.** **Steps 0c, 0r, 2p, 2c, 2s, 2L, 3L, 3s, and 3j do not exist for this run**: skip them entirely and follow Steps 1 → 2 → 3 → 3b → 4 → 5 → 7 exactly as written. Do not print a parallelism line in the banner above, and emit nothing else — an `off` run's stdout is byte-identical to a pre-feature run's.
+**If the resolved value is `off` (including by default), the run is finished with parallel mode.** **Steps 0c, 0r, 2p, 2c, 2s, 2L, 3L, 3s, and 3j do not exist for this run**: skip them entirely and follow Steps 1 → 2 → 3 → 3b → 4 → 5 → 7 exactly as written. Do not print a parallelism line in the banner above, and emit nothing else — an `off` run's stdout is byte-identical to a pre-feature run's, the `INSTRUMENT MOVED` line excepted: that one is a disclosure about the run's own settings, not a parallel-mode artifact, and a run that suppressed it to preserve byte-parity would be preserving the wrong thing.
 
 Add one line to the status output **only when `parallelism` is not `off`**:
 
@@ -977,9 +1019,19 @@ Status: STALLED
 **Derive the split mechanically from what is already on disk** — never invent one. Read the spec's
 `###` sub-headings inside `## Functional requirements` and group contiguous blocks until each group
 reaches the budget; when the plan's phase boundaries are coarser than those headings, prefer the
-phases, because each phase is already required to exit on a green tree and is therefore already a
-shippable unit. Print the groups with their FR ranges. A refusal without a split is a wall; a refusal
-that names the four runs it would rather see is a plan.
+phases, because a phase boundary is where the plan itself already cuts the work and where the
+coverage map, the commands table and the task list already line up. Print the groups with their FR
+ranges, and give each group a `needs:` line naming the groups it depends on. A refusal without a
+split is a wall; a refusal that names the four runs it would rather see is a plan.
+
+**Do not tell the operator a phase exits on a green tree — it does not, by design.** The phase-exit
+criterion is that every applicable gate command *ran and its verdict was recorded* — "exit 0, or a
+carried `GATE` entry naming the fix that was rejected and why" (`templates/architect.md` → the
+per-phase gate block), and `templates/coder.md` states in terms that a gate finding is not a
+`BLOCKED` stop: clear what you can, record what you cannot, proceed. Verification lives at the
+boundaries the run actually mints — the tester, the reviewer, QA and Step 4e — not at a phase exit,
+which records verdicts rather than enforcing them. A split group is therefore a smaller unit of
+*work*, and the runs it becomes are what verify it.
 
 **Run Step 7c before stopping**, as every other stop that occurs after a plan exists does — a halted
 run still produces its timeline. The run meter's stop below carries the same obligation.
@@ -1049,7 +1101,9 @@ Parse coder's output to confirm `Status: DONE`. If `BLOCKED`, stop and report th
 
 Read the plan file at `plan_path` and confirm `status: DONE` is present in the frontmatter. If `status` is not `DONE`, or all tasks are not checked `[x]`, re-invoke the coder subagent with the same plan ID to continue. If still not DONE after retry, stop and report to user.
 
-**Simplification pass (mandatory before tester):**
+**Simplification pass (mandatory before tester, above `sketch`):**
+
+**At `rigor: sketch` this pass is skipped, out loud.** A throwaway claims nothing about quality, and this is the one step whose whole product is quality. Print `SIMPLIFY skipped — rigor sketch`, log that line to `.progress.md`, and continue to the phase-gate re-run below (a no-op, since nothing edited the diff). The skip is recorded exactly like the no-skill-available skip, and for the same reason: a step that did not run must never look like one that ran and found nothing.
 
 After coder DONE is confirmed, invoke the `simplify` skill on the changes from this plan — pass `--plan {this plan's ID}` so the skill resolves the scope to the paths this plan's tasks touched. This is the cheap pre-review pass for simplicity. Any fixes the skill produces are folded into the same diff — they belong to this plan, not a new one — and the plan stays at `status: DONE`. If `simplify` reports no issues, continue. Log the result to `.progress.md` as a `SIMPLIFY` entry, **carrying its `Bugs:` lines verbatim** — those are correctness issues it observed and deliberately did not fix, they already carry `file:line`, and this is the log the reviewer reads at the start of its own pass. They travel as **observations, never as verdicts**: the reviewer confirms one on its own evidence or dismisses it, and `simplify` said so is not a finding. Do not loop on simplify; it runs once.
 
@@ -1111,6 +1165,7 @@ Read the test report file at `test_report_path` (expect `.md` or `.html` extensi
 
   ```
   ORCHESTRATOR — tester blocked
+  Spec: {spec_path}
   Plan: {plan_id}
   Test report: {test_report_path}
   Status: STALLED — tooling gap; human intervention required before continuing
@@ -1193,6 +1248,7 @@ If `review_cycle >= review_budget`:
 
 ```
 ORCHESTRATOR — review cycle limit reached ({review_budget})
+Spec: {spec_path}
 Bound by: {in-run cap max_review_cycles | family remainder max_family_cycles − family_cr_count − eval_reserve | minimum-one floor | family-budget override}
 Last CR: {cr_path}
 Status: STALLED — human intervention required
@@ -1473,6 +1529,7 @@ Sending it round the remediation loop spends a cycle on a plan that cannot addre
 
 ```
 ORCHESTRATOR — spec eval blocked on a red engineering gate
+Spec: {spec_path}
 Last eval: {eval_path}
 Gate: {gate name} — {the exact command recorded in the report}
 Status: STALLED — human intervention required
@@ -1488,6 +1545,7 @@ one the run is permitted, and an unremediated finding it just graded is a decisi
 
 ```
 ORCHESTRATOR — spec eval cycle limit reached ({max_eval_cycles})
+Spec: {spec_path}
 Last eval: {eval_path}
 Unresolved criteria: {the actionable set, one per line}
 Status: STALLED — human intervention required
@@ -1612,6 +1670,7 @@ A `BLOCKED_STALE` status means one or more gates exceeded their wall-clock budge
 
 ```
 ORCHESTRATOR — QA stale
+Spec: {spec_path}
 QA report: {qa_report_path}
 Stale gates: {list from report frontmatter `stale_gates:`}
 Status: STALLED — operator decision required
@@ -1627,6 +1686,7 @@ Check `qa_cycle`. If `qa_cycle >= max_qa_cycles`:
 
 ```
 ORCHESTRATOR — QA cycle limit reached ({max_qa_cycles})
+Spec: {spec_path}
 Last QA report: {qa_report_path}
 Status: STALLED — human intervention required
 ```
@@ -1790,6 +1850,7 @@ status results:
 
 ```
 ORCHESTRATOR — spec eval artifact missing or incomplete
+Spec: {spec_path}
 Expected: plans/eval/EVAL-* with `plan: {root_plan_id}`, an evidence matrix, and a final grade
 Last eval: {eval_path, or "none persisted"}
 Status: STALLED — human intervention required
@@ -1820,6 +1881,10 @@ Final report: plans/final/FINAL-{NNN}-{slug}.md
 Tester: {tester_status} (coverage {after} — stmts/branches per stack)
 QA report: {qa_report_path}
 Spec eval: {PASS | ISSUES | SKIPPED}{ — {N} actionable, {M} recorded}{, graded before {qa_cycle} QA remediation(s) — see Step 4e}
+Rigor: {sketch | delivery | hardened} (from {--rigor | roadmap story | $mb config | default}){ — {n} blocker(s) demoted to warning across {gates}; {gates} skipped}
+Delivered: {m} / {t} spec requirements carry passing evidence
+Unmeasured: {gate — state, comma-separated, e.g. "G2 — MISSING_TOOL, G6 — UNMEASURED (no denominator)"} (or "none")
+Instrument moved: {key old → new (direction), comma-separated — config keys and gate-config fields together} (or "none")
 Deferred by decision: {criterion — reason, one per line, or "none"}
 Issues found:
   - {issue} (or "none")
@@ -1840,9 +1905,68 @@ Review cycles used: {review_cycle} / {review_budget}{, clamped by the family rem
 QA cycles used: {qa_cycle} / {max_qa_cycles}
 Spec eval cycles used: {eval_cycle} / {max_eval_cycles}
 Family reviews to date: {family_cr_count, or n/a} / {max_family_cycles} (rework ratio {g8_family, or n/a})
+Run cost: {elapsed_minutes}m across {boundary_count} boundaries{ / {max_run_minutes}m budget, when one is set}
 
 Output only — review the diff, then commit and open the PR yourself.
 ```
+
+**`Delivered:` and `Unmeasured:` are the run's delivery statement, and neither is computed from the
+plan.** Four of the banner's lines are cycle counters — they say what the pipeline did. These two say
+what the run has to show for it, and both come from evidence already on disk:
+
+- **`Delivered: {m} / {t}`** — `t` is the number of rows in the root plan's `## Requirement Coverage`
+  map, the pre-registered commitment, and `m` is the number of those requirements the spec eval's
+  per-criterion evidence matrix (verified above to hold exactly `t` rows) marks met **with evidence
+  cited**. Count the matrix, never the plan: a requirement is delivered when something outside the
+  plan says so, or the number is the plan grading itself. **When `eval_status` is `SKIPPED` there is
+  no matrix, so print `Delivered: not graded — spec eval SKIPPED ({t} requirements committed)` and
+  never a ratio.** An ungraded run has no delivery claim to make, and a missing line reads as zero
+  problems rather than as no evidence.
+- **`Unmeasured:`** — every G1–G7 gate the QA report records as `MISSING_TOOL` or `UNMEASURED`, plus
+  every entry in its `stale_gates:` frontmatter, each with the state that produced it. QA already
+  computes this set and already reports it prominently in its own file; this line is what carries it
+  to the one artifact the user actually reads at the end. `READY_TO_COMMIT` deliberately admits these
+  verdicts as non-failures (`templates/qa.md` → Step 6) — which is defensible *only* if the terminal
+  banner says which gates never ran. Three of seven gates silently unmeasured under a green banner is
+  the exact shape this framework exists to prevent one level down.
+
+- **`Rigor:`** — the level this run was verified at, its source, and everything the level
+  changed: the count of blockers demoted to warnings (from each gate runner's `report.rigor`) and
+  the gates the level skipped. **Print it at every level, `hardened` included.** A reader must never
+  infer the level from a missing line — a `hardened` run and an artifact written before rigor existed
+  are different things, and a cheap green that reads like an expensive one is the failure this whole
+  feature is built to avoid. The level scales the work, never this banner: every line above and below
+  it is required identically at all three levels (ADR-0024, *the invariant disclosure set*).
+
+- **`Instrument moved:`** — every anchored key whose working-tree value disagreed with the merge-base:
+  the nine config keys resolved at Step 0b (`references/config.md` → *The anchored set*) and the four
+  `.cleancode-gates.json` field families the gate runner reports in `report.instrument.moves`
+  (`references/gate-config.md`). Copy the values and directions; do not re-derive them and do not
+  summarise the list. The run already executed on the merge-base values, so this line changes no
+  verdict — it exists because a branch that moved its own instrument, in either direction, is
+  something a reviewer must see before reading anything else on this banner. `none` when nothing
+  moved; `not anchored — no merge-base` when the run had none to read.
+
+**Two lines are required on every terminal banner the run can end on** — this one, `STALLED` in all
+its forms, `BLOCKED`, `BLOCKED_STALE`, and the scope-band and family-budget refusals: `Run cost:` and
+`Spec: {spec_path}`.
+
+**`Spec:` is what makes the run re-enterable under its own budget.** `max_family_cycles` is the only
+budget that survives a run, it resolves from spec provenance, and the positional `SPEC-*` argument is
+the only thing that binds a re-run to the family it belongs to (`references/config.md` → *Accepted
+CLI Args*). A stop banner that does not name its spec forces whoever resumes — a person or
+`product-manager` — to re-type the brief, which mints a fresh `SPEC-*`, which starts the family at
+zero. That is the documented cascade vector, reproduced by the framework's own retry path, and the
+banner that omits one line is what causes it. The complete banner above already carries it; the stop
+banners must too, and it costs nothing at any of them — every stop that can happen after Step 1 has
+`spec_path` bound, and a stop before Step 1 has no run to resume.
+
+**`Run cost:` is not optional and not exclusive to this banner** either. Print it on every banner in
+that same list, using the same line. A stopped run is the case where the
+number matters most, and it is the case where a banner assembled ad hoc is most likely to omit it.
+`{boundary_count}` is the number of rows in `boundaries[]` at the time of the stop, so the reader can
+see whether fifteen hours bought five boundaries or fifty. When `max_run_minutes` is `0` the budget
+clause is dropped and the line still prints.
 
 ### Step 7c — Progress timeline (html mode)
 

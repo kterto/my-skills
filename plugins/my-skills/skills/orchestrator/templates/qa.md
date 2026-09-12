@@ -327,6 +327,8 @@ Result: {PASS | FAIL | MISSING_TOOL | WARN} — {metric value vs threshold, or v
 
 Emit the artifact per `.orchestrator/artifact-format.md`. **Always write the `.md`** (canonical, frontmatter below). Include the **Related** region in the `.md` body — a relative link to the plan, per `.orchestrator/artifact-format.md` → Related navigation. When `output_format=html`, render the paired view by running `node .orchestrator/render-artifact.cjs plans/qa/QA-{NNN}-{slug}.md` (it carries the Related links into the `.html`) — do NOT hand-write HTML. The stdout summary below is identical regardless of format.
 
+**Stamp the run's rigor in the report header** — `Rigor: {level} (from {source})` — at every level, `hardened` included. A reader must never infer it from a missing line.
+
 **Filling the gate table.** The `Threshold` column renders from `.cleancode-gates.json`, per stack —
 print the configured values, never remembered ones, and name the stack in the row when a plan spans
 two. A `Metric` cell must paste back into the config unchanged: write the config's own key names,
@@ -418,8 +420,12 @@ stale_gates: []   # or [{gate: G6, elapsed_minutes: 43}, ...] — gates that exc
 
 ## Step 6 — Set status
 
-- **READY_TO_COMMIT**: All test suites pass, zero lint errors, zero type/build errors, zero format issues, static analysis clean, **every Clean Code gate G1–G7 either PASS or carrying a recorded non-failure verdict** (`MISSING_TOOL`, `UNMEASURED`, or at-or-below a recorded baseline — see `.orchestrator/gate-config.md`), and the family's G8 either `≤ 0.5` or `UNMEASURED`.
-- **BLOCKED**: Any test failure, lint error, type/build error, format issue, or **any G1–G7 measured FAIL**.
+- **READY_TO_COMMIT**: All test suites pass, zero lint errors, zero type/build errors, zero format issues, static analysis clean, **every Clean Code gate G1–G7 either PASS or carrying a recorded non-failure verdict** (`MISSING_TOOL`, `UNMEASURED`, at-or-below a recorded baseline, or `REPORT-ONLY` at this run's rigor — see `.orchestrator/gate-config.md`), and the family's G8 either `≤ 0.5` or `UNMEASURED`.
+- **BLOCKED**: Any test failure, lint error, type/build error, format issue, or **any measured FAIL on a gate that blocks at this run's rigor** (`.orchestrator/gate-config.md` → *Rigor decides block-or-report*).
+
+**A `REPORT-ONLY` gate that failed is still written down, in full.** Below `hardened`, a measured G2/G4/G5/G7 failure — and G1 at `sketch` — does not block, but the row is `REPORT-ONLY — FAIL (n findings, demoted by rigor <level>)`, every finding keeps its file, line, rule and fix hint, and the verdict rationale names the set. **`READY_TO_COMMIT` at `sketch` and `READY_TO_COMMIT` at `hardened` must never be byte-identical**: the first says gates were measured and not enforced, the second says they held. The rigor line in the report header and the `REPORT-ONLY` cells are what carry that difference; never render a demoted failure as `✅`, and never drop it from the table because it did not block.
+
+**G6 below `hardened` is `UNMEASURED (rigor-<level>)`**, listed with the other unmeasured gates and forwarded to the FINAL banner's `Unmeasured:` line. It is not a pass and it is not a missing tool.
 
 **A `MISSING_TOOL` or `UNMEASURED` verdict does not block on its own.** It is not a failure and not a pass: it means no value exists to compare, so blocking on it asks the pipeline to fix something no plan can reach — a stack with no mutation runner never installs one mid-run, and `flutter test --coverage` will not start emitting branch records. Report it prominently, name it in the verdict rationale, and let the run proceed on the gates that *were* measured. Adjudicating it case by case is what let two QA reports on the same feature, hours apart, reach opposite verdicts on an identical unmeasured gate.
 - **READY_WITH_WARNINGS**: All blocking checks pass but the family's G8 ratio is in `0.5 < r ≤ 1.5` (HIGH_REWORK). Plan can ship; flag in report so the human investigates root cause.

@@ -27,6 +27,8 @@ node <skill-dir>/bin/gates.cjs [flags]
 - `--skip G6` — exclude gates (G6 mutation is slow)
 - `--out <dir|->` — report dir (default `./.cleancode`); `-` prints JSON to stdout
 - `--require-tools` — exit 2 if any gate is `missing_tool`
+- `--base-ref <ref>` — anchor the instrument to `<ref>` (see *The instrument is merge-base anchored*). A `diff` scope anchors to its own base automatically; this flag sets it explicitly and outranks the scope.
+- `--rigor <sketch|delivery|hardened>` — how hard this run's verdict is (see *Rigor*). Default `hardened`, which is the pre-rigor behaviour: every gate blocks.
 - `--scaffold` — advice mode: detect stacks and print the exact install commands for any missing gate tooling, then exit 0 (read-only, changes nothing)
 
 ### Exit codes
@@ -46,6 +48,49 @@ A gate reports `status: "missing_tool"` with an install hint (never crashes) whe
 ## Config
 
 On first run it auto-creates `.cleancode-gates.json` in the target project root from detected stacks (per-stack gate commands + thresholds: coverage 85/80, complexity 8, length 30, nesting 2, mutation 70). Edit it to override roots, thresholds, commands, or exemptions. Delete it to regenerate.
+
+### Rigor — what a green run at this level claims
+
+`--rigor` (or a top-level `"rigor"` in `.cleancode-gates.json`) selects one of three levels. Each is named by what a green run at that level **claims**, not by how much effort it spent:
+
+| Level | The promise | G1 | G2 · G4 · G5 · G7 | G6 |
+|---|---|---|---|---|
+| `sketch` | It runs. Nothing is claimed about quality. | report | report | skipped |
+| `delivery` | It does what the Acceptance says, and the happy path is proven. | **blocks** | report | skipped |
+| `hardened` (default) | Plus: the gates hold and the mutants die. | **blocks** | **blocks** | **blocks** |
+
+**Rigor scales the work, never the disclosure.** Every gate still runs at every level and every finding is still reported — what moves is whether a finding *blocks*:
+
+- A **report-only** gate's blockers are **demoted, not deleted**. Each keeps its file, line, rule and fix hint, and gains `demotedFrom: "blocker"` plus the level that demoted it. The gate's `status` falls from `fail` to `warn`; the finding is still in `report.gates[].findings[]` for a fixer to act on.
+- **G6 is the one gate a lower level skips**, because its cost is prohibitive rather than merely real. A skipped gate is `status: "skipped"` with `measurement.state: "unmeasured"` and `reason: "rigor-<level>"` — it is never reported as a pass.
+- A run whose exit code is `0` **because of its level** says so, on stderr and in `report.md`: `RIGOR sketch — 1 blocker demoted to warning (G5); G6 skipped`. A `hardened` run prints nothing, because nothing about its exit code needs explaining.
+- `report.rigor` carries `{ level, source, demoted, reportOnly, skipped }` on **every** report, `hardened` included — a reader must never infer the level from a missing line.
+
+**Precedence: `--rigor` > the config's `rigor` > `hardened`.** An unrecognised value in the config fails closed to `hardened`, never to the lowest bar. The config field is **merge-base anchored** like the thresholds below it, so a branch that sets itself to `sketch` prints `INSTRUMENT MOVED — rigor hardened → sketch (loosening)` and runs at the merge-base level. `docs/adr/0024` in the authoring repo is normative for the level contract.
+
+### The instrument is merge-base anchored
+
+The config lives inside the tree it measures, so the cheapest path to a green gate runs through the config rather than through the code: widen `exempt`, drop a `root`, lower a threshold — all inside the change under review, all silent.
+
+When the run knows a base ref — any `diff` scope, or an explicit `--base-ref` — four field families are read from **that ref's** copy of `.cleancode-gates.json` and the gates run on those values:
+
+| Anchored | Left to the working tree |
+|---|---|
+| `rigor` · `stacks.<s>.roots` · `stacks.<s>.exclude` · `gates.<id>.exempt` · `gates.<id>.thresholds` | `tool` · `runner` · `budget` · `baseline` · everything else |
+
+The split is *what is measured and how hard* versus *how the measurement is performed*. A branch legitimately swaps a runner or raises a G6 budget; a branch that lowers `mutationScore` is changing the verdict it is about to be judged by.
+
+Every field that disagrees is named once, on stderr and in `report.md`, and the line cannot be suppressed:
+
+```
+INSTRUMENT MOVED — node-ts.gates.G2.exempt +3 globs (loosening), node-ts.gates.G1.thresholds.statements 85 → 60 (loosening) — measured against merge-base (origin/main) values
+```
+
+`report.instrument` carries the same as data: `{ anchored, baseRef, source, moves[] }`, present on every report including `anchored: false`. Direction is derived per key — a floor (`statements`, `branches`, `mutationScore`) loosens when it falls, a ceiling (`complexity`, `maxDepth`, `source-lines-of-code`, …) loosens when it rises, and a key neither table knows is reported `changed` with both values rather than guessed at.
+
+**No config at the base ref anchors to the built-in defaults, never to the working-tree copy** — that is also what the merge-base measured at, since the file is auto-created from those defaults. The same applies when it is unparseable there.
+
+A legitimate threshold change still works: land it in its own commit, where the moved line is informative rather than damning. Project, module and files scopes have no base, report `anchored: false`, and claim nothing.
 
 ## Reading the report (for agents/orchestrators)
 
@@ -96,8 +141,8 @@ node <skill-dir>/bin/gates.cjs --scope diff --gates G5 --out -
   **G6 is bounded and may decline.** `gates.G6.budget` takes `perMutantSeconds` (default 120,
   written into the generated config as the per-mutant `timeout`), `totalSeconds` (default 1800,
   the hard bound on the child process) and `maxMutants` (default 400). Before scoring anything
-  the adapter runs `mutation_test -d`, which counts the mutations without running any test, and
-  refuses the run when the mutant count or the worst-case wall clock exceeds the budget. A
+  the dart adapter runs `mutation_test -d`, which counts the mutations without running any test,
+  and refuses the run when the mutant count or the worst-case wall clock exceeds the budget. A
   refused run — and a run killed on the clock — reports `status: error` with
   `measurement.state: "unmeasured"` and the arithmetic that caused it. **Never `pass`:** a scope
   nothing ran against has no score to compare. Every G6 result carries a `measurement` block
@@ -105,6 +150,16 @@ node <skill-dir>/bin/gates.cjs --scope diff --gates G5 --out -
   verified" are separate questions. Because each mutant re-runs the whole test command, G6 over
   a large project is a scheduled artifact, not a per-change gate — use `--scope diff` or a
   narrow module.
+
+  **What each stack enforces, stated rather than assumed.** `perMutantSeconds` and
+  `totalSeconds` are enforced on both stacks: the per-mutant cap is written into the generated
+  tool config (Stryker's `timeoutMS`) and the child is spawned with a hard `timeout` and
+  `SIGKILL`. `maxMutants` is enforced on dart-flutter only — Stryker exposes no count without
+  running the mutants, so there is nothing to refuse *before* the spend, and a node-ts run is
+  bounded by the clock instead of by the count. Stryker also classifies differently and
+  correctly so: it counts a `Timeout` as **detected** (the suite caught a mutant that hangs),
+  where `mutation_test`'s timeouts mean the mutant never ran and score as unmeasured. Each
+  adapter follows its own tool; neither should be "fixed" into the other's semantics.
 - Mirrors the gate semantics in a project's qa agent (`.claude/agents/qa.md` in GSD repos) but decoupled from any plan/CR/QA flow. G8 (rework ratio) is intentionally out of scope — it's a plan-tree metric, not a code property.
 - Tests: `cd <skill-dir> && node --test`.
 - Common skill dirs: Claude Code personal install `~/.claude/skills/clean-code-gates`; opencode local installer `~/.config/opencode/my-skills/plugins/my-skills/skills/clean-code-gates`; opencode remote install cache location is shown in the loaded skill's location.

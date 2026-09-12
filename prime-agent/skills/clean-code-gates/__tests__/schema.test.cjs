@@ -242,6 +242,47 @@ for (const [label, mutate] of negativeCases) {
   });
 }
 
+test('a report whose instrument moved conforms to report.schema.json', () => {
+  const moved = buildReport({
+    scope: { kind: 'diff', baseRef: 'origin/main', files: ['a.ts'], stacks: ['node-ts'] },
+    gateResults: [{ gate: 'G5', name: 'no-comments', stack: 'node-ts', status: 'pass', tool: 'builtin', findings: [] }],
+    instrument: {
+      anchored: true, baseRef: 'origin/main', source: 'merge-base',
+      moves: [
+        { key: 'node-ts.gates.G1.thresholds.statements', from: 85, to: 60, direction: 'loosening' },
+        { key: 'node-ts.gates.G2.exempt', added: 3, removed: 0, direction: 'loosening' },
+      ],
+    },
+    now: '2026-05-31T00:00:00Z', version: '0.1.0',
+  });
+  assert.deepStrictEqual(validate(moved, schema), []);
+});
+
+test('a report whose rigor demoted and skipped gates conforms to report.schema.json', () => {
+  const r = buildReport({
+    scope: { kind: 'diff', baseRef: 'origin/main', files: ['a.ts'], stacks: ['node-ts'] },
+    gateResults: [{
+      gate: 'G2', name: 'complexity', stack: 'node-ts', status: 'warn', tool: 'eslint',
+      findings: [{ id: 'G2-a.ts:4', severity: 'warning', file: 'a.ts', line: 4, rule: 'complexity',
+        message: 'too complex', demotedFrom: 'blocker', rigor: 'sketch' }],
+    }],
+    rigor: { level: 'sketch', source: 'cli', demoted: { G2: 1 }, reportOnly: ['G2'], skipped: ['G6'] },
+    now: '2026-05-31T00:00:00Z', version: '0.1.0',
+  });
+  assert.deepStrictEqual(validate(r, schema), []);
+});
+
+test('a report built with no rigor still carries the hardened stamp', () => {
+  assert.deepStrictEqual(sampleReport.rigor,
+    { level: 'hardened', source: 'default', demoted: {}, reportOnly: [], skipped: [] });
+});
+
+test('a report built with no instrument still carries the unanchored block', () => {
+  assert.deepStrictEqual(sampleReport.instrument,
+    { anchored: false, baseRef: null, source: 'working-tree', moves: [] });
+  assert.deepStrictEqual(validate(sampleReport, schema), []);
+});
+
 test('schema: gate finding required fields and severity enum', () => {
   const finding = sampleReport.gates[0].findings[0];
   assert.ok('id' in finding);
@@ -442,4 +483,50 @@ test('the keyword-form guard detects the forms it exists to catch', () => {
 
   const nestedInItems = { type: 'array', items: { type: 'object', properties: { bag: { type: 'object', additionalProperties: { type: 'number' } } } } };
   assert.deepStrictEqual(unsupportedKeywordForms(nestedInItems), ['$[].bag.additionalProperties: sub-schema form']);
+});
+
+// A gate result carrying the measurement block — the field that separates
+// "did it pass" from "was it actually verified". The dart G6 adapter has
+// emitted it since the mutation-test port and node-ts emits it now, while the
+// published schema rejected it: any consumer validating a real report before
+// trusting it (the natural thing to do with a schema that ships beside the
+// tool) would have thrown on the one result that admits it measured nothing.
+test('a gate result with a measurement block conforms to report.schema.json', () => {
+  const measured = buildReport({
+    scope: { kind: 'diff', files: ['src/a.ts'], stacks: ['node-ts'] },
+    gateResults: [
+      {
+        gate: 'G6',
+        name: 'mutation',
+        stack: 'node-ts',
+        status: 'error',
+        tool: 'stryker',
+        findings: [],
+        measurement: {
+          state: 'unmeasured',
+          reason: 'killed-on-clock',
+          mutants: null,
+          budgetSeconds: 1800,
+        },
+      },
+      {
+        gate: 'G5', name: 'no-comments', stack: 'node-ts', status: 'pass', tool: 'builtin', findings: [],
+        measurement: { state: 'measured', mutants: 12, measured: 12, unrun: 0, excluded: 3 },
+      },
+    ],
+    now: '2026-09-11T00:00:00Z',
+    version: '0.1.0',
+  });
+  const errs = validate(measured, schema);
+  assert.deepStrictEqual(errs, [], `schema violations: ${errs.join('; ')}`);
+});
+
+test('schema: measurement.state rejects a value outside the four documented states', () => {
+  const errs = validate(
+    corrupt((r) => {
+      r.gates[0].measurement = { state: 'probably-fine' };
+    }),
+    schema,
+  );
+  assert.ok(errs.length > 0, 'an undocumented measurement state must not validate');
 });

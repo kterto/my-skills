@@ -56,6 +56,61 @@ Resolve it like this, per gate:
    Note it is consumed by **the project's own lint command**, not by the gate runner — a plausible
    path in that key is not evidence the mechanism is wired. Confirm against `PROJECT-CONTEXT.md`.
 
+### Rigor decides block-or-report — never measure-or-not
+
+The run's `rigor` (preamble line `rigor=`, resolved once at Step 0b) sets **which gates stop the work**. It never sets which gates run, and it never sets what gets written down.
+
+| Gate | `sketch` | `delivery` | `hardened` |
+|---|---|---|---|
+| G1 coverage | report | **blocks** | **blocks** |
+| G2 · G4 · G5 · G7 | report | report | **blocks** |
+| G6 mutation | skipped — `UNMEASURED (rigor-sketch)` | skipped — `UNMEASURED (rigor-delivery)` | **blocks** |
+
+Three rules, and they are the whole contract:
+
+1. **A report-only gate still runs, and its findings are still written.** They are recorded at `warning` severity, marked `demoted from blocker by rigor <level>`, and they appear in the coder's progress log, the QA gate table and the CR exactly as a blocking finding would — with their file, line, rule and fix hint intact. A fixer agent can act on them; the phase simply does not stop for them.
+2. **G6's skip is a disclosure, not a silence.** It is recorded `UNMEASURED` with the reason `rigor-<level>`, it lands in QA's unmeasured set, and it reaches the FINAL banner's `Unmeasured:` line like any other gate that did not produce a verdict. It is never reported as a pass.
+3. **The level changes no threshold.** `.cleancode-gates.json` is read identically at every level; a demoted G2 finding is the *same* finding at the *same* complexity limit, reported differently. A role that "relaxes a threshold because the run is a sketch" has misread this section.
+
+**When `clean-code-gates` runs the gate, pass the level through** — `--rigor <level>`, alongside the `--base-ref` the changed-file set below is computed from. The runner applies the table above, stamps `report.rigor`, and prints one line when the level changed a verdict:
+
+```
+RIGOR sketch — 3 blockers demoted to warning (G2, G5); G6 skipped
+```
+
+**When you run the project's own gate command by hand, apply the same table yourself** and write the same annotation into your report. The two paths must not disagree about what a green means.
+
+**No role may change the level.** A coder that finds `sketch` too low for what it is touching, or a reviewer that judges the opposite, records that as a finding and proceeds at the level it was given. A pipeline that can choose its own standard has no standard (ADR-0024).
+
+### The instrument is anchored to the merge-base
+
+`.cleancode-gates.json` holds every blocking number, it is deep-merged user-wins, and it sits **inside the tree being measured**. So the cheapest path to a green gate does not run through the code — it runs through the config: widen `exempt`, drop a `root`, lower a threshold, all inside the change under review, all silent. That is the same failure `SKILL.md` Step 0b anchors `.orchestrator/config.json` against, one level down.
+
+**Four field families resolve from `$mb` — the merge-base — and the gate runs on those values:**
+
+| Anchored to `$mb` | Read from the working tree |
+|---|---|
+| `stacks.<stack>.roots` | `gates.<id>.tool` |
+| `stacks.<stack>.exclude` | `gates.<id>.runner` |
+| `gates.<id>.exempt` | `gates.<id>.budget` |
+| `gates.<id>.thresholds` | `stacks.<stack>.baseline`, everything else |
+
+The line between the columns is **what is measured and how hard** versus **how the measurement is performed**. A branch legitimately swaps a test runner or raises a G6 time budget; a branch that lowers `mutationScore` is editing the verdict it is about to be judged by.
+
+**When the runner does this for you.** `clean-code-gates` anchors on its own whenever it knows a base ref — any `--scope diff[:<ref>]`, or an explicit `--base-ref <ref>` — emits the moved line on stderr and in `report.md`, and carries `report.instrument` as data. **Always give it the ref**: a `project`, `module` or `files` scope has no base, reports `anchored: false`, and reads the working-tree config. Run the gates against the same base the changed-file set below is computed from.
+
+**When you read the config by hand** — to render the `Threshold` column, to cite a number in a report, to decide whether a file is exempt — read those four families from `git show $mb:./.cleancode-gates.json`, and fall back to the tool's built-in defaults when the file is absent or unparseable **there**, never to the working-tree copy. The merge-base measured at those defaults too, since the file is auto-created from them.
+
+**Print the disagreement, once, and never suppress it:**
+
+```
+INSTRUMENT MOVED — node-ts.gates.G2.exempt +3 globs (loosening), node-ts.gates.G1.thresholds.statements 85 → 60 (loosening) — measured against merge-base (origin/main) values
+```
+
+A **floor** (`statements`, `branches`, `lines`, `functions`, `mutationScore`) loosens when it falls. A **ceiling** (`complexity`, `maxDepth`, `maxLinesPerFunction`, `maxParams`, `maxStatements`, `cyclomatic-complexity`, `maximum-nesting-level`, `number-of-parameters`, `source-lines-of-code`) loosens when it rises. A glob list loosens when `exempt` or `exclude` grow, or when `roots` shrink. Anything else prints `(changed)` with both values rather than a guessed direction.
+
+**A loosening move is a finding, not a config read.** Carry the line into the report that owns the gate — QA's gate table notes, the reviewer's findings — verbatim, and never summarised. A tightening move prints too: whoever wrote it needs to know it did not take effect on this run. The escape is to move the instrument in a separate, earlier commit, where the line is informative rather than damning — which is the same bar a human faces.
+
 **The changed-file set — compute it this way, never with a two-dot range.** Every gate scopes to the
 files this run changed, and **the pipeline never commits**: the coder leaves work in the working tree
 and the run ends at `READY_TO_COMMIT`. A range like `base..HEAD` sees only committed history, so on
