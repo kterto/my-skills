@@ -514,12 +514,21 @@ over time** — and merging them would leave half the ledger unavailable to an `
 
 #### The run meter — evaluated at every boundary
 
-**Every boundary row already carries the timestamp this needs.** When `max_run_minutes > 0`, compute
-`elapsed = now − run_started_at` as each boundary is written, and print it beside the boundary:
+**Every boundary row already carries the timestamp this needs.** Compute
+`elapsed = now − run_started_at` as each boundary is written, and print it beside the boundary —
+**always, whatever `max_run_minutes` is set to**:
 
 ```
 ORCHESTRATOR — boundary {step}/{cycle}: {elapsed_minutes}m elapsed of {max_run_minutes}m
+ORCHESTRATOR — boundary {step}/{cycle}: {elapsed_minutes}m elapsed (no run budget set)
 ```
+
+**`max_run_minutes` caps the run; it does not enable the measurement.** The first form is printed
+when a budget is set, the second when it is `0`. A run that cannot state what it has spent cannot be
+reasoned about afterwards either, and the inputs are already on disk: Step 0a writes `boundaries[0].at`
+before the pipeline branches and Step 0b binds `run_started_at` from it unconditionally, so the number
+costs a subtraction. Reporting is not a policy decision; **stopping** is, and that is what the key
+governs.
 
 When `elapsed_minutes >= max_run_minutes`, **do not open another cycle.** Finish the step in flight,
 then stop with a `Status: STALLED` banner naming the elapsed time, the boundary reached, and what
@@ -536,7 +545,8 @@ Status: STALLED
 **Evaluate it at each of the five boundary mints — Steps 3, 3j, 4c, 5d and 0a — not "wherever a
 boundary is written".** 0a is the run's own start and can only print `0m`. The other four are the
 decision points: each sits immediately before the run would open another cycle, which is the only
-place stopping is both safe and useful.
+place stopping is both safe and useful. **The comparison against the budget happens only when
+`max_run_minutes > 0`; the print happens at all five either way.**
 
 **This is a stop, not a kill, but be honest about what resumes.** Every artifact written so far stays
 on disk and the plan keeps its status. What does **not** happen is automatic re-entry: `--resume` is
@@ -550,8 +560,11 @@ The point is that the run can answer *how long have I been going* at all: cycle 
 for spend that stops tracking the moment one cycle costs ten times another, and a run that reached
 every one of its cycle caps can still have spent fifteen hours without a single mechanism noticing.
 
-**Off by default** (`max_run_minutes: 0`), because a badly chosen bound stops good runs. Set it once
-the project has a baseline for what its runs cost.
+**The stop is off by default** (`max_run_minutes: 0`), because a badly chosen bound stops good runs.
+Set it once the project has a baseline for what its runs cost — and the elapsed line printed at every
+boundary, plus the `Run cost:` line in the terminal banner (Step 7b), is how that baseline is
+acquired. Off-by-default is a defensible choice for a stop; it was never a defensible choice for a
+number, and for its first year this meter had no way to report one.
 
 **`suites[]` has consumers; `boundaries[]` does not yet.** The tester, QA and the outer join all read
 `suites[]` through the inheritance rule above. `boundaries[]` is read by the `delta=` line the reviewer
@@ -928,9 +941,19 @@ Status: STALLED
 **Derive the split mechanically from what is already on disk** — never invent one. Read the spec's
 `###` sub-headings inside `## Functional requirements` and group contiguous blocks until each group
 reaches the budget; when the plan's phase boundaries are coarser than those headings, prefer the
-phases, because each phase is already required to exit on a green tree and is therefore already a
-shippable unit. Print the groups with their FR ranges. A refusal without a split is a wall; a refusal
-that names the four runs it would rather see is a plan.
+phases, because a phase boundary is where the plan itself already cuts the work and where the
+coverage map, the commands table and the task list already line up. Print the groups with their FR
+ranges, and give each group a `needs:` line naming the groups it depends on. A refusal without a
+split is a wall; a refusal that names the four runs it would rather see is a plan.
+
+**Do not tell the operator a phase exits on a green tree — it does not, by design.** The phase-exit
+criterion is that every applicable gate command *ran and its verdict was recorded* — "exit 0, or a
+carried `GATE` entry naming the fix that was rejected and why" (`templates/architect.md` → the
+per-phase gate block), and `templates/coder.md` states in terms that a gate finding is not a
+`BLOCKED` stop: clear what you can, record what you cannot, proceed. Verification lives at the
+boundaries the run actually mints — the tester, the reviewer, QA and Step 4e — not at a phase exit,
+which records verdicts rather than enforcing them. A split group is therefore a smaller unit of
+*work*, and the runs it becomes are what verify it.
 
 **Run Step 7c before stopping**, as every other stop that occurs after a plan exists does — a halted
 run still produces its timeline. The run meter's stop below carries the same obligation.
@@ -1772,6 +1795,8 @@ Final report: plans/final/FINAL-{NNN}-{slug}.md
 Tester: {tester_status} (coverage {after} — stmts/branches per stack)
 QA report: {qa_report_path}
 Spec eval: {PASS | ISSUES | SKIPPED}{ — {N} actionable, {M} recorded}{, graded before {qa_cycle} QA remediation(s) — see Step 4e}
+Delivered: {m} / {t} spec requirements carry passing evidence
+Unmeasured: {gate — state, comma-separated, e.g. "G2 — MISSING_TOOL, G6 — UNMEASURED (no denominator)"} (or "none")
 Deferred by decision: {criterion — reason, one per line, or "none"}
 Issues found:
   - {issue} (or "none")
@@ -1792,9 +1817,38 @@ Review cycles used: {review_cycle} / {review_budget}{, clamped by the family rem
 QA cycles used: {qa_cycle} / {max_qa_cycles}
 Spec eval cycles used: {eval_cycle} / {max_eval_cycles}
 Family reviews to date: {family_cr_count, or n/a} / {max_family_cycles} (rework ratio {g8_family, or n/a})
+Run cost: {elapsed_minutes}m across {boundary_count} boundaries{ / {max_run_minutes}m budget, when one is set}
 
 Output only — review the diff, then commit and open the PR yourself.
 ```
+
+**`Delivered:` and `Unmeasured:` are the run's delivery statement, and neither is computed from the
+plan.** Four of the banner's lines are cycle counters — they say what the pipeline did. These two say
+what the run has to show for it, and both come from evidence already on disk:
+
+- **`Delivered: {m} / {t}`** — `t` is the number of rows in the root plan's `## Requirement Coverage`
+  map, the pre-registered commitment, and `m` is the number of those requirements the spec eval's
+  per-criterion evidence matrix (verified above to hold exactly `t` rows) marks met **with evidence
+  cited**. Count the matrix, never the plan: a requirement is delivered when something outside the
+  plan says so, or the number is the plan grading itself. **When `eval_status` is `SKIPPED` there is
+  no matrix, so print `Delivered: not graded — spec eval SKIPPED ({t} requirements committed)` and
+  never a ratio.** An ungraded run has no delivery claim to make, and a missing line reads as zero
+  problems rather than as no evidence.
+- **`Unmeasured:`** — every G1–G7 gate the QA report records as `MISSING_TOOL` or `UNMEASURED`, plus
+  every entry in its `stale_gates:` frontmatter, each with the state that produced it. QA already
+  computes this set and already reports it prominently in its own file; this line is what carries it
+  to the one artifact the user actually reads at the end. `READY_TO_COMMIT` deliberately admits these
+  verdicts as non-failures (`templates/qa.md` → Step 6) — which is defensible *only* if the terminal
+  banner says which gates never ran. Three of seven gates silently unmeasured under a green banner is
+  the exact shape this framework exists to prevent one level down.
+
+**`Run cost:` is not optional and not exclusive to this banner.** Print it on **every terminal
+banner the run can end on** — this one, `STALLED` in all its forms, `BLOCKED`, `BLOCKED_STALE`, and
+the scope-band and family-budget refusals — using the same line. A stopped run is the case where the
+number matters most, and it is the case where a banner assembled ad hoc is most likely to omit it.
+`{boundary_count}` is the number of rows in `boundaries[]` at the time of the stop, so the reader can
+see whether fifteen hours bought five boundaries or fifty. When `max_run_minutes` is `0` the budget
+clause is dropped and the line still prints.
 
 ### Step 7c — Progress timeline (html mode)
 
