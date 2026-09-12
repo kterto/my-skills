@@ -96,8 +96,8 @@ node <skill-dir>/bin/gates.cjs --scope diff --gates G5 --out -
   **G6 is bounded and may decline.** `gates.G6.budget` takes `perMutantSeconds` (default 120,
   written into the generated config as the per-mutant `timeout`), `totalSeconds` (default 1800,
   the hard bound on the child process) and `maxMutants` (default 400). Before scoring anything
-  the adapter runs `mutation_test -d`, which counts the mutations without running any test, and
-  refuses the run when the mutant count or the worst-case wall clock exceeds the budget. A
+  the dart adapter runs `mutation_test -d`, which counts the mutations without running any test,
+  and refuses the run when the mutant count or the worst-case wall clock exceeds the budget. A
   refused run — and a run killed on the clock — reports `status: error` with
   `measurement.state: "unmeasured"` and the arithmetic that caused it. **Never `pass`:** a scope
   nothing ran against has no score to compare. Every G6 result carries a `measurement` block
@@ -105,6 +105,16 @@ node <skill-dir>/bin/gates.cjs --scope diff --gates G5 --out -
   verified" are separate questions. Because each mutant re-runs the whole test command, G6 over
   a large project is a scheduled artifact, not a per-change gate — use `--scope diff` or a
   narrow module.
+
+  **What each stack enforces, stated rather than assumed.** `perMutantSeconds` and
+  `totalSeconds` are enforced on both stacks: the per-mutant cap is written into the generated
+  tool config (Stryker's `timeoutMS`) and the child is spawned with a hard `timeout` and
+  `SIGKILL`. `maxMutants` is enforced on dart-flutter only — Stryker exposes no count without
+  running the mutants, so there is nothing to refuse *before* the spend, and a node-ts run is
+  bounded by the clock instead of by the count. Stryker also classifies differently and
+  correctly so: it counts a `Timeout` as **detected** (the suite caught a mutant that hangs),
+  where `mutation_test`'s timeouts mean the mutant never ran and score as unmeasured. Each
+  adapter follows its own tool; neither should be "fixed" into the other's semantics.
 - Mirrors the gate semantics in a project's qa agent (`.claude/agents/qa.md` in GSD repos) but decoupled from any plan/CR/QA flow. G8 (rework ratio) is intentionally out of scope — it's a plan-tree metric, not a code property.
 - Tests: `cd <skill-dir> && node --test`.
 - Common skill dirs: Claude Code personal install `~/.claude/skills/clean-code-gates`; opencode local installer `~/.config/opencode/my-skills/plugins/my-skills/skills/clean-code-gates`; opencode remote install cache location is shown in the loaded skill's location.

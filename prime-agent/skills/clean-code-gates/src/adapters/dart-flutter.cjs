@@ -5,6 +5,7 @@ const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { G1_EXEMPTIONS } = require('../../defaults.cjs');
 const { toPosix } = require('../scope.cjs');
+const { g6Budget } = require('./g6-budget.cjs');
 
 /**
  * dart-flutter adapter.
@@ -724,18 +725,6 @@ function xmlEscape(s) {
  * finishes and one that does not. Everything is written to a temp dir that is
  * removed afterwards, so no mutation-test-report/ litter reaches the tree.
  */
-const G6_BUDGET_DEFAULTS = { perMutantSeconds: 120, totalSeconds: 1800, maxMutants: 400 };
-
-function g6Budget(g6cfg) {
-  const b = (g6cfg && g6cfg.budget) || {};
-  const num = (v, d) => (Number.isFinite(v) && v > 0 ? v : d);
-  return {
-    perMutantSeconds: num(b.perMutantSeconds, G6_BUDGET_DEFAULTS.perMutantSeconds),
-    totalSeconds: num(b.totalSeconds, G6_BUDGET_DEFAULTS.totalSeconds),
-    maxMutants: num(b.maxMutants, G6_BUDGET_DEFAULTS.maxMutants),
-  };
-}
-
 function runMutationTest(flutter, stackCfg, io, targets, g6cfg = {}, deps = {}) {
   const exec = deps.execFileSync || execFileSync;
   const dart = dartInvocation(flutter);

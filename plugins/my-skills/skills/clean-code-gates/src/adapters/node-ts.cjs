@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
+const { g6Budget } = require('./g6-budget.cjs');
 const { G1_EXEMPTIONS } = require('../../defaults.cjs');
 const { toPosix } = require('../scope.cjs');
 
@@ -25,6 +26,10 @@ const GATE_META = {
 
 const MUTATION_KILLED = new Set(['Killed', 'Timeout']);
 const MUTATION_UNDETECTED = new Set(['Survived', 'NoCoverage']);
+// Stryker refuses to score these itself: they say something about the mutation
+// operator, never about the tests. Counting them either way would be a made-up
+// number — they are reported and kept out of the ratio.
+const MUTATION_EXCLUDED = new Set(['CompileError', 'RuntimeError', 'Ignored']);
 
 /**
  * Default @typescript-eslint/naming-convention policy: camelCase identifiers,
@@ -512,13 +517,17 @@ function runG4(files, stackCfg, io) {
 
 // ---- G6: mutation (stryker) --------------------------------------------
 
-function writeStrykerConfig(targets, reportPath, excludedMutations, runner) {
+function writeStrykerConfig(targets, reportPath, excludedMutations, runner, budget) {
   const cfg = {
     testRunner: runner,
     coverageAnalysis: 'perTest',
     mutate: targets,
     reporters: ['json'],
     jsonReporter: { fileName: reportPath },
+    // The per-mutant cap. Without it one mutant that sends the suite into a
+    // loop is bounded only by the whole-run timeout below, which spends the
+    // entire budget proving one thing.
+    timeoutMS: budget.perMutantSeconds * 1000,
   };
   if (runner === 'jest') {
     cfg.jest = { configFile: 'package.json', enableFindRelatedTests: true };
@@ -532,24 +541,55 @@ function writeStrykerConfig(targets, reportPath, excludedMutations, runner) {
   return cfgPath;
 }
 
-function fileMutationScore(mutants) {
-  let killed = 0;
+/**
+ * Classify one file's mutants and score the ones that actually ran.
+ *
+ * Four buckets, not two. DETECTED and UNDETECTED are the ratio. EXCLUDED is
+ * what Stryker itself refuses to score — a mutant that would not compile was
+ * never a test of anything. UNRUN is `Pending` and any status this adapter does
+ * not recognise: the run ended before it reached them, so they are missing
+ * evidence rather than surviving mutants, and they make the measurement
+ * partial instead of lowering the score.
+ *
+ * `score` is null when nothing was scorable. It used to be 100 — a file whose
+ * every mutant failed to compile returned a perfect score and passed the gate,
+ * which is the vacuous green `run.cjs` raises `assertNonEmptyScope` to forbid
+ * one level up.
+ *
+ * A `Timeout` counts as DETECTED here and as unmeasured in the dart adapter,
+ * and both are right: Stryker times a mutant out against the test suite, so a
+ * hang is the suite catching it, while `mutation_test`'s timeouts mean the
+ * mutant never ran at all. The divergence follows the tools, not a preference.
+ */
+function g6Score(mutants) {
+  let detected = 0;
   let undetected = 0;
+  let unrun = 0;
+  let excluded = 0;
   const survivors = [];
-  for (const m of mutants) {
-    if (MUTATION_KILLED.has(m.status)) killed++;
+  for (const m of mutants || []) {
+    if (MUTATION_KILLED.has(m.status)) detected++;
     else if (MUTATION_UNDETECTED.has(m.status)) {
       undetected++;
       survivors.push(m);
-    }
+    } else if (MUTATION_EXCLUDED.has(m.status)) excluded++;
+    else unrun++;
   }
-  const denom = killed + undetected;
-  return { score: denom ? (100 * killed) / denom : 100, undetected, survivors };
+  const valid = detected + undetected;
+  return {
+    score: valid ? (detected / valid) * 100 : null,
+    valid,
+    detected,
+    undetected,
+    unrun,
+    excluded,
+    survivors,
+  };
 }
 
 function mutationFindings(rel, mutants, threshold) {
-  const { score, undetected, survivors } = fileMutationScore(mutants);
-  if (score >= threshold) return [];
+  const { score, undetected, survivors } = g6Score(mutants);
+  if (score === null || score >= threshold) return [];
 
   const findings = [
     {
@@ -578,7 +618,98 @@ function mutationFindings(rel, mutants, threshold) {
   return findings;
 }
 
-function runG6(files, stackCfg, io) {
+/**
+ * A G6 run that produced no scorable report. `error`, never `pass`: a scope
+ * nothing ran against has no score to compare, and a pass that measured
+ * nothing must not be byte-identical to a pass that did.
+ */
+function g6Unmeasured(run, { targets, threshold, command }) {
+  const reason = run.reason || 'no-report';
+  const detail = run.detail
+    ? `${reason} — ${run.detail}`
+    : `the run did not produce a scorable report (${reason})`;
+  return gateResult('G6', 'error', {
+    command,
+    thresholds: { mutationScore: threshold },
+    measurement: {
+      state: 'unmeasured',
+      reason,
+      mutants: run.mutants ?? null,
+      budgetSeconds: run.budget ? run.budget.totalSeconds : null,
+    },
+    findings: [{
+      id: 'G6:unmeasured',
+      severity: 'blocker',
+      file: targets[0] || '.',
+      line: 1,
+      rule: 'mutation/unmeasured',
+      message: `mutation testing did not run: ${detail}`,
+      fixHint: 'Narrow the scope, raise gates.G6.budget, or fix the runner — then re-run G6',
+    }],
+  });
+}
+
+/**
+ * Turn a Stryker json report into the gate verdict plus the `measurement` block
+ * that says whether anything was verified at all.
+ */
+function g6Verdict(report, opts) {
+  const { targets, threshold, command } = opts;
+  const thresholds = { mutationScore: threshold };
+  if (opts.unmeasured) return g6Unmeasured({ ...opts.unmeasured, budget: opts.budget }, opts);
+  // An empty scope is a complete answer, and a common one — a diff of test
+  // files alone mutates nothing. It passes, and says it measured nothing.
+  if (!targets.length) {
+    return gateResult('G6', 'pass', {
+      command, thresholds, measurement: { state: 'empty', mutants: 0 },
+    });
+  }
+  if (!report) return g6Unmeasured({ reason: 'no-report', budget: opts.budget }, opts);
+
+  const findings = [];
+  const totals = { mutants: 0, valid: 0, unrun: 0, excluded: 0 };
+  for (const key of Object.keys(report.files || {})) {
+    const rel = toPosix(path.isAbsolute(key) ? path.relative(opts.root || '', key) : key);
+    const mutants = report.files[key].mutants || [];
+    const s = g6Score(mutants);
+    totals.mutants += mutants.length;
+    totals.valid += s.valid;
+    totals.unrun += s.unrun;
+    totals.excluded += s.excluded;
+    findings.push(...mutationFindings(rel, mutants, threshold));
+  }
+
+  if (totals.mutants === 0 || (totals.valid === 0 && totals.unrun === 0)) {
+    return gateResult('G6', 'pass', {
+      command, thresholds, measurement: { state: 'empty', mutants: totals.mutants },
+    });
+  }
+  // Mutants exist and none of them ran: there is no ratio, so this is
+  // unmeasured rather than a zero.
+  if (totals.valid === 0) {
+    return g6Unmeasured(
+      { reason: 'nothing-ran', mutants: totals.mutants, budget: opts.budget },
+      opts,
+    );
+  }
+
+  const blocked = findings.some((f) => f.severity === 'blocker');
+  return gateResult('G6', blocked ? 'fail' : 'pass', {
+    command,
+    thresholds,
+    findings,
+    measurement: {
+      state: totals.unrun ? 'partial' : 'measured',
+      mutants: totals.mutants,
+      measured: totals.valid,
+      unrun: totals.unrun,
+      excluded: totals.excluded,
+    },
+  });
+}
+
+function runG6(files, stackCfg, io, deps = {}) {
+  const exec = deps.execFileSync || execFileSync;
   const strykerBin = binPath(io.root, 'stryker');
   if (!strykerBin) return missingTool('G6', stackCfg);
 
@@ -604,43 +735,52 @@ function runG6(files, stackCfg, io) {
   const excludedMutations = g6Cfg.excludedMutations || [];
   const targets = scopedTargets(files, stackCfg, 'G6');
   const command = 'stryker run';
-  if (!targets.length) return gateResult('G6', 'pass', { command, thresholds });
+  const budget = g6Budget(g6Cfg);
+  const opts = { targets, threshold, command, budget, root: io.root };
+  if (!targets.length) return g6Verdict(null, opts);
 
   const reportDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccg-mutation-'));
   const reportPath = path.join(reportDir, 'mutation.json');
-  const cfgPath = writeStrykerConfig(targets, reportPath, excludedMutations, runner);
+  const cfgPath = writeStrykerConfig(targets, reportPath, excludedMutations, runner, budget);
 
+  let killed = false;
   try {
-    execFileSync(strykerBin, ['run', cfgPath], {
+    exec(strykerBin, ['run', cfgPath], {
       cwd: io.root,
       stdio: ['ignore', 'ignore', 'ignore'],
       maxBuffer: 64 * 1024 * 1024,
+      // Without this the 43-minute-hang class stays unmitigated on this stack:
+      // the dart adapter has carried both since the run that motivated them,
+      // and node-ts spawned Stryker with no clock at all. SIGKILL because a
+      // wedged runner is exactly what SIGTERM is already failing to stop.
+      timeout: budget.totalSeconds * 1000,
+      killSignal: 'SIGKILL',
     });
-  } catch {
-    // Stryker exits non-zero only when a break threshold is hit; the report is
-    // still written. A missing report (below) is the real failure signal.
+  } catch (err) {
+    // Stryker exits non-zero when a break threshold is hit and still writes the
+    // report, so a failure here is not itself the signal. Being killed on the
+    // clock is: whatever is on disk then is a partial run nobody asked for.
+    if (err && (err.code === 'ETIMEDOUT' || err.signal === 'SIGKILL')) killed = true;
   }
 
-  if (!fs.existsSync(reportPath)) return gateResult('G6', 'error', { command, thresholds });
+  if (killed) {
+    return g6Verdict(null, {
+      ...opts,
+      unmeasured: {
+        reason: 'killed-on-clock',
+        detail: `exceeded the ${budget.totalSeconds}s budget`,
+      },
+    });
+  }
+  if (!fs.existsSync(reportPath)) return g6Verdict(null, opts);
   let report;
   try {
     report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
   } catch {
-    return gateResult('G6', 'error', { command, thresholds });
+    return g6Verdict(null, { ...opts, unmeasured: { reason: 'unparseable-report' } });
   }
 
-  const findings = [];
-  for (const key of Object.keys(report.files || {})) {
-    const rel = toPosix(path.isAbsolute(key) ? path.relative(io.root, key) : key);
-    findings.push(...mutationFindings(rel, report.files[key].mutants, threshold));
-  }
-
-  const blocked = findings.some((f) => f.severity === 'blocker');
-  return gateResult('G6', blocked ? 'fail' : 'pass', {
-    command,
-    thresholds,
-    findings,
-  });
+  return g6Verdict(report, opts);
 }
 
 // ---- G7: dependency structure (dependency-cruiser) ---------------------
@@ -721,6 +861,7 @@ function runG7(files, stackCfg, io) {
 }
 
 module.exports = {
+  _internals: { g6Score, g6Verdict, g6Budget, writeStrykerConfig, runG6 },
   detectRunner,
   resolveRunner,
   isExempt,

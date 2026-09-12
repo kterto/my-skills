@@ -443,3 +443,49 @@ test('the keyword-form guard detects the forms it exists to catch', () => {
   const nestedInItems = { type: 'array', items: { type: 'object', properties: { bag: { type: 'object', additionalProperties: { type: 'number' } } } } };
   assert.deepStrictEqual(unsupportedKeywordForms(nestedInItems), ['$[].bag.additionalProperties: sub-schema form']);
 });
+
+// A gate result carrying the measurement block — the field that separates
+// "did it pass" from "was it actually verified". The dart G6 adapter has
+// emitted it since the mutation-test port and node-ts emits it now, while the
+// published schema rejected it: any consumer validating a real report before
+// trusting it (the natural thing to do with a schema that ships beside the
+// tool) would have thrown on the one result that admits it measured nothing.
+test('a gate result with a measurement block conforms to report.schema.json', () => {
+  const measured = buildReport({
+    scope: { kind: 'diff', files: ['src/a.ts'], stacks: ['node-ts'] },
+    gateResults: [
+      {
+        gate: 'G6',
+        name: 'mutation',
+        stack: 'node-ts',
+        status: 'error',
+        tool: 'stryker',
+        findings: [],
+        measurement: {
+          state: 'unmeasured',
+          reason: 'killed-on-clock',
+          mutants: null,
+          budgetSeconds: 1800,
+        },
+      },
+      {
+        gate: 'G5', name: 'no-comments', stack: 'node-ts', status: 'pass', tool: 'builtin', findings: [],
+        measurement: { state: 'measured', mutants: 12, measured: 12, unrun: 0, excluded: 3 },
+      },
+    ],
+    now: '2026-09-11T00:00:00Z',
+    version: '0.1.0',
+  });
+  const errs = validate(measured, schema);
+  assert.deepStrictEqual(errs, [], `schema violations: ${errs.join('; ')}`);
+});
+
+test('schema: measurement.state rejects a value outside the four documented states', () => {
+  const errs = validate(
+    corrupt((r) => {
+      r.gates[0].measurement = { state: 'probably-fine' };
+    }),
+    schema,
+  );
+  assert.ok(errs.length > 0, 'an undocumented measurement state must not validate');
+});
