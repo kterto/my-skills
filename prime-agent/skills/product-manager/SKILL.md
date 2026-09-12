@@ -56,6 +56,7 @@ Default: `conservative=true`.
 |---|---|---|---|
 | `conservative` | bool | `--conservative` flag > `pm.config.json.conservative` > `true` | Halt after a human-validation spot when `true`. |
 | `base_branch` | string | `--base` flag > `pm.config.json.base_branch` > the starting branch | The run base branch used by `references/git-flow.md` → Base resolution. When neither `--base` nor `base_branch` is set, the branch PM was invoked on is the run base. |
+| `max_queue_minutes` | integer ≥ 0 | `pm.config.json.max_queue_minutes` > `0` | Wall-clock budget for the whole resolved story queue. `0` means **no stop**, never *no measurement*: per-story `cost` and the running total are recorded and printed either way (mirrors the orchestrator's `max_run_minutes`, `references/config.md`). Above `0`, PM stops before cutting the next story's branch once the total is reached. |
 
 ---
 
@@ -138,14 +139,26 @@ For each story in the queue, PM executes the following steps in order:
    - **Run the timestamp-parity gate** (html-mode roadmaps only; see `references/git-flow.md` → **Timestamp-parity gate**) over the freshly re-rendered pages — a red gate halts the run before the sync docs are committed.
    - Commit the roadmap sync docs **only** (`roadmap.lock.json`, READMEs) in a `docs(roadmap): sync <id>` commit — no logs here; they need the PR URL.
    - Push `pm/<id>-<slug>` to origin.
-   - Run the **human-validation check** (step 5), render `templates/pr-body.template.md` (its `{{human_validation_note}}` comes from that check), open the PR with `gh pr create --body-file`, and capture the PR URL.
+   - Run the **human-validation check** (step 5), render `templates/pr-body.template.md` (its `{{human_validation_note}}` comes from that check; its `{{not_delivered}}` is the orchestrator banner's `Delivered:` / `Unmeasured:` / `Deferred by decision:` / `Issues found:` lines copied verbatim, never re-derived or summarized), open the PR with `gh pr create --body-file`, and capture the PR URL.
    - **Write and commit PM's logs** (step 6): with the PR URL known, append the `pm-progress.md` row (and, autonomous-mode-flagged, the `human-validation-queue.md` row), commit them as `chore(pm): log <id>`, and push. This dedicated post-PR commit keeps the working tree clean before the next story's branch is cut.
 
 5. **Human-validation check.** Scan the story's `## Acceptance` section and the orchestrator's QA report for validation markers (see `references/human-validation.md` → **Detection sources**). The result sets the PR-body `{{human_validation_note}}` before the PR is opened. Then apply mode behavior:
    - **conservative (default):** if flagged, halt the loop after the PR is open and its log commit is made, surfacing a validation request (story id, PR URL, matched items). The user re-runs PM with the same scope to resume — the Filter step skips the now-`done` story automatically.
    - **autonomous (`--conservative=false`):** if flagged, append a row to `/roadmap/human-validation-queue.md` embedding the PR URL (committed in the `chore(pm): log <id>` commit in step 6) and continue to the next story.
 
-6. **Append log entry.** After the PR is open, write one row to `/roadmap/pm-progress.md` using `templates/pm-progress-entry.template.md` (see `references/resume-and-logging.md` → **Log** and **Entry fields**), filling `commit`, `pr` (the PR URL), and `state`. The log is append-only; existing rows are never modified. This row plus any `human-validation-queue.md` row are committed together as `chore(pm): log <id>` and pushed, so they do not dirty the tree for the next story.
+6. **Append log entry.** After the PR is open, write one row to `/roadmap/pm-progress.md` using `templates/pm-progress-entry.template.md` (see `references/resume-and-logging.md` → **Log** and **Entry fields**), filling `commit`, `pr` (the PR URL), `state`, and `cost`. The log is append-only; existing rows are never modified. This row plus any `human-validation-queue.md` row are committed together as `chore(pm): log <id>` and pushed, so they do not dirty the tree for the next story.
+
+7. **Meter the story, and the queue.** `cost` is the wall-clock minutes of this story's PM span — from the branch cut in step 1 to this log row — recorded **whatever `max_queue_minutes` is set to**. The orchestrator's own `max_run_minutes` is bound per run from that run's `boundaries[0].at` and resets at every Step 0b, so it cannot see a loop: a twenty-story milestone in which every run finishes inside a disciplined 60-minute budget still legally consumes twenty hours, and before this row nothing anywhere could say so. After each story, print the running total and, when `max_queue_minutes > 0` and the total has reached it, **stop before cutting the next branch** rather than mid-story:
+
+   ```
+   PRODUCT-MANAGER — story {id} complete: {story_minutes}m (queue total {queue_minutes}m{ / {max_queue_minutes}m})
+   PRODUCT-MANAGER — queue budget exhausted
+   Queue total: {queue_minutes}m / {max_queue_minutes}m over {n} stories
+   Stopped before: {next story id}
+   Remaining: {ids not started}
+   ```
+
+   The stop leaves every completed story committed, pushed and PR'd — it declines to start the next one. Resume by re-running PM with the same scope: the Filter step skips the stories already `done`. The queue total is recomputed from the log's `cost` column on resume, so a resumed queue does not silently restart its budget at zero; say so in the resume line when it happens.
 
 ---
 

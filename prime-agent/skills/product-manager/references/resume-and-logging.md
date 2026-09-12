@@ -31,6 +31,7 @@ Each log entry records the following fields. The order here is the column order 
 | `pr` | URL string or `—` | The PR URL opened by PM for this story; `—` if no PR was opened. |
 | `human_validation` | `none` \| `flagged: <source>` | Detection result from `references/human-validation.md`. Source is `acceptance` or `qa-report`. |
 | `notes` | Free text | Unmet dependencies, warnings, stop reason, or any other context recorded at entry time. Empty string if nothing to note. |
+| `cost` | Integer minutes | Wall-clock minutes of this story's PM span, branch cut to log row. Recorded on every story regardless of `max_queue_minutes`, which caps the queue but does not enable the measurement. The queue total is the sum of this column over the rows of the current scope, which is also how it is recovered on resume. Absent on rows written before the column existed — treat a missing cell as unknown, not as zero, and say so when totalling. |
 
 ---
 
