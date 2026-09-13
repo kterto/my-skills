@@ -520,6 +520,15 @@ function runG4(files, stackCfg, io) {
 function writeStrykerConfig(targets, reportPath, excludedMutations, runner, budget) {
   const cfg = {
     testRunner: runner,
+    // Name the runner plugin explicitly rather than leaning on Stryker's
+    // default `@stryker-mutator/*` glob. That glob does not traverse pnpm's
+    // symlinked node_modules, so on a pnpm project Stryker loads zero
+    // TestRunner plugins and dies with `Cannot find TestRunner plugin "jest"`.
+    // This adapter then reports `no-report`, which is indistinguishable from a
+    // run that genuinely scored nothing — a missing measurement wearing the
+    // shape of a measured one. The package sits next to core either way, so
+    // naming it costs nothing and fixes every pnpm consumer.
+    plugins: [`@stryker-mutator/${runner}-runner`],
     coverageAnalysis: 'perTest',
     mutate: targets,
     reporters: ['json'],
