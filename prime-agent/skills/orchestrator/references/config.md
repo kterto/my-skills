@@ -387,7 +387,7 @@ ignored unless named. Two files are tracked, and only two.
 | `PROJECT-CONTEXT.md` | **yes** | Hand-curated shared project knowledge a teammate's fresh clone must already have. Prose, so it three-way merges. |
 | `eval-baselines/**` | **yes** | Durable comparability anchors, not per-run output. |
 | `run-manifest.json`, `verification-ledger.json`, `tmp/` | no | Per-run, branch-scoped, rewritten **whole** on every run. Two branches hold two mutually exclusive snapshots, not two mergeable sets of rows — a silent three-way auto-merge would produce a state no run ever emitted. |
-| `artifact-format.md`, `artifact-format-html.md`, `artifact-format-parallel.md`, `config.md`, `gate-config.md`, `lane-protocol.md`, `html-templates/`, the four `.cjs`, rendered role files | no | Copies of the installed skill. Lifecycle item 2 re-materializes them the moment one goes missing, so a fresh clone self-heals. Tracking them lands a four-figure diff in a product PR on every skill upgrade. |
+| `artifact-format.md`, `artifact-format-html.md`, `artifact-format-parallel.md`, `config.md`, `gate-config.md`, `lane-protocol.md`, `html-templates/`, the five `.cjs`, rendered role files | no | Copies of the installed skill. Lifecycle item 2 re-materializes them the moment one goes missing, so a fresh clone self-heals. Tracking them lands a four-figure diff in a product PR on every skill upgrade. |
 
 **Why an allow-list rather than a list of ignores.** A deny-list has to be extended every time the
 pipeline learns to write a new file, and it is extended *after* the file has already been committed

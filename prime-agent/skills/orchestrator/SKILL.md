@@ -68,7 +68,7 @@ On invocation with a plain-language task description (and optional `--setup`):
 > **Already loaded? Do not reload.** A caller running several tasks in one session — the `product-manager` skill does exactly this, one run per user story — needs this protocol **once**, not once per task. If its text is still visible in your context, a second task is a **new pipeline run starting here at the Lifecycle**, not a re-read of the skill. **A new run rebinds everything**: `base_sha`, the spec, the cycle counters, the family counts. "Capture once" anywhere below means once per *run*, never once per session — carrying story 1's base into story 2 would diff the wrong tree. Re-invoking would duplicate roughly 26k tokens of protocol per task, and a ten-story milestone would spend most of a context window on copies of one document. Reload only when you genuinely cannot see this text any more — after compaction, or in a fresh session. Presence is the test, not recollection.
 
 1. Resolve config (see `references/config.md`): CLI args > `.orchestrator/config.json` > defaults.
-2. If `--setup` is present, OR `.orchestrator/config.json` does not exist, OR `.orchestrator/.materialized-version` does not exist, OR its contents differ from the skill's own `MATERIALIZED-VERSION` file — a sibling of this `SKILL.md` in the skill directory, read with the same mechanism you read this file — OR any file B3 materializes is missing — currently `.orchestrator/.gitignore`, `.orchestrator/artifact-format.md`, `.orchestrator/artifact-format-html.md`, `.orchestrator/artifact-format-parallel.md`, `.orchestrator/config.md`, `.orchestrator/gate-config.md`, `.orchestrator/lane-protocol.md`, the seven scaffolds in `.orchestrator/html-templates/`, the four runtime scripts `.orchestrator/{render-artifact,check-artifact-pairing,check-artifact-links,gate-scope}.cjs`, and the six role files in `.orchestrator/roles/` — → run **Bootstrap** (Steps B1–B3), then continue. **A project bootstrapped by an older skill version has `config.json` and none of the files added since**, so keying only on `config.json` would leave every role pointing at a reference that is not there. **The version compare exists because a materialized copy that is present but old is invisible to a missing-file test**, and every role reads those copies rather than the skill's own — this skill's own repository ran for five commits with its rendered role files behind their templates, so the `rigor=` preamble field shipped in the templates never reached the materialized tester role and no run ever carried it. **When the skill's own `MATERIALIZED-VERSION` is the file that is missing, the compare is not stale — it is unavailable**: treat the version condition as not met, say so in one line, and fall through to the missing-file tests. An install route that did not ship the stamp would otherwise bootstrap on every single run, and re-materializing the whole skill once per invocation is a worse failure than the staleness it is trying to catch.
+2. If `--setup` is present, OR `.orchestrator/config.json` does not exist, OR `.orchestrator/.materialized-version` does not exist, OR its contents differ from the skill's own `MATERIALIZED-VERSION` file — a sibling of this `SKILL.md` in the skill directory, read with the same mechanism you read this file — OR any file B3 materializes is missing — currently `.orchestrator/.gitignore`, `.orchestrator/artifact-format.md`, `.orchestrator/artifact-format-html.md`, `.orchestrator/artifact-format-parallel.md`, `.orchestrator/config.md`, `.orchestrator/gate-config.md`, `.orchestrator/lane-protocol.md`, the seven scaffolds in `.orchestrator/html-templates/`, the five runtime scripts `.orchestrator/{render-artifact,check-artifact-pairing,check-artifact-links,gate-scope,index-plans}.cjs`, and the six role files in `.orchestrator/roles/` — → run **Bootstrap** (Steps B1–B3), then continue. **A project bootstrapped by an older skill version has `config.json` and none of the files added since**, so keying only on `config.json` would leave every role pointing at a reference that is not there. **The version compare exists because a materialized copy that is present but old is invisible to a missing-file test**, and every role reads those copies rather than the skill's own — this skill's own repository ran for five commits with its rendered role files behind their templates, so the `rigor=` preamble field shipped in the templates never reached the materialized tester role and no run ever carried it. **When the skill's own `MATERIALIZED-VERSION` is the file that is missing, the compare is not stale — it is unavailable**: treat the version condition as not met, say so in one line, and fall through to the missing-file tests. An install route that did not ship the stamp would otherwise bootstrap on every single run, and re-materializing the whole skill once per invocation is a worse failure than the staleness it is trying to catch.
 3. Run **Pipeline** (Steps 0–6).
 4. Spec eval runs inside the review loop (Step 4e), before the QA exit gate.
 5. On `READY_TO_COMMIT` → run **Final report** (Step 7).
@@ -1667,6 +1667,38 @@ qa report as relative paths (per `artifact-format.md` → Related navigation) �
 those links into the `.html`. When `output_format=html`, render the view with
 `node .orchestrator/render-artifact.cjs plans/final/FINAL-{NNN}-{slug}.md`. Never create any
 directory other than `plans/final/` for the final report.
+
+**Regenerate the plans index** — immediately after the FINAL artifact is written and rendered, and
+**before** any of the verification below, which can stop the run:
+
+```
+node .orchestrator/index-plans.cjs
+```
+
+It prints `index-plans: wrote plans/index.html` on success. It runs on **every run that reaches this
+step**, which is why it sits above the file verification rather than beside the banner: each early
+return below —
+the STALLED spec-eval stop, the missing-FINAL stop, a red Step 7d gate — ends a run that has *already*
+written artifacts, and an index regenerated only on the runs that reach the banner is an index that
+silently omits every run that did not. It costs about a tenth of a second on a 750-artifact tree and
+rewrites exactly one file, and re-running it is harmless: the generator is deterministic, and two runs
+over an unchanged tree are byte-identical. **So run it again whenever a branch below writes another
+artifact** — the eval retry on the STALLED path, the retried persistence — before you print that
+branch's report. A second tenth of a second is the entire price of an index that is never behind the
+tree it describes.
+
+**`plans/index.html` is a derived view; the artifacts remain the source of truth.** It is generated
+from them and never hand-edited, so anything only the index claims is wrong by construction, and a
+stale index is fixed by re-running the generator, never by patching the page. It is one more file in
+the diff the closing banner tells the user to review before committing — that is the whole of its
+effect on the run.
+
+**When `output_format=html`, a regeneration whose links do not resolve is a failing gate, not a
+cosmetic issue.** `plans/index.html` is an added/modified `plans/**.html`, so it falls inside
+`check-artifact-links.cjs`'s branch scope exactly like a rendered artifact, and every local href on the page is audited against
+disk. Skipping the regeneration does not dodge that check — it only ships a page whose links describe
+the previous run's tree. If the gate goes red, fix what it names and regenerate; never delete the
+index to turn it green.
 
 **File verification (mandatory before printing the banner):**
 

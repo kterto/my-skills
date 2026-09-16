@@ -66,6 +66,7 @@ export const SKILL_FILES = [
   "references/gate-config.md",
   "references/lane-protocol.md",
   "scripts/render-artifact.cjs",
+  "scripts/index-plans.cjs",
   "scripts/check-artifact-pairing.cjs",
   "scripts/check-artifact-links.cjs",
   "scripts/gate-scope.cjs",

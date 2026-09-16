@@ -138,6 +138,8 @@
         "scripts/gate-scope.test.cjs",
         "scripts/gate-shell-injection.test.cjs",
         "scripts/gate-target-guard.test.cjs",
+        "scripts/index-plans.cjs",
+        "scripts/index-plans.test.cjs",
         "scripts/README.md",
         "scripts/render-artifact.cjs",
         "scripts/render-artifact.test.cjs",
