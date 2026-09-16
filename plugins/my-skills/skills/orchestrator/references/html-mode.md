@@ -39,7 +39,7 @@ The manifest is the enumeration source precisely because it already holds the ru
 
 The renderer auto-selects the `progress-timeline` scaffold for a `*.progress.md` source, emits one timeline row per log entry (role → action/status → timestamp) with the status→pill mapping, fills the `<main data-*>` shell and the Related link to the plan, and writes `<plan-path-without-.md>.progress.html`. `.progress.md` stays the markdown source-of-truth log; the `.html` is a regenerated read-only view.
 
-This step ALSO runs at the STALLED/BLOCKED stop points (review-cycle limit, qa-cycle limit, spec-eval-cycle limit, family budget exhausted at pre-flight, tester BLOCKED, qa BLOCKED_STALE) so a halted run still produces a timeline — and there too it renders the **whole** manifest set, since a `PARTIAL` parallel run has exactly the same unpaired-log problem. In `md` mode this step is skipped — `.progress.md` is the only progress artifact.
+This step ALSO runs at the STALLED/BLOCKED stop points (review-cycle limit, qa-cycle limit, spec-eval-cycle limit, tester BLOCKED, qa BLOCKED_STALE) so a halted run still produces a timeline — and there too it renders the **whole** manifest set, since a `PARTIAL` parallel run has exactly the same unpaired-log problem. In `md` mode this step is skipped — `.progress.md` is the only progress artifact. **The family-budget stop is not on that list**, and deliberately: it fires before the workspace gate, which is before the run folder is minted and before the manifest this step enumerates from exists. There is nothing to render and nothing to clean up — `$run_dir` is not yet bound.
 
 ## Step 7d — Artifact validation gates (html mode — blocking)
 
