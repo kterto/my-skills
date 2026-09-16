@@ -57,6 +57,23 @@ const targets = explicitMode
   ? explicit.map((f) => path.resolve(ROOT, f))
   : branchScope({ root: ROOT, auditPath: 'plans', ext: '.md', baseRef, label: 'artifact-pairing', allowEmpty });
 
+// The seven kind directories every artifact lived in before the run-folder layout.
+// They are frozen: nothing new is written into one, but an artifact already there is
+// still MAINTAINED in place — a coder flips its checkboxes, a reviewer appends to its
+// progress log. That edit puts a legacy `.md` into branch scope, where this gate would
+// demand the `.html` sibling an md-mode artifact never had, and BOTH documented
+// remedies are forbidden: rendering one lands it in the frozen tree, and moving the
+// file is the bulk migration the layout rules out. The run could then never print its
+// completion banner. This gate's own contract already says legacy artifacts "predate
+// the html contract and are not migrated here" — so honour it: a `.md` in a frozen
+// directory is exempt from the sibling requirement. An EXPLICIT audit is never exempt,
+// because naming a path is asking about that path.
+const LEGACY_DIRS = new Set(['specs', 'feat', 'code-review', 'qa', 'test', 'eval', 'final']);
+const isLegacyHome = (md) => {
+  const rel = path.relative(PLANS, md).split(path.sep);
+  return rel.length === 2 && LEGACY_DIRS.has(rel[0]);
+};
+
 const problems = [];
 for (const md of targets) {
   const rel = path.relative(ROOT, md);
@@ -64,6 +81,7 @@ for (const md of targets) {
   // BEFORE reading it — branchScope surfaces such paths (sec-1).
   const bad = targetProblem(md, { root: ROOT, auditPath: 'plans', ext: '.md', enforceContainment: !explicitMode });
   if (bad) { problems.push(`${rel}: ${bad}`); continue; }
+  if (!explicitMode && isLegacyHome(md)) continue;
   const html = md.replace(/\.md$/, '.html');
   // Guard the sibling with the SAME fail-closed check as the `.md` target above:
   // existsSync alone follows symlinks and accepts a directory, so a `foo.html/` dir

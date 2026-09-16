@@ -11,13 +11,21 @@ A plan ID (e.g. `FEAT-001`, `FIX-003`) or a direct path to a plan `.md` file.
 
 ## Step 1 — Locate and read the plan
 
-**A direct path to the plan file in your prompt takes precedence and needs no search at all.** Otherwise resolve the plan's **`.md`** from its ID, anywhere under `plans/`:
+**Prefer the `Plan:` path the orchestrator passes you.** It is an exact path into this run's folder, it needs no search at all, and it is the only channel that is correct by construction; any other direct path to the plan file in your prompt takes the same precedence. Only when you were handed an ID and no path, resolve the plan's **`.md`** recursively, anywhere under `plans/`:
 
 ```bash
 find plans -maxdepth 3 -type f -name '<PLAN-ID>-*.md' ! -name '*.progress.md' -print -quit
 ```
 
-`-print -quit` stops at the first hit instead of walking the rest of the tree, and the quoted `-name` keeps the pattern away from the shell, which matters because zsh aborts the whole command on an unmatched glob. The `.md` is always the canonical source of truth — read it fully, even if an `.html` view sits beside it. Also read the paired `.progress.md`.
+`-print -quit` stops at the first hit instead of walking the rest of the tree, and the quoted `-name` keeps the pattern away from the shell, which matters because zsh aborts the whole command on an unmatched glob. **Never a shell glob and never a listing of one directory**: every artifact a run writes now lives flat inside that run's own folder, `plans/<YYYYMMDD>T<HHMMSS>Z-<4hex>-<slug>/`, so only a recursive search finds a plan you were not handed the path to — and `-maxdepth 3` reaches both that layout and the frozen legacy `plans/<kind>/<file>` tree. The `.md` is always the canonical source of truth — read it fully, even if an `.html` view sits beside it. Also read the paired `.progress.md`.
+
+**Everything you touch lives in that one folder.** The plan, its `.progress.md` sidecar and the rendered `.html` view are flat siblings inside it, and `{run_dir}` below always means that folder — the value of the `run_dir=` line in your preamble. **`run_dir=` is authoritative. Where `.orchestrator/PROJECT-CONTEXT.md`'s Conventions section names a plan directory it is describing the legacy tree and never overrides your preamble.** Run standalone, the shared write-path precedence applies: step 1 (`MAESTRO_CR_TARGET_PATH`) is the reviewer's alone and never yours; step 2 is `run_dir=`; step 4 is minting one scan-free; and step 3 is the rule your three sibling roles carry word for word:
+
+3. **No `run_dir=`, but an input artifact path was handed to you** — a plan path, a `CR` path, a `QA` report path, a spec path: write into `dirname(that path)`, **unless that `dirname` is one of the seven frozen kind directories** (`plans/specs`, `plans/feat`, `plans/code-review`, `plans/qa`, `plans/test`, `plans/eval`, `plans/final`), in which case this rule does not apply and you fall through to rule 4 — mint a fresh run folder with `newrun`. That `dirname` is the artifact's own run folder **only when the input came from a run folder**; handed a legacy artifact, which is months of existing work and the reference project's entire 1653-file corpus, it resolves to a directory these same rules declare read-only, so obeying it would write new work back into the one tree no role may write into again. Falling through is the right answer rather than a degraded one: a fix for a legacy artifact is new work, and new work goes in a new run folder.
+
+**The precedence places a *new* artifact and never relocates an in-place update.** Checking a task off in the plan you were handed, appending to its `## Progress Log`, or appending to its `.progress.md` sidecar stays with the file those lines belong to, wherever it already sits — they are that artifact's own body, not a new artifact, and a run folder minted to hold them would hold nothing. Only the artifact you are about to create is placed by the four rules above.
+
+**That paragraph, and not rule 3, is what settles your case, because you create no artifact at all.** Everything you write is the plan's own body — a checkbox, a `## Progress Log` entry, a `.progress.md` append, and in html mode a re-render of a view that already sits beside the `.md` — so **the folder you write into is the folder the plan is already in**, frozen legacy tree included, and rule 3's exclusion never sends you off to mint a run folder you would have nothing to put in. You never create a directory, and you never resolve a folder's name from disk. The folder's slug is a human label that nothing parses: a feature's story routinely spans several run folders, so read your plan's identity from its ID and front matter, never from the folder it sits in.
 
 > **html note:** if `output_format=html`, a `<ID>-<slug>.html` rendered view exists alongside the `.md`. The `.md` is always the source of truth — mutate it first, then regenerate the view. When (and only when) `output_format=html` AND the `<ID>-<slug>.html` file exists beside the `.md`, you keep its task state in sync as you go by re-running `node .orchestrator/render-artifact.cjs <plan.md>` after each checkbox flip (see Step 4b-html) — never hand-edit the html. All other artifacts' `.html` views are likewise renders of their `.md`; this live re-render applies to the plan (`FEAT`/`FIX`/`QAF`) html view you are executing, nothing else. `.progress.md` stays markdown-only.
 
@@ -118,7 +126,7 @@ Run this immediately after marking a task `[x]` (and updating `updated_at`) in t
 The `.md` is authoritative; do NOT hand-edit the `.html`. Regenerate it from the current `.md` by re-running the renderer:
 
 ```bash
-node .orchestrator/render-artifact.cjs plans/<dir>/<ID>-<slug>.md
+node .orchestrator/render-artifact.cjs {run_dir}/<ID>-<slug>.md
 ```
 
 The renderer re-derives the checkbox states, the progress overview counts, and the `<main data-*>` shell (including `data-updated-at`) from the `.md`, so the rendered plan tracks reality. It exits non-zero without writing if the plan structure is non-conformant — if that happens, fix the `.md`, not the `.html`. Re-running it is idempotent and cheap; run it once per checked-off task (or once at the end of the session — a single final render also satisfies the pairing gate).
@@ -328,7 +336,7 @@ Total tasks completed this session: {N}
 ```
 
 4. Update `**Status**` in `.progress.md` to `DONE`.
-5. **html sync (html mode + plan `.html` exists only):** after writing `status: DONE` and the final `updated_at` to the plan `.md`, run a final `node .orchestrator/render-artifact.cjs plans/<dir>/<ID>-<slug>.md` so the view reflects DONE with all checkboxes `checked` and the progress overview at `{N} / {N} (100%)`. This one render also satisfies the pairing gate for the plan.
+5. **html sync (html mode + plan `.html` exists only):** after writing `status: DONE` and the final `updated_at` to the plan `.md`, run a final `node .orchestrator/render-artifact.cjs {run_dir}/<ID>-<slug>.md` so the view reflects DONE with all checkboxes `checked` and the progress overview at `{N} / {N} (100%)`. This one render also satisfies the pairing gate for the plan.
 
 ## Code style
 

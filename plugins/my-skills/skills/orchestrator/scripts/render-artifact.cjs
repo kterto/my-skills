@@ -11,13 +11,24 @@
  *   node .orchestrator/render-artifact.cjs <artifact.md> [<artifact.md> ...]
  *
  * Type is inferred from the path in this precedence order: a `*.progress.md`
- * sidecar takes the progress-timeline scaffold; anything beneath a `plans/eval/`
- * directory takes the qa-report scaffold whatever its basename says; otherwise the
- * basename prefix is looked up in `SCAFFOLD`, falling back to qa-report. The eval
- * rule is anchored on the `plans/eval/` segment pair because the path handed to
- * `toHtml` is absolute — a bare `/eval/` test also matches a checkout that happens
- * to live under an unrelated `eval/` directory, which rendered every FEAT, CR and
- * TEST artifact of that project as a QA report.
+ * sidecar takes the progress-timeline scaffold; anything directly beneath the
+ * **legacy** `plans/eval/` directory takes the qa-report scaffold whatever its
+ * basename says; otherwise the basename prefix is looked up in `SCAFFOLD`, falling
+ * back to qa-report.
+ *
+ * **The prefix is what decides the scaffold; the directory rule is legacy only.**
+ * Every artifact a run writes now lands flat in one run folder,
+ * `plans/<YYYYMMDD>T<HHMMSS>Z-<4hex>-<slug>/`, so an `EVAL` sits beside the `FEAT`,
+ * `CR` and `QA` of the same run and no directory names its kind any more. `EVAL` is
+ * therefore an explicit row in `SCAFFOLD` rather than a path test that only fires in
+ * the frozen legacy tree. That row changes no output — it is the qa-report scaffold
+ * every eval has always rendered under, and the fallback happened to reach the same
+ * place — but it means the choice survives the layout that removed the directory.
+ *
+ * The legacy rule stays, and stays anchored on the `plans/eval/` segment pair,
+ * because the path handed to `toHtml` is absolute — a bare `/eval/` test also matches
+ * a checkout that happens to live under an unrelated `eval/` directory, which
+ * rendered every FEAT, CR and TEST artifact of that project as a QA report.
  */
 'use strict';
 const fs = require('fs');
@@ -56,9 +67,15 @@ function escAttr(s) {
     .replace(/[\x00-\x1F\x7F]/g, (c) => '&#' + c.charCodeAt(0) + ';');
 }
 
+/**
+ * Every prefix on the `artifact-format.md` allow-list, mapped to the scaffold it
+ * borrows its chrome from. This is the ONLY input to the choice for an artifact in a
+ * run folder, which is now all of them — `EVAL` is listed here for that reason, even
+ * though the qa-report fallback below already resolved it to the same scaffold.
+ */
 const SCAFFOLD = {
   SPEC: 'spec', FEAT: 'plan', FIX: 'plan', QAF: 'plan', PACT: 'plan',
-  TEST: 'test-report', CR: 'code-review', QA: 'qa-report', FINAL: 'final-report',
+  TEST: 'test-report', CR: 'code-review', QA: 'qa-report', EVAL: 'qa-report', FINAL: 'final-report',
 };
 
 const KICKER = {
@@ -345,6 +362,10 @@ function toHtml(abs, src) {
   const { fm, body } = parseFrontmatter(src);
   const isProgress = /\.progress\.md$/.test(abs);
   const prefix = (path.basename(abs).match(/^([A-Z]+)/) || [])[1];
+  // The middle branch is the LEGACY tree only: `plans/eval/` is one of the seven
+  // frozen kind directories, and it outranks the prefix map there because an artifact
+  // of any prefix filed under it was an eval. A run-folder artifact never matches it
+  // and resolves through `SCAFFOLD` — including `EVAL`, which is a row of its own.
   const scaffold = isProgress
     ? 'progress-timeline'
     : /(^|\/)plans\/eval\//.test(abs) ? 'qa-report'
@@ -520,7 +541,11 @@ function main(argv) {
   }
 }
 
-module.exports = { esc, escAttr, inline, parseFrontmatter, mdToHtml, buildSections, toHtml, validateHtml, render };
+// `SCAFFOLD` is exported so the suite can pin that every allow-listed prefix has an
+// EXPLICIT row rather than arriving at its scaffold through the qa-report fallback —
+// a distinction no rendered output can show, and the one the run-folder layout made
+// load-bearing.
+module.exports = { esc, escAttr, inline, parseFrontmatter, mdToHtml, buildSections, toHtml, validateHtml, render, SCAFFOLD };
 
 if (require.main === module) {
   main(process.argv);

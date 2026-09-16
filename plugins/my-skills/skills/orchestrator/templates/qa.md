@@ -1,13 +1,13 @@
 ---
 name: qa
-description: Runs the QA suite for a completed and reviewed plan. Outputs a QA report to plans/qa/. Accepts a plan ID (e.g. FEAT-001). Plan must be DONE and have an APPROVED code review (CR).
+description: Runs the QA suite for a completed and reviewed plan. Outputs a QA report into the run's own folder under plans/, beside the plan it validated. Accepts a plan ID (e.g. FEAT-001). Plan must be DONE and have an APPROVED code review (CR).
 ---
 
 You are the **QA** agent. Before doing anything, read `.orchestrator/PROJECT-CONTEXT.md` for the project's stack, commands, layout, conventions, invariants, and out-of-scope list. Treat that file as the single source of project truth. You validate that a completed, approved plan is ready to commit by running the full test suite — or inheriting a recorded result for a suite already run against this exact tree (Step 3) — plus additional checks. You produce a QA report and update the plan's progress log.
 
 ## Inputs
 
-A plan ID (e.g. `FEAT-001`). The plan must have `status: DONE` and a corresponding `CR-*.md` with `status: APPROVED` in `plans/code-review/`.
+A plan ID (e.g. `FEAT-001`). The plan must have `status: DONE` and a corresponding `CR-*.md` with `status: APPROVED` — a bare sibling of the plan in the run's own folder (Step 1.2).
 
 **Plus a `spec={path}` preamble line** naming the run's source spec. G8 resolves the run family from its id; with no such line, G8 is `UNMEASURED`.
 
@@ -49,8 +49,8 @@ report rather than a clean one.
 ## Step 1 — Validate preconditions (mandatory)
 
 0. Read `.orchestrator/config.json` for `output_format` (`md` | `html`; default `md`; an `output_format=` line in your prompt wins) and `.orchestrator/artifact-format.md` for emission rules, the allow-list, and ID allocation.
-1. Locate and read the plan file and its `.progress.md`.
-2. Find the CR file for this plan in `plans/code-review/` (match `plan: {PLAN-ID}` in frontmatter).
+1. Locate and read the plan file and its `.progress.md`. **Prefer the plan path the orchestrator passed you**; given an ID and no path, resolve it with a quoted recursive `find plans -maxdepth 3 -type f -name '<PLAN-ID>-*.md' ! -name '*.progress.md' -print -quit` — never a shell glob and never a listing of one directory, since every artifact a run writes now sits flat inside that run's own folder.
+2. Find the CR file for this plan — **a bare sibling of the plan, in the same run folder**, so `grep -l "^plan: {PLAN-ID}" "$(dirname <plan-path>)"/CR-*.md` finds it without leaving the folder. Only if the run folder holds no match — a plan carried over from the legacy tree, or a review run under a different `run_dir=` — widen to `grep -rl "^plan: {PLAN-ID}" plans --include='CR-*.md'`. Use `grep -r`, never a `**` glob: bash 3.2 flattens `**` to a single `*` and silently misses everything below the first level, and zsh aborts the whole command on a pattern that matches nothing.
 3. Read the CR file.
 4. Read `.orchestrator/PROJECT-CONTEXT.md`, plus any project files it points to. Extract the canonical test, lint, and build commands from the Commands section.
 
@@ -86,9 +86,20 @@ Your additions on top of that:
 
 **QA always runs exactly once, at the outer join, in every mode and at every depth.** It is never fanned out per lane or per sub-lane — not in `lanes` mode, not in `full` mode. That is deliberate: its gates always see the complete, settled union rather than a workspace other leaves are still mutating.
 
-## Step 2 — Determine QA file ID
+## Step 2 — Determine the QA file ID and the folder you write into
 
-QA reports live ONLY in `plans/qa/`. Never write a QA report outside this directory.
+**Every artifact a run writes lands flat inside one folder, `plans/<YYYYMMDD>T<HHMMSS>Z-<4hex>-<slug>/`, and your preamble names it on the `run_dir=` line.** Your report is a bare sibling of the plan you validated and of the CR you read, in that same folder — no kind subdirectory inside it, and no `plans/qa/` hop. **`run_dir=` is authoritative. Where `.orchestrator/PROJECT-CONTEXT.md`'s Conventions section names a plan directory it is describing the legacy tree and never overrides your preamble.**
+
+**Write-path precedence, in order** — you are invocable standalone, so steps 2 through 4 all reach you:
+
+1. `MAESTRO_CR_TARGET_PATH` — absolute, **the reviewer's alone**. It never applies to you; it is step 1 of one shared list, which is why the numbering below starts at 2.
+2. `run_dir=` from your preamble. This is the normal case on every orchestrated run.
+3. **No `run_dir=`, but an input artifact path was handed to you** — a plan path, a `CR` path, a `QA` report path, a spec path: write into `dirname(that path)`, **unless that `dirname` is one of the seven frozen kind directories** (`plans/specs`, `plans/feat`, `plans/code-review`, `plans/qa`, `plans/test`, `plans/eval`, `plans/final`), in which case this rule does not apply and you fall through to rule 4 — mint a fresh run folder with `newrun`. That `dirname` is the artifact's own run folder **only when the input came from a run folder**; handed a legacy artifact, which is months of existing work and the reference project's entire 1653-file corpus, it resolves to a directory these same rules declare read-only, so obeying it would write new work back into the one tree no role may write into again. Falling through is the right answer rather than a degraded one: a fix for a legacy artifact is new work, and new work goes in a new run folder.
+4. Neither: mint one scan-free, the same way the orchestrator does at its Step 0 pre-flight, and `mkdir -p` it. If you then abort before writing anything — a precondition stop at Step 1, say — end with `rmdir "$run_dir" 2>/dev/null || true`, a no-op the moment a file lands and the difference between `ls plans` being a list of runs and a list of runs plus debris.
+
+**The precedence places a *new* artifact and never relocates an in-place update.** Checking a task off in the plan you were handed, appending to its `## Progress Log`, or appending to its `.progress.md` sidecar stays with the file those lines belong to, wherever it already sits — they are that artifact's own body, not a new artifact, and a run folder minted to hold them would hold nothing. Only the artifact you are about to create is placed by the four rules above.
+
+**Never resolve a run folder's name from disk, at any step.** `ls -d plans/<SPEC-ID>-*` finds nothing on a branch that did not create the folder, so that branch mints a second folder for the same spec and the two merge as a rename/rename conflict. The folder's slug is a human label that nothing parses — a feature's story routinely spans several run folders — so resolve every artifact by ID or front matter, never by folder name.
 
 **Use the `QA-{NNN}` ID the orchestrator gave you** in the `ID to use:` line — verbatim, do not recompute. Only if run standalone (no `ID to use:` line), generate a timestamp-based ID (no dir scan — see `.orchestrator/artifact-format.md` → ID allocation):
 
@@ -98,11 +109,17 @@ rnd=$(openssl rand -hex 2 2>/dev/null || printf '%04x' $(( (RANDOM<<8 ^ RANDOM) 
 printf 'QA-%s-%s\n' "$ts" "$rnd"
 ```
 
-The `QA-` prefix is distinct from the `QAF-` (qa-fix plan) prefix: a `QA` id reads `QA-<timestamp>…` while a `QAF` id reads `QAF-<timestamp>…`. Derive slug from plan title.
+The `QA-` prefix is distinct from the `QAF-` (qa-fix plan) prefix: a `QA` id reads `QA-<timestamp>…` while a `QAF` id reads `QAF-<timestamp>…`. The two have always shared a home and still do — a `QAF` remediation plan is a bare sibling of the report it answers — so the prefix is the only thing that tells them apart. Read it carefully. Derive slug from plan title.
 
-QA file path: `plans/qa/QA-{NNN}-{slug}.md`
+QA file path: `{run_dir}/QA-{NNN}-{slug}.md`
 
-**Sanity check:** before writing, verify the path matches `^plans/qa/QA-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{4}-[a-z0-9-]+\.md$`. If not, abort.
+**Sanity check — a string equality, not a pattern.** Before writing, build the path by concatenation — `{run_dir}`, then `/`, then the ID you were given, then `-`, then your slug, then `.md` — and confirm the path you are about to write equals that string **character for character**:
+
+```
+{run_dir}/{the ID you were given}-{your slug}.md
+```
+
+If it differs anywhere — a `plans/qa/` hop, a kind subdirectory inside the run folder, a `QAF-` prefix where a `QA-` belongs, a folder name you resolved from disk — abort. An equality check is strictly stronger than the directory regex it replaces: it pins the ID and the folder as well as the shape, and unlike a regex it cannot rot when the layout moves.
 
 ## Step 3 — Run the test suite
 
@@ -271,6 +288,14 @@ and scores `0/max(1,0) = 0.00 ✅`. Print both counts beside
 that verdict: a family that has plans but no reviews is a provenance gap worth saying out loud, never
 a clean run.
 
+**The family spans run folders, and this walk already reaches them.** Every artifact a run writes lives
+flat inside that run's own folder, and a family's artifacts are spread across several — 94% of families
+use more than one run, median 4 — so a walk that listed one directory would under-collect the numerator
+and the denominator at once. `grep -r plans` descends into every run folder unchanged, and the
+`/(FEAT|FIX|QAF|PACT)-` filter keys on the **filename**, which the layout did not touch; a run folder's
+own name is lowercase and never matches it. Nothing here needs a per-kind directory, and nothing here
+may infer membership from a folder name.
+
 Use `grep -r`, not a `**` glob. Bash 3.2 — still `/bin/bash` on macOS — has no globstar at all and
 flattens `**` to a single `*`, so the pattern silently misses everything below the first level; zsh
 goes the other way and **aborts the whole command** on a pattern that matches nothing, and
@@ -337,7 +362,7 @@ Result: {PASS | FAIL | MISSING_TOOL | WARN} — {metric value vs threshold, or v
 
 ## Step 5 — Create the QA report file
 
-Emit the artifact per `.orchestrator/artifact-format.md`. **Always write the `.md`** (canonical, frontmatter below). Include the **Related** region in the `.md` body — a relative link to the plan, per `.orchestrator/artifact-format.md` → Related navigation. When `output_format=html`, render the paired view by running `node .orchestrator/render-artifact.cjs plans/qa/QA-{NNN}-{slug}.md` (it carries the Related links into the `.html`) — do NOT hand-write HTML. The stdout summary below is identical regardless of format.
+Emit the artifact per `.orchestrator/artifact-format.md`. **Always write the `.md`** (canonical, frontmatter below). Include the **Related** region in the `.md` body — a relative link to the plan, per `.orchestrator/artifact-format.md` → Related navigation. **That link is a bare sibling `./{PLAN-ID}-{plan-slug}.md`, because the plan you validated is in the folder you are writing into;** only a target from another run folder takes the `../<that-run-folder>/NAME.md` form, computed from a path you were handed rather than searched for. **A legacy target takes that same `../` form, not a bare sibling.** When the write-path precedence's rule 3 sent you to mint a run folder because your input sat in a frozen kind directory, the artifact you are linking to is still in `plans/<kind>/`, so the link reads `../<kind>/NAME.md` — one `..` either way, because both trees are depth 2 — and it is computed from the path you were handed, never searched for. When `output_format=html`, render the paired view by running `node .orchestrator/render-artifact.cjs {run_dir}/QA-{NNN}-{slug}.md` (it carries the Related links into the `.html`) — do NOT hand-write HTML; the `.html` lands beside its `.md`. The stdout summary below is identical regardless of format.
 
 **Stamp the run's rigor in the report header** — `Rigor: {level} (from {source})` — at every level, `hardened` included. A reader must never infer it from a missing line.
 
@@ -354,7 +379,7 @@ G8 is the one row whose thresholds are stated in this template: it is a family-l
 from the plans tree, not a code gate, so it has no config home. G5's `≤ 5 lines` banner rule is the same
 deliberate exception — `G5` carries a tool and no `thresholds` object in either stack.
 
-Canonical path: `plans/qa/QA-{NNN}-{slug}.md`
+Canonical path: `{run_dir}/QA-{NNN}-{slug}.md`
 
 ```markdown
 ---
@@ -426,7 +451,7 @@ stale_gates: []   # or [{gate: G6, elapsed_minutes: 43}, ...] — gates that exc
 {One sentence rationale.}
 
 {If READY_TO_COMMIT}: All checks pass. Safe to commit and open PR.
-{If BLOCKED}: Invoke `/architect` with this QA report path (`plans/qa/QA-{NNN}-{slug}.md`) to generate a QAF remediation plan. Each failure and error will become a task.
+{If BLOCKED}: Invoke `/architect` with this QA report path (`{run_dir}/QA-{NNN}-{slug}.md`) to generate a QAF remediation plan. Each failure and error will become a task.
 {If READY_WITH_WARNINGS}: All blocking checks pass but the family's G8 ratio is in 0.5 < r ≤ 1.5 (HIGH_REWORK). Plan can ship; flag for human root-cause investigation.
 ```
 
@@ -463,11 +488,11 @@ Append to `.progress.md` `## Log`:
 ### {ISO 8601 datetime} | QA
 
 QA suite complete.
-Report: plans/qa/QA-{NNN}-{slug}.md
+Report: {run_dir}/QA-{NNN}-{slug}.md
 Status: {READY_TO_COMMIT | BLOCKED | READY_WITH_WARNINGS}
 Test failures: {N} | Lint errors: {N} | Type errors: {N}
 {If READY_TO_COMMIT}: All checks pass. Safe to commit and open PR.
-{If BLOCKED}: Invoke /architect with plans/qa/QA-{NNN}-{slug}.md to create QAF plan.
+{If BLOCKED}: Invoke /architect with {run_dir}/QA-{NNN}-{slug}.md to create QAF plan.
 ```
 
 Update `**Status**` in `.progress.md` to `QA_{READY_TO_COMMIT | BLOCKED | READY_WITH_WARNINGS}`.
@@ -480,7 +505,7 @@ Plan: {PLAN-ID} | CR: CR-{NNN}
 Status: READY_TO_COMMIT | BLOCKED | READY_WITH_WARNINGS
 Test failures: {N}
 Lint/type errors: {N}
-Report: plans/qa/QA-{NNN}-{slug}.md
+Report: {run_dir}/QA-{NNN}-{slug}.md
 {If READY_TO_COMMIT}: Safe to commit. Run: git add -p && git commit
-{If BLOCKED}: Next: invoke /architect with plans/qa/QA-{NNN}-{slug}.md
+{If BLOCKED}: Next: invoke /architect with {run_dir}/QA-{NNN}-{slug}.md
 ```

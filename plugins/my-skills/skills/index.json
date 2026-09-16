@@ -131,6 +131,8 @@
         "references/html-mode.md",
         "references/lane-protocol.md",
         "references/parallel.md",
+        "scripts/check-artifact-home.cjs",
+        "scripts/check-artifact-home.test.cjs",
         "scripts/check-artifact-links.cjs",
         "scripts/check-artifact-pairing.cjs",
         "scripts/check-artifact-pairing.test.cjs",

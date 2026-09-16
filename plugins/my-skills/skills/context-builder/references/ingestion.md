@@ -15,7 +15,7 @@ Resolve exactly one source set, in this order. Stop at the first that yields mat
 3. **The fallback union** — the paths this framework already uses, so an existing project
    needs no reorganisation:
    - `docs/superpowers/specs/*`
-   - `plans/specs/*`
+   - every `SPEC-*.md` **anywhere under `plans/`** (see **Resolving the `plans/` leg**)
    - `docs/adr/*`
    - `docs/design-prompts/*`
    - `PRD-*` and `SPEC-*` at the repo root
@@ -25,6 +25,38 @@ Resolve exactly one source set, in this order. Stop at the first that yields mat
 
 Report which branch was taken. "Ingested 6 documents from `docs/foundation/`" and
 "No materials found — interview only" are both fine outcomes; a silent choice is not.
+
+## Resolving the `plans/` leg
+
+The orchestrator writes **every artifact of a run flat inside that run's own folder**,
+`plans/<YYYYMMDD>T<HHMMSS>Z-<4hex>-<slug>/`. There is no kind subdirectory inside it, and
+the seven legacy kind directories (`plans/specs/`, `plans/feat/`, …) are frozen and
+read-only — still worth reading, never written to again. So a spec may sit at
+`plans/specs/SPEC-*.md` (legacy) or at `plans/<run-folder>/SPEC-*.md` (everything
+written since), and only a recursive search finds both:
+
+```bash
+find plans -maxdepth 3 -name 'SPEC-*.md' -print 2>/dev/null | sort
+```
+
+**Quoted, and `find` rather than a glob, for two separate reasons.** bash 3.2 ships no
+`globstar`, so `plans/**/SPEC-*.md` collapses to `plans/*/SPEC-*.md` — **exactly one**
+directory level, which covers a run folder today and silently misses anything deeper; the
+pattern reads as "any depth" and behaves as "one level". And zsh **aborts the command
+outright** when the pattern matches nothing, printing `no matches found` that
+`2>/dev/null` does not suppress — the failure is a shell expansion error raised before the
+command runs, not the command's stderr, so the ingest gets an error instead of an empty
+leg. `find` returns nothing and exits 0.
+
+A `plans/specs/*` pattern is the specific bug this rule replaces: on any project written
+under the run-folder layout it matches the frozen legacy tree only, so `/context-builder`
+ingests **zero** orchestrator-written specs and says nothing about it. When the recursive
+search returns no spec while `plans/` itself exists, report that as its own line in the
+Phase 2 summary — an unreported empty leg reads exactly like a project that has no specs.
+
+The run folder's slug is a **human label that nothing parses**: a feature's story routinely
+spans several run folders, so never group, order, or attribute documents by folder name.
+Each spec is ingested as its own document, on its own merits.
 
 ## The digest record
 

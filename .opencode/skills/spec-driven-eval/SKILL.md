@@ -48,6 +48,18 @@ git status --short                    # include untracked new files
 
 Record the diff surface in the report. Evidence outside it is still valid (e.g. a pre-existing file was modified), but note when a check relies on files not in the diff — that may indicate the wrong base was chosen.
 
+### Invocation — where the report is written (`--out <dir>`)
+
+`--out <dir>` names the directory the report is written **into, directly — with no appended `evaluations/` segment**. That is the whole point of the flag: a caller that passes it has already decided where this run's artifacts live, and quietly nesting one more level below that choice is exactly what it exists to stop. The report's destination, first match wins:
+
+1. **`--out <dir>`** — write the report at `<dir>/<priority>-<story-slug>-<timestamp>.md`. Create `<dir>` if it is missing, and create nothing beneath it.
+2. **The derived `<spec-folder>/evaluations/`** — the default when no `--out` was passed and a `.specs`/spec folder exists.
+3. **Inline** — neither of the above: present the report in the response and write no file.
+
+**The extra segment is never cosmetic, because a report is mostly relative links.** Every `file:line` citation and every link out to a PRD or an ADR is resolved from wherever the report sits. Measured against the orchestrator's run folders, where a run's artifacts sit flat at depth 2 (`plans/<run>/<file>`): an artifact whose link reads `../../docs/adr/015.md` resolves cleanly at depth 2 and reports `1 broken local link(s)` one level deeper, at depth 3 — which is precisely the shape an appended `<dir>/evaluations/` produces. That is why the orchestrator's in-loop step passes `--out {run_dir}` on every invocation.
+
+**`--out` moves the report and nothing else.** `_ac-baseline.md` keeps resolving to the PRD's own spec folder — `<spec-folder>/evaluations/_ac-baseline.md`, Reproducibility rule 1 — whatever `--out` says, because the two artifacts have different owners and different lifetimes. **The baseline belongs to the spec, across every run**: it is the frozen checklist every implementation of that PRD is scored against, so a copy landing in one run's output directory is a forked baseline, the single biggest drift source rule 1 exists to pin down. **The report belongs to one run** — which is why its filename carries a timestamp and the baseline's deliberately does not. Redirect the baseline along with the report and each run becomes comparable only to itself.
+
 ---
 
 ## Quick start
@@ -336,9 +348,9 @@ Record the file list in the report. Steps 4 and 8 use it as the first set of pat
 
 Produce a markdown report following the template in [reference.md](references/reference.md). It must separate the **two subjects** and contain: per-AC implementation checklist table (I-checks, MET/UNMET, evidence); the Elicitation `E` block (category-rubric recall table + added-requirement ledger with verdicts → `E_recall` / `E_precision` / `E_justified`); the Scope `S` traceability verdict; per-requirement unit/e2e test checklist table (T-checks over the **sanctioned set = PRD ACs ∪ valid E-additions**); extra-tests inventory; the test-distribution `D` table (tiers with counts + %); the computed `Final` (+ `Adjusted Final` if a gate is ✗); `R` / `G` / `D`; a ranked gap list; and concrete fixes to reach 1.00.
 
-Save the report to `<spec-folder>/evaluations/<priority>-<story-slug>-<timestamp>.md` when a `.specs`/spec folder exists; otherwise present it inline. The `<timestamp>` is a UTC instant in `YYYYMMDDTHHMMSSZ` form (e.g. `20260606T143012Z`), obtained from the system clock at write time (`date -u +%Y%m%dT%H%M%SZ`). The timestamp makes every report filename unique so **multiple agents evaluating the same story in parallel never overwrite each other** — each run produces its own file. If a same-second collision is still possible (many parallel runs), append a short run id: `<priority>-<story-slug>-<timestamp>-<run-id>.md`.
+Save the report as `<priority>-<story-slug>-<timestamp>.md` in the directory the **Invocation** precedence resolves to: `<dir>` itself when `--out <dir>` was passed — no `evaluations/` segment appended — otherwise `<spec-folder>/evaluations/` when a `.specs`/spec folder exists, otherwise present it inline. The `<timestamp>` is a UTC instant in `YYYYMMDDTHHMMSSZ` form (e.g. `20260606T143012Z`), obtained from the system clock at write time (`date -u +%Y%m%dT%H%M%SZ`). The timestamp makes every report filename unique so **multiple agents evaluating the same story in parallel never overwrite each other** — each run produces its own file. If a same-second collision is still possible (many parallel runs), append a short run id: `<priority>-<story-slug>-<timestamp>-<run-id>.md`.
 
-Note: only the **report** filename is timestamped. The frozen `_ac-baseline.md` is deliberately **not** timestamped — it is a single shared artifact that every run reads from to stay comparable; never fork it per run.
+Note: only the **report** filename is timestamped, and only the **report** follows `--out`. The frozen `_ac-baseline.md` is deliberately **not** timestamped and **not** relocated — it is a single shared artifact that every run reads from to stay comparable; never fork it per run.
 
 ## Worked example
 
@@ -348,6 +360,7 @@ A complete applied evaluation (an example billing service's P0 "Start Free Trial
 
 - Scoring `I`/`T` on a sliding "feels like a 0.75" judgment instead of counting binary checks.
 - Re-deriving the AC list or checklist per implementation (breaks comparability) instead of reusing the frozen baseline.
+- Appending an `evaluations/` segment under an explicit `--out <dir>`, or moving `_ac-baseline.md` to follow `--out` — the flag names the report's directory exactly, and the baseline never leaves the spec folder.
 - Marking a check UNMET without showing the search performed; or MET without `file:line` evidence.
 - Searching the full codebase for evidence without first running `git diff` to bound the diff surface — this produces unreliable searches and inflates "not found" confidence.
 - Awarding implementation credit without reading the production code path end-to-end.

@@ -144,7 +144,25 @@ Ask structured user questions on these gaps until roadmap-clarity confidence ≥
 
 ### Step 3 — Seed decomposition
 
-Pull spec and PRD content from `docs/superpowers/specs/*`, `plans/specs/*`, any PRD files found in the repo, and README to seed the decomposition step. These are read-only inputs. (`plans/specs/*` is where the orchestrator brainstormer writes specs; the `ingest-spec` op remains location-agnostic via its explicit path argument — see `references/mutation-ops.md`.)
+Pull spec and PRD content from `docs/superpowers/specs/`, **every `SPEC-*.md` anywhere under `plans/`**, any PRD files found in the repo, and README to seed the decomposition step. These are read-only inputs. (The `ingest-spec` op remains location-agnostic via its explicit path argument — see `references/mutation-ops.md`.)
+
+**Find the orchestrator's specs recursively, and never with a shell glob.** The orchestrator writes every artifact of a run flat inside that run's own folder, `plans/<YYYYMMDD>T<HHMMSS>Z-<4hex>-<slug>/`, so `plans/specs/*` matches only the frozen legacy tree and misses every spec written since. A `plans/**/SPEC-*.md` pattern is not the fix either: bash 3.2 ships no `globstar`, so `**` collapses to `*` — **exactly one** directory level, which covers a run folder today and silently misses anything deeper, so the pattern reads as "any depth" and behaves as "one level". And zsh **aborts the command outright** on a zero-match pattern, printing `no matches found` that `2>/dev/null` does not suppress: the failure is a shell expansion error raised before the command runs, not the command's stderr. Use a quoted `find`, which returns nothing and exits 0:
+
+```bash
+find plans -maxdepth 3 -name 'SPEC-*.md' -print 2>/dev/null | sort
+```
+
+**Then print the seed inventory, and make a miss loud.** Report, before decomposition starts, how many documents each source contributed and name the spec files found:
+
+```
+ROADMAP — decomposition seeds
+  specs (plans/):            {n}  {paths, one per line}
+  specs (docs/superpowers/): {n}
+  PRDs:                      {n}  {paths}
+  README:                    found | absent
+```
+
+If `plans/` exists but the recursive search returned **zero** `SPEC-*.md`, say so on its own line — `plans/ exists but contributed no specs — decomposition is seeding from README and PRDs only` — and ask the user to confirm before continuing. This is the failure this step is written to prevent: with a silent glob, `/roadmap` seeds from README and stray PRDs, decomposes a plan that ignores every spec the orchestrator ever wrote, and **nothing in its output says a spec was missed**. A named, counted inventory makes the miss impossible to overlook; an unreported zero is indistinguishable from a project that genuinely has no specs.
 
 ---
 

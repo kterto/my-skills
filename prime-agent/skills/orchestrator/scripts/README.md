@@ -1,7 +1,7 @@
 # Orchestrator runtime scripts
 
 These `.cjs` files are the load-bearing runtime for `output_format=html`. Bootstrap
-(references/bootstrap.md → B3 — Materialize) copies the four gate/render scripts verbatim into a
+(references/bootstrap.md → B3 — Materialize) copies the six runtime scripts verbatim into a
 target project's `.orchestrator/`, where they run with `.orchestrator/` as `__dirname` and
 the repo root as their `ROOT` (`path.resolve(__dirname, '..')`). Zero dependencies —
 Node's built-ins only, so no `npm install` in the target project.
@@ -12,6 +12,7 @@ Node's built-ins only, so no `npm install` in the target project.
 | `gate-scope.cjs` | Shared **fail-closed** branch-scope discovery for the gates (`branchScope()`). Shell-free `git` via `execFileSync`; refuses an unresolvable base instead of degrading to a green no-op. |
 | `check-artifact-pairing.cjs` | Gate: every branch-added `.md` under `plans/` has its `.html` sibling and complete frontmatter. |
 | `check-artifact-links.cjs` | Gate: every local link in a branch-added `plans/**.html` resolves on disk. |
+| `check-artifact-home.cjs` | Gate: every branch-added artifact sits in a legal home — a `plans/<RUN-TOKEN>-<slug>/` run folder, or one of the seven frozen legacy kind directories — at depth exactly 2. Runs in **both** md and html mode: it audits a path, not a render. |
 | `index-plans.cjs` | Generator: the whole `plans/` tree → one self-contained `plans/index.html`, grouped by **family** (every artifact answering one `SPEC-*`, across all the runs that touched it). Deterministic — byte-identical output for an unchanged tree, so it can be committed and `--check`ed. |
 
 ## `index-plans.cjs` — the read view over `plans/`

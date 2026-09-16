@@ -139,9 +139,29 @@ For each story in the queue, PM executes the following steps in order:
    - **Success** = the orchestrator prints its `ORCHESTRATOR — pipeline complete` final report, which only happens when QA returned `READY_TO_COMMIT` or `READY_WITH_WARNINGS` (the report's QA line shows which). The proposed commit message and PR message PM uses in step 4 are read from this report, and `final_report_path` is read from its `Final report:` line. → run the **artifact verification** below, then proceed to step 4.
 
    **Read `spec_id` from the banner's `Spec:` line, on every terminal state — success or stop.** Every terminal banner the orchestrator can print carries it (orchestrator `SKILL.md` → Step 7b, *Two lines are required on every terminal banner*). It is logged in step 6 and it is what a retry passes back in step 2; a story whose row has no spec id is a story whose next attempt starts a new family. If the line is genuinely absent — an older orchestrator — take the id from the FINAL report's front matter where one exists, and record `—` only when neither has it.
+
    - **Stop** = the orchestrator prints any stop banner with a `Status: STALLED` line (cycle-limit reached, family rework budget exceeded, tester BLOCKED, qa BLOCKED_STALE, or spec still in DRAFT). There is no terminal `BLOCKED` status — `BLOCKED` is only an internal intermediate the orchestrator resolves via its fix/QA loops and never the final printed state. On any `Status: STALLED` banner, halt the entire PM run: report the stop banner, the story id, and the remaining queue. Do not proceed to any further story.
 
-   **Artifact verification (mandatory before step 4 — same retry pattern used for every other artifact).** The banner is a printed side effect; the orchestrator's Step 7 file-write is what must actually land, and under context pressure the write can be dropped while the banner still prints. Do **not** trust the banner alone. Read `final_report_path` (`plans/final/FINAL-{NNN}-{slug}.md`) on disk. If the `Final report:` line is absent from the banner, glob `plans/final/FINAL-*.md` and take the most recent as a fallback — with timestamp-based IDs (`FINAL-<YYYYMMDD>T<HHMMSS>Z-<hex>`), `ls plans/final/FINAL-*.md | sort | tail -1` is chronological. If the file does not exist or is empty, re-invoke the orchestrator once (answering Step 0 with option 1, per step 2) to force Step 7 to re-persist — **passing the banner's `SPEC-*` positionally**, per step 2's retry rule. This re-invocation is a retry of the same work, so it must land in the same family; without the id it re-brainstorms the story that just finished. If the FINAL artifact is still missing after the retry, halt the PM run exactly like a `Status: STALLED` stop — report the story id, the missing-artifact reason, and the remaining queue. **Never commit a story whose FINAL artifact is not on disk** — the pipeline did not actually finish.
+   **Read `run_dir` from the banner's `Run folder:` line, alongside `Spec:`.** Every artifact that run wrote — the spec, the plans, the code reviews, the QA and test reports, the FINAL report — lands **flat inside that one folder**, `plans/<YYYYMMDD>T<HHMMSS>Z-<4hex>-<slug>/`, so the folder is the only path PM needs in order to reach any of them. The artifact verification below uses it; where a stop banner carries the line too, PM names that folder when it reports where the stopped run's partial artifacts are. Note the folder's slug is a **human label that nothing parses** — a story's work routinely spans several run folders — so never infer membership, ordering, or "which story this was" from the name; resolve by artifact id and by the path the banner printed.
+
+   **Artifact verification (mandatory before step 4 — same retry pattern used for every other artifact).** The banner is a printed side effect; the orchestrator's Step 7 file-write is what must actually land, and under context pressure the write can be dropped while the banner still prints. Do **not** trust the banner alone. Read `final_report_path` on disk. The banner's `Final report:` line gives it in full — `{run_dir}/FINAL-<ID-TOKEN>-<slug>.md`, inside the run folder, because every artifact of a run is written flat in that one folder. **Prefer that line to any search**, always.
+
+   **If the `Final report:` line is missing, bound the lookup with the banner's `Run folder:` line — never with a kind directory.** That folder holds exactly one FINAL:
+
+   ```bash
+   find "$run_dir" -maxdepth 1 -name 'FINAL-*.md'   # $run_dir = the banner's `Run folder:` value
+   ```
+
+   **Only if neither line is present** — an older orchestrator — search recursively, and **sort by BASENAME, never by path**:
+
+   ```bash
+   find plans -maxdepth 3 -name 'FINAL-*.md' \
+     | awk -F/ '{print $NF "\t" $0}' | sort | tail -1 | cut -f2-
+   ```
+
+   **The obvious one-liner is wrong, and it fails in the worst direction.** `find plans -name 'FINAL-*.md' | sort | tail -1` sorts **full paths**, and a path sort puts the frozen legacy `plans/final/…` after every run folder, because a run folder starts with the timestamp's leading digit (`2`, 0x32) and `final` starts with `f` (0x66). So `tail -1` hands back a **stale legacy FINAL from a different story**; PM's check is "exists and non-empty", so it **passes**, and PM commits a story the pipeline never finished. Sorting by basename compares `FINAL-<YYYYMMDD>T<HHMMSS>Z-<hex>` against `FINAL-<YYYYMMDD>T…`, which is chronological by construction. The opposite failure is just as costly: a bare `plans/final/FINAL-*.md` glob matches **nothing** on a project written under the run-folder layout, so PM declares the FINAL artifact missing, burns an extra full orchestrator run, and then halts a **successful** story exactly like a `Status: STALLED` stop. Both failures are silent; the `Run folder:` line is what avoids either.
+
+   If the file does not exist or is empty, re-invoke the orchestrator once (answering Step 0 with option 1, per step 2) to force Step 7 to re-persist — **passing the banner's `SPEC-*` positionally**, per step 2's retry rule. This re-invocation is a retry of the same work, so it must land in the same family; without the id it re-brainstorms the story that just finished. If the FINAL artifact is still missing after the retry, halt the PM run exactly like a `Status: STALLED` stop — report the story id, the missing-artifact reason, and the remaining queue. **Never commit a story whose FINAL artifact is not on disk** — the pipeline did not actually finish.
 
 4. **Execute the success-path sequence** (see `references/git-flow.md` → **Success-path sequence**). The ordering is load-bearing because of two constraints: `/roadmap sync` must run after the trailer commit (it reads `git log`), and PM's own logs must be committed *after* the PR (they record the PR URL). The steps (the html-mode parity gate runs after sync, before the sync-docs commit):
    - Commit with the `Roadmap-Story: <id>` trailer using the orchestrator's proposed commit message.
@@ -192,7 +212,7 @@ Beyond `complete <scope>` (which *executes* stories), PM exposes a set of **mana
 | `park <selection>` | `set-release backlog <ids…>` | Sugar for `assign backlog <selection>`. |
 | `unpark <selection> [<release>]` | `set-release <release-or-null> <ids…>` | Sugar; with a release re-tiers to it, omitting the release un-tiers to `null`. |
 | `add-spec <path>` | `ingest-spec <path>` | Targeted re-eval appending a spec's new work (new items default `release: null`). |
-| `new-spec [raw idea]` | *(two-step; see below)* | Spawns the orchestrator brainstormer, writes `plans/specs/SPEC-{id}.md`, then STOPS. Does not touch the roadmap. |
+| `new-spec [raw idea]` | *(two-step; see below)* | Spawns the orchestrator brainstormer into a freshly minted run folder, which writes `{run_dir}/SPEC-<ID-TOKEN>-<slug>.md`, then STOPS. Does not touch the roadmap. |
 | `reorder <ids-in-order>` | `reorder <ids-in-order>` | `sequence`/`depends_on` of **not-done** items only (`--after <id>` accepted). |
 | `revise <id>` | `revise <id>` | Retitle / re-scope, or split/merge via new stable IDs + supersede — **not-done** only. |
 | `release <list\|reorder\|rename …>` | `release <list\|reorder\|rename …>` | Manage the ordered `releases[]` registry. `list` is read-only. |
@@ -219,8 +239,19 @@ Every mutating verb shows the staged diff and requires approval. **`--yes`** ski
 
 Raw-idea → roadmap is deliberately two-gated:
 
-1. `new-spec "raw idea"` spawns the **orchestrator brainstormer subagent** (reused unchanged), which writes `plans/specs/SPEC-{id}.md`. PM then **STOPS** — it does not append to the roadmap.
-2. After the user reviews/edits the spec, `add-spec plans/specs/SPEC-{id}.md` runs roadmap `ingest-spec`, which stages the append diff, gates, writes, and opens the planning PR.
+1. `new-spec "raw idea"` spawns the **orchestrator brainstormer subagent** (reused unchanged), which writes `{run_dir}/SPEC-<ID-TOKEN>-<slug>.md` — flat inside a run folder, like every other artifact the framework writes. **PM mints that folder itself before the spawn and passes it in the preamble as `run_dir={path}`**, because here PM is the spawner and the spawner owns the mint (the orchestrator does the same at its Step 0):
+
+   ```bash
+   ts=$(date -u +%Y%m%dT%H%M%SZ)
+   rnd=$(openssl rand -hex 2 2>/dev/null || printf '%04x' $(( (RANDOM<<8 ^ RANDOM) & 0xffff )))
+   run_dir="plans/${ts}-${rnd}-${slug}"   # slug: kebab-cased from the raw idea, <=5 words, <=40 chars
+   mkdir -p "$run_dir"
+   ```
+
+   **The name is minted, never resolved from disk and never re-derived on a second branch.** Nothing is listed, so two worktrees minting in the same second still differ in the 4 hex; a name re-derived elsewhere yields two folders for one spec and a rename/rename merge conflict. PM then **STOPS** — it does not append to the roadmap.
+2. After the user reviews/edits the spec, `add-spec {run_dir}/SPEC-<ID-TOKEN>-<slug>.md` runs roadmap `ingest-spec`, which stages the append diff, gates, writes, and opens the planning PR.
+
+**PM reports the exact spec path and never searches for it.** It knows the path because it minted the folder; if it spawned without a `run_dir=` (so the brainstormer minted its own under the role write-path precedence), take the path verbatim from the brainstormer's `Spec:` line. A `plans/specs/*` glob finds nothing under this layout, and a recursive search finds every spec in the project rather than the one just written.
 
 See `references/roadmap-management.md` → Spec-creation two-step.
 
@@ -254,7 +285,7 @@ When a story is system-scoped, PM reads that system's `path` from `config.system
 - **`gh: MISSING`** → stop: install the GitHub CLI and ensure it is authenticated.
 - **Unrecognized flag** (e.g. a mistyped `--conservative`) → stop and echo the **exact unrecognized token in backticks** (e.g. ``unknown flag `--corservative`; did you mean `--conservative`?``) so a one-letter typo is visible against the intended flag. Do not silently ignore or silently accept an unknown flag.
 - **Orchestrator prints a `Status: STALLED` stop banner** (cycle-limit, family rework budget exceeded, tester BLOCKED, qa BLOCKED_STALE, or spec DRAFT) → stop the entire run. Report the stop banner, the story id, and the unprocessed queue. Stories completed before the stall are preserved (their branches, commits, and PRs remain). Note: there is no terminal `BLOCKED` status — `BLOCKED` is an internal intermediate only; PM keys off the orchestrator's printed STALLED banner.
-- **`pipeline complete` banner but no FINAL artifact on disk** → the orchestrator's Step 7 write was dropped while the banner still printed. Re-invoke the orchestrator once to re-persist (per-story loop step 3, **Artifact verification**); if `plans/final/FINAL-{NNN}-{slug}.md` is still missing after the retry, halt the run like a STALLED stop. Never commit the story — the pipeline did not finish.
+- **`pipeline complete` banner but no FINAL artifact on disk** → the orchestrator's Step 7 write was dropped while the banner still printed. Re-invoke the orchestrator once to re-persist (per-story loop step 3, **Artifact verification**); if `{run_dir}/FINAL-<ID-TOKEN>-<slug>.md` is still missing after the retry, halt the run like a STALLED stop. Never commit the story — the pipeline did not finish. **Before declaring it missing, confirm you looked in the run folder the banner named** — a `plans/final/…` lookup matches nothing under the run-folder layout, and a whole-`plans/` search sorted by path returns a stale FINAL from another story that passes the exists-and-non-empty check (per-story loop step 3).
 - **Dependency cycle detected** → stop before executing any story and report the offending story ids.
 - **Unrecognized `<scope>` argument** → stop and print the list of valid milestone ids and phase ids from `roadmap.lock.json`, the release names from `releases[]` (and `backlog`), and the declared system names from `roadmap.config.json` → `systems`.
 - **Unknown system** (bare-system `<scope>`, `--system <name>`, or `assign-system`/`add-* --system` naming a system not in `config.systems`) → stop and print the valid declared system names (e.g. ``unknown system `backedn`; declared systems: backend, app, admin, landing``). Never silently return an empty queue or lazily create the system — the `system` set is config-declared and typo-guarded. `null` (untag) is always permitted.

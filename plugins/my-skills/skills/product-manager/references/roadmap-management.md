@@ -106,11 +106,11 @@ See `references/git-flow.md` → **Reject-and-discard** for the git steps.
 
 Turning a raw idea into roadmap work is deliberately **two-gated** so the spec is validated before it reshapes the plan, and the roadmap change is validated before commit:
 
-1. **`new-spec "raw idea"`** — PM spawns the **orchestrator brainstormer subagent** (reused unchanged) with the raw idea. The brainstormer interviews as needed and writes `plans/specs/SPEC-{id}.md`.
-2. **STOP for user review.** PM does **not** auto-append to the roadmap. It surfaces the written spec path and stops so the user can review/edit the spec.
-3. **`add-spec plans/specs/SPEC-{id}.md`** — after the user approves the spec, they (or PM on request) run `add-spec` with the spec path. This maps to roadmap `ingest-spec`, which stages an append diff (`+ new`, new items default `release: null`), gates, and — on approval — writes; PM then commits / pushes / opens the planning PR.
+1. **`new-spec "raw idea"`** — PM **mints the run folder first** (`plans/<YYYYMMDD>T<HHMMSS>Z-<4hex>-<slug>/`, `mkdir -p`, never resolved from disk — see `SKILL.md` → `new-spec` two-step for the recipe), then spawns the **orchestrator brainstormer subagent** (reused unchanged) with the raw idea and `run_dir={path}` in the preamble. The brainstormer interviews as needed and writes `{run_dir}/SPEC-<ID-TOKEN>-<slug>.md` — flat inside that folder, with no kind subdirectory.
+2. **STOP for user review.** PM does **not** auto-append to the roadmap. It surfaces the written spec path — the one it already knows, never a path it searched for — and stops so the user can review/edit the spec.
+3. **`add-spec {run_dir}/SPEC-<ID-TOKEN>-<slug>.md`** — after the user approves the spec, they (or PM on request) run `add-spec` with the spec path. This maps to roadmap `ingest-spec`, which stages an append diff (`+ new`, new items default `release: null`), gates, and — on approval — writes; PM then commits / pushes / opens the planning PR.
 
-`new-spec` itself never mutates the roadmap and opens no PR — it only produces a spec for review. The roadmap seed list recognizes `plans/specs/*` (roadmap `SKILL.md` → Context gate Step 3), and `ingest-spec` stays location-agnostic via its explicit path argument.
+`new-spec` itself never mutates the roadmap and opens no PR — it only produces a spec for review. The roadmap seed step finds specs by **recursive search under `plans/`**, at any depth and never by glob, so a spec in a run folder seeds decomposition exactly like the frozen legacy ones in `plans/specs/` (roadmap `SKILL.md` → Context gate Step 3); `ingest-spec` stays location-agnostic via its explicit path argument.
 
 ---
 

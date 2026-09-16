@@ -69,6 +69,7 @@ export const SKILL_FILES = [
   "scripts/index-plans.cjs",
   "scripts/check-artifact-pairing.cjs",
   "scripts/check-artifact-links.cjs",
+  "scripts/check-artifact-home.cjs",
   "scripts/gate-scope.cjs",
 ]
 
