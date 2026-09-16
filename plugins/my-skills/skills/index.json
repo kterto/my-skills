@@ -119,6 +119,7 @@
     {
       "name": "orchestrator",
       "files": [
+        "MATERIALIZED-VERSION",
         "references/artifact-format-html.md",
         "references/artifact-format-parallel.md",
         "references/artifact-format.md",

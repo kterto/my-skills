@@ -699,12 +699,31 @@ test('MAP(a) every allow-listed prefix resolves to its documented scaffold and d
   }
 });
 
-test('MAP(b) a plans/eval/ artifact and an unrecognised prefix both fall back to the qa-report scaffold', () => {
-  // `plans/eval/` has no prefix of its own — the directory overrides whatever the
-  // basename starts with, so EVAL must not be readable as a scaffold key.
-  const evalId = 'EVAL-20260101T000000Z-abcd';
-  const evalHtml = toHtml(`/repo/plans/eval/${evalId}-fixture.md`, MAP_MD(evalId));
-  assert.equal(styleOf(evalHtml), scaffoldStyle('qa-report'), 'plans/eval/ must lift the qa-report scaffold');
+test('MAP(b) plans/eval/ outranks the prefix map, an eval/ segment outside the plans tree does not, and an unknown prefix falls back to qa-report', () => {
+  // `CR` is the probe that makes the directory rule observable: the map points it at the
+  // code-review scaffold, so a CR artifact rendering as qa-report can only be the eval
+  // directory firing. An `EVAL-` basename would prove nothing — the prefix is absent from
+  // the map, so the directory branch and the fallback return the same scaffold either way.
+  const crId = 'CR-20260101T000000Z-abcd';
+  const evalHtml = toHtml(`/repo/plans/eval/${crId}-fixture.md`, MAP_MD(crId));
+  assert.equal(styleOf(evalHtml), scaffoldStyle('qa-report'), 'plans/eval/ must outrank the CR prefix');
+
+  const reviewHtml = toHtml(`/repo/plans/code-review/${crId}-fixture.md`, MAP_MD(crId));
+  assert.equal(
+    styleOf(reviewHtml),
+    scaffoldStyle('code-review'),
+    'the same CR artifact outside plans/eval/ must keep its mapped scaffold',
+  );
+
+  // The path reaching toHtml is absolute, so an `eval` segment can sit anywhere above the
+  // project. Only the `plans/eval/` pair is the eval directory; a checkout under some
+  // unrelated `eval/` folder used to render every mapped prefix as a QA report.
+  const nestedHtml = toHtml(`/repo/eval/checkout/plans/code-review/${crId}-fixture.md`, MAP_MD(crId));
+  assert.equal(
+    styleOf(nestedHtml),
+    scaffoldStyle('code-review'),
+    'an eval/ segment outside the plans tree must not trigger the directory rule',
+  );
 
   // An unknown prefix must degrade to the same documented fallback rather than throwing
   // on a template filename derived from the basename.

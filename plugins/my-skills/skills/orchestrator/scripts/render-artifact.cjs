@@ -10,8 +10,14 @@
  *
  *   node .orchestrator/render-artifact.cjs <artifact.md> [<artifact.md> ...]
  *
- * Type is inferred from the path: `*.progress.md` → progress-timeline scaffold,
- * `plans/eval/**` → qa-report scaffold, otherwise the same-named scaffold.
+ * Type is inferred from the path in this precedence order: a `*.progress.md`
+ * sidecar takes the progress-timeline scaffold; anything beneath a `plans/eval/`
+ * directory takes the qa-report scaffold whatever its basename says; otherwise the
+ * basename prefix is looked up in `SCAFFOLD`, falling back to qa-report. The eval
+ * rule is anchored on the `plans/eval/` segment pair because the path handed to
+ * `toHtml` is absolute — a bare `/eval/` test also matches a checkout that happens
+ * to live under an unrelated `eval/` directory, which rendered every FEAT, CR and
+ * TEST artifact of that project as a QA report.
  */
 'use strict';
 const fs = require('fs');
@@ -341,7 +347,7 @@ function toHtml(abs, src) {
   const prefix = (path.basename(abs).match(/^([A-Z]+)/) || [])[1];
   const scaffold = isProgress
     ? 'progress-timeline'
-    : /\/eval\//.test(abs) ? 'qa-report'
+    : /(^|\/)plans\/eval\//.test(abs) ? 'qa-report'
     : SCAFFOLD[prefix] || 'qa-report';
   const tplName = scaffold + '.template.html';
 

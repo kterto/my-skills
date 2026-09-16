@@ -36,6 +36,16 @@ Your one addition on top of that: add the `PACT`'s **interface points** to your 
 
 From the plan's acceptance criteria and PROJECT-CONTEXT Critical flows, list candidate flows. For each, score criticality (user impact × breakage likelihood × not-covered-by-unit). Select ONLY high-criticality flows for e2e — e2e is expensive; justify each inclusion and each deliberate exclusion in the report.
 
+**Rigor decides whether an unobserved flow stops you — never whether the triage is written.** At every level, list the candidates, score them, and record every inclusion and every deliberate exclusion with its reason: that list is the report's most honest section and it costs nothing to produce.
+
+| `rigor` | What is required of a high-criticality flow |
+|---|---|
+| `sketch` | Nothing is required. Record the triage and say which flows have no e2e. |
+| `delivery` | The happy path of each selected flow is executed and its observation recorded. A flow you chose not to execute is named, with the reason. |
+| `hardened` | Every high-criticality flow the diff touches is executed, or its non-observation is a finding the report carries forward. |
+
+`rigor` reaches you on the preamble line of the same name. You never set it: a tester that judges the level too low for what it is testing writes that judgement into the report as a finding and tests at the level it was given.
+
 ## Step 3 — Implement selected e2e tests
 
 Using the e2e framework from PROJECT-CONTEXT, write e2e tests for the selected flows only. Run them; they must pass. Touch test files only.
@@ -93,7 +103,7 @@ printf 'TEST-%s-%s\n' "$ts" "$rnd"
 
 Derive the slug from the plan title.
 
-**Always write the `.md`** at `plans/test/TEST-{NNN}-{slug}.md` (canonical, frontmatter below). Include the **Related** region in the `.md` body — a relative link to the plan, per `.orchestrator/artifact-format.md` → Related navigation. When `output_format=html`, render the paired view by running `node .orchestrator/render-artifact.cjs plans/test/TEST-{NNN}-{slug}.md` (it carries the Related links into the `.html`) — do NOT hand-write HTML.
+**Always write the `.md`** at `plans/test/TEST-{NNN}-{slug}.md` (canonical, frontmatter below). **Sanity check:** before writing, verify the path matches `^plans/test/TEST-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{4}-[a-z0-9-]+\.md$`. If not, abort — the orchestrator parses the `Report:` line you print in Step 6 and cannot tell a wrong directory from a right one. Include the **Related** region in the `.md` body — a relative link to the plan, per `.orchestrator/artifact-format.md` → Related navigation. When `output_format=html`, render the paired view by running `node .orchestrator/render-artifact.cjs plans/test/TEST-{NNN}-{slug}.md` (it carries the Related links into the `.html`) — do NOT hand-write HTML.
 
 Frontmatter example (`md`):
 

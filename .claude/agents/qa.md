@@ -16,9 +16,22 @@ A plan ID (e.g. `FEAT-001`). The plan must have `status: DONE` and a correspondi
 ## Step 0 — Gate wall-clock budget (mandatory)
 
 Read `gate_wall_clock_minutes` from `.orchestrator/config.json` (integer ≥ 0; default `15`; `0`
-disables the bound). **Run every suite and every gate command in Steps 3, 4 and 4b under that
-bound.** On a command that exceeds it: stop it, record that gate's verdict as `UNMEASURED`, and add
-the gate to the report's `stale_gates:` frontmatter list with the elapsed minutes.
+disables the bound). **Run each Clean Code gate command in Step 4b under that bound.** On a command
+that exceeds it: stop it, record that gate's verdict as `UNMEASURED`, and add the gate to the
+report's `stale_gates:` frontmatter list with the elapsed minutes.
+
+**The bound is on Step 4b's gate commands only — not on the Step 3 test suite and not on Step 4's
+lint, type or format checks.** Two reasons, and both matter. A gate has an **id** (`G1`…`G7`), a row
+in the report's gate table, and `UNMEASURED` in its verdict vocabulary; a test suite has none of
+those, so "record it as UNMEASURED against its gate" has nothing to write. And a full suite
+legitimately runs longer than a gate: at the default of 15 minutes this would kill ordinary suites on
+any large project, turning a bound meant to catch a wedged tool into one that fails healthy runs.
+A suite that truly hangs is a project defect the run should surface by hanging visibly, not one QA
+should paper over by inventing a verdict for it.
+
+**Never record a command you stopped in `suites[]`.** A killed command produced no result, and the
+verification ledger's inheritance rule would otherwise let that non-execution be inherited as a
+recorded outcome at that tree for the rest of the run.
 
 A stale gate is **not** a failure. It is a gate whose result is unknown, and the difference matters:
 a fail is something a fix plan can act on, while a timeout is an operator decision about tooling or
@@ -239,7 +252,7 @@ fam=$(grep -rl "{spec_id}" plans --include='*.md' --exclude='*.progress.md')
 fam_plans=$(printf '%s\n' $fam | grep -E '/(FEAT|FIX|QAF|PACT)-' \
             | sed -E 's#.*/([A-Z]+-[0-9]{8}T[0-9]{6}Z-[0-9a-f]+)-.*#\1#' | sort -u)
 # denominator scope — the family's CRs, resolved by PROVENANCE, not by mention
-fam_crs=$(for p in $fam_plans; do grep -rl "^plan: $p" plans/code-review --include='CR-*.md'; done | sort -u)
+fam_crs=$(for p in $fam_plans; do grep -rl "^plan: $p" plans --include='CR-*.md'; done | sort -u)
 ```
 
 **Count the denominator from `$fam_crs`, never from `$fam`.** A `grep` for the id matches it anywhere
@@ -250,11 +263,23 @@ frontmatter, which every reviewer has always written, is the reliable edge. On t
 was built for, the bare grep finds 2 CRs where provenance finds 9 and the true count is 13.
 
 `{spec_id}` is the `SPEC-*` id from the `spec=` line in your preamble. **No `spec=` line means there
-is no family to measure: report G8 `UNMEASURED`, never `0.00 ✅`.** Use
-`grep -r`, not a `**` glob — globstar is off by default in bash and absent from bash 3.2, where `**`
-silently means `*` and misses everything below the first level, while zsh aborts the command on zero
-matches. Either way an empty family would score `0/max(1,0) = 0.00` and render a green pass, which is
-the vacuous-green failure class these gates exist to prevent. A plan and its `.progress.md` sidecar are
+is no family to measure: report G8 `UNMEASURED`, never `0.00 ✅`.** **A non-empty `$fam_plans` over an
+empty `$fam_crs` is `UNMEASURED` on exactly the same grounds** — a `grep` that matches nothing exits
+non-zero, and that status is discarded the moment the call sits inside a command substitution nobody
+checks or pipes into `wc -l` — so the empty set reaches the ratio wearing the shape of a measured zero
+and scores `0/max(1,0) = 0.00 ✅`. Print both counts beside
+that verdict: a family that has plans but no reviews is a provenance gap worth saying out loud, never
+a clean run.
+
+Use `grep -r`, not a `**` glob. Bash 3.2 — still `/bin/bash` on macOS — has no globstar at all and
+flattens `**` to a single `*`, so the pattern silently misses everything below the first level; zsh
+goes the other way and **aborts the whole command** on a pattern that matches nothing, and
+`2>/dev/null` does not suppress that, because the shell fails before the `grep` it would have
+redirected ever runs. **Only one of the two lands where the rule above can catch it.** zsh's abort leaves the
+variable empty, which is the UNMEASURED case; bash 3.2's flattening returns a non-empty but
+short set, which passes every emptiness test and is scored as a measured number that is simply
+wrong. That is why `grep -r` is mandatory rather than merely safer — the second failure has no
+net under it at all. A plan and its `.progress.md` sidecar are
 **one** artifact — count the plan.
 
 ```
@@ -313,6 +338,8 @@ Result: {PASS | FAIL | MISSING_TOOL | WARN} — {metric value vs threshold, or v
 ## Step 5 — Create the QA report file
 
 Emit the artifact per `.orchestrator/artifact-format.md`. **Always write the `.md`** (canonical, frontmatter below). Include the **Related** region in the `.md` body — a relative link to the plan, per `.orchestrator/artifact-format.md` → Related navigation. When `output_format=html`, render the paired view by running `node .orchestrator/render-artifact.cjs plans/qa/QA-{NNN}-{slug}.md` (it carries the Related links into the `.html`) — do NOT hand-write HTML. The stdout summary below is identical regardless of format.
+
+**Stamp the run's rigor in the report header** — `Rigor: {level} (from {source})` — at every level, `hardened` included. A reader must never infer it from a missing line.
 
 **Filling the gate table.** The `Threshold` column renders from `.cleancode-gates.json`, per stack —
 print the configured values, never remembered ones, and name the stack in the row when a plan spans
@@ -405,11 +432,22 @@ stale_gates: []   # or [{gate: G6, elapsed_minutes: 43}, ...] — gates that exc
 
 ## Step 6 — Set status
 
-- **READY_TO_COMMIT**: All test suites pass, zero lint errors, zero type/build errors, zero format issues, static analysis clean, **every Clean Code gate G1–G7 either PASS or carrying a recorded non-failure verdict** (`MISSING_TOOL`, `UNMEASURED`, or at-or-below a recorded baseline — see `.orchestrator/gate-config.md`), and the family's G8 either `≤ 0.5` or `UNMEASURED`.
-- **BLOCKED**: Any test failure, lint error, type/build error, format issue, or **any G1–G7 measured FAIL**.
+- **READY_TO_COMMIT**: All test suites pass, zero lint errors, zero type/build errors, zero format issues, static analysis clean, **every Clean Code gate G1–G7 either PASS or carrying a recorded non-failure verdict** (`MISSING_TOOL`, `UNMEASURED`, at-or-below a recorded baseline, or `REPORT-ONLY` at this run's rigor — see `.orchestrator/gate-config.md`), and the family's G8 either `≤ 0.5` or `UNMEASURED`.
+- **BLOCKED**: Any test failure, lint error, type/build error, format issue, or **any measured FAIL on a gate that blocks at this run's rigor** (`.orchestrator/gate-config.md` → *Rigor decides block-or-report*).
+
+**A `REPORT-ONLY` gate that failed is still written down, in full.** Below `hardened`, a measured G2/G4/G5/G7 failure — and G1 at `sketch` — does not block, but the row is `REPORT-ONLY — FAIL (n findings, demoted by rigor <level>)`, every finding keeps its file, line, rule and fix hint, and the verdict rationale names the set. **`READY_TO_COMMIT` at `sketch` and `READY_TO_COMMIT` at `hardened` must never be byte-identical**: the first says gates were measured and not enforced, the second says they held. The rigor line in the report header and the `REPORT-ONLY` cells are what carry that difference; never render a demoted failure as `✅`, and never drop it from the table because it did not block.
+
+**G6 below `hardened` is `UNMEASURED (rigor-<level>)`**, listed with the other unmeasured gates and forwarded to the FINAL banner's `Unmeasured:` line. It is not a pass and it is not a missing tool.
 
 **A `MISSING_TOOL` or `UNMEASURED` verdict does not block on its own.** It is not a failure and not a pass: it means no value exists to compare, so blocking on it asks the pipeline to fix something no plan can reach — a stack with no mutation runner never installs one mid-run, and `flutter test --coverage` will not start emitting branch records. Report it prominently, name it in the verdict rationale, and let the run proceed on the gates that *were* measured. Adjudicating it case by case is what let two QA reports on the same feature, hours apart, reach opposite verdicts on an identical unmeasured gate.
 - **READY_WITH_WARNINGS**: All blocking checks pass but the family's G8 ratio is in `0.5 < r ≤ 1.5` (HIGH_REWORK). Plan can ship; flag in report so the human investigates root cause.
+
+**A non-empty `stale_gates:` is never `READY_TO_COMMIT`.** A gate stopped on the clock is unmeasured
+*because this run ran out of time on it*, which is not the same as a gate that could never be
+measured here — the distinction Step 0 exists to draw. Set `READY_WITH_WARNINGS` at best, name every
+stale gate and its elapsed minutes in the verdict rationale, and never print "all checks pass" over
+one. The orchestrator reads the key and synthesizes `BLOCKED_STALE` from it; a report that buries a
+timeout inside a clean verdict defeats that.
 
 ## Step 7 — Update plan and progress files
 

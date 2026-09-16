@@ -252,7 +252,7 @@ fam=$(grep -rl "{spec_id}" plans --include='*.md' --exclude='*.progress.md')
 fam_plans=$(printf '%s\n' $fam | grep -E '/(FEAT|FIX|QAF|PACT)-' \
             | sed -E 's#.*/([A-Z]+-[0-9]{8}T[0-9]{6}Z-[0-9a-f]+)-.*#\1#' | sort -u)
 # denominator scope — the family's CRs, resolved by PROVENANCE, not by mention
-fam_crs=$(for p in $fam_plans; do grep -rl "^plan: $p" plans/code-review --include='CR-*.md'; done | sort -u)
+fam_crs=$(for p in $fam_plans; do grep -rl "^plan: $p" plans --include='CR-*.md'; done | sort -u)
 ```
 
 **Count the denominator from `$fam_crs`, never from `$fam`.** A `grep` for the id matches it anywhere
@@ -263,11 +263,23 @@ frontmatter, which every reviewer has always written, is the reliable edge. On t
 was built for, the bare grep finds 2 CRs where provenance finds 9 and the true count is 13.
 
 `{spec_id}` is the `SPEC-*` id from the `spec=` line in your preamble. **No `spec=` line means there
-is no family to measure: report G8 `UNMEASURED`, never `0.00 ✅`.** Use
-`grep -r`, not a `**` glob — globstar is off by default in bash and absent from bash 3.2, where `**`
-silently means `*` and misses everything below the first level, while zsh aborts the command on zero
-matches. Either way an empty family would score `0/max(1,0) = 0.00` and render a green pass, which is
-the vacuous-green failure class these gates exist to prevent. A plan and its `.progress.md` sidecar are
+is no family to measure: report G8 `UNMEASURED`, never `0.00 ✅`.** **A non-empty `$fam_plans` over an
+empty `$fam_crs` is `UNMEASURED` on exactly the same grounds** — a `grep` that matches nothing exits
+non-zero, and that status is discarded the moment the call sits inside a command substitution nobody
+checks or pipes into `wc -l` — so the empty set reaches the ratio wearing the shape of a measured zero
+and scores `0/max(1,0) = 0.00 ✅`. Print both counts beside
+that verdict: a family that has plans but no reviews is a provenance gap worth saying out loud, never
+a clean run.
+
+Use `grep -r`, not a `**` glob. Bash 3.2 — still `/bin/bash` on macOS — has no globstar at all and
+flattens `**` to a single `*`, so the pattern silently misses everything below the first level; zsh
+goes the other way and **aborts the whole command** on a pattern that matches nothing, and
+`2>/dev/null` does not suppress that, because the shell fails before the `grep` it would have
+redirected ever runs. **Only one of the two lands where the rule above can catch it.** zsh's abort leaves the
+variable empty, which is the UNMEASURED case; bash 3.2's flattening returns a non-empty but
+short set, which passes every emptiness test and is scored as a measured number that is simply
+wrong. That is why `grep -r` is mandatory rather than merely safer — the second failure has no
+net under it at all. A plan and its `.progress.md` sidecar are
 **one** artifact — count the plan.
 
 ```

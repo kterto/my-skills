@@ -103,7 +103,7 @@ printf 'TEST-%s-%s\n' "$ts" "$rnd"
 
 Derive the slug from the plan title.
 
-**Always write the `.md`** at `plans/test/TEST-{NNN}-{slug}.md` (canonical, frontmatter below). Include the **Related** region in the `.md` body — a relative link to the plan, per `.orchestrator/artifact-format.md` → Related navigation. When `output_format=html`, render the paired view by running `node .orchestrator/render-artifact.cjs plans/test/TEST-{NNN}-{slug}.md` (it carries the Related links into the `.html`) — do NOT hand-write HTML.
+**Always write the `.md`** at `plans/test/TEST-{NNN}-{slug}.md` (canonical, frontmatter below). **Sanity check:** before writing, verify the path matches `^plans/test/TEST-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{4}-[a-z0-9-]+\.md$`. If not, abort — the orchestrator parses the `Report:` line you print in Step 6 and cannot tell a wrong directory from a right one. Include the **Related** region in the `.md` body — a relative link to the plan, per `.orchestrator/artifact-format.md` → Related navigation. When `output_format=html`, render the paired view by running `node .orchestrator/render-artifact.cjs plans/test/TEST-{NNN}-{slug}.md` (it carries the Related links into the `.html`) — do NOT hand-write HTML.
 
 Frontmatter example (`md`):
 

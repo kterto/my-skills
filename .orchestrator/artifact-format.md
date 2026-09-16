@@ -31,13 +31,15 @@ id: <ID>
 status: <status>          # e.g. DRAFT | READY | APPROVED | BLOCKED
 created_at: <ISO-8601>
 updated_at: <ISO-8601>
-cycle: <integer>          # review or qa cycle number (0-based)
+cycle: <integer>          # the review or qa cycle this artifact was produced in, as the
+                          # orchestrator counts it (first review cycle is 1); 0 when the role
+                          # runs outside a loop, or when no budget line was supplied
 ---
 ```
 
 Body: free-form markdown with headings, lists, and fenced code blocks as appropriate for the role.
 
-## html rendered view (additional, only when output_format=html)
+## Where the html view rules live
 
 **When `output_format=html`, read `.orchestrator/artifact-format-html.md` before writing any
 artifact** — the html view's authoring rules and its two blocking validation gates live there. On an
@@ -94,9 +96,12 @@ governs. So the family resolves in a single pass:
 grep -rl "{spec_id}" plans --include='*.md' --exclude='*.progress.md'
 ```
 
-Use `grep -r`, never a `**` glob: globstar is off by default in bash and does not exist in bash 3.2,
-where `**` silently means `*` and misses every artifact below the first level; zsh aborts the command
-outright on zero matches. A plan and its `.progress.md` sidecar are **one** artifact — count the plan.
+**No shell glob, in either shell.** In bash 3.2 globstar does not exist, so `**` silently degrades to
+`*` and misses every artifact below the first level; in zsh a pattern that matches nothing aborts the
+entire command with `no matches found`, and `2>/dev/null` does not suppress that, because the failure
+is a shell expansion error rather than a command's stderr. Family and artifact resolution therefore
+uses `grep -r` or a quoted `find`, never a shell glob, at any nesting depth. A plan and its
+`.progress.md` sidecar are **one** artifact — count the plan.
 
 **The grep resolves the plans; the reviews resolve by provenance.** `grep` matches the id anywhere in
 a file, so it also pulls in artifacts that merely cite the spec in prose, and it misses every `CR`
@@ -105,11 +110,26 @@ written before this rule existed — 0 of 222 code reviews across both reference
 which every reviewer has always written:
 
 ```bash
-grep -rl "^plan: {plan_id}" plans/code-review --include='CR-*.md'
+grep -rl "^plan: {plan_id}" plans --include='CR-*.md'
 ```
 
 One pass per family plan. Using the bare grep as the denominator scored three already-shipped families
 as blocking and missed a fourth that was genuinely over the line.
+
+**The search root is `plans`, not `plans/code-review`.** The `--include='CR-*.md'` filter already
+restricts the match set to code reviews, so at today's layout — where every `CR` lives in
+`plans/code-review/` — the two roots return byte-identical output; widening the root is a robustness
+fix against a `CR` filed anywhere else under `plans/`, not a change in what this command measures.
+
+**When the family has plans but this grep returns nothing, that is UNMEASURED — never `0.00`.** An
+empty result is silent: `grep` does report it, with a non-zero status, but nobody reads that status —
+an assignment from a command substitution keeps it and no caller tests it, and the pipe the command
+actually uses (`… | sort -u`) discards it outright, exiting 0 on an empty stream. The `0` then flows
+into the rework ratio as a green pass — the vacuous-green class these gates exist to prevent. **The diagnostic
+trap is that a wrong root looks exactly like a clean family**: when the searched directory does not
+exist grep at least writes one line to stderr, but when it DOES exist and is populated there is not
+even that line to notice, so nothing distinguishes "this family has no reviews" from "this grep looked
+in the wrong place". Report `UNMEASURED` and say which root you searched.
 
 **This is why the rule is load-bearing rather than cosmetic.** An artifact that omits the spec id is
 invisible to the family — it does not count toward the rework ratio, it does not count toward the
@@ -181,7 +201,7 @@ Required header lines per role:
 
 Roles that have a path line also print it immediately after the Status line (or after the ID line for architect, which has no Status line). Additional informational lines (e.g. `Coverage:`, `Next:`) may follow but are not parsed by the orchestrator for control flow.
 
-### Parallel-mode lines (additive — only when `parallelism` is not `off`)
+### Where the additive stdout lines live
 
 Moved to `.orchestrator/artifact-format-parallel.md`, under this same name. Every row in the table
 above is unchanged on the parallel path; those lines are additive and never replace one.

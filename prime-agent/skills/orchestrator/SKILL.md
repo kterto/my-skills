@@ -1,6 +1,6 @@
 ---
 name: orchestrator
-description: Multi-role pipeline orchestrator. Use when the user invokes "/orchestrator", says "orchestrate", or asks to "run the full pipeline". Auto-detects whether to run bootstrap (first-time setup) or go straight to the pipeline — bootstrap runs when `.orchestrator/config.json` is absent or any file it materializes is missing; pass `--setup` to force bootstrap. Admits each role (brainstormer → architect → coder → tester → reviewer → qa) as an RLM child. Never commits or pushes.
+description: Multi-role pipeline orchestrator. Use when the user invokes "/orchestrator", says "orchestrate", or asks to "run the full pipeline". Auto-detects whether to run bootstrap (first-time setup) or go straight to the pipeline — bootstrap runs when the project's copy of the skill is absent, incomplete or out of date; pass `--setup` to force it. Admits each role (brainstormer → architect → coder → tester → reviewer → qa) as an RLM child. Never commits or pushes.
 ---
 
 ## Prime Agent compatibility
@@ -68,14 +68,14 @@ On invocation with a plain-language task description (and optional `--setup`):
 > **Already loaded? Do not reload.** A caller running several tasks in one session — the `product-manager` skill does exactly this, one run per user story — needs this protocol **once**, not once per task. If its text is still visible in your context, a second task is a **new pipeline run starting here at the Lifecycle**, not a re-read of the skill. **A new run rebinds everything**: `base_sha`, the spec, the cycle counters, the family counts. "Capture once" anywhere below means once per *run*, never once per session — carrying story 1's base into story 2 would diff the wrong tree. Re-invoking would duplicate roughly 26k tokens of protocol per task, and a ten-story milestone would spend most of a context window on copies of one document. Reload only when you genuinely cannot see this text any more — after compaction, or in a fresh session. Presence is the test, not recollection.
 
 1. Resolve config (see `references/config.md`): CLI args > `.orchestrator/config.json` > defaults.
-2. If `--setup` is present OR `.orchestrator/config.json` does not exist OR any file B3 materializes is missing — currently `.orchestrator/.gitignore`, `.orchestrator/artifact-format.md`, `.orchestrator/artifact-format-html.md`, `.orchestrator/artifact-format-parallel.md`, `.orchestrator/config.md`, `.orchestrator/gate-config.md`, `.orchestrator/lane-protocol.md` — → run **Bootstrap** (Steps B1–B3), then continue. **A project bootstrapped by an older skill version has `config.json` and none of the files added since**, so keying only on `config.json` would leave every role pointing at a reference that is not there.
+2. If `--setup` is present, OR `.orchestrator/config.json` does not exist, OR `.orchestrator/.materialized-version` does not exist, OR its contents differ from the skill's own `MATERIALIZED-VERSION` file — a sibling of this `SKILL.md` in the skill directory, read with the same mechanism you read this file — OR any file B3 materializes is missing — currently `.orchestrator/.gitignore`, `.orchestrator/artifact-format.md`, `.orchestrator/artifact-format-html.md`, `.orchestrator/artifact-format-parallel.md`, `.orchestrator/config.md`, `.orchestrator/gate-config.md`, `.orchestrator/lane-protocol.md`, the seven scaffolds in `.orchestrator/html-templates/`, the four runtime scripts `.orchestrator/{render-artifact,check-artifact-pairing,check-artifact-links,gate-scope}.cjs`, and the six role files in `.orchestrator/roles/` — → run **Bootstrap** (Steps B1–B3), then continue. **A project bootstrapped by an older skill version has `config.json` and none of the files added since**, so keying only on `config.json` would leave every role pointing at a reference that is not there. **The version compare exists because a materialized copy that is present but old is invisible to a missing-file test**, and every role reads those copies rather than the skill's own — this skill's own repository ran for five commits with its rendered role files behind their templates, so the `rigor=` preamble field shipped in the templates never reached the materialized tester role and no run ever carried it. **When the skill's own `MATERIALIZED-VERSION` is the file that is missing, the compare is not stale — it is unavailable**: treat the version condition as not met, say so in one line, and fall through to the missing-file tests. An install route that did not ship the stamp would otherwise bootstrap on every single run, and re-materializing the whole skill once per invocation is a worse failure than the staleness it is trying to catch.
 3. Run **Pipeline** (Steps 0–6).
 4. Spec eval runs inside the review loop (Step 4e), before the QA exit gate.
 5. On `READY_TO_COMMIT` → run **Final report** (Step 7).
 
 ## Bootstrap
 
-Bootstrap runs when `--setup` is passed, when `.orchestrator/config.json` is absent, or when any file B3 materializes is missing from `.orchestrator/` (Lifecycle item 2 above is the trigger, and it is the only place that decision is made). It has three steps: B1 context gate, B2 dependency check, B3 materialize.
+Bootstrap runs when `--setup` is passed, when `.orchestrator/config.json` is absent, when `.orchestrator/.materialized-version` is absent or differs from the skill's own `MATERIALIZED-VERSION`, or when any file B3 materializes is missing — from `.orchestrator/` or from `.orchestrator/roles/` (Lifecycle item 2 above is the trigger, and it is the only place that decision is made). It has three steps: B1 context gate, B2 dependency check, B3 materialize.
 
 **When it is triggered, read `references/bootstrap.md` now and execute B1–B3 in full, then continue to Step 0 below. When it is not, do not open that file.** An already-bootstrapped project takes this branch on no run at all, and ~14KB of setup protocol read on every run to skip it was 14KB the pipeline paid to learn nothing.
 
@@ -218,16 +218,30 @@ This step runs before anything else. Its goal: **always start the pipeline in a 
 Parse the invocation's arguments here, including **`--resume`** (see 0r), **`--override-family-budget`** (see the family budget gate below) and **`--override-spec-size`** (see Step 2's scope band). `--resume` maps to no config key — it is a per-invocation intent, like `--setup` (`references/config.md` → Accepted CLI Args).
 
 **Family budget gate — run it before the workspace gate, and before Step 1.** When the invocation names an existing spec — the reuse
-form at Step 1, an explicit `SPEC-*` id or a `plans/specs/` path — resolve that spec's family and count its reviews
+form at Step 1: an explicit `SPEC-*` id, or a path whose **basename** matches
+`^SPEC-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{4}-[a-z0-9-]+\.md$` and that exists under `plans/` — resolve that spec's family and count its reviews
 **exactly as `.orchestrator/artifact-format.md` → *The run family* specifies** — the grep finds the
 family's plans, and each plan's reviews resolve by provenance from their `plan:` frontmatter. Do not
 restate the commands here; one normative copy is what stops this gate and QA's G8 drifting apart about
-the same family.
+the same family. **Match the basename, never a directory prefix** — the id is in the filename and the
+directory is not part of the identity, so a `plans/specs/` prefix test stops recognising a spec the
+moment one is written anywhere else, and a spec this gate fails to recognise is a spec it never counts.
 
 Counting grep hits instead would make this gate inert: no `CR` written before that rule existed carries
 the spec id at all — 0 of 222 across both reference projects — so the cascade family reads **2**
 reviews by grep where provenance resolves **9** and the true lineage is 13. A budget of 6 never fires
-on a 2. **If that count is at or above `max_family_cycles`, do not start.** Print the family
+on a 2.
+
+**When the resolution returns `UNMEASURED` — the family has plans but the provenance grep finds no
+reviews at all — this gate has no number to compare and must not invent one.** Bind
+`family_cr_count` to `UNMEASURED`, print it as such wherever the count appears, and **proceed**: a
+family whose reviews cannot be resolved is a provenance gap, not evidence of a clean history, and
+stopping every such run would halt on the first project that predates the `related_to` rule. Say it
+in one line (`Family reviews to date: UNMEASURED — provenance unresolved`) so the run carries the
+caveat into its own report rather than a `0` that looks measured. Step 0b's clamp treats `UNMEASURED`
+as no bound, exactly as an absent count does.
+
+**If that count is a number at or above `max_family_cycles`, do not start.** Print the family
 oldest-first and stop:
 
 ```
@@ -700,9 +714,14 @@ above, before any work begins. On a short run that is pure overhead.
 ### Step 1 — Brainstormer: capture an unambiguous spec
 
 **Spec reuse — check this before minting anything.** When the invocation names an existing spec — a
-bare `SPEC-*` id, or a path under `plans/specs/` — do **not** mint a new one. Bind `spec_id` and
-`spec_path` from it, read the file to confirm `status: READY_FOR_PLANNING`, print
-`ORCHESTRATOR — reusing {spec_id}`, and go straight to Step 2.
+bare `SPEC-*` id, or a path whose **basename** matches
+`^SPEC-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{4}-[a-z0-9-]+\.md$` and that exists under `plans/` — do **not**
+mint a new one. Bind `spec_id` and `spec_path` from it, read the file to confirm
+`status: READY_FOR_PLANNING`, print `ORCHESTRATOR — reusing {spec_id}`, and go straight to Step 2.
+**Match the basename, never a directory prefix** — the id is in the filename and the directory is not
+part of the identity, so a `plans/specs/` prefix test stops recognising a spec the moment one is
+written anywhere else, which turns a retry into exactly the brand-new family the next paragraph
+describes.
 
 **This is the only way a second run joins the first run's family.** A re-run that mints a fresh
 `SPEC-*` writes every artifact into a brand-new family, so the pre-flight budget and G8 both start from
@@ -737,8 +756,8 @@ Follow your full brainstormer workflow for the given automation_level, then writ
 
 Parse the brainstormer's output to extract:
 
-- `spec_id` — e.g. `SPEC-007` (from line `BRAINSTORMER — SPEC-{NNN} created`)
-- `spec_path` — e.g. `plans/specs/SPEC-007-slug.md` (from line `Spec: {path}`)
+- `spec_id` — e.g. `SPEC-20260703T142531Z-9f0c` (from line `BRAINSTORMER — SPEC-{NNN} created`)
+- `spec_path` — e.g. `plans/specs/SPEC-20260703T142531Z-9f0c-slug.md` (from line `Spec: {path}`)
 - `spec_status` — `READY_FOR_PLANNING` or `DRAFT`
 
 **File verification (mandatory before continuing):**

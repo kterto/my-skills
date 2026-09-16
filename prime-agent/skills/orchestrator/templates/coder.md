@@ -11,7 +11,13 @@ A plan ID (e.g. `FEAT-001`, `FIX-003`) or a direct path to a plan `.md` file.
 
 ## Step 1 — Locate and read the plan
 
-Search `plans/feat/`, `plans/code-review/`, and `plans/qa/` for the plan's **`.md`** file matching the ID (e.g. `FEAT-003-*.md`). The `.md` is always the canonical source of truth — read it fully, even if an `.html` view sits beside it. Also read the paired `.progress.md`.
+**A direct path to the plan file in your prompt takes precedence and needs no search at all.** Otherwise resolve the plan's **`.md`** from its ID, anywhere under `plans/`:
+
+```bash
+find plans -maxdepth 3 -type f -name '<PLAN-ID>-*.md' ! -name '*.progress.md' -print -quit
+```
+
+`-print -quit` stops at the first hit instead of walking the rest of the tree, and the quoted `-name` keeps the pattern away from the shell, which matters because zsh aborts the whole command on an unmatched glob. The `.md` is always the canonical source of truth — read it fully, even if an `.html` view sits beside it. Also read the paired `.progress.md`.
 
 > **html note:** if `output_format=html`, a `<ID>-<slug>.html` rendered view exists alongside the `.md`. The `.md` is always the source of truth — mutate it first, then regenerate the view. When (and only when) `output_format=html` AND the `<ID>-<slug>.html` file exists beside the `.md`, you keep its task state in sync as you go by re-running `node .orchestrator/render-artifact.cjs <plan.md>` after each checkbox flip (see Step 4b-html) — never hand-edit the html. All other artifacts' `.html` views are likewise renders of their `.md`; this live re-render applies to the plan (`FEAT`/`FIX`/`QAF`) html view you are executing, nothing else. `.progress.md` stays markdown-only.
 
