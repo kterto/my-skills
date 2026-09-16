@@ -102,9 +102,27 @@ An invocation with no argument is the common case and needs no ceremony.
 
 Resolve the review scope **once**, before any analysis, and state the resolved scope in one line so the reader knows what was and was not looked at.
 
-1. **Explicit argument wins.** A path/glob, a commit range, or `--plan <id>` (resolve the plan's touched paths from its task list and its `## Verification (per phase)` section).
+1. **Explicit argument wins.** A path/glob, a commit range, or `--plan <id>` — find the plan file per **Resolving `--plan <id>`** below, then take its touched paths from its task list and its `## Verification (per phase)` section.
 2. **No argument** → the changed code: uncommitted changes plus the current branch's commits against its merge-base with the auto-detected default branch (`origin/HEAD` → `main` → `master` → `dev`). Use `git diff <merge-base>...HEAD` plus `git status --porcelain=v1`.
 3. **Nothing changed** → say so and stop. Do not expand to the whole repo — an unbounded "simplify everything" pass is not what any caller asked for.
+
+### Resolving `--plan <id>`
+
+`<id>` is a plan artifact id — `FEAT-<YYYYMMDD>T<HHMMSS>Z-<hex>`. **There is no kind directory to look in.** The orchestrator writes every artifact of a run flat inside that run's own folder, `plans/<YYYYMMDD>T<HHMMSS>Z-<4hex>-<slug>/`, so the plan file is `plans/<some-run-folder>/<id>-<slug>.md` and the folder name cannot be derived from the id. `plans/feat/FEAT-<id>-*.md` is the frozen legacy tree: it is the obvious guess precisely because it used to be the only place a `FEAT-` could be, and on any project written under the run-folder layout it matches nothing.
+
+Resolve it with a **quoted recursive `find`**:
+
+```bash
+find plans -maxdepth 3 -type f -name "${plan_id}-*.md" ! -name '*.progress.md' -print 2>/dev/null
+```
+
+**`-type f` and `! -name '*.progress.md'` are part of the predicate, not decoration.** The coder writes a `<id>-<slug>.progress.md` sidecar flat beside the plan, and it matches `${plan_id}-*.md` exactly as well as the plan itself does — so without the exclusion every plan a coder has already executed resolves to **two** hits, and the more-than-one rule below turns that into a stop. That is the orchestrator's own sequential Step 3, halting on every run, on a second "hit" that is the plan's own sidecar rather than the duplicate artifact the rule exists to catch. The predicate is the one the orchestrator role templates use verbatim; the single deliberate difference is that they end in `-print -quit` because they want the first hit and stop, while this skill needs *every* hit in order to tell one plan from two.
+
+The quoting, and `find` rather than a glob, matter for two separate reasons. bash 3.2 ships no `globstar`, so `plans/**/<id>-*.md` collapses to `plans/*/<id>-*.md` — **exactly one** directory level, which covers a run folder today and silently misses anything deeper, so the pattern reads as "any depth" while behaving as "one level". And zsh **aborts the command outright** when the pattern matches nothing, printing `no matches found` that `2>/dev/null` does not suppress: the failure is a shell expansion error raised before the command runs, not the command's stderr. `find` returns nothing and exits 0. Then:
+
+- **Exactly one hit** → that is the plan. Read its task list and its `## Verification (per phase)` section, and take the scope from the paths they name.
+- **More than one hit** → print every path and **stop**. One id resolving in two places (a run folder plus a legacy copy, or a duplicated artifact) is a real inconsistency; picking one silently reviews a scope the caller did not ask for.
+- **No hit** → **stop, and say so**: name the id and the exact `find` that was run. **Never fall back to the whole diff.** That fallback is the dangerous failure here, because it is invisible: `--plan` is an explicit argument (rule 1 above), the caller — normally the orchestrator's sequential Step 3 — passed it specifically to get one plan's narrow scope, and a silent widening produces a pass whose output says "Fixed: 7" about files nobody asked about, with nothing anywhere recording that the requested scope was never found. If a whole-diff pass is actually wanted, the caller re-invokes with no argument.
 
 Read the **enclosing function or class** of every changed hunk, not just the hunk. Reuse and altitude findings are invisible from a diff window alone.
 
@@ -182,7 +200,7 @@ The skill **never commits and never pushes**. Its edits stay in the working tree
 
 The orchestrator invokes this skill at exactly two points, both of which assume the contract above:
 
-- **Sequential Step 3** — scope is one plan's changes; call with `--plan <FEAT-id>`.
+- **Sequential Step 3** — scope is one plan's changes; call with `--plan <FEAT-id>`. The id is resolved by recursive find under `plans/` (**Scope** → *Resolving `--plan <id>`*), because the plan lives in its run's folder and not in any kind directory; an id that resolves to nothing **stops the pass** rather than quietly widening it to the whole diff.
 - **Parallel outer join Step 3j** — scope is the **union diff** across every leaf; call with no argument (or the run's base range). It runs **once per run**, never per lane and never per sub-lane.
 
 In both cases the orchestrator re-runs the plan's own `## Verification (per phase)` gates afterward — the Verification section above is this skill's own floor, not a replacement for that.

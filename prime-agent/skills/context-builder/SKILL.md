@@ -97,10 +97,17 @@ Resolve the source materials in this order (full rules: `references/ingestion.md
 
 1. `--from <path>` if given — use **only** this.
 2. `docs/foundation/` — the documented default.
-3. Fallback union: `docs/superpowers/specs/*`, `plans/specs/*`, `docs/adr/*`,
-   `docs/design-prompts/*`, root `PRD-*` / `SPEC-*`.
+3. Fallback union: `docs/superpowers/specs/*`, every `SPEC-*.md` **anywhere under
+   `plans/`**, `docs/adr/*`, `docs/design-prompts/*`, root `PRD-*` / `SPEC-*`.
 4. Nothing found — ask the user where the materials are, and offer to proceed
    **interview-only**.
+
+**Resolve the `plans/` leg with a quoted recursive `find`, never a shell glob.** The
+orchestrator writes each run's artifacts flat inside that run's own folder,
+`plans/<YYYYMMDD>T<HHMMSS>Z-<4hex>-<slug>/`, so a `plans/specs/*` pattern reaches only the
+frozen legacy tree and ingests **zero** orchestrator-written specs. The exact command and
+the reason a `**` pattern is not the fix are in `references/ingestion.md` →
+**Resolving the `plans/` leg**.
 
 The fallback union means a project already following this framework's conventions needs
 no reorganisation, while a fresh project gets one obvious folder. Say which branch you

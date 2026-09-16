@@ -27,13 +27,15 @@ Under `parallelism: full`, a lane adopted for sub-splitting is governed by its o
 | Aspect | Sub-contract |
 | ------ | ------------ |
 | Prefix | `PACT` — **no new prefix** |
-| Directory | `plans/feat/` — **no new directory** |
+| Directory | the run's own folder, from the preamble's `run_dir=` — **no new directory**, and the same one the parent contract is in |
 | Frontmatter | the same **five required keys** (`id`, `status`, `created_at`, `updated_at`, `cycle`) plus `related_to` — **no new frontmatter key** |
 | Renderer | the existing `PACT → plan` scaffold mapping, masthead kicker `Interface Contract` — **no new scaffold** |
 | Gates | `check-artifact-pairing.cjs` and `check-artifact-links.cjs` accept it unchanged |
 | Body | the same six regions, read one level down (sub-lane map, path ownership, interface points, unowned files, integration sub-lane, per-sub-lane definition of done) **plus one new required region** (below) |
 
 **There is no new prefix, directory, scaffold, or frontmatter key.** A reader who knows how to read a `PACT` already knows how to read a sub-contract.
+
+**Everything one run writes shares one flat folder, whichever lane or level produced it.** The parent contract, every sub-contract, every leaf `FEAT` plan, every `.progress.md` and every join report land side by side in the `run_dir=` the preamble carries — a lane does not get a folder, and neither does a level. Two consequences are worth stating once, because both simplify: a same-run link is a **bare sibling** `./NAME.md` rather than a `../<kind>/` hop, and a sibling artifact is reachable from any path you were already handed without a search. Concurrency is unaffected — each artifact still has exactly one writer, and that isolation was never a property of the directory.
 
 **`related_to` references both the source spec and the parent `PACT`.** Both edges are required: the spec is what the work answers to, and the parent contract is what the sub-lane split partitions. A sub-contract **never links sideways to a sibling** sub-contract — the parent contract is the run's only index of the nesting, so sibling knowledge would create a second, race-prone one.
 
@@ -75,10 +77,21 @@ The tester, reviewer, and QA roles can be invoked with a `PACT` ID where a plan 
 
 When the ID you were given carries the `PACT-` prefix:
 
-1. **Read the `PACT`** at `plans/feat/{PACT-ID}-*.md`.
+1. **Read the `PACT` at the path your preamble's `contract=` line carries.** On a join-level invocation that line names the run's **parent** contract: the orchestrator parsed `pact_path` out of the architect's own output at Step 2c (`references/parallel.md` → Step 2c) and has held it ever since, so the contract reaches you as a path, not as a search. **A role never searches for an artifact it was handed** — the same rule `leaves=` already applies to the leaf set, applied to the contract that indexes it.
+
+   **Legacy fallback — a run started before the orchestrator emitted `contract=` on join spawns, and nothing else.** Locate the file with a **quoted recursive `find`**, never a shell glob:
+
+   ```bash
+   find plans -maxdepth 3 -type f -name "{PACT-ID}-*.md" ! -name '*.progress.md'
+   ```
+
+   The quoting and the recursion are both load-bearing. An unquoted `plans/**/{PACT-ID}-*.md` is expanded by the shell before `find` ever runs: **bash 3.2 flattens `**` to `*`** and matches only the first level, missing every artifact inside a run folder, and **zsh aborts the whole command** when the pattern matches nothing — `2>/dev/null` does not suppress that, because it is a shell expansion error rather than output. `-maxdepth 3` reaches both trees without walking the repository: a run folder's artifact at `plans/<run>/NAME.md` and a frozen legacy artifact at `plans/feat/NAME.md` are both depth 2, and the frozen legacy `plans/specs/evaluations/` tree reaches depth 3. More than one hit means the ID is ambiguous — stop and report it rather than picking one.
+
 2. **Resolve the leaf plan set from its lane map.** For each row:
    - The row's **`Sub-contract` cell is empty** (a flat lane) → take the row's own `Lane plan ID`, exactly as before.
    - The row's **`Sub-contract` cell carries a `PACT` ID** (a sub-split lane) → **read that sub-contract** and take **its** leaf plan IDs **in place of** the row's own. The row's `Lane plan ID` cell is `—` for such a lane; there is no lane-level plan to also collect.
+
+     **A sub-contract is a sibling of the contract you just read** — same run, so same folder. Resolve it inside that folder and nowhere else, with the same quoted form: `find "$(dirname {the contract= path})" -maxdepth 1 -name "{PACT-ID}-*.md"`. This is the one hop the resolution takes by ID rather than by a path it was handed, and bounding it to the parent contract's own directory is what keeps it a one-directory read instead of a walk of `plans/`.
 
    **The recursion is one level only.** A sub-contract never carries a `Sub-contract` column of its own (depth is capped at 2 — `config.md` → `parallelism`), so resolution terminates after exactly one walk. Do not look for a third level; encountering one is a malformed artifact, not a deeper tree to follow.
 
@@ -87,7 +100,7 @@ When the ID you were given carries the `PACT-` prefix:
    Read every plan in the resulting **leaf set** in place of the single plan your own Step 1 would have read.
 3. **Every plan in the resolved leaf set must be `status: DONE`.** The check applies to the **resolved leaf set** — the sub-lane plans for a split lane, the lane plan for a flat one — not to the lane map's rows. If any is not DONE, stop and report which leaf is incomplete, naming it by its **qualified name** (`{lane}/{sub-lane}`) when it is a sub-lane: the union is not yet a complete change set, so any verdict over it would describe work that does not exist.
 4. **Evaluate the union of the leaf diffs as one change set**, in a single join-level pass. Never once per lane and never once per sub-lane. The leaves share one workspace, so the ordinary diff range already yields the union; what changes is that you evaluate it against every resolved leaf plan's acceptance criteria plus the `PACT`, not one plan's. **This evaluation is unchanged by nesting** — only the set of plans feeding it is resolved differently.
-5. **Write back at the join — the entry once, a pointer everywhere else:** set `plan:` in your report frontmatter to the **parent** `PACT` ID and fill the Related region with a relative link to it. Then record your verdict at these three kinds of site, and only these:
+5. **Write back at the join — the entry once, a pointer everywhere else:** set `plan:` in your report frontmatter to the **parent** `PACT` ID and fill the Related region with a relative link to it — a **bare sibling** `./{PACT-ID}-{slug}.md`, since your report and the contract are both artifacts of this run and land in the same `run_dir`. Then record your verdict at these three kinds of site, and only these:
 
    - **The parent `PACT`'s `.progress.md` `## Log` takes the full entry**, byte-for-byte as your own *Update plan and progress files* step specifies, written **once**. The parent contract is the run's only index of the fan-out, so it is the one place a join verdict has a single home. Write the **sidecar**, never the `PACT` file itself.
    - **Each resolved leaf plan's `## Progress Log` takes your ordinary one-line entry, unchanged.** It is already one line and already names your report ID and your verdict, so there is nothing there to de-duplicate — and replacing it with a pointer would lose the ID and the counts to save nothing.
@@ -97,7 +110,7 @@ When the ID you were given carries the `PACT-` prefix:
      {STATUS} — recorded in full at {PACT-ID}-{slug}.progress.md
      ```
 
-     Leaf plans and the `PACT` share a directory, so this is a bare sibling filename. Keep it **plain text, never a markdown link**: a log line is rendered as an escaped text node, so a bare path creates no `href` for the link checker to resolve, and one shape serves both `output_format` modes.
+     Every artifact of the run — the parent `PACT`, every sub-contract, every leaf plan and every sidecar — is written flat in the one `run_dir` folder, so this is a bare sibling filename. Keep it **plain text, never a markdown link**: a log line is rendered as an escaped text node, so a bare path creates no `href` for the link checker to resolve, and one shape serves both `output_format` modes.
 
    **The guarantee is unchanged — no leaf's log is missing the join verdict.** Every leaf still gains one entry per join role per cycle, stamped with that role, that timestamp and that verdict token, so a reader who opens one leaf still learns which joins ran, when, and how they ruled — and now also where the reasoning is. What a leaf stops carrying is the entry *body*, which was identical in all of them. **That body is the cost this removes:** a nine-leaf fan-out wrote nine byte-identical paragraphs per join role per cycle, into exactly the logs the next join spawn re-reads and the digest's region F re-hashes.
 

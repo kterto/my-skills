@@ -25,6 +25,7 @@ import { readdirSync, readFileSync, writeFileSync, mkdirSync, rmSync, statSync, 
 import { dirname, join, relative, sep } from "node:path"
 import { fileURLToPath } from "node:url"
 import { lint, coverageFailure, formatFinding } from "./lint-prime-fences.mjs"
+import { materializedRelPaths, stampFromEntries } from "./stamp-orchestrator-version.mjs"
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)))
 const srcRoot = join(repoRoot, "plugins", "my-skills", "skills")
@@ -200,6 +201,44 @@ if (errors.length) {
   console.error(`\n${errors.length} overlay error(s) — prime-agent/skills was not written.`)
   process.exit(1)
 }
+
+// Each host stamps the bytes IT materializes. `generated` holds the POST-overlay
+// orchestrator — `SKILL.md` and `references/config.md` reach a Prime-bootstrapped
+// project with different bytes than a marketplace one — so copying the shared
+// MATERIALIZED-VERSION through would certify two different trees under one value,
+// and a Prime project comparing its `.orchestrator/.materialized-version` against
+// it would read "in sync" about files it never received. Recompute it here, over
+// the buffers just assembled, because this is the only place those bytes exist.
+const ORCHESTRATOR = "orchestrator"
+const STAMP_FILE = "MATERIALIZED-VERSION"
+// Drop the shared stamp, which walk() copied through as an ordinary file, BEFORE
+// recomputing. If the recompute then fails, the distribution is missing a stamp
+// rather than carrying the shared one — a missing stamp re-bootstraps a project,
+// a wrong one tells it the copies it never received are current.
+generated.delete(join(ORCHESTRATOR, STAMP_FILE))
+const orchestratorFiles = new Map()
+for (const [rel, { content }] of generated) {
+  const parts = rel.split(sep)
+  if (parts[0] !== ORCHESTRATOR) continue
+  orchestratorFiles.set(parts.slice(1).join("/"), content)
+}
+if (orchestratorFiles.size) {
+  const stampRel = join(ORCHESTRATOR, STAMP_FILE)
+  try {
+    const stamp = stampFromEntries(
+      materializedRelPaths([...orchestratorFiles.keys()]).map((key) => ({ key, bytes: orchestratorFiles.get(key) })),
+    )
+    generated.set(stampRel, { content: Buffer.from(stamp), mode: generated.get(stampRel)?.mode ?? 0o644 })
+  } catch (error) {
+    // Not `fail()`: the errors array is read once, above, and nothing reads it
+    // again — a stamp failure pushed onto it would exit 0 having written an
+    // unstamped distribution that `--check` then calls current.
+    console.error(`error: ${ORCHESTRATOR}: cannot stamp the Prime distribution — ${error.message}`)
+    console.error("\nprime-agent/skills was not written.")
+    process.exit(1)
+  }
+}
+
 
 if (check) {
   const onDisk = new Set(

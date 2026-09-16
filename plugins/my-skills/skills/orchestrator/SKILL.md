@@ -1,6 +1,6 @@
 ---
 name: orchestrator
-description: Multi-role pipeline orchestrator. Use when the user invokes "/orchestrator", says "orchestrate", or asks to "run the full pipeline". Auto-detects whether to run bootstrap (first-time setup) or go straight to the pipeline — bootstrap runs when `.orchestrator/config.json` is absent or any file it materializes is missing; pass `--setup` to force bootstrap. Spawns each role (brainstormer → architect → coder → tester → reviewer → qa) as a subagent. Never commits or pushes.
+description: Multi-role pipeline orchestrator. Use when the user invokes "/orchestrator", says "orchestrate", or asks to "run the full pipeline". Auto-detects whether to run bootstrap (first-time setup) or go straight to the pipeline — bootstrap runs when the project's copy of the skill is absent, incomplete or out of date; pass `--setup` to force it. Spawns each role (brainstormer → architect → coder → tester → reviewer → qa) as a subagent. Never commits or pushes.
 ---
 
 # orchestrator
@@ -14,14 +14,14 @@ On invocation with a plain-language task description (and optional `--setup`):
 > **Already loaded? Do not reload.** A caller running several tasks in one session — the `product-manager` skill does exactly this, one run per user story — needs this protocol **once**, not once per task. If its text is still visible in your context, a second task is a **new pipeline run starting here at the Lifecycle**, not a re-read of the skill. **A new run rebinds everything**: `base_sha`, the spec, the cycle counters, the family counts. "Capture once" anywhere below means once per *run*, never once per session — carrying story 1's base into story 2 would diff the wrong tree. Re-invoking would duplicate roughly 26k tokens of protocol per task, and a ten-story milestone would spend most of a context window on copies of one document. Reload only when you genuinely cannot see this text any more — after compaction, or in a fresh session. Presence is the test, not recollection.
 
 1. Resolve config (see `references/config.md`): CLI args > `.orchestrator/config.json` > defaults.
-2. If `--setup` is present OR `.orchestrator/config.json` does not exist OR any file B3 materializes is missing — currently `.orchestrator/.gitignore`, `.orchestrator/artifact-format.md`, `.orchestrator/artifact-format-html.md`, `.orchestrator/artifact-format-parallel.md`, `.orchestrator/config.md`, `.orchestrator/gate-config.md`, `.orchestrator/lane-protocol.md` — → run **Bootstrap** (Steps B1–B3), then continue. **A project bootstrapped by an older skill version has `config.json` and none of the files added since**, so keying only on `config.json` would leave every role pointing at a reference that is not there.
+2. If `--setup` is present, OR `.orchestrator/config.json` does not exist, OR `.orchestrator/.materialized-version` does not exist, OR its contents differ from the skill's own `MATERIALIZED-VERSION` file — a sibling of this `SKILL.md` in the skill directory, read with the same mechanism you read this file — OR any file B3 materializes is missing — currently `.orchestrator/.gitignore`, `.orchestrator/artifact-format.md`, `.orchestrator/artifact-format-html.md`, `.orchestrator/artifact-format-parallel.md`, `.orchestrator/config.md`, `.orchestrator/gate-config.md`, `.orchestrator/lane-protocol.md`, the seven scaffolds in `.orchestrator/html-templates/`, the six runtime scripts `.orchestrator/{render-artifact,check-artifact-pairing,check-artifact-links,check-artifact-home,gate-scope,index-plans}.cjs`, and the six role files in this host's agent directory — → run **Bootstrap** (Steps B1–B3), then continue. **A project bootstrapped by an older skill version has `config.json` and none of the files added since**, so keying only on `config.json` would leave every role pointing at a reference that is not there. **The version compare exists because a materialized copy that is present but old is invisible to a missing-file test**, and every role reads those copies rather than the skill's own — this skill's own repository ran for five commits with its rendered role files behind their templates, so the `rigor=` preamble field shipped in the templates never reached the materialized tester role and no run ever carried it. **When the skill's own `MATERIALIZED-VERSION` is the file that is missing, the compare is not stale — it is unavailable**: treat the version condition as not met, say so in one line, and fall through to the missing-file tests. An install route that did not ship the stamp would otherwise bootstrap on every single run, and re-materializing the whole skill once per invocation is a worse failure than the staleness it is trying to catch.
 3. Run **Pipeline** (Steps 0–6).
 4. Spec eval runs inside the review loop (Step 4e), before the QA exit gate.
 5. On `READY_TO_COMMIT` → run **Final report** (Step 7).
 
 ## Bootstrap
 
-Bootstrap runs when `--setup` is passed, when `.orchestrator/config.json` is absent, or when any file B3 materializes is missing from `.orchestrator/` (Lifecycle item 2 above is the trigger, and it is the only place that decision is made). It has three steps: B1 context gate, B2 dependency check, B3 materialize.
+Bootstrap runs when `--setup` is passed, when `.orchestrator/config.json` is absent, when `.orchestrator/.materialized-version` is absent or differs from the skill's own `MATERIALIZED-VERSION`, or when any file B3 materializes is missing — from `.orchestrator/` or from this host's agent directory (Lifecycle item 2 above is the trigger, and it is the only place that decision is made). It has three steps: B1 context gate, B2 dependency check, B3 materialize.
 
 **When it is triggered, read `references/bootstrap.md` now and execute B1–B3 in full, then continue to Step 0 below. When it is not, do not open that file.** An already-bootstrapped project takes this branch on no run at all, and ~14KB of setup protocol read on every run to skip it was 14KB the pipeline paid to learn nothing.
 
@@ -121,6 +121,7 @@ Artifact rules: read .orchestrator/artifact-format.md before writing any artifac
 Artifact rules (html mode only): also read .orchestrator/artifact-format-html.md.
 Artifact rules (parallel path ONLY): also read .orchestrator/artifact-format-parallel.md; omit this line entirely on a sequential run.
 HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
+run_dir=plans/{run-folder}          ← EVERY role, EVERY spawn; write every artifact directly in this folder
 ID to use: {PREFIX}-{ID-TOKEN}      ← producing roles ONLY; use verbatim, do not compute your own
 lane={qualified leaf name}          ← parallel path ONLY; omit the line entirely on a sequential run
 contract={governing contract path}  ← parallel path ONLY; omit the line entirely on a sequential run
@@ -133,9 +134,12 @@ delta={cycle delta file list}       ← reviewer spawns on cycle >= 2 ONLY; omit
 - `output_format` is resolved once per run (CLI arg > `.orchestrator/config.json` > default `md`).
 - `automation_level` is resolved once per run (CLI `--mode` > `.orchestrator/config.json` > default `manual`). Only the brainstormer changes behavior on it: `manual` interviews the user; `autonomous` resolves open questions with the brainstormer's own defaults and produces a READY spec without prompting. Include it in every preamble for consistency, but the other five roles ignore it.
 - `rigor` is resolved once per run at Step 0b (CLI `--rigor` > `$mb:.orchestrator/config.json` > `hardened`) and is **read-only for every role**. It names what a green run claims — `sketch`: it runs; `delivery`: it does what the Acceptance says and the happy path is proven; `hardened`: plus the gates hold and the mutants die. Roles branch on it where their template says so (the coder's phase-exit gates, the tester's e2e observation, QA's block-or-report and verdict, the reviewer's severity floor); the full table is `.orchestrator/config.md` → `rigor`. **A role may never set, raise or lower it** — one that judges the level wrong for the work records that as a finding and proceeds at the level it was given (ADR-0024). It scales what the run *does*, never what the run *reports*: every artifact's disclosure fields are required identically at all three levels.
-- `ID to use:` is included for the roles that create a numbered artifact (brainstormer→SPEC, architect→FEAT/FIX/QAF, tester→TEST, reviewer→CR, qa→QA). The coder creates no new artifact, so it gets the preamble WITHOUT an `ID to use:` line.
+- `run_dir` names the **one folder this run writes into** — `plans/<YYYYMMDD>T<HHMMSS>Z-<4hex>-<slug>`, minted once at Step 0 pre-flight (below) — and it is sent **unconditionally, to all six roles, on every spawn**, sequential and parallel alike. The role's write path is a concatenation it checks by **string equality**, never by listing a directory: `{run_dir}/{the ID you were given}-{your slug}.md`, with the `.progress.md` sidecar and the `html`-mode `.html` render beside it. **Depth is exactly 2** — `plans/<run-folder>/<file>` — and that is load-bearing rather than tidy: an artifact carrying `href="../../docs/adr/015.md"` resolves at that depth and reports `1 broken local link(s)` one level deeper under the shipped `check-artifact-links.cjs`, and the reference project emits 22 such escapes to `docs/adr`, `docs/sprint` and `docs/design_contracts`. There is no `plans/runs/` wrapper and no kind subdirectory inside a run folder. **Write-path precedence is normative and lives in one place** — `.orchestrator/artifact-format.md` → *Write-path precedence* — in this order: `MAESTRO_CR_TARGET_PATH` (absolute, reviewer only, unchanged, and explicitly exempt from every path check) > `run_dir=` from the preamble > `dirname()` of an input artifact path the role was handed, unless that dirname is a frozen legacy directory > the role's own `newrun` mint. Every role template also carries the sentence that settles the last ambiguity: **`run_dir=` is authoritative, and where `.orchestrator/PROJECT-CONTEXT.md`'s Conventions section names a plan directory it is describing the legacy tree and never overrides the preamble.**
+- **`run_dir=` is unconditional, and that is the deliberate difference from every other key here.** `lane=`, `contract=`, `leaves=`, `tree=`, `aggregate=` and `delta=` signal by their *absence*; this one has no meaning to omit. A role that must not guess its own directory needs the line on **every** path, so a parallel-only or producing-roles-only key would leave exactly the spawns that write artifacts deriving a path instead of reading one — the search this key exists to delete. Its cost is stated plainly in the byte-identical note below.
+- **Every spawn that names an artifact by ID also names its path.** `Plan: {plan_path}` accompanies `Implement plan {id}`, `Run tests for plan {id}`, `Review plan {id}` and `Run the QA suite for plan {id}`, and it carries the path of *that* plan — the parent `PACT`'s path wherever a step's parallel-path note substitutes `root_plan_id` for `plan_id`. Without it a role holds an ID and no directory, which is precisely the directory search `run_dir` and precedence rule 3 exist to remove; with it, precedence rule 3 has something to bind when a role is ever run without a preamble.
+- `ID to use:` is included for the roles that create a numbered artifact (brainstormer→SPEC, architect→FEAT/FIX/QAF, tester→TEST, reviewer→CR, qa→QA). The coder creates no new artifact, so it gets the preamble WITHOUT an `ID to use:` line — but it gets `run_dir=` like every other role, because it still writes the plan's `.progress.md` and mutates the plan beside it.
 - Always emit the `.md` artifact; when `output_format=html`, the producing role ALSO renders the paired `.html` by running `node .orchestrator/render-artifact.cjs <artifact.md>` (per `artifact-format.md`) — HTML is never hand-authored.
-- `lane=` and `contract=` are the **single authoritative source of lane membership at every depth**, resolved by the orchestrator exactly like the two keys above. A role never infers its lane, its governing contract, or its depth from plan prose, a file path, or an ID: the lines are present ⇒ this is a leaf invocation; absent ⇒ it is not. On a sequential run both lines are omitted, which is what keeps an `off` run's prompts byte-identical to a pre-feature run's. `lane=` carries the **qualified leaf name** (`backend/data` for a sub-lane, `backend` for an unsplit lane) and `contract=` the leaf's **governing** contract — see Step 3L.p.
+- `lane=` and `contract=` are the **single authoritative source of lane membership at every depth**, resolved by the orchestrator exactly like the two keys above. A role never infers its lane, its governing contract, or its depth from plan prose, a file path, or an ID. **`lane=` is the leaf discriminator and `contract=` is not**: `lane=` present ⇒ this is a leaf invocation, absent ⇒ it is not, while `contract=` is emitted on **every** parallel-path spawn — the five join spawns at Steps 3b, 4, 4b2, 5 and 5c carry it too — so its presence means *parallel*, never *leaf*. What changes with depth is what it carries, not whether it is there: the leaf's **governing** contract at Step 3L.p, the **parent** `PACT` at every join (`references/parallel.md` → 3j.3). On a sequential run both lines are omitted, which is what keeps an `off` run's prompts byte-identical to **another `off` run of the same skill version**. (That invariant is still the one being asserted; what re-baselined it is the unconditional `run_dir=` line above, which every run of this version carries and no run before it did. The comparison was never with an arbitrary past release — it is that two `off` runs of one version must not differ, so that a prompt difference is always evidence of a mode difference.) `lane=` carries the **qualified leaf name** (`backend/data` for a sub-lane, `backend` for an unsplit lane) and `contract=` the leaf's **governing** contract — see Step 3L.p.
 - `leaves=` carries the run's **resolved leaf set** — every leaf `FEAT` ID, in dispatch order — on the three join-level spawns (tester, reviewer, qa). The orchestrator dispatched those leaves and already holds the list, so a role that receives it **uses it as given and does not walk the contract tree**. Without it, each of the three would re-read the parent contract plus every sub-contract to rebuild a set the orchestrator never lost, once per role and again on every review and QA cycle. The `PACT` ID resolution walk in `.orchestrator/artifact-format-parallel.md` stays the **fallback** for a **legacy** run — one started before the orchestrator emitted this line — where it is absent. A **resumed** run is not a fallback case: Step 0r rebuilds the leaf set from the parent contract's `Sub-contract` column and emits `leaves=` like any other run.
 
 - `tree=` carries the working tree's hash, minted with Step 0a's recipe **immediately before this spawn** — never an earlier boundary's value, because the coder writes code and the tester writes tests between them. It goes to the **two roles that execute whole-app suites**, the tester and QA, and to nobody else; the reviewer runs nothing, so it does not get the line. Its sole use is the suite-inheritance match (Step 0a → *Suite inheritance*), and it is emitted on **both** paths — a sequential run duplicates suites exactly as a parallel one does.
@@ -144,11 +148,11 @@ delta={cycle delta file list}       ← reviewer spawns on cycle >= 2 ONLY; omit
 
   **It narrows nothing.** `MAESTRO_REVIEW_BASE` is untouched, the working-tree snapshot is untouched, and the reviewer's read set is untouched — `delta=` is an **input to disclosure**, not a scope. What it buys is that the CR states what was examined: today a cycle-6 reviewer facing a multi-megabyte union necessarily reads a subset, and reports no scope at all, so nobody can tell a thorough review from a shallow one, or measure what a narrowing rule would cost. Reporting the scope is a strict increase in information over reporting none, and it is the measurement any future scope rule has to be argued from.
 
-- `aggregate=` names the **join digest** (`references/parallel.md` → 3j.4): the run's aggregate, materialized once by the orchestrator, which the tester, reviewer and QA read **in place of** the leaf plans, contracts and progress logs it replaces. It is emitted **only** on the parallel path, **only** when the digest built and its integrity check passed, and it is **omitted entirely** otherwise — a role that does not see the line resolves the aggregate exactly as it does today, from `leaves=`. There is no `aggregate=none`: the line's absence is the signal, exactly as it is for `lane=`, `contract=` and `leaves=`, and that omission is what keeps a sequential run's prompts byte-identical to a pre-feature run's.
+- `aggregate=` names the **join digest** (`references/parallel.md` → 3j.4): the run's aggregate, materialized once by the orchestrator, which the tester, reviewer and QA read **in place of** the leaf plans, contracts and progress logs it replaces. It is emitted **only** on the parallel path, **only** when the digest built and its integrity check passed, and it is **omitted entirely** otherwise — a role that does not see the line resolves the aggregate exactly as it does today, from `leaves=`. There is no `aggregate=none`: the line's absence is the signal, exactly as it is for `lane=`, `contract=` and `leaves=`, and that omission is what keeps a sequential run's prompts byte-identical to **another `off` run of the same skill version**. `run_dir=` is the one key that is not in this family — it is present on every path, so it never carries a signal by being absent.
 
 #### Generating `{PREFIX}-{ID-TOKEN}` before each producing spawn
 
-Generate a timestamp-based ID (see `artifact-format.md` → ID allocation). No directory scan — this is what makes parallel worktrees collision-free — so `newid` takes only the prefix, and the target directory comes from `artifact-format.md`'s allow-list:
+Generate a timestamp-based ID (see `artifact-format.md` → ID allocation). No directory scan — this is what makes parallel worktrees collision-free — so `newid` takes only the prefix, and **the target directory is `run_dir`**, the single folder minted for this run at Step 0 pre-flight and handed to every role on the preamble's `run_dir=` line. There is no per-kind directory left to select: the ID names the file, `run_dir` names the folder, and the write path is those two concatenated.
 
 ```bash
 newid() {  # $1=prefix
@@ -170,16 +174,33 @@ This step runs before anything else. Its goal: **always start the pipeline in a 
 Parse the invocation's arguments here, including **`--resume`** (see 0r), **`--override-family-budget`** (see the family budget gate below) and **`--override-spec-size`** (see Step 2's scope band). `--resume` maps to no config key — it is a per-invocation intent, like `--setup` (`references/config.md` → Accepted CLI Args).
 
 **Family budget gate — run it before the workspace gate, and before Step 1.** When the invocation names an existing spec — the reuse
-form at Step 1, an explicit `SPEC-*` id or a `plans/specs/` path — resolve that spec's family and count its reviews
+form at Step 1: an explicit `SPEC-*` id, or a path whose **basename** matches
+`^SPEC-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{4}-[a-z0-9-]+\.md$` and that exists under `plans/` — resolve that spec's family and count its reviews
 **exactly as `.orchestrator/artifact-format.md` → *The run family* specifies** — the grep finds the
 family's plans, and each plan's reviews resolve by provenance from their `plan:` frontmatter. Do not
 restate the commands here; one normative copy is what stops this gate and QA's G8 drifting apart about
-the same family.
+the same family. **Resolve it recursively** — `grep -r`, or a quoted `find plans -maxdepth 3 ...`, never
+a shell glob — because every spec now lives one level below `plans/`, inside the run folder that wrote it.
+**Match the basename, never a directory prefix** — the id is in the filename and the
+directory is not part of the identity, so a `plans/specs/` prefix test stops recognising a spec the
+moment one is written anywhere else, which under this layout is **every** spec written from here on,
+and a spec this gate fails to recognise is a spec it never counts.
 
 Counting grep hits instead would make this gate inert: no `CR` written before that rule existed carries
 the spec id at all — 0 of 222 across both reference projects — so the cascade family reads **2**
 reviews by grep where provenance resolves **9** and the true lineage is 13. A budget of 6 never fires
-on a 2. **If that count is at or above `max_family_cycles`, do not start.** Print the family
+on a 2.
+
+**When the resolution returns `UNMEASURED` — the family has plans but the provenance grep finds no
+reviews at all — this gate has no number to compare and must not invent one.** Bind
+`family_cr_count` to `UNMEASURED`, print it as such wherever the count appears, and **proceed**: a
+family whose reviews cannot be resolved is a provenance gap, not evidence of a clean history, and
+stopping every such run would halt on the first project that predates the `related_to` rule. Say it
+in one line (`Family reviews to date: UNMEASURED — provenance unresolved`) so the run carries the
+caveat into its own report rather than a `0` that looks measured. Step 0b's clamp treats `UNMEASURED`
+as no bound, exactly as an absent count does.
+
+**If that count is a number at or above `max_family_cycles`, do not start.** Print the family
 oldest-first and stop:
 
 ```
@@ -189,6 +210,10 @@ Family reviews to date: {family_cr_count} / {max_family_cycles}
 Most recent: {last 3 family artifacts with dates}
 Status: STALLED — human intervention required
 ```
+
+**No run-folder cleanup here, and no `Run folder:` line.** This gate runs before the workspace gate,
+so it is ahead of the Step 0a mint: `$run_dir` is unbound, no folder exists, and there is nothing to
+remove or to name. Every stop *after* the mint ends with `rmdir "$run_dir" 2>/dev/null || true`.
 
 **This gate exists because the in-run counters cannot see the thing that actually runs away.**
 `max_review_cycles`, `max_qa_cycles` and `max_eval_cycles` are scoped to one invocation and start at
@@ -223,7 +248,7 @@ the gate was skipped, or G8 came back `UNMEASURED` — print `n/a` rather than a
 3. **Preserve it in place.** Do not stash, reset, or clean. The completed leaves' output *is* the work being resumed; discarding it would defeat the point.
 4. Branch protection is **unchanged** — a protected branch or a branch other than the manifest's `branch` still stops the run.
 
-Without `--resume` nothing here applies and 0a runs exactly as written. This is why the flag, not a scan, is the trigger: an ordinary invocation performs no manifest read, emits nothing extra, and behaves byte-identically to before.
+Without `--resume` nothing here applies and 0a runs exactly as written. This is why the flag, not a scan, is the trigger: an ordinary invocation performs no manifest read, emits nothing extra, and behaves byte-identically to **an invocation of the same skill version without the flag**.
 
 #### 0a — Ensure clean isolated workspace
 
@@ -285,6 +310,9 @@ If the current branch is also protected (dirty + protected), drop option 1 from 
   Reason: user cancelled
   ```
 
+  **No run-folder cleanup, and no `Run folder:` line** — the cancellation is decided before the
+  Step 0a mint below, so `$run_dir` is unbound and no folder was ever created.
+
 After applying the choice, re-verify:
 
 - `git status --porcelain=v1 -- . ':(exclude).opencode' ':(exclude).claude'` is empty.
@@ -303,6 +331,100 @@ Strategy: {use-current | new-branch | new-worktree | commit+... | stash+...}
 ```
 
 **Record `base_sha` here** — `git rev-parse HEAD` on the resolved workspace, after the branch/worktree choice is applied. It is the run's fixed comparison point: everything the pipeline produces is a delta from it. It is what the reviewer diffs its working-tree snapshot against (`MAESTRO_REVIEW_BASE`), what Step 4e's eval measures, and what the run manifest binds a resumable run to (Step 0r). Capture it once; never re-derive it later from a moved `HEAD`.
+
+##### Mint the run folder — immediately after `base_sha`, before any spawn
+
+**Every artifact this run writes lands FLAT inside one folder**,
+`plans/<YYYYMMDD>T<HHMMSS>Z-<4hex>-<slug>/`. Mint it here, scan-free, exactly once per run — the
+recipe is normative in `artifact-format.md` → *The run folder name*, and this is the copy the
+orchestrator executes:
+
+```bash
+slugify() {  # $1 = raw text -> [a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?
+  s=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9' '-' \
+        | tr -s '-' | cut -c1-40 | sed -e 's/^-*//' -e 's/-*$//')
+  printf '%s\n' "${s:-run}"        # an input with no [a-z0-9] byte at all would
+}                                  # otherwise return empty and end the name in `-`
+newrun() {   # $1 = slug, already kebab-cased
+  ts=$(date -u +%Y%m%dT%H%M%SZ)
+  rnd=$(openssl rand -hex 2 2>/dev/null || printf '%04x' $(( (RANDOM<<8 ^ RANDOM) & 0xffff )))
+  printf 'plans/%s-%s-%s\n' "$ts" "$rnd" "$1"
+}
+invocation_text="{the first five words of the user's brief}"   # bind it; nothing else does
+run_dir=$(newrun "$(slugify "$invocation_text")")
+mkdir -p "$run_dir"
+```
+
+**`slugify` is defined here because it is called here, and it was called before it was defined.** The
+mint line reads `newrun "$(slugify …)"` while no definition existed anywhere in this skill: the shell
+reports `command not found`, the command substitution yields the empty string, the script continues
+at exit 0, and `mkdir -p` creates `plans/<ts>-<hex>-` — a name ending in a hyphen, which the home gate
+then rejects for **every** artifact that run goes on to write. A helper that is called and never
+defined fails silently in exactly the way a shell makes cheapest.
+
+**Verified against seven inputs in zsh and in bash 3.2** (`/bin/bash` on macOS), which produce
+byte-identical output on all seven: `add list sharing to the dashboard` →
+`add-list-sharing-to-the-dashboard`; `Add List Sharing To The Dashboard` → the same 33 characters;
+`fix: crash when a user's token expires!` → `fix-crash-when-a-user-s-token-expires`; a 90-character
+sentence → its first 40 characters, `the-orchestrator-mints-exactly-one-run-f`; `café résumé
+ingestão` → `caf-r-sum-ingest-o`, because `tr` works on bytes and each multi-byte character collapses
+to a single `-` that `tr -s` then squeezes; an already-kebab `spot-opening-hours` comes back
+unchanged; and an input carrying no `[a-z0-9]` byte at all — pure punctuation, or an all-emoji brief —
+falls back to `run` rather than returning empty, which is the one input class that would otherwise
+reproduce the very failure this helper was added to fix. **The trailing-hyphen trim runs AFTER the truncation and not before**, because `cut -c1-40`
+can land mid-word and leave the name ending in `-` — `add list sharing to the dashboard now a bit
+more` cuts to `add-list-sharing-to-the-dashboard-now-a-` — and a name ending in a hyphen fails the
+grammar the home gate enforces, exactly as the empty slug above does.
+
+**One normative copy of the name grammar, and it is not this file.** `artifact-format.md` →
+*The run folder name* states the `<RUN-TOKEN>-<slug>` shape, the 5-word / 40-character slug bound, the
+`-`-never-`+` separator and the rule that the absence of a leading `^[A-Z]+-` is what tells a run
+folder from an artifact file; `check-artifact-home.cjs` is the machine copy of that same grammar.
+Read it there — a regex restated in three places is three places to disagree about one name.
+**Bind `run_dir` for the whole run**: it is the `run_dir=` value the preamble sends to every role on
+every spawn, and depth is exactly `plans/<run-folder>/<file>` — no `plans/runs/` wrapper above it and
+no kind subdirectory inside it.
+
+**It is minted, never derived — and that is the whole reason it is a timestamp plus four hex
+digits.** `newrun` lists no directory, exactly as `newid` lists none, so two worktrees minting in the
+same second still differ in the hex. The alternative was simulated: a name resolved from something
+already on disk — `dirname(spec_path)`, or `ls -d plans/<SPEC-ID>-*` — leaves branch B finding
+nothing, because A's folder exists only on A's branch; B mints its own, and `git merge` yields a
+rename/rename CONFLICT with one spec owning two folders. `plans/` has no directory-level merge
+surface today and a minted name is what keeps it that way. **Resolve it here, once, and never
+re-derive it in a second worktree.**
+
+**This `mkdir` is the only one the system gains, and the orchestrator is the only party that runs
+it.** Nothing in the pipeline mkdirs today — the seven kind directories appear as a side effect of
+the first write into them — so after this line every step and every role still creates no directory
+at all. The legacy tree is untouched: `plans/specs/`, `plans/feat/`, `plans/code-review/`,
+`plans/qa/`, `plans/test/`, `plans/eval/` and `plans/final/` stay exactly where they are as a frozen,
+read-only section of the allow-list, resolvers still find them, and no role writes into one again.
+
+**Every stop after this line ends with the folder cleanup**, as its last action — after the banner is
+printed, and after Step 7c where that branch calls for it:
+
+```bash
+rmdir "$run_dir" 2>/dev/null || true
+```
+
+It removes the folder only when the run wrote nothing into it and is a silent no-op otherwise; that
+is the whole of its behavior. It is the difference between `ls plans` being a list of runs and a list
+of runs plus debris. **The two stops that precede this line — the family-budget refusal above and the
+pre-flight cancellation — mint no folder and must not run it**: `$run_dir` is unbound there and there
+is nothing to remove.
+
+**The slug is a human label and nothing parses it.** A feature's story spans 2–4 run folders — 94% of
+families use more than one slug, median 4, max 17, and 37 slugs appear in more than one family — so a
+run folder does **not** group a feature, and no resolution anywhere in this pipeline reads its name:
+every lookup is by artifact ID or by frontmatter. *What happened to feature X* is answered by
+`plans/index.html` (Step 7b), which reads the disk.
+
+**Every read over `plans/` is recursive, and never a shell glob.** Artifacts now sit one level below
+`plans/`, so a non-recursive scan finds nothing — and `**` is not the fix: bash 3.2 flattens it to
+`*` and misses everything below the first level, while zsh **aborts the whole command** on a
+zero-match pattern, which `2>/dev/null` does not suppress because the failure is a shell expansion
+error. Use `grep -r`, or a quoted `find plans -maxdepth 3 ...`.
 
 ##### The verification ledger — the tree over time
 
@@ -436,6 +558,8 @@ Stopped at: {step}, {loop} cycle {cycle}
 Remaining: {the steps not reached}
 Status: STALLED
 ```
+
+Then `rmdir "$run_dir" 2>/dev/null || true` — Step 0a's run-folder cleanup, a no-op once anything was written.
 
 **Evaluate it at each of the five boundary mints — Steps 3, 3j, 4c, 5d and 0a — not "wherever a
 boundary is written".** 0a is the run's own start and can only print `0m`. The other four are the
@@ -587,7 +711,7 @@ Every other key (`output_format`, `automation_level`, `context_threshold`, `clar
 
 **But `output_format` is project policy, not a per-developer preference — do not let its trust anchor suggest otherwise.** Reading it from the working tree is correct (a branch cannot escalate concurrency with it); *diverging* on it across a team is not. `scripts/check-artifact-pairing.cjs` never reads `output_format` or `config.json` at all: it scopes via `branchScope({auditPath: 'plans', ext: '.md', baseRef})` — **every** changed `.md` on the branch, whoever authored it — and unconditionally requires each one's `.html` sibling. So a developer running `html` is blocked by every md-only artifact a teammate added to the same branch, and cannot clear the gate without re-rendering work that is not theirs. The key therefore belongs in the **tracked** `.orchestrator/config.json`, identical for everyone on the branch, and a project that wants to change it should change it once, deliberately, for the whole team. `automation_level` and the thresholds are genuinely per-developer; `output_format` is not.
 
-**If the resolved value is `off` (including by default), the run is finished with parallel mode.** **Steps 0c, 0r, 2p, 2c, 2s, 2L, 3L, 3s, and 3j do not exist for this run**: skip them entirely and follow Steps 1 → 2 → 3 → 3b → 4 → 5 → 7 exactly as written. Do not print a parallelism line in the banner above, and emit nothing else — an `off` run's stdout is byte-identical to a pre-feature run's, the `INSTRUMENT MOVED` line excepted: that one is a disclosure about the run's own settings, not a parallel-mode artifact, and a run that suppressed it to preserve byte-parity would be preserving the wrong thing.
+**If the resolved value is `off` (including by default), the run is finished with parallel mode.** **Steps 0c, 0r, 2p, 2c, 2s, 2L, 3L, 3s, and 3j do not exist for this run**: skip them entirely and follow Steps 1 → 2 → 3 → 3b → 4 → 5 → 7 exactly as written. Do not print a parallelism line in the banner above, and emit nothing else — an `off` run's stdout is byte-identical to **another `off` run of the same skill version**, the `INSTRUMENT MOVED` line excepted: that one is a disclosure about the run's own settings, not a parallel-mode artifact, and a run that suppressed it to preserve byte-parity would be preserving the wrong thing. The `Run folder:` line every banner of this version carries (Step 7b) is in the same category and prints on both paths: it is what the run wrote, not how it was sliced.
 
 Add one line to the status output **only when `parallelism` is not `off`**:
 
@@ -652,9 +776,17 @@ above, before any work begins. On a short run that is pure overhead.
 ### Step 1 — Brainstormer: capture an unambiguous spec
 
 **Spec reuse — check this before minting anything.** When the invocation names an existing spec — a
-bare `SPEC-*` id, or a path under `plans/specs/` — do **not** mint a new one. Bind `spec_id` and
-`spec_path` from it, read the file to confirm `status: READY_FOR_PLANNING`, print
-`ORCHESTRATOR — reusing {spec_id}`, and go straight to Step 2.
+bare `SPEC-*` id, or a path whose **basename** matches
+`^SPEC-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{4}-[a-z0-9-]+\.md$` and that exists under `plans/` — do **not**
+mint a new one. Bind `spec_id` and `spec_path` from it, read the file to confirm
+`status: READY_FOR_PLANNING`, print `ORCHESTRATOR — reusing {spec_id}`, and go straight to Step 2.
+**Resolve the path recursively** — `grep -r`, or a quoted `find plans -maxdepth 3 ...`, never a shell
+glob — since a reused spec was written by an **earlier** run and therefore lives in **that** run's
+folder, not in this one's. **Match the basename, never a directory prefix** — the id is in the
+filename and the directory is not part of the identity, so a `plans/specs/` prefix test stops
+recognising a spec the moment one is written anywhere else, which under this layout is every spec
+written from here on, and that turns a retry into exactly the brand-new family the next paragraph
+describes.
 
 **This is the only way a second run joins the first run's family.** A re-run that mints a fresh
 `SPEC-*` writes every artifact into a brand-new family, so the pre-flight budget and G8 both start from
@@ -676,6 +808,7 @@ Artifact rules: read .orchestrator/artifact-format.md before writing any artifac
 Artifact rules (html mode only): also read .orchestrator/artifact-format-html.md.
 Artifact rules (parallel path ONLY): also read .orchestrator/artifact-format-parallel.md; omit this line entirely on a sequential run.
 HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
+run_dir={run_dir}   ← the run folder minted at Step 0; write EVERY artifact directly in it and create no subdirectory
 ID to use: {computed SPEC-<id>}
 
 {user input}
@@ -689,8 +822,8 @@ Follow your full brainstormer workflow for the given automation_level, then writ
 
 Parse the brainstormer's output to extract:
 
-- `spec_id` — e.g. `SPEC-007` (from line `BRAINSTORMER — SPEC-{NNN} created`)
-- `spec_path` — e.g. `plans/specs/SPEC-007-slug.md` (from line `Spec: {path}`)
+- `spec_id` — e.g. `SPEC-20260703T142531Z-9f0c` (from line `BRAINSTORMER — SPEC-{NNN} created`)
+- `spec_path` — e.g. `{run_dir}/SPEC-20260703T142531Z-9f0c-slug.md` (from line `Spec: {path}`)
 - `spec_status` — `READY_FOR_PLANNING` or `DRAFT`
 
 **File verification (mandatory before continuing):**
@@ -704,6 +837,8 @@ ORCHESTRATOR — spec still in DRAFT
 Spec: {spec_path}
 Status: STALLED — resolve open questions and re-run the orchestrator
 ```
+
+Then `rmdir "$run_dir" 2>/dev/null || true` — Step 0a's run-folder cleanup, a no-op once anything was written.
 
 Only continue when `spec_status` is `READY_FOR_PLANNING`.
 
@@ -738,6 +873,7 @@ Artifact rules: read .orchestrator/artifact-format.md before writing any artifac
 Artifact rules (html mode only): also read .orchestrator/artifact-format-html.md.
 Artifact rules (parallel path ONLY): also read .orchestrator/artifact-format-parallel.md; omit this line entirely on a sequential run.
 HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
+run_dir={run_dir}   ← the run folder minted at Step 0; write EVERY artifact directly in it and create no subdirectory
 ID to use: {computed FEAT-<id>}
 
 Source spec: {spec_path}
@@ -749,7 +885,7 @@ Follow your full architect workflow and print the structured output summary.
 Parse the architect's output to extract:
 
 - `plan_id` — e.g. `FEAT-003` (from line `ARCHITECT — {ID} created`)
-- `plan_path` — e.g. `plans/feat/FEAT-003-slug.md`
+- `plan_path` — e.g. `{run_dir}/FEAT-003-slug.md`, flat inside this run's folder
 
 Also bind **`root_plan_id = plan_id`** here. `plan_id` is the **active** plan and is reassigned by every remediation cycle (Steps 4c, 5d); `root_plan_id` is the run's **aggregate under evaluation** and is **immutable for the whole run**. On a sequential run the two start equal and only `plan_id` moves.
 
@@ -804,7 +940,10 @@ which records verdicts rather than enforcing them. A split group is therefore a 
 *work*, and the runs it becomes are what verify it.
 
 **Run Step 7c before stopping**, as every other stop that occurs after a plan exists does — a halted
-run still produces its timeline. The run meter's stop below carries the same obligation.
+run still produces its timeline. The run meter's stop below carries the same obligation. Then
+`rmdir "$run_dir" 2>/dev/null || true` — Step 0a's run-folder cleanup, which is a **no-op** at this
+particular stop: the architect's plan is deliberately kept on disk (below) so an
+`--override-spec-size` re-run reuses it, and that plan is in the run folder.
 
 **Why this is a stop and not a warning.** The family budget is the only cross-run bound, it is checked
 **pre-flight** against prior history, and on a brand-new spec that history is empty — so a single first
@@ -859,9 +998,11 @@ Artifact rules: read .orchestrator/artifact-format.md before writing any artifac
 Artifact rules (html mode only): also read .orchestrator/artifact-format-html.md.
 Artifact rules (parallel path ONLY): also read .orchestrator/artifact-format-parallel.md; omit this line entirely on a sequential run.
 HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
+run_dir={run_dir}   ← the run folder minted at Step 0; write EVERY artifact directly in it and create no subdirectory
 MAESTRO_REVIEW_BASE={base_sha}   ← the Step 0a pre-flight base; your phase gates scope the working tree against it
 
 Implement plan {plan_id}.
+Plan: {plan_path}
 Follow your full coder workflow and print the structured session summary.
 ```
 
@@ -906,24 +1047,27 @@ Artifact rules: read .orchestrator/artifact-format.md before writing any artifac
 Artifact rules (html mode only): also read .orchestrator/artifact-format-html.md.
 Artifact rules (parallel path ONLY): also read .orchestrator/artifact-format-parallel.md; omit this line entirely on a sequential run.
 HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
+run_dir={run_dir}   ← the run folder minted at Step 0; write EVERY artifact directly in it and create no subdirectory
 ID to use: {computed TEST-<id>}
+contract={pact_path}   ← parallel path ONLY; omit the line entirely on a sequential run
 leaves={comma-separated leaf FEAT IDs, in dispatch order}   ← parallel path ONLY; omit the line entirely on a sequential run
 tree={hash minted now with Step 0a's recipe}   ← both paths; the suite-inheritance match key
 aggregate={path to .orchestrator/join-digest.md}   ← parallel path ONLY, and only when the digest built and its integrity check passed; omit the line entirely otherwise
 MAESTRO_REVIEW_BASE={base_sha}   ← the Step 0a pre-flight base; the coverage floor scopes the working tree against it
 
 Run tests for plan {plan_id}.
+Plan: {plan_path}
 Follow your full tester workflow and print the structured output summary.
 ```
 
 > **On the parallel path the tester is invoked with `root_plan_id` — the parent `PACT` ID — not the active `plan_id`** (Step 3j.3), so it runs once at the join over the **whole** leaf union. This holds on **every** cycle: after a remediation pass reassigns `plan_id` to a `FIX`/`QAF` ID (Steps 4c, 5d), `root_plan_id` is unchanged, so the join role still evaluates the aggregate rather than narrowing to the last remediation plan. Pass the remediation plan as a **related input**, never as the subject. On an `off` run `root_plan_id` and `plan_id` coincide at Step 2 and the block reads exactly as before.
 >
-> **`leaves=` is emitted here, on the parallel path only.** The orchestrator dispatched the leaves at Step 3L and still holds the resolved set, so it hands it over rather than making the role rebuild it. The line is **omitted entirely on an `off` run**, exactly as `lane=` and `contract=` are — that omission is what keeps a sequential run's prompt byte-identical to a pre-feature run's.
+> **`contract=` and `leaves=` are emitted here, on the parallel path only.** The orchestrator dispatched the leaves at Step 3L and still holds the resolved set, and it parsed `pact_path` out of the architect's own output back at Step 2c, so it hands both over rather than making the role rebuild them. **`contract=` carries the parent `PACT`'s path, never a leaf's** (`references/parallel.md` → 3j.3) — it is step 1 of the `PACT` ID resolution rule, and while no join emitted it every parallel run fell through to that rule's legacy recursive `find`, which exists only for a run started before this line was emitted. Both lines are **omitted entirely on an `off` run**, exactly as `lane=` is — that omission is what keeps a sequential run's prompt byte-identical to **another `off` run of the same skill version**. `run_dir=` above them is emitted on both paths and is not part of that comparison.
 
 Parse the tester's output to extract:
 
 - `tester_status` — `PASS`, `BELOW_FLOOR`, or `BLOCKED`
-- `test_report_path` — e.g. `plans/test/TEST-{NNN}-slug.md` (from line `Report: {path}`)
+- `test_report_path` — e.g. `{run_dir}/TEST-{NNN}-slug.md` (from line `Report: {path}`)
 
 **File verification (mandatory before continuing):**
 
@@ -941,7 +1085,9 @@ Read the test report file at `test_report_path` (expect `.md` or `.html` extensi
   Status: STALLED — tooling gap; human intervention required before continuing
   ```
 
-  If `output_format=html`, run Step 7c (progress timeline render).
+  If `output_format=html`, run Step 7c (progress timeline render). Then
+  `rmdir "$run_dir" 2>/dev/null || true` — Step 0a's run-folder cleanup, a no-op once anything was
+  written.
 
 - If `BELOW_FLOOR` → surface a soft warning to the user (the tester's floor is not a hard stop here — reviewer and qa still run — but since P3 it is the **same** measurement QA hard-fails on, so a BELOW_FLOOR run is now expected to reach a G1 block at Step 5 rather than merely at risk of one), then continue to Step 4 (Reviewer):
 
@@ -967,9 +1113,11 @@ Artifact rules: read .orchestrator/artifact-format.md before writing any artifac
 Artifact rules (html mode only): also read .orchestrator/artifact-format-html.md.
 Artifact rules (parallel path ONLY): also read .orchestrator/artifact-format-parallel.md; omit this line entirely on a sequential run.
 HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
+run_dir={run_dir}   ← the run folder minted at Step 0; write EVERY artifact directly in it and create no subdirectory
 ID to use: {computed CR-<id>}
 root_plan={root_plan_id}   ← the run's immutable aggregate; the reviewer's requirement-coverage anchor. Emitted on BOTH paths, on every cycle.
 spec={spec_path}   ← the run's source spec; omit the line entirely when the run has no spec
+contract={pact_path}   ← parallel path ONLY; omit the line entirely on a sequential run
 leaves={comma-separated leaf FEAT IDs, in dispatch order}   ← parallel path ONLY; omit the line entirely on a sequential run
 aggregate={path to .orchestrator/join-digest.md}   ← parallel path ONLY, and only when the digest built and its integrity check passed; omit the line entirely otherwise
 delta={path to the cycle delta file list}   ← review cycles >= 2 ONLY; omit the line entirely on cycle 1
@@ -977,6 +1125,7 @@ MAESTRO_REVIEW_BASE={base_sha}   ← the Step 0a pre-flight base; the reviewer s
 budget: review_cycle={review_cycle} review_budget={review_budget} family_cr_count={family_cr_count}   ← stamp these into the CR frontmatter; they are how a later reader knows what the run had left
 
 Review plan {plan_id}. The plan is in DONE status.
+Plan: {plan_path}
 Follow your full reviewer workflow and print the structured output summary.
 ```
 
@@ -986,12 +1135,12 @@ Follow your full reviewer workflow and print the structured output summary.
 
 > **`root_plan=` is emitted on both paths, and it is what keeps requirement coverage alive across remediation cycles.** Step 4c reassigns `plan_id` to the `FIX` plan, whose acceptance criteria are the previous CR's Must Fixes and which carries no `## Requirement Coverage` map by design. Without this line a sequential cycle-2 review would gate on the `FIX` plan alone and silently drop everything cycle 1 was checking — the same leak, one level down. The reviewer resolves the map from `root_plan` and re-verifies it on every cycle, which is also what surfaces a requirement an earlier cycle met and a later fix broke.
 >
-> **`leaves=` is emitted here, on the parallel path only.** The orchestrator dispatched the leaves at Step 3L and still holds the resolved set, so it hands it over rather than making the role rebuild it. The line is **omitted entirely on an `off` run**, exactly as `lane=` and `contract=` are. It is re-emitted on **every** review cycle, so a cycle-10 run re-reads nothing a cycle-1 run already resolved.
+> **`contract=` and `leaves=` are emitted here, on the parallel path only**, and for the same reason they are at Step 3b: the orchestrator holds the parent `PACT`'s path from Step 2c and the resolved leaf set from Step 3L, so it hands both over rather than making the role rebuild them. `contract=` is the **parent** contract's path, never a leaf's. Both lines are **omitted entirely on an `off` run**, exactly as `lane=` is. Both are re-emitted on **every** review cycle, so a cycle-10 run re-reads nothing a cycle-1 run already resolved — and a reviewer that reaches one level down for a sub-contract's *Inherited interface assignments* opens a path it was handed rather than searching for one.
 
 Parse reviewer's output to extract:
 
 - `cr_status` — `APPROVED` or `REQUEST_CHANGES`
-- `cr_path` — e.g. `plans/code-review/CR-005-slug.md` (from line `CR file: {path}`)
+- `cr_path` — e.g. `{run_dir}/CR-005-slug.md` (from line `CR file: {path}`), unless `MAESTRO_CR_TARGET_PATH` was set — that absolute path wins, unchanged, and is exempt from every path check
 
 **File verification (mandatory before continuing):**
 
@@ -1026,7 +1175,8 @@ Status: STALLED — human intervention required
 
 **`Bound by:` is not decoration.** The two stalls need different remedies — raise `--max-review`, or close out the family — and without the line they print identically and the operator picks by guessing. The `review cycle limit reached` header and the `Status: STALLED` line are both unchanged, which is what the `product-manager` stop rule keys on.
 
-If `output_format=html`, run Step 7c (progress timeline render).
+If `output_format=html`, run Step 7c (progress timeline render). Then
+`rmdir "$run_dir" 2>/dev/null || true` — Step 0a's run-folder cleanup, a no-op once anything was written.
 
 Stop.
 
@@ -1042,6 +1192,7 @@ Artifact rules: read .orchestrator/artifact-format.md before writing any artifac
 Artifact rules (html mode only): also read .orchestrator/artifact-format-html.md.
 Artifact rules (parallel path ONLY): also read .orchestrator/artifact-format-parallel.md; omit this line entirely on a sequential run.
 HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
+run_dir={run_dir}   ← the run folder minted at Step 0; write EVERY artifact directly in it and create no subdirectory
 ID to use: {computed FIX-<id>}
 spec={spec_path}   ← the run's source spec; every artifact you write names its id in `related_to` (family membership). Omit the line entirely when the run has no spec
 
@@ -1064,9 +1215,11 @@ Artifact rules: read .orchestrator/artifact-format.md before writing any artifac
 Artifact rules (html mode only): also read .orchestrator/artifact-format-html.md.
 Artifact rules (parallel path ONLY): also read .orchestrator/artifact-format-parallel.md; omit this line entirely on a sequential run.
 HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
+run_dir={run_dir}   ← the run folder minted at Step 0; write EVERY artifact directly in it and create no subdirectory
 MAESTRO_REVIEW_BASE={base_sha}   ← the Step 0a pre-flight base; your phase gates scope the working tree against it
 
 Implement plan {fix_plan_id}.
+Plan: {fix_plan_path}
 Follow your full coder workflow and print the structured session summary.
 ```
 
@@ -1089,17 +1242,20 @@ Artifact rules: read .orchestrator/artifact-format.md before writing any artifac
 Artifact rules (html mode only): also read .orchestrator/artifact-format-html.md.
 Artifact rules (parallel path ONLY): also read .orchestrator/artifact-format-parallel.md; omit this line entirely on a sequential run.
 HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
+run_dir={run_dir}   ← the run folder minted at Step 0; write EVERY artifact directly in it and create no subdirectory
 ID to use: {computed TEST-<id>}
+contract={pact_path}   ← parallel path ONLY; omit the line entirely on a sequential run
 leaves={comma-separated leaf FEAT IDs, in dispatch order}   ← parallel path ONLY; omit the line entirely on a sequential run
 tree={hash minted now with Step 0a's recipe}   ← both paths; the suite-inheritance match key
 aggregate={path to .orchestrator/join-digest.md}   ← parallel path ONLY, and only when the digest built and its integrity check passed; omit the line entirely otherwise
 MAESTRO_REVIEW_BASE={base_sha}   ← the Step 0a pre-flight base; the coverage floor scopes the working tree against it
 
 Run tests for plan {fix_plan_id}.
+Plan: {fix_plan_path}
 Follow your full tester workflow and print the structured output summary.
 ```
 
-> **On the parallel path this re-run is invoked with `root_plan_id` — the parent `PACT` ID — not `fix_plan_id`**, exactly as Step 3b is (Step 3j.3), with the `FIX` plan as a related input. `leaves=` is emitted for the same reason it is emitted at Step 3b — the orchestrator dispatched the leaves and still holds the set — and is omitted entirely on a sequential run, which is what keeps this block byte-identical to a pre-feature run's. Both were absent here: without them a cycle-2 tester narrows to the remediation plan's diff, and the leaf union stops being tested the moment the first fix cycle runs.
+> **On the parallel path this re-run is invoked with `root_plan_id` — the parent `PACT` ID — not `fix_plan_id`**, exactly as Step 3b is (Step 3j.3), with the `FIX` plan as a related input. `contract=` and `leaves=` are emitted for the same reason they are emitted at Step 3b — the orchestrator holds the parent `PACT`'s path and the dispatched leaf set — and both are omitted entirely on a sequential run, which is what keeps this block byte-identical to **the same block in another `off` run of the same skill version**. **A remediation cycle is the same join spawn one cycle later, not a lesser one**: emitting the two lines at Step 3b and dropping them here would put the cycle-1 tester on the handed path and every later tester back on the legacy recursive `find`. All of it was absent here: without `root_plan_id` and `leaves=` a cycle-2 tester narrows to the remediation plan's diff, and the leaf union stops being tested the moment the first fix cycle runs.
 
 Apply the same `tester_status` logic: `BLOCKED` → stop; `BELOW_FLOOR` → soft warning, continue; `PASS` → continue.
 
@@ -1137,12 +1293,23 @@ eval or has no `spec-driven-eval` installed does not report cycles it never spen
    skill not installed" for the report, and go to Step 5. An absent optional dependency reduces the
    run's quality, never its correctness.
 3. Else invoke `spec-driven-eval` with **`Profile: in-loop`** — never a generic evaluator, a one-pass
-   code review, or a summary child. Pass the brainstormer SPEC-{NNN} path, the accumulated diff
-   (`git diff` against the pre-flight base recorded in Step 0), and the path to
+   code review, or a summary child. Pass the brainstormer SPEC-{NNN} path, **an explicit
+   `--out {run_dir}`**, the accumulated diff (`git diff` against the pre-flight base recorded in
+   Step 0), and the path to
    `.orchestrator/verification-ledger.json` with the current tree hash, which its Engineering Gates
    step reads in place of re-probing a suite against a tree that has not moved since the tester ran
    it. Execute its required acceptance-criterion decomposition, evidence collection,
    scoring/calibration, and report process.
+
+   **`--out {run_dir}` is not optional, and it is the one allow-listed exception to "flat inside".**
+   `spec-driven-eval` writes to `<spec-folder>/evaluations/` by default and the orchestrator hands it
+   the spec path, so under this layout `<spec-folder>` **is** a run folder — without the flag the
+   skill would create `{run_dir}/evaluations/`, the single nested directory the layout does not
+   permit, and every link out of the report would sit one level too deep. This already happens in the
+   wild: the reference project carries `plans/specs/evaluations/` plus two per-spec-id subfolders at
+   depth 4. A `{run_dir}/evaluations/` directory is therefore the visible symptom of a missing
+   `--out`, never a layout anyone intended. **On a reused spec the flag also corrects the folder** —
+   `spec_path` then points into the *earlier* run's folder (Step 1), and the eval belongs to this run.
 
    **The profile omits sections, never method.** `in-loop` requires the per-criterion evidence
    matrix, the numeric `Final`, the ranked gap list and the Engineering Gates — the four things this
@@ -1155,18 +1322,23 @@ eval or has no `spec-driven-eval` installed does not report cycles it never spen
    NOTE: the SPEC-{NNN} format may not match spec-driven-eval's expected input — verify its
    expected input shape; if it does not accept SPEC-{NNN} directly, adapt by passing the spec's
    Functional requirements section as the criteria.
-4. **Persist the complete workflow output verbatim** to the canonical `plans/eval/` directory
-   (allow-listed in `artifact-format.md`); do not replace it with a hand-written PASS/ISSUES
-   summary. Compute the ID with `newid EVAL`, derive the slug from the plan title, and write
-   `plans/eval/EVAL-{NNN}-{slug}.md` (canonical). Prepend only the required canonical
+4. **Persist the complete workflow output verbatim** into `{run_dir}` — this run's folder, minted at
+   Step 0 pre-flight and allow-listed in `artifact-format.md` as the one directory every artifact of
+   a run shares; do not replace it with a hand-written PASS/ISSUES summary. Compute the ID with
+   `newid EVAL`, derive the slug from the plan title, and write
+   `{run_dir}/EVAL-{NNN}-{slug}.md` (canonical), flat beside the plans, the CRs and the
+   reports this run produced. Prepend only the required canonical
    frontmatter — `id`, `status: PASS | ISSUES | SKIPPED`, `created_at`, `updated_at`, `cycle`,
    plus `plan: {root_plan_id}` (the run's aggregate, not the active `FIX` plan) — then retain
    every workflow report section below it unchanged. A report missing the per-criterion evidence
    matrix or final grade is incomplete: retry the workflow once, then stop rather than continuing.
    When `output_format=html`, render the view with
-   `node .orchestrator/render-artifact.cjs plans/eval/EVAL-{NNN}-{slug}.md` (the renderer
-   auto-selects the qa-report scaffold for `plans/eval/` sources). Never create any directory
-   other than `plans/eval/` for eval output.
+   `node .orchestrator/render-artifact.cjs {run_dir}/EVAL-{NNN}-{slug}.md` — the renderer resolves
+   `EVAL-` to the qa-report scaffold through its prefix table's fallback, so the view is the same one
+   it produced before and no longer depends on the source sitting under a directory named `eval`.
+   **No role and no step creates a directory under `plans/`. The orchestrator creates exactly one
+   per run, at pre-flight.** The eval output is written into that folder and nowhere else, and the
+   `--out {run_dir}` above is what keeps the eval skill's own default from adding a second one.
    Record `eval_path` and `eval_status`. **Derive `eval_status` by the rule below before you write
    the frontmatter**, and if the reconciliation **or the remediation floor** below flips it to `PASS`, update the persisted
    `status:` in place — otherwise the artifact linked from the final report contradicts the run that
@@ -1306,6 +1478,8 @@ Gate: {gate name} — {the exact command recorded in the report}
 Status: STALLED — human intervention required
 ```
 
+Then `rmdir "$run_dir" 2>/dev/null || true` — Step 0a's run-folder cleanup, a no-op once anything was written.
+
 #### If `eval_status` is `PASS` or `SKIPPED` → go to Step 5 (QA).
 
 #### If `eval_status` is `ISSUES` with a non-empty actionable set:
@@ -1321,6 +1495,8 @@ Last eval: {eval_path}
 Unresolved criteria: {the actionable set, one per line}
 Status: STALLED — human intervention required
 ```
+
+Then `rmdir "$run_dir" 2>/dev/null || true` — Step 0a's run-folder cleanup, a no-op once anything was written.
 
 Repeated `ISSUES` on the same criteria means the spec and the implementation disagree in a way no
 further remediation run will settle. The cap is tested **here**, before the dispatch below and after
@@ -1344,7 +1520,8 @@ substitutions:
 
 - In 4a, the architect's prompt reads `Source eval report: {eval_path}` in place of
   `Source CR file: {cr_path}`. Input type is still `fix`, the ID is still `newid FIX`, and the plan
-  is still written to `plans/code-review/` per the canonical table. Its `related_to` names the
+  is still written into `{run_dir}` per the canonical table — flat beside the `EVAL` it answers, the
+  same way a `FIX` sits beside its `CR`. Its `related_to` names the
   `EVAL` and the `root_plan_id`. Each **actionable** unmet criterion becomes one TDD task pair;
   deferred-by-decision items are not tasks and must not be planned.
 - In 4b2, treat the eval report as the reviewer CR for the "flagged a test gap" condition.
@@ -1379,25 +1556,28 @@ Artifact rules: read .orchestrator/artifact-format.md before writing any artifac
 Artifact rules (html mode only): also read .orchestrator/artifact-format-html.md.
 Artifact rules (parallel path ONLY): also read .orchestrator/artifact-format-parallel.md; omit this line entirely on a sequential run.
 HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
+run_dir={run_dir}   ← the run folder minted at Step 0; write EVERY artifact directly in it and create no subdirectory
 ID to use: {computed QA-<id>}
 MAESTRO_REVIEW_BASE={base_sha}   ← the Step 0a pre-flight base; every gate scopes the working tree against it
 spec={spec_path}   ← the run's source spec; G8 resolves the run family from it. Omit the line entirely when the run has no spec
+contract={pact_path}   ← parallel path ONLY; omit the line entirely on a sequential run
 leaves={comma-separated leaf FEAT IDs, in dispatch order}   ← parallel path ONLY; omit the line entirely on a sequential run
 tree={hash minted now with Step 0a's recipe}   ← both paths; the suite-inheritance match key
 aggregate={path to .orchestrator/join-digest.md}   ← parallel path ONLY, and only when the digest built and its integrity check passed; omit the line entirely otherwise
 
 Run the QA suite for plan {plan_id}. The plan is DONE and has an APPROVED CR.
+Plan: {plan_path}
 Follow your full QA workflow and print the structured output summary.
 ```
 
 > **On the parallel path QA is invoked with `root_plan_id` — the parent `PACT` ID — not the active `plan_id`** (Step 3j.3), so it runs once at the join over the **whole** leaf union, in every mode and on every QA cycle. A QA-remediation pass reassigns `plan_id` (Step 5d) but never `root_plan_id`, so the gates always see the aggregate; the `QAF` plan is a **related input**, never the subject. The CR QA matches is likewise the join-level CR — the one whose `plan:` frontmatter is `root_plan_id`. On an `off` run the two coincide and the block reads exactly as before.
 >
-> **`leaves=` is emitted here, on the parallel path only.** The orchestrator dispatched the leaves at Step 3L and still holds the resolved set, so it hands it over rather than making the role rebuild it. The line is **omitted entirely on an `off` run**, exactly as `lane=` and `contract=` are. It is re-emitted on **every** QA cycle, for the same reason it is on every review cycle.
+> **`contract=` and `leaves=` are emitted here, on the parallel path only.** The orchestrator holds the parent `PACT`'s path from Step 2c and the resolved leaf set from Step 3L, so it hands both over rather than making the role rebuild them; `contract=` is the **parent** contract's path, never a leaf's. Both lines are **omitted entirely on an `off` run**, exactly as `lane=` is, and both are re-emitted on **every** QA cycle, for the same reason they are on every review cycle.
 
 Parse QA's output to extract:
 
 - `qa_status` — `READY_TO_COMMIT`, `READY_WITH_WARNINGS`, or `BLOCKED` (the three the qa agent emits)
-- `qa_report_path` — e.g. `plans/qa/QA-003-slug.md` (from line `Report: {path}`)
+- `qa_report_path` — e.g. `{run_dir}/QA-003-slug.md` (from line `Report: {path}`)
 
 **`BLOCKED_STALE` is not one of them, and must not be looked for here.** The qa agent never prints
 it; the orchestrator synthesizes it after reading the report. Do the synthesis in the file
@@ -1447,7 +1627,8 @@ Stale gates: {list from report frontmatter `stale_gates:`}
 Status: STALLED — operator decision required
 ```
 
-If `output_format=html`, run Step 7c (progress timeline render).
+If `output_format=html`, run Step 7c (progress timeline render). Then
+`rmdir "$run_dir" 2>/dev/null || true` — Step 0a's run-folder cleanup, a no-op once anything was written.
 
 The user can choose to re-run QA (perhaps with more budget), commit without the stale gate, or remediate manually.
 
@@ -1462,7 +1643,8 @@ Last QA report: {qa_report_path}
 Status: STALLED — human intervention required
 ```
 
-If `output_format=html`, run Step 7c (progress timeline render).
+If `output_format=html`, run Step 7c (progress timeline render). Then
+`rmdir "$run_dir" 2>/dev/null || true` — Step 0a's run-folder cleanup, a no-op once anything was written.
 
 Stop.
 
@@ -1478,6 +1660,7 @@ Artifact rules: read .orchestrator/artifact-format.md before writing any artifac
 Artifact rules (html mode only): also read .orchestrator/artifact-format-html.md.
 Artifact rules (parallel path ONLY): also read .orchestrator/artifact-format-parallel.md; omit this line entirely on a sequential run.
 HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
+run_dir={run_dir}   ← the run folder minted at Step 0; write EVERY artifact directly in it and create no subdirectory
 ID to use: {computed QAF-<id>}
 spec={spec_path}   ← the run's source spec; every artifact you write names its id in `related_to` (family membership). Omit the line entirely when the run has no spec
 
@@ -1500,9 +1683,11 @@ Artifact rules: read .orchestrator/artifact-format.md before writing any artifac
 Artifact rules (html mode only): also read .orchestrator/artifact-format-html.md.
 Artifact rules (parallel path ONLY): also read .orchestrator/artifact-format-parallel.md; omit this line entirely on a sequential run.
 HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
+run_dir={run_dir}   ← the run folder minted at Step 0; write EVERY artifact directly in it and create no subdirectory
 MAESTRO_REVIEW_BASE={base_sha}   ← the Step 0a pre-flight base; your phase gates scope the working tree against it
 
 Implement plan {qaf_plan_id}.
+Plan: {qaf_plan_path}
 Follow your full coder workflow and print the structured session summary.
 ```
 
@@ -1518,9 +1703,11 @@ Artifact rules: read .orchestrator/artifact-format.md before writing any artifac
 Artifact rules (html mode only): also read .orchestrator/artifact-format-html.md.
 Artifact rules (parallel path ONLY): also read .orchestrator/artifact-format-parallel.md; omit this line entirely on a sequential run.
 HTML rendering (html mode only): write ONLY the .md; then render its view with `node .orchestrator/render-artifact.cjs <your-artifact.md>`. Never hand-write HTML.
+run_dir={run_dir}   ← the run folder minted at Step 0; write EVERY artifact directly in it and create no subdirectory
 ID to use: {computed CR-<id>}
 root_plan={root_plan_id}   ← the run's immutable aggregate; the reviewer's requirement-coverage anchor. Emitted on BOTH paths, on every cycle.
 spec={spec_path}   ← the run's source spec; every artifact you write names its id in `related_to` (family membership). Omit the line entirely when the run has no spec
+contract={pact_path}   ← parallel path ONLY; omit the line entirely on a sequential run
 leaves={comma-separated leaf FEAT IDs, in dispatch order}   ← parallel path ONLY; omit the line entirely on a sequential run
 aggregate={path to .orchestrator/join-digest.md}   ← parallel path ONLY, and only when the digest built and its integrity check passed; omit the line entirely otherwise
 delta={path to the cycle delta file list}   ← review cycles >= 2 ONLY; omit the line entirely on cycle 1
@@ -1528,12 +1715,13 @@ MAESTRO_REVIEW_BASE={base_sha}   ← the Step 0a pre-flight base; the reviewer s
 budget: review_cycle={review_cycle} review_budget={review_budget} family_cr_count={family_cr_count}   ← stamp these into the CR frontmatter; emitted on EVERY reviewer spawn, Step 4 and Step 5c alike
 
 Review plan {qaf_plan_id}. The plan is in DONE status.
+Plan: {qaf_plan_path}
 Follow your full reviewer workflow and print the structured output summary.
 ```
 
 > **On the parallel path this re-review is invoked with `root_plan_id` — the parent `PACT` ID — not `qaf_plan_id`**, exactly as Step 4 is (Step 3j.3), with the `QAF` plan as a related input.
 >
-> **The three lines added above were absent, and each absence cost something different.** Without `root_plan=` the reviewer resolves its requirement-coverage map from the `QAF` plan, which carries none by design — so a `5c` re-review gates on that plan's acceptance criteria alone and silently drops every requirement the run has tracked since Step 2. That is precisely the leak Step 4c's note describes, one loop further in, and it is a **both-path** defect: `root_plan=` and `MAESTRO_REVIEW_BASE=` are emitted on an `off` run at Step 4 already, so adding them here restores consistency rather than widening a sequential run's prompt with anything new. Without `MAESTRO_REVIEW_BASE` the reviewer falls back to `git merge-base`, which is not the base the rest of the run measured against, so its snapshot and QA's disagree about what changed. Without `leaves=` a parallel run re-walks the contract tree to rebuild a set the orchestrator never lost. Of the run's reviewer spawns, `5c` was the only one missing all three.
+> **The four lines added above were absent, and each absence cost something different.** Without `root_plan=` the reviewer resolves its requirement-coverage map from the `QAF` plan, which carries none by design — so a `5c` re-review gates on that plan's acceptance criteria alone and silently drops every requirement the run has tracked since Step 2. That is precisely the leak Step 4c's note describes, one loop further in, and it is a **both-path** defect: `root_plan=` and `MAESTRO_REVIEW_BASE=` are emitted on an `off` run at Step 4 already, so adding them here restores consistency rather than widening a sequential run's prompt with anything new. Without `MAESTRO_REVIEW_BASE` the reviewer falls back to `git merge-base`, which is not the base the rest of the run measured against, so its snapshot and QA's disagree about what changed. Without `leaves=` a parallel run re-walks the contract tree to rebuild a set the orchestrator never lost, and without `contract=` it cannot even find the tree's root without searching — step 1 of the `PACT` ID resolution rule reads that line, so its absence drops every join onto the recursive `find` kept only for legacy runs. Of the run's reviewer spawns, `5c` was the only one missing the first three; **`contract=` was missing from both of them, Step 4 included, and from every tester and QA join spawn as well** — which is what made `references/parallel.md`'s "all three join spawns carry `contract={pact_path}`" false on every run.
 
 **Verify** the new CR file exists at the path reported in reviewer output. If missing, re-invoke reviewer once; if still missing, stop and report.
 
@@ -1558,6 +1746,8 @@ Extract plan IDs and file paths from subagent output using these patterns:
 
 If an agent output is ambiguous or missing the expected pattern, re-read the relevant plan file directly to determine status before continuing.
 
+> **The `Plan:` line the orchestrator *sends* is not the `Plan:` line it *reads*.** Every spawn that names a plan by ID also names its path (*Mandatory role-prompt preamble* above), so a coder, tester, reviewer or QA prompt now carries a `Plan:` **input** line — while the table's `Plan: {path}` pattern is the **architect's output**, parsed from the architect's summary and from nowhere else. Never read a role's own prompt back as its output, and **never add a `Plan:` line to an architect prompt**, where it would be indistinguishable from the line that step exists to extract. The architect is handed its input as `Source spec:`, `Source CR file:`, `Source QA report:` or `Source eval report:` for exactly this reason.
+
 > **Note — BLOCKED_STALE is orchestrator-synthesized:** the qa agent never emits the literal string `BLOCKED_STALE`. The orchestrator infers it from the QA report's `stale_gates:` frontmatter, written by `templates/qa.md` → Step 0 when a gate exceeds `gate_wall_clock_minutes`. **An absent key means a report from before that step existed, not a clean run** — Step 0 emits `stale_gates: []` when nothing timed out. Do not expect this value in the qa agent's `Status:` output line.
 
 ### Rules
@@ -1566,6 +1756,8 @@ If an agent output is ambiguous or missing the expected pattern, re-read the rel
 - Never skip a step — each agent must complete before the next is invoked.
 - Always pass the exact plan ID or file path extracted from the previous agent's output.
 - Never commit or push — the orchestrator's job ends at `READY_TO_COMMIT`.
+- **No role and no step creates a directory under `plans/`.** The orchestrator creates exactly one per run, at Step 0 pre-flight, and every artifact of that run — spec, plans, `PACT`, test reports, CRs, QA reports, `EVAL`, `FINAL` — is written flat inside it. The seven legacy kind directories are frozen and read-only; nothing writes into one again. **This rule is now checked rather than trusted**: `node .orchestrator/check-artifact-home.cjs` runs at Step 7b in both modes and blocks the completion banner on any artifact that landed anywhere else.
+- **Never resolve a path by searching.** `run_dir=` names the folder, the `ID to use:` line names the file, and a `Plan:` line names any artifact handed in. Where a read over `plans/` genuinely is needed, it is recursive — `grep -r`, or a quoted `find plans -maxdepth 3 ...` — and never a shell glob.
 - If a subagent returns an unexpected status or error, stop and report to the user with the last known state.
 - Track and report `review_cycle` and `qa_cycle` counts in all status messages.
 - Keep a running log of each agent invocation and its outcome in your response so the user can follow the pipeline progress.
@@ -1592,15 +1784,57 @@ If an agent output is ambiguous or missing the expected pattern, re-read the rel
 
 If `output_format=html`, run Step 7c (progress timeline render).
 
-**Persist the final report** to the canonical `plans/final/` directory (allow-listed in
-`artifact-format.md`). Compute the ID with `newid FINAL`, derive the slug from the
-plan title, and ALWAYS write `plans/final/FINAL-{NNN}-{slug}.md` (canonical). Its frontmatter
+**Persist the final report** into `{run_dir}` — this run's folder, minted at Step 0 pre-flight and
+allow-listed in `artifact-format.md` as the one directory every artifact of a run shares. Compute
+the ID with `newid FINAL`, derive the slug from the
+plan title, and ALWAYS write `{run_dir}/FINAL-{NNN}-{slug}.md` (canonical). Its frontmatter
 MUST carry the five required keys (`id`, `status`, `created_at`, `updated_at`, `cycle`), and its
 body MUST include the **Related** region linking to the spec, plan, test report, code review, and
 qa report as relative paths (per `artifact-format.md` → Related navigation) — the renderer carries
 those links into the `.html`. When `output_format=html`, render the view with
-`node .orchestrator/render-artifact.cjs plans/final/FINAL-{NNN}-{slug}.md`. Never create any
-directory other than `plans/final/` for the final report.
+`node .orchestrator/render-artifact.cjs {run_dir}/FINAL-{NNN}-{slug}.md`.
+**No role and no step creates a directory under `plans/`. The orchestrator creates exactly one per
+run, at pre-flight** — so the final report is written into that folder, flat, and nowhere else.
+
+**The Related links are siblings now, and none of them is searched for.** Every artifact this run
+produced is in `{run_dir}`, so a same-run target is a bare `./NAME.md` — simpler than the old
+`../<kind>/` hop, and one fewer level for `check-artifact-links.cjs` to resolve. A **cross-run**
+target is normal on any retry — a reused spec was written by an earlier run (Step 1) and lives in
+that run's folder — and it is written `../<that run's folder>/NAME.md`, computed from the path the
+orchestrator already holds and handed over. **Never search the tree for a link target**: every path
+in this region is one the run was given.
+
+**Regenerate the plans index** — immediately after the FINAL artifact is written and rendered, and
+**before** any of the verification below, which can stop the run:
+
+```
+node .orchestrator/index-plans.cjs
+```
+
+It prints `index-plans: wrote plans/index.html` on success. It runs on **every run that reaches this
+step**, which is why it sits above the file verification rather than beside the banner: each early
+return below —
+the STALLED spec-eval stop, the missing-FINAL stop, a red Step 7d gate — ends a run that has *already*
+written artifacts, and an index regenerated only on the runs that reach the banner is an index that
+silently omits every run that did not. It costs about a tenth of a second on a 750-artifact tree and
+rewrites exactly one file, and re-running it is harmless: the generator is deterministic, and two runs
+over an unchanged tree are byte-identical. **So run it again whenever a branch below writes another
+artifact** — the eval retry on the STALLED path, the retried persistence — before you print that
+branch's report. A second tenth of a second is the entire price of an index that is never behind the
+tree it describes.
+
+**`plans/index.html` is a derived view; the artifacts remain the source of truth.** It is generated
+from them and never hand-edited, so anything only the index claims is wrong by construction, and a
+stale index is fixed by re-running the generator, never by patching the page. It is one more file in
+the diff the closing banner tells the user to review before committing — that is the whole of its
+effect on the run.
+
+**When `output_format=html`, a regeneration whose links do not resolve is a failing gate, not a
+cosmetic issue.** `plans/index.html` is an added/modified `plans/**.html`, so it falls inside
+`check-artifact-links.cjs`'s branch scope exactly like a rendered artifact, and every local href on the page is audited against
+disk. Skipping the regeneration does not dodge that check — it only ships a page whose links describe
+the previous run's tree. If the gate goes red, fix what it names and regenerate; never delete the
+index to turn it green.
 
 **File verification (mandatory before printing the banner):**
 
@@ -1622,23 +1856,51 @@ status results:
 ```
 ORCHESTRATOR — spec eval artifact missing or incomplete
 Spec: {spec_path}
-Expected: plans/eval/EVAL-* with `plan: {root_plan_id}`, an evidence matrix, and a final grade
+Expected: {run_dir}/EVAL-* with `plan: {root_plan_id}`, an evidence matrix, and a final grade
 Last eval: {eval_path, or "none persisted"}
 Status: STALLED — human intervention required
 ```
 
+Then `rmdir "$run_dir" 2>/dev/null || true` — Step 0a's run-folder cleanup, a no-op once anything was written.
+
 The `Status: STALLED` line is what makes the `product-manager` skill's existing stop rule catch this
 without any change on its side.
 
-Read back `plans/final/FINAL-{NNN}-{slug}.md` (and, when `output_format=html`, the paired
+Read back `{run_dir}/FINAL-{NNN}-{slug}.md` (and, when `output_format=html`, the paired
 `.html`). If it does not exist or is empty, re-run this persistence step once. If still missing
 after the retry, stop and report — do **NOT** print the `pipeline complete` banner. The banner is
 the contract downstream consumers rely on (the `product-manager` skill treats it as proof the
 FINAL artifact exists and moves straight to commit/PR); printing it without the persisted file on
 disk is the silent-drop failure mode this step guards against.
 
-Then, when `output_format=html`, run **Step 7d (artifact validation gates)** and confirm both
-gates are green. A red gate blocks the banner exactly as a missing FINAL file does — resolve it
+**Then run the artifact-home gate — in BOTH modes, before the banner:**
+
+```
+node .orchestrator/check-artifact-home.cjs
+```
+
+It prints `artifact-home: OK` and exits 0 when every artifact this branch added or edited sits at
+depth exactly 2 under `plans/` — in this run's folder, or, for anything written before that layout
+existed, in one of the seven frozen legacy kind directories — and otherwise names each offender and
+exits 1.
+
+**It is not one of the html gates and must never be skipped with them.** A wrong directory is a wrong
+directory whatever the render mode, and `md` is the default, so a home gate that ran only under `html`
+would be unmeasured on almost every run — which is the state it was written to end. The directory
+allow-list has been normative for this project's entire life and was never once machine-checked:
+nothing validated **where** an artifact landed, and because bootstrap runs zero `mkdir`, a directory
+comes into being as a side effect of the first write into it, so one typo in a role's write path
+silently creates a top-level directory that reads as intentional forever after. The depth is what
+carries the cost: an artifact linking sideways with `href="../../docs/adr/015.md"` resolves from
+`plans/<run>/` and reports `1 broken local link(s)` one level deeper, and the reference project emits
+22 such escapes.
+
+A red home gate blocks the banner exactly as a missing FINAL file does. **Fix it by moving the named
+artifact into `{run_dir}`, never by creating a directory that makes its current path legal** — the
+gate's whole subject is that no run creates a second directory under `plans/`.
+
+Then, when `output_format=html`, ALSO run **Step 7d (artifact validation gates)** and confirm both of
+its gates are green. A red gate blocks the banner exactly as a missing FINAL file does — resolve it
 (re-render or fix frontmatter) before proceeding.
 
 In addition, PRINT the report below to stdout (the printed summary is the same regardless of
@@ -1647,8 +1909,9 @@ mode). If READY_WITH_WARNINGS arrived from QA, carry the G8 warning into the Iss
 ```
 ORCHESTRATOR — pipeline complete
 Spec: {spec_path}
+Run folder: {run_dir}
 Final plan: {plan_id}
-Final report: plans/final/FINAL-{NNN}-{slug}.md
+Final report: {run_dir}/FINAL-{NNN}-{slug}.md
 Tester: {tester_status} (coverage {after} — stmts/branches per stack)
 QA report: {qa_report_path}
 Spec eval: {PASS | ISSUES | SKIPPED}{ — {N} actionable, {M} recorded}{, graded before {qa_cycle} QA remediation(s) — see Step 4e}
@@ -1718,9 +1981,23 @@ what the run has to show for it, and both come from evidence already on disk:
   something a reviewer must see before reading anything else on this banner. `none` when nothing
   moved; `not anchored — no merge-base` when the run had none to read.
 
-**Two lines are required on every terminal banner the run can end on** — this one, `STALLED` in all
-its forms, `BLOCKED`, `BLOCKED_STALE`, and the scope-band and family-budget refusals: `Run cost:` and
-`Spec: {spec_path}`.
+**Three lines are required on every terminal banner the run can end on** — this one, `STALLED` in all
+its forms, `BLOCKED`, `BLOCKED_STALE`, and the scope-band and family-budget refusals: `Run cost:`,
+`Spec: {spec_path}` and `Run folder: {run_dir}`. The third has the one exception the other two do not:
+**the family-budget refusal and the pre-flight cancellation run before Step 0a mints a folder**, so
+they print the other two and omit this one — `$run_dir` is unbound there and a banner must not invent
+a path that does not exist.
+
+**`Run folder:` is the only navigation handle a consumer needs, and adding it changed nothing else on
+this banner.** Every artifact the run wrote — the spec, the plans, the CRs, the test and QA reports,
+the `EVAL`, the `FINAL` — is flat inside that one folder, so a reader with this line needs no search
+and no kind directory; `product-manager` reads it to bound its FINAL lookup to
+`find "$run_dir" -maxdepth 1 -name 'FINAL-*.md'`. **The line was added, never substituted**: the
+`Final report:` line above still carries the full path in the form that consumer prefers, now
+`{run_dir}/FINAL-…`, and every other line keeps its key, its wording and its position. **Say plainly
+what this folder is not**: its slug is a human label, nothing parses it, and a feature's story
+routinely spans several run folders — so a consumer must never infer membership, ordering, or *which
+story this was* from the name. Resolve by artifact ID, by frontmatter, or by `plans/index.html`.
 
 **`Spec:` is what makes the run re-enterable under its own budget.** `max_family_cycles` is the only
 budget that survives a run, it resolves from spec provenance, and the positional `SPEC-*` argument is
@@ -1743,9 +2020,11 @@ clause is dropped and the line still prints.
 
 **In `md` mode — the default — neither step exists. Skip both and open nothing.** There are no `.html` artifacts to render, pair or link-check.
 
+**The artifact-home gate is NOT part of that skip, and it is the only gate that is not.** `node .orchestrator/check-artifact-home.cjs` runs in Step 7b above, on **both** paths and in **both** modes, because the pairing and links gates audit `.html` files an `md` run never produces while the home gate audits a **path**, which every run produces. Skipping it alongside them would leave the layout unchecked on the default mode — the same gap in a new place.
+
 **When `output_format=html`, read `references/html-mode.md` now and execute both**, in order, after Step 7b has persisted the final report:
 
 - **Step 7c** renders a progress timeline for every plan-shaped artifact the run produced, enumerated from the run manifest — not only the active plan. It also runs at every STALLED/BLOCKED stop point.
-- **Step 7d** runs the two artifact gates and **blocks the `pipeline complete` banner** while either is red.
+- **Step 7d** runs the two html artifact gates — pairing and links — and **blocks the `pipeline complete` banner** while either is red. They are the second and third gates a full `html` run executes; the home gate is the first, and Step 7b has already run it.
 
 Read it from the skill directory: these are steps the orchestrator runs itself, not rules a role obeys, so B3 does not materialize the file. The rules roles follow when rendering their own artifacts stay in `.orchestrator/artifact-format-html.md`.

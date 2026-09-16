@@ -119,6 +119,7 @@
     {
       "name": "orchestrator",
       "files": [
+        "MATERIALIZED-VERSION",
         "references/artifact-format-html.md",
         "references/artifact-format-parallel.md",
         "references/artifact-format.md",
@@ -130,6 +131,8 @@
         "references/html-mode.md",
         "references/lane-protocol.md",
         "references/parallel.md",
+        "scripts/check-artifact-home.cjs",
+        "scripts/check-artifact-home.test.cjs",
         "scripts/check-artifact-links.cjs",
         "scripts/check-artifact-pairing.cjs",
         "scripts/check-artifact-pairing.test.cjs",
@@ -137,6 +140,8 @@
         "scripts/gate-scope.test.cjs",
         "scripts/gate-shell-injection.test.cjs",
         "scripts/gate-target-guard.test.cjs",
+        "scripts/index-plans.cjs",
+        "scripts/index-plans.test.cjs",
         "scripts/README.md",
         "scripts/render-artifact.cjs",
         "scripts/render-artifact.test.cjs",

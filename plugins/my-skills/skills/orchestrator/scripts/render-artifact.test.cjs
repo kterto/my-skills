@@ -24,8 +24,14 @@ process.env.RENDER_ARTIFACT_TPL_DIR =
 process.env.RENDER_ARTIFACT_ALLOW_ROOT =
   process.env.RENDER_ARTIFACT_ALLOW_ROOT || path.resolve(__dirname, '..');
 const SCRIPT = path.join(__dirname, 'render-artifact.cjs');
-const { toHtml, validateHtml, esc } = require('./render-artifact.cjs');
+const { toHtml, validateHtml, esc, SCAFFOLD } = require('./render-artifact.cjs');
 
+// The **Related:** href in each fixture below is the shape the layout prescribes for
+// that edge: PLAN_MD answers a spec an EARLIER run wrote, so it takes the cross-run
+// `../<other-run-folder>/NAME.md`; the PACT further down is written in the same run as
+// its spec, so it takes the bare same-run sibling `./NAME.md`. PLAN_MD's body link must
+// stay a DIFFERENT target from its Related href — when the two match, P1(c) and H2(d)
+// are satisfied by the body anchor and stop proving anything about the Related nav.
 const PLAN_MD = `---
 id: FEAT-20260101T000000Z-abcd
 status: IN_PROGRESS
@@ -34,11 +40,11 @@ updated_at: 2026-01-02T00:00:00Z
 cycle: 1
 ---
 
-**Related:** [SPEC-20260101T000000Z-0000](../specs/SPEC-20260101T000000Z-0000-x.md)
+**Related:** [SPEC-20260101T000000Z-0000](../20251230T090000Z-0f0f-earlier-run/SPEC-20260101T000000Z-0000-x.md)
 
 ## Overview
 
-Some overview text with **bold** and a [link](../specs/x.md).
+Some overview text with **bold** and a [link](./PACT-20260101T000000Z-0001-x.md).
 
 ## Tasks
 
@@ -101,10 +107,20 @@ cycle: 0
 Just a paragraph and no top-level headings at all.
 `;
 
-const planHtml = () => toHtml('/repo/plans/feat/FEAT-20260101T000000Z-abcd-fixture.md', PLAN_MD);
+// Most fixtures live where a run actually writes now: flat inside one run folder,
+// `plans/<YYYYMMDD>T<HHMMSS>Z-<4hex>-<slug>/`, with every prefix sharing it. A few
+// deliberately stay in a legacy kind directory (the spec below, and two rows of the
+// prefix table) because the seven kind directories are frozen rather than gone, and
+// the renderer has to keep working over both trees. The renderer is depth-agnostic —
+// the path reaches `toHtml` only for type inference — so a fixture path that lies
+// about the layout is a document that lies about the layout.
+const RUN_FOLDER = '20260101T000000Z-a1b2-render-fixtures';
+const RUN_DIR = `/repo/plans/${RUN_FOLDER}`;
+
+const planHtml = () => toHtml(`${RUN_DIR}/FEAT-20260101T000000Z-abcd-fixture.md`, PLAN_MD);
 const specHtml = () => toHtml('/repo/plans/specs/SPEC-20260101T000000Z-abcd-fixture.md', SPEC_MD);
 const progressHtml = () =>
-  toHtml('/repo/plans/feat/FEAT-20260101T000000Z-abcd-fixture.progress.md', PROGRESS_MD);
+  toHtml(`${RUN_DIR}/FEAT-20260101T000000Z-abcd-fixture.progress.md`, PROGRESS_MD);
 
 // ---------- Phase 1 ----------
 
@@ -127,7 +143,7 @@ test('P1(b) - [ ] / - [x] items become disabled checkboxes, checked iff [x]', ()
 test('P1(c) **Related:** becomes <nav class="related"> with <a href> preserved', () => {
   const html = planHtml();
   assert.match(html, /<nav class="related"><span class="label">Related:<\/span>/);
-  assert.match(html, /<a href="\.\.\/specs\/SPEC-20260101T000000Z-0000-x\.md">/);
+  assert.match(html, /<a href="\.\.\/20251230T090000Z-0f0f-earlier-run\/SPEC-20260101T000000Z-0000-x\.md">/);
   // it must not be emitted as a plain paragraph
   assert.doesNotMatch(html, /<p>[^<]*Related:/);
 });
@@ -235,7 +251,7 @@ line two
 | a2 | b2 |
 `;
 
-const richHtml = () => toHtml('/repo/plans/feat/FEAT-20260101T000000Z-rich-fixture.md', RICH_MD);
+const richHtml = () => toHtml(`${RUN_DIR}/FEAT-20260101T000000Z-rich-fixture.md`, RICH_MD);
 
 test('P3(a) a fenced code block renders <pre><code> with its contents HTML-escaped', () => {
   const html = richHtml();
@@ -305,7 +321,7 @@ cycle: 0
 
 Body text.
 `;
-const injectHtml = () => toHtml('/repo/plans/feat/FEAT-20260101T000000Z-inj-fixture.md', INJECT_MD);
+const injectHtml = () => toHtml(`${RUN_DIR}/FEAT-20260101T000000Z-inj-fixture.md`, INJECT_MD);
 
 test('H1(a) a " in a frontmatter value is attribute-escaped in <main data-*> and cannot terminate it', () => {
   const html = injectHtml();
@@ -356,7 +372,7 @@ test('H2(b) disallowed schemes and malformed URLs render as escaped text with NO
 });
 
 test('H2(c) relative and http/https/mailto links render as anchors with attribute-escaped href', () => {
-  assert.match(inline('[s](../specs/x.md)'), /<a href="\.\.\/specs\/x\.md">s<\/a>/);
+  assert.match(inline('[s](../20251230T090000Z-0f0f-earlier-run/x.md)'), /<a href="\.\.\/20251230T090000Z-0f0f-earlier-run\/x\.md">s<\/a>/);
   assert.match(inline('[h](http://example.com/p)'), /<a href="http:\/\/example\.com\/p">h<\/a>/);
   assert.match(
     inline('[q](https://example.com/p?q=1&r=2)'),
@@ -368,7 +384,7 @@ test('H2(c) relative and http/https/mailto links render as anchors with attribut
 
 test('H2(d) P1(c) invariant: the Related nav relative href is still preserved (relatedNav inherits the fix)', () => {
   const html = planHtml();
-  assert.match(html, /<a href="\.\.\/specs\/SPEC-20260101T000000Z-0000-x\.md">/);
+  assert.match(html, /<a href="\.\.\/20251230T090000Z-0f0f-earlier-run\/SPEC-20260101T000000Z-0000-x\.md">/);
 });
 
 test('H2(e) bold and inline code inside/around a link are still rendered', () => {
@@ -578,7 +594,7 @@ cycle: 2
 related_to: SPEC-20260101T000000Z-0000
 ---
 
-**Related:** [SPEC-20260101T000000Z-0000](../specs/SPEC-20260101T000000Z-0000-x.md)
+**Related:** [SPEC-20260101T000000Z-0000](./SPEC-20260101T000000Z-0000-x.md)
 
 ## Lane Map
 
@@ -594,7 +610,7 @@ related_to: SPEC-20260101T000000Z-0000
 `;
 
 // toHtml is pure and the fixture is an immutable string, so one render serves every assertion.
-const PACT_HTML = toHtml('/repo/plans/feat/PACT-20260101T000000Z-abcd-fixture.md', PACT_MD);
+const PACT_HTML = toHtml(`${RUN_DIR}/PACT-20260101T000000Z-abcd-fixture.md`, PACT_MD);
 
 function styleOf(html) {
   return (html.match(/<style>([\s\S]*?)<\/style>/) || [])[1];
@@ -616,7 +632,7 @@ test('PACT(b) a rendered PACT keeps the <main data-*> shell, cycle badge, Relate
   assert.match(PACT_HTML, /data-id="PACT-20260101T000000Z-abcd"/);
   assert.match(PACT_HTML, /<span class="badge">cycle 2<\/span>/);
   assert.match(PACT_HTML, /<nav class="related"><span class="label">Related:<\/span>/);
-  assert.match(PACT_HTML, /<a href="\.\.\/specs\/SPEC-20260101T000000Z-0000-x\.md">/);
+  assert.match(PACT_HTML, /<a href="\.\/SPEC-20260101T000000Z-0000-x\.md">/);
   assert.deepEqual(validateHtml(PACT_HTML, PACT_MD, false), []);
   // …and the conformant document it validates as is the plan-scaffold one: same lifted
   // behavior script under the same CSP (H3(b) already pins hash↔script binding).
@@ -649,20 +665,28 @@ test('PACT(c) a PACT-*.md on disk renders end-to-end through the CLI to a valid 
 
 // ---------- prefix → scaffold map (regression lock for the SCAFFOLD/KICKER_BY_PREFIX split) ----------
 
-// Every prefix on the `references/artifact-format.md` allow-list, with the scaffold it
-// borrows chrome from and the document label it is titled under. Before the split, the
-// label was derived from the scaffold filename, so the two columns could not disagree;
-// PACT is the first prefix where they do. Pinning the whole table means a future edit to
-// either map cannot silently re-point an established prefix.
+// Every prefix on the `references/artifact-format.md` allow-list, with the folder its
+// fixture lives in, the scaffold it borrows chrome from, and the document label it is
+// titled under. Before the SCAFFOLD/KICKER_BY_PREFIX split, the label was derived from
+// the scaffold filename, so the last two columns could not disagree; PACT is the first
+// prefix where they do. Pinning the whole table means a future edit to either map cannot
+// silently re-point an established prefix.
+//
+// The folder column is the layout, not decoration. Most rows sit in ONE run folder,
+// because that is what a run writes — every prefix of a run, flat, in the same
+// directory — and the table passing that way is the proof that the prefix alone decides
+// the scaffold. SPEC and FINAL stay in a legacy kind directory, since those seven are
+// frozen rather than gone and must keep rendering exactly as they always have.
 const PREFIX_SCAFFOLD = [
   ['SPEC', 'specs', 'spec', 'Functional Specification'],
-  ['FEAT', 'feat', 'plan', 'Execution Plan'],
-  ['FIX', 'code-review', 'plan', 'Execution Plan'],
-  ['QAF', 'qa', 'plan', 'Execution Plan'],
-  ['PACT', 'feat', 'plan', 'Interface Contract'],
-  ['TEST', 'test', 'test-report', 'Test Report'],
-  ['CR', 'code-review', 'code-review', 'Code Review'],
-  ['QA', 'qa', 'qa-report', 'QA Report'],
+  ['FEAT', RUN_FOLDER, 'plan', 'Execution Plan'],
+  ['FIX', RUN_FOLDER, 'plan', 'Execution Plan'],
+  ['QAF', RUN_FOLDER, 'plan', 'Execution Plan'],
+  ['PACT', RUN_FOLDER, 'plan', 'Interface Contract'],
+  ['TEST', RUN_FOLDER, 'test-report', 'Test Report'],
+  ['CR', RUN_FOLDER, 'code-review', 'Code Review'],
+  ['QA', RUN_FOLDER, 'qa-report', 'QA Report'],
+  ['EVAL', RUN_FOLDER, 'qa-report', 'QA Report'],
   ['FINAL', 'final', 'final-report', 'Final Report'],
 ];
 
@@ -696,21 +720,68 @@ test('MAP(a) every allow-listed prefix resolves to its documented scaffold and d
       new RegExp(`<p class="masthead__kicker"><span>${kicker}</span></p>`),
       `${prefix} must be titled "${kicker}"`,
     );
+    // …and it must get there through its OWN row, not through the qa-report fallback.
+    // No render can show that difference — a prefix falling through resolves to the same
+    // page — but a prefix without a row depends on the fallback never changing, and under
+    // the run-folder layout there is no directory left to catch it if it does.
+    assert.equal(
+      SCAFFOLD[prefix],
+      scaffold,
+      `${prefix} must be an explicit row in SCAFFOLD, not a fallback`,
+    );
   }
 });
 
-test('MAP(b) a plans/eval/ artifact and an unrecognised prefix both fall back to the qa-report scaffold', () => {
-  // `plans/eval/` has no prefix of its own — the directory overrides whatever the
-  // basename starts with, so EVAL must not be readable as a scaffold key.
-  const evalId = 'EVAL-20260101T000000Z-abcd';
-  const evalHtml = toHtml(`/repo/plans/eval/${evalId}-fixture.md`, MAP_MD(evalId));
-  assert.equal(styleOf(evalHtml), scaffoldStyle('qa-report'), 'plans/eval/ must lift the qa-report scaffold');
+test('MAP(b) plans/eval/ outranks the prefix map, an eval/ segment outside the plans tree does not, and an unknown prefix falls back to qa-report', () => {
+  // `CR` is the probe that makes the directory rule observable: the map points it at the
+  // code-review scaffold, so a CR artifact rendering as qa-report can only be the eval
+  // directory firing. An `EVAL-` basename would prove nothing here — its own row and the
+  // directory branch both resolve to qa-report, so neither could be told from the other.
+  const crId = 'CR-20260101T000000Z-abcd';
+  const evalHtml = toHtml(`/repo/plans/eval/${crId}-fixture.md`, MAP_MD(crId));
+  assert.equal(styleOf(evalHtml), scaffoldStyle('qa-report'), 'plans/eval/ must outrank the CR prefix');
+
+  const reviewHtml = toHtml(`/repo/plans/code-review/${crId}-fixture.md`, MAP_MD(crId));
+  assert.equal(
+    styleOf(reviewHtml),
+    scaffoldStyle('code-review'),
+    'the same CR artifact outside plans/eval/ must keep its mapped scaffold',
+  );
+
+  // The path reaching toHtml is absolute, so an `eval` segment can sit anywhere above the
+  // project. Only the `plans/eval/` pair is the eval directory; a checkout under some
+  // unrelated `eval/` folder used to render every mapped prefix as a QA report.
+  const nestedHtml = toHtml(`/repo/eval/checkout/plans/code-review/${crId}-fixture.md`, MAP_MD(crId));
+  assert.equal(
+    styleOf(nestedHtml),
+    scaffoldStyle('code-review'),
+    'an eval/ segment outside the plans tree must not trigger the directory rule',
+  );
 
   // An unknown prefix must degrade to the same documented fallback rather than throwing
   // on a template filename derived from the basename.
   const unknownId = 'ZZZ-20260101T000000Z-abcd';
-  const unknownHtml = toHtml(`/repo/plans/feat/${unknownId}-fixture.md`, MAP_MD(unknownId));
+  const unknownHtml = toHtml(`${RUN_DIR}/${unknownId}-fixture.md`, MAP_MD(unknownId));
   assert.equal(styleOf(unknownHtml), scaffoldStyle('qa-report'), 'an unknown prefix must fall back to qa-report');
+});
+
+test('MAP(c) an EVAL renders the qa-report scaffold from its prefix in a run folder, byte-identically to the legacy plans/eval/ one', () => {
+  // The eval is the artifact the layout moved: it used to be identifiable by the only
+  // directory that named its kind, and it now sits in `{run_dir}` beside the run's FEAT,
+  // CR and QA, where nothing about the path says "eval". Its `SCAFFOLD` row is what
+  // carries that across, and MAP(a) pins the row itself.
+  const id = 'EVAL-20260101T000000Z-abcd';
+  const inRun = toHtml(`${RUN_DIR}/${id}-fixture.md`, MAP_MD(id));
+  assert.equal(styleOf(inRun), scaffoldStyle('qa-report'), 'an EVAL in a run folder must lift the qa-report scaffold');
+  assert.match(inRun, /<p class="masthead__kicker"><span>QA Report<\/span><\/p>/);
+
+  // The legacy tree is frozen, not migrated, so the same artifact filed under
+  // `plans/eval/` must still render — and render to the same bytes. The directory
+  // contributed nothing the prefix does not now carry on its own.
+  const legacy = toHtml(`/repo/plans/eval/${id}-fixture.md`, MAP_MD(id));
+  assert.equal(styleOf(legacy), scaffoldStyle('qa-report'), 'a legacy plans/eval/ EVAL must still lift qa-report');
+  assert.equal(inRun, legacy, 'the run-folder render and the legacy one must be byte-identical');
+  assert.deepEqual(validateHtml(inRun, MAP_MD(id), false), []);
 });
 
 test('P4(j) in a multi-arg batch the first offending arg fails and later args are not rendered', () => {

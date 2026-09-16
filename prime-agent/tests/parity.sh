@@ -10,6 +10,7 @@ set -euo pipefail
 prime_dir="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 repo_root="$(CDPATH= cd -- "$prime_dir/.." && pwd)"
 builder="$repo_root/scripts/build-prime-agent.mjs"
+stamper="$repo_root/scripts/stamp-orchestrator-version.mjs"
 linter="$repo_root/scripts/lint-prime-fences.mjs"
 fixtures="$repo_root/scripts/__tests__/fixtures/prime-fences"
 
@@ -58,6 +59,10 @@ scaffold() {
   # The builder lints the tree it writes, so the throwaway repo needs the checker
   # too — and section 4h below scaffolds a defective skill to prove that gate fires.
   cp "$linter" "$root/scripts/lint-prime-fences.mjs"
+  # It also re-stamps the orchestrator over the bytes it just generated, so the
+  # digest helpers travel with it. The demo skill is not the orchestrator, so the
+  # stamp block is inert here — the import is not.
+  cp "$stamper" "$root/scripts/stamp-orchestrator-version.mjs"
   printf -- '---\nname: demo\nallowed-tools:\n  - Read\n  - Bash\n---\n\n# demo\n\nRun `git status -- \x27:(exclude).claude\x27`.\n' \
     > "$root/plugins/my-skills/skills/demo/SKILL.md"
   printf -- '## Prime Agent compatibility\n\nPort note.\n' > "$root/prime-agent/overlays/preamble.md"
@@ -264,7 +269,13 @@ tree_fences="$(printf '%s\n' "$tree_out" | sed -n 's/.* \([0-9]*\) python fences
 #     agent_message completion contract and the gather/by_name wave binding), the same
 #     pair protocol.explain-codebase.md and protocol.rlm-dispatch.md each contribute.
 #     Reviewed when context-builder shipped; see ADR-0023.
-[[ "$tree_fences" == "19" ]] || fail "linter modeled $tree_fences python fences in the emitted tree, expected 19 — fence selection changed, or a fence was added without review"
+# 19 -> 21: 6f6a004 split the bootstrap branch out of orchestrator/SKILL.md into
+#     references/bootstrap.md, and the Prime port injects that same RLM pair into the
+#     new reference — a role that reads only bootstrap.md still has to know how to
+#     dispatch. SKILL.md kept its four, so the pair is duplicated rather than moved.
+#     The counter was not bumped with it, so this assertion has been red on every
+#     checkout since; reviewed here.
+[[ "$tree_fences" == "21" ]] || fail "linter modeled $tree_fences python fences in the emitted tree, expected 21 — fence selection changed, or a fence was added without review"
 
 # 4f-bis. Cross-file section pointers resolve. Splitting SKILL.md and config.md into
 #     parallel/config-parallel references left 18 pointers naming a file that no longer

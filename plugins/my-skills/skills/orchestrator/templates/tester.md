@@ -18,6 +18,14 @@ A plan ID (e.g. `FEAT-001`). The plan must have `status: DONE` from the coder.
 2. Read `.orchestrator/artifact-format.md` — emission rules, allow-list, and ID allocation.
 3. Read `.orchestrator/PROJECT-CONTEXT.md` (Test tooling, Critical flows sections) and the plan file for `{PLAN-ID}`.
 
+**Prefer the plan path the orchestrator passes you** — it points straight into this run's folder and needs no search. Given an ID and no path, resolve it recursively, never with a shell glob and never by listing one directory: every artifact a run writes now lives flat inside that run's own folder, `plans/<YYYYMMDD>T<HHMMSS>Z-<4hex>-<slug>/`, and `-maxdepth 3` reaches both that layout and the frozen legacy `plans/<kind>/<file>` tree.
+
+```bash
+find plans -maxdepth 3 -type f -name '<PLAN-ID>-*.md' ! -name '*.progress.md' -print -quit
+```
+
+The quoted `-name` keeps the pattern away from the shell, which matters because zsh aborts the whole command on a pattern that matches nothing and bash 3.2 flattens `**` to a single `*` and never descends.
+
 ### Step 1a — `PACT` ID input (parallel mode only)
 
 **When your preamble carries an `aggregate=` line**, read that file's section for your role **in place of** the artifacts named below, after checking its stamp's `root_plan_id`, `leaves` and `tree` against your own preamble. On any mismatch, or if the file is missing or unparseable, **fall through to `leaves=` and read the originals, printing which field mismatched** — never proceed on a digest you could not verify. Record which rung you took in your report, in the shape `references/parallel.md` → 3j.4 specifies; the artifact is what a human reads three cycles later when a verdict looks wrong.
@@ -87,7 +95,7 @@ Run the coverage command from PROJECT-CONTEXT. Below threshold, add unit/integra
 
 ## Step 5 — Write the tester report
 
-Emit a `TEST-{NNN}` report per `.orchestrator/artifact-format.md`: flows selected/excluded with rationale, e2e added, coverage before/after, weak tests found. In the rendered report, fill the Related region with a relative link to the plan, per `.orchestrator/artifact-format.md` → Related navigation. Set status:
+Emit a `TEST-{NNN}` report per `.orchestrator/artifact-format.md`: flows selected/excluded with rationale, e2e added, coverage before/after, weak tests found. In the rendered report, fill the Related region with a relative link to the plan, per `.orchestrator/artifact-format.md` → Related navigation — **a bare sibling `./{PLAN-ID}-{plan-slug}.md`, because the plan you tested is in the same run folder you are writing into.** Set status:
 
 - **PASS** — e2e green and, for each stack the plan touches, every **measurable** `G1.thresholds` key is met. A key whose coverage tool emits no denominator is `UNMEASURED`, not a miss — `flutter test --coverage` writes line records and zero branch records, so `branches` is `UNMEASURED` on `dart-flutter` and can never be met from that instrument. Name every `UNMEASURED` key with its stack in the report; it does not prevent `PASS`. Only a **measured** key below its configured value produces `BELOW_FLOOR`
 - **BELOW_FLOOR** — still short after best effort. Report the measured values against the configured ones, per stack, and why the gap remains. This stays a soft status the orchestrator carries forward, not a stop — but it is now the same measurement QA hard-fails on, so it is an accurate early warning rather than a competing opinion
@@ -103,7 +111,17 @@ printf 'TEST-%s-%s\n' "$ts" "$rnd"
 
 Derive the slug from the plan title.
 
-**Always write the `.md`** at `plans/test/TEST-{NNN}-{slug}.md` (canonical, frontmatter below). Include the **Related** region in the `.md` body — a relative link to the plan, per `.orchestrator/artifact-format.md` → Related navigation. When `output_format=html`, render the paired view by running `node .orchestrator/render-artifact.cjs plans/test/TEST-{NNN}-{slug}.md` (it carries the Related links into the `.html`) — do NOT hand-write HTML.
+**Always write the `.md`** at `{run_dir}/TEST-{NNN}-{slug}.md` (canonical, frontmatter below) — flat inside the run folder your preamble names on the `run_dir=` line, beside the plan you tested. **`run_dir=` is authoritative. Where `.orchestrator/PROJECT-CONTEXT.md`'s Conventions section names a plan directory it is describing the legacy tree and never overrides your preamble.** With no `run_dir=` line — a standalone invocation — write into `dirname` of the plan path you were handed, **unless that `dirname` is one of the seven frozen kind directories** (`plans/specs`, `plans/feat`, `plans/code-review`, `plans/qa`, `plans/test`, `plans/eval`, `plans/final`), in which case mint instead: a report on a legacy plan is new work, and new work never lands in the frozen tree. With neither a `run_dir=` line nor a plan path, mint a folder scan-free the way the orchestrator does (`.orchestrator/artifact-format.md` → ID allocation), never resolve one from disk, and `rmdir "$run_dir" 2>/dev/null || true` if you abort before writing anything — a no-op the moment a file lands. The folder's slug is a human label that nothing parses, so never read the plan's identity out of it.
+
+**Sanity check — a string equality, not a pattern.** Before writing, build the path by concatenation — `{run_dir}`, then `/`, then the `TEST-{NNN}` ID you were given, then `-`, then your slug, then `.md` — and confirm the path you are about to write equals that string **character for character**:
+
+```
+{run_dir}/{the ID you were given}-{your slug}.md
+```
+
+If it differs anywhere — a `plans/test/` hop, a kind subdirectory inside the run folder, a recomputed ID — abort: the orchestrator parses the `Report:` line you print in Step 6 and cannot tell a wrong folder from a right one. An equality check is strictly stronger than the directory regex it replaces, and unlike a regex it cannot rot when the layout moves.
+
+Include the **Related** region in the `.md` body — a relative link to the plan, per `.orchestrator/artifact-format.md` → Related navigation; a same-run target is a bare sibling `./NAME.md`. When `output_format=html`, render the paired view by running `node .orchestrator/render-artifact.cjs {run_dir}/TEST-{NNN}-{slug}.md` (it carries the Related links into the `.html`) — do NOT hand-write HTML; the `.html` lands beside its `.md`.
 
 Frontmatter example (`md`):
 
@@ -137,7 +155,7 @@ Append to `.progress.md` `## Log`:
 ### {ISO 8601 datetime} | TESTER
 
 Test suite complete.
-Report: plans/test/TEST-{NNN}-{slug}.{md|html}
+Report: {run_dir}/TEST-{NNN}-{slug}.{md|html}
 Status: {PASS | BELOW_FLOOR | BLOCKED}
 Coverage: {before} → {after} (stmts/branches, changed files, vs configured G1)
 {If PASS}: All e2e flows green. Coverage floor met.
@@ -150,7 +168,7 @@ Coverage: {before} → {after} (stmts/branches, changed files, vs configured G1)
 ```
 TESTER — TEST-{NNN} created
 Status: PASS | BELOW_FLOOR | BLOCKED
-Report: plans/test/TEST-{NNN}-{slug}.{md|html}
+Report: {run_dir}/TEST-{NNN}-{slug}.{md|html}
 Coverage: {before} → {after} (stmts/branches, changed files, vs configured G1)
 Next: invoke /reviewer with plan ID {PLAN-ID}
 ```
