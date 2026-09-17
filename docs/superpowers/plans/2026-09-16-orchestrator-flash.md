@@ -1488,12 +1488,21 @@ In that repository, invoke `/orchestrator-flash` with a small idea — e.g. "a C
 
 ```bash
 test "$(find plans -mindepth 1 -maxdepth 1 -type d | wc -l)" -eq 1
-find plans -mindepth 2 -maxdepth 2 -name '*.md' | wc -l    # expect 4
+find plans -mindepth 2 -maxdepth 2 -name '*.md' | wc -l    # expect 4 + one per review cycle
 find plans -mindepth 3 | wc -l                              # expect 0 — depth is exactly 2
-node /Volumes/ssd/Developer/my-skills/plugins/my-skills/skills/orchestrator/scripts/check-artifact-home.cjs .
+
+# The home gate resolves ROOT as the parent of its own directory and its automatic scope
+# is git BRANCH scope. A flash run's artifacts are untracked, so running it unmaterialized
+# or without `--` collects zero files and exits 0 even with a violation sitting in plans/.
+S=<repo>/plugins/my-skills/skills/orchestrator/scripts
+cp "$S/check-artifact-home.cjs" "$S/gate-scope.cjs" .orchestrator/
+node .orchestrator/check-artifact-home.cjs -- $(find plans -name '*.md')
+rm -f .orchestrator/check-artifact-home.cjs .orchestrator/gate-scope.cjs
 ```
 
-Expected: one run folder; four artifacts (`SPEC`, `FEAT`, `CR`, `FINAL`); nothing at depth 3; the home gate green. The gate needs a base ref on a repository with no `main` — pass one, or read its `--allow-empty` handling, because `gate-scope.cjs:16-20` exits non-zero rather than passing when it cannot resolve one.
+Expected: one run folder; `SPEC`, `FEAT`, `FINAL` and one `CR` per review cycle; nothing at depth 3; `artifact-home: OK`.
+
+**Prove the gate is live before trusting its green.** Touch `plans/SPEC-<token>-stray.md` and re-run it against that path: it must report `file at the plans/ root`. A gate that reports OK because it scanned nothing is the same vacuous green that decided flash runs no scoped gates at all — and it will happen here, because nothing in a flash run is ever committed.
 
 Also confirm by eye: the banner carried `Status: READY_TO_COMMIT`, `Pipeline: flash`, and the full `NOT VERIFIED` list; `.orchestrator/flash/` holds six files; nothing was committed.
 
