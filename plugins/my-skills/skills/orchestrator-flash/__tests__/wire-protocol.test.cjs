@@ -38,6 +38,43 @@ test('the brainstormer batches its questions instead of one per turn', () => {
   assert.match(tpl('brainstormer'), /single message|one message|batch/i);
 });
 
+test('the interview travels on the wire, because a subagent cannot ask and wait', () => {
+  // A role file may instruct an interview all it likes; without a relay the question dies
+  // inside the spawn. This asserts both halves — the role emits the question block, and
+  // the pipeline knows what to do with it.
+  const b = tpl('brainstormer');
+  assert.match(b, /^STATUS: QUESTION$/m, 'the brainstormer has no way to return a question');
+  assert.match(b, /\(default: /, 'a question with no stated default cannot be answered with "defaults"');
+  assert.match(b, /first return is the question block, not a spec/i,
+    'nothing stops the role writing the spec on the spawn that should have asked');
+
+  const md = skill();
+  const step1 = md.slice(md.indexOf('## Step 1'), md.indexOf('## Step 2'));
+  assert.match(step1, /STATUS: QUESTION/, 'Step 1 never parses the question block');
+  assert.match(step1, /hand control back to the user/i, 'Step 1 never returns the questions to the user');
+  assert.match(step1, /Answers:/, 'Step 1 never feeds the answers back in');
+  assert.match(step1, /One round is the whole budget/, 'the interview has no bound and can become a conversation');
+  assert.match(step1, /interview: skipped/, 'a skipped interview would look like one that found nothing');
+});
+
+test('the interview is a resolved config key, not a role-level whim', () => {
+  const md = skill();
+  assert.match(md, /^\| `interview` \| `true` \|/m, 'interview is not in the configuration table');
+  // The fence is normative — it is what an executing agent copies. A fence that lists
+  // fewer values than the wire carries sends the role a value it has no branch for.
+  assert.match(md, /interview=\{on\|answered\|off\}/,
+    'the preamble fence does not declare every value the wire carries');
+  assert.match(md, /automation_level: autonomous/,
+    "a project's own automation_level is still ignored without a word");
+  assert.match(tpl('brainstormer'), /interview=off/, 'the role cannot tell an interview run from a silent one');
+  // Three values, three first moves. The answer spawn is the one that is easy to forget,
+  // and a role that falls through it asks the same questions a second time.
+  for (const v of ['interview=on', 'interview=answered', 'interview=off']) {
+    assert.ok(tpl('brainstormer').includes(v), `the role has no branch for ${v}`);
+  }
+  assert.match(skill(), /interview=answered/, 'the session never tells the answer spawn that the asking is done');
+});
+
 test('functional requirements are numbered, because two later steps count them', () => {
   assert.match(tpl('brainstormer'), /## Functional requirements/);
   assert.match(tpl('architect'), /## Functional requirements|FR #/);

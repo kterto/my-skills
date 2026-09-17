@@ -168,6 +168,8 @@
       "files": [
         "__tests__/banner.test.cjs",
         "__tests__/config-contract.test.cjs",
+        "__tests__/final-artifact.test.cjs",
+        "__tests__/fixtures/final-good.md",
         "__tests__/forbidden-tokens.test.cjs",
         "__tests__/materialized-set.test.cjs",
         "__tests__/reviewer-snapshot.test.cjs",
