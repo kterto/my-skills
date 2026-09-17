@@ -15,11 +15,27 @@ const FLASH = join(__dirname, '..');
 const KEYS = ['review', 'simplify', 'max_review_cycles', 'warn_after_minutes',
   'test_cmd', 'typecheck_cmd', 'build_cmd'];
 
+// Documented, deliberately NOT written by the template. An explicit key outranks the
+// project's `automation_level`, so a template that wrote one would make that read inert
+// in every bootstrapped project — a default behaving as a pin, which is the failure the
+// Configuration section forbids by name.
+const UNPINNED = ['interview'];
+
 const config = () => JSON.parse(readFileSync(join(FLASH, 'templates/flash-config.template.json'), 'utf8'));
 const skill = () => readFileSync(join(FLASH, 'SKILL.md'), 'utf8');
 
-test('the template holds exactly the seven documented keys', () => {
+test('the template holds exactly the seven pinnable keys', () => {
   assert.deepEqual(Object.keys(config()).sort(), [...KEYS].sort());
+});
+
+test('the eighth key is documented and deliberately absent from the template', () => {
+  const md = skill();
+  for (const k of UNPINNED) {
+    assert.ok(!(k in config()), `the template pins \`${k}\`, which outranks a project's own setting`);
+    assert.match(md, new RegExp(`^\\| \`${k}\``, 'm'), `\`${k}\` is not in the configuration table`);
+    assert.match(md, /not in the config template/i,
+      'nothing says why the key is absent, so the next edit adds it back');
+  }
 });
 
 test('the defaults are the ones the spec fixed', () => {

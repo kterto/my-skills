@@ -1085,6 +1085,8 @@ Regenerate `plans/index.html` by running `node .orchestrator/index-plans.cjs` **
 
 Then print:
 
+> **Superseded 2026-09-17.** The banner below is the shipped-then form. The current contract is `orchestrator-flash/SKILL.md` Step 5, amended by ADR-0025 — the headline is `ORCHESTRATOR — pipeline complete (flash)`, the block carries the paths and the six *Not delivered* lines, and the FINAL file opens with it. Do not re-execute this section as written.
+
 ```
 ORCHESTRATOR-FLASH — pipeline complete
 Status: READY_TO_COMMIT

@@ -146,6 +146,8 @@ This accepts a known failure class. `SKILL.md:17` records the orchestrator runni
 
 ### 7. The completion banner
 
+> **Superseded 2026-09-17.** The banner below is the shipped-then form. The current contract is `orchestrator-flash/SKILL.md` Step 5, amended by ADR-0025 — the headline is `ORCHESTRATOR — pipeline complete (flash)`, the block carries the paths and the six *Not delivered* lines, and the FINAL file opens with it. Do not re-execute this section as written.
+
 ```
 ORCHESTRATOR-FLASH — pipeline complete
 Status: READY_TO_COMMIT
