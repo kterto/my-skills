@@ -164,6 +164,26 @@
       ]
     },
     {
+      "name": "orchestrator-flash",
+      "files": [
+        "__tests__/banner.test.cjs",
+        "__tests__/config-contract.test.cjs",
+        "__tests__/forbidden-tokens.test.cjs",
+        "__tests__/materialized-set.test.cjs",
+        "__tests__/reviewer-snapshot.test.cjs",
+        "__tests__/run-folder.test.cjs",
+        "__tests__/wire-protocol.test.cjs",
+        "MATERIALIZED-VERSION",
+        "SKILL.md",
+        "templates/architect.md",
+        "templates/artifact-format-flash.md",
+        "templates/brainstormer.md",
+        "templates/coder.md",
+        "templates/flash-config.template.json",
+        "templates/reviewer.md"
+      ]
+    },
+    {
       "name": "pr-review-report",
       "files": [
         "__tests__/backlog-owner-gate.test.sh",
