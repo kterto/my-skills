@@ -102,3 +102,97 @@ mkdir -p "$run_dir"
 7. **Resolve `role_agent_type`** once, as described above.
 
 **Elapsed at every boundary.** After each step, print `Elapsed: {m}m`. Past `warn_after_minutes`, add `— over the {n}m mark`. The clock is advisory: it never stops the run, and no stop condition anywhere reads it.
+
+## Step 1 — Brainstormer
+
+Mint `SPEC` with `newid SPEC`. Spawn the brainstormer with the preamble, the user's raw invocation text, and `Artifact kind: spec`.
+
+Parse from its output: `Spec: {path}` and `Status:`. A flash spec is always `ACTIVE`; there is no draft branch, because the brainstormer cannot produce one.
+
+If the file at `Spec:` does not exist, re-invoke once naming the exact path. If it still does not exist, print the halt banner and stop.
+
+## Step 2 — Architect
+
+Mint `FEAT` with `newid FEAT`. Spawn the architect with the preamble and:
+
+```
+Source spec: {spec path}
+```
+
+Parse from its output: `ARCHITECT — {ID} created` and the plan path it names. Verify the plan exists and holds a `## Requirement coverage` table; re-invoke once if not, then stop.
+
+## Step 3 — Coder
+
+Spawn the coder with the preamble — the one spawn that carries no `ID to use:` line, because the coder creates no artifact — plus the plan's path and `MAESTRO_REVIEW_BASE={base_sha}`.
+
+Parse `Status: DONE|BLOCKED`. On `BLOCKED`, print the halt banner with the coder's reason and stop.
+
+When `simplify` is on, run the `simplify` skill over the changed scope after the coder returns and before Step 3b. When it is off, print `simplify: skipped (config)` — a step that did not run must never look like one that ran and found nothing.
+
+## Step 3b — Typecheck and build
+
+Run the resolved `typecheck_cmd` and `build_cmd`, detecting them from the project when the config leaves them `null`. Print both results. **Both are advisory and neither blocks the run.**
+
+Flash runs no clean-code gates at all. Because nothing here is ever committed, a gate scoped to a commit range resolves to zero files and reports green with no gate having run — and a vacuous green is worse than no gate, especially for an audience that will believe it.
+
+## Step 4 — Reviewer
+
+Skip this step entirely when `review` is off, and print `review: skipped (config)`.
+
+Otherwise mint `CR` with `newid CR` and spawn the reviewer with the preamble, the plan's path and `MAESTRO_REVIEW_BASE={base_sha}`.
+
+Read the CR's frontmatter `status`:
+
+- `APPROVED` → go to Step 5.
+- `REQUEST_CHANGES` with cycles remaining → hand the **CR itself** to the coder, along with the plan's path so the original acceptance criteria stay in scope. Do not route it through the architect as a fix plan: a fix plan carries no requirement coverage, and reviewing against it alone silently drops everything the first cycle checked. Then mint a fresh `CR` and review again.
+- `REQUEST_CHANGES` with no cycles remaining, or `max_review_cycles` of `0` → go to Step 5 and record the open findings in the banner.
+
+Count cycles against `max_review_cycles`. Nothing else clamps it.
+
+## Step 5 — Final
+
+Mint `FINAL` with `newid FINAL` and write the report yourself into the run folder: what was built, the acceptance criteria it covers, the review outcome, and every open Must Fix.
+
+Regenerate `plans/index.html` by running `node .orchestrator/index-plans.cjs` **only if that script already exists** in the project. When it does not, add `Index: not indexed (no index-plans.cjs in this project)` to the banner rather than leaving the omission silent.
+
+Then print:
+
+```
+ORCHESTRATOR-FLASH — pipeline complete
+Status: READY_TO_COMMIT
+Pipeline: flash (reduced verification — see below)
+
+Spec:        {spec path}
+Plan:        {plan path}
+Built:       {one line per acceptance criterion delivered}
+Verified:    coder TDD tests (changed scope) · typecheck · build (advisory)
+NOT VERIFIED: e2e · coverage floor (G1 — asserted by nobody) · mutation (G6)
+              · spec grading · QA regression · full test suite
+Elapsed:     {m}m   Review cycles: {n}/{budget}
+Commit:      {proposed commit message}
+```
+
+Every halt instead prints:
+
+```
+ORCHESTRATOR-FLASH — halted
+Status: STALLED
+Reason: {one line}
+```
+
+`READY_TO_COMMIT` and `STALLED` are the strings `product-manager` matches, and they are carried verbatim so a wrapper can drive flash unchanged.
+
+Flash never commits and never pushes.
+
+## What flash does not verify
+
+Read this before trusting a green run.
+
+- **Coverage (G1) is asserted by nobody.** Flash has no tester and no QA role.
+- **No e2e, no mutation testing, no spec grading, no QA regression pass.**
+- **No full test suite runs anywhere** — only the coder's changed-scope tests.
+- **The spec is mutable.** Nothing records that the idea shifted mid-run.
+- **Nothing hard-bounds the run.** The clock is advisory; review cycles are finite; the interview is not.
+- **`READY_TO_COMMIT` here means less than it does from the orchestrator.** That is what the `Pipeline: flash` line and the `NOT VERIFIED` list exist to say.
+
+When the idea survives, hand the spec to `/orchestrator` and let the full pipeline claim what flash could not.
