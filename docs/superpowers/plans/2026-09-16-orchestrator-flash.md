@@ -1126,7 +1126,7 @@ When the idea survives, hand the spec to `/orchestrator` and let the full pipeli
 
 - [ ] **Step 4: Run the full suite to verify it passes**
 
-Run: `node --test plugins/my-skills/skills/orchestrator-flash/__tests__/`
+Run: `node --test 'plugins/my-skills/skills/orchestrator-flash/__tests__/*.test.cjs'`
 Expected: PASS — all five test files, 44 tests.
 
 - [ ] **Step 5: Commit**
@@ -1339,7 +1339,7 @@ checkGenerated(
 
 ```bash
 node scripts/stamp-flash-version.mjs
-node --test plugins/my-skills/skills/orchestrator-flash/__tests__/
+node --test 'plugins/my-skills/skills/orchestrator-flash/__tests__/*.test.cjs'
 node scripts/check-host-parity.mjs
 ```
 
@@ -1441,7 +1441,7 @@ node scripts/build-prime-agent.mjs --check
 node scripts/check-host-parity.mjs
 bash prime-agent/tests/install.sh
 bash prime-agent/tests/parity.sh
-node --test plugins/my-skills/skills/orchestrator-flash/__tests__/
+node --test 'plugins/my-skills/skills/orchestrator-flash/__tests__/*.test.cjs'
 ```
 
 Expected: all exit 0. `parity.sh` reporting a fence count other than `23` means the overlay inserted a different block than planned — reconcile the pin against reality, with a comment, rather than forcing it.
@@ -1513,5 +1513,5 @@ git commit -m "docs(adr): record why flash emits the orchestrator's green"
 ## Notes for the executor
 
 - **Do not edit `plugins/my-skills/skills/orchestrator/templates/*.md`.** Moving those files moves `MATERIALIZED-VERSION`, which re-triggers bootstrap in every consumer project of the real orchestrator and reddens `check-host-parity.mjs`. Flash has its own templates for exactly this reason.
-- **`node --test` runs from the repo root**, and the test files resolve the repo root as five directories above `__tests__`. Moving the skill breaks that path.
+- **`node --test` runs from the repo root, and takes a quoted glob, not a directory** — Node 22 resolves a bare directory path as a module and dies with MODULE_NOT_FOUND. , and the test files resolve the repo root as five directories above `__tests__`. Moving the skill breaks that path.
 - **If a contract test fails after an intentional change, change the test with the reason in the message** — these tests encode decisions from the spec, so a silent edit erases the decision.

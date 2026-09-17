@@ -30,3 +30,75 @@ Every key is absent-tolerant: a missing key takes the default above, and a missi
 CLI flags override the file for one run: `--no-review`, `--simplify`, `--max-review N`, `--setup`.
 
 **A default in this table is a default, never a pin.** The template must not write a value that a flag is meant to move — that is precisely how the orchestrator's `sketch` tier became unreachable.
+
+## How to spawn a role
+
+Every role runs as a real subagent of the host's **generic** agent type, resolved once per run and bound to `role_agent_type`. Try in order and use the first that exists: `general-purpose` (Claude Code), `general` (opencode). Flash deliberately does not register agent types of its own — `scripts/sync-agents.sh` manages a closed six-name list in the host agent directories and its `--prune` deletes any other file there, so a flash role dropped beside them is destructible by routine maintenance.
+
+```
+Agent({
+  description: "<3-5 word task summary>",
+  subagent_type: role_agent_type,
+  prompt: "<the preamble below, then the step's brief>"
+})
+```
+
+The prompt's first instruction is always: **read `.orchestrator/flash/{role}.md` and follow it.** The subagent does not see this conversation, so the brief must be self-contained — carry the user's raw input, the artifact path or ID, and any decision already locked.
+
+### The preamble, on every spawn
+
+```
+FLASH CONTEXT (authoritative — do not recompute):
+Role file: .orchestrator/flash/{role}.md          ← read this first
+Artifact rules: .orchestrator/flash/artifact-format-flash.md
+run_dir={run_dir}                                  ← write every artifact directly in this folder
+ID to use: {PREFIX}-{ID-TOKEN}                     ← producing roles; omit for the coder
+MAESTRO_REVIEW_BASE={base_sha}                     ← roles that scope a diff
+```
+
+`run_dir=` is unconditional and goes to every role on every spawn. The coder creates no new artifact, so it is the one role whose preamble carries no `ID to use:` line.
+
+Never emit the parallel-path preamble keys — `lane`, `contract`, `leaves`, `aggregate`, `tree`, `delta` — in any form. Flash has no path on which they mean anything, and a role that sees one switches into a mode this pipeline does not implement. Their absence is the signal, so a blank one is worse than none.
+
+Where a step hands a role an artifact by ID, it also hands it the path. **Never add a `Plan:` line to an architect prompt** — the architect's own output `Plan:` line is what Step 2 extracts, so the architect is handed `Source spec:` instead.
+
+## Step 0 — Pre-flight
+
+1. **Parse arguments.** `--no-review`, `--simplify`, `--max-review N`, `--setup`. Everything else is the invocation text.
+2. **Resolve config.** CLI flag > `.orchestrator/flash-config.json` > the default in the Configuration table. Read the file from the working tree; do not anchor it to a merge base.
+3. **Bootstrap if needed** — see *Bootstrap*. `--setup` forces it.
+4. **Guard the workspace.**
+
+```bash
+branch=$(git rev-parse --abbrev-ref HEAD)
+case "$branch" in
+  main|master|develop|dev|release/*) protected=1 ;;
+  *) protected=0 ;;
+esac
+dirty=$(git status --porcelain | head -1)
+```
+
+   - Clean tree, protected branch → cut and switch to `flash/<slug>` without asking.
+   - Clean tree, working branch → stay on it without asking.
+   - Dirty tree → ask **one** question, proceed-or-cancel. On cancel, print the `STALLED` banner and stop. This stop is **pre-mint**: `$run_dir` is not bound yet, so never clean up a path that does not exist.
+
+5. **Record the base and start the clock.**
+
+```bash
+base_sha=$(git rev-parse HEAD)
+run_started_at=$(date -u +%s)
+```
+
+   `base_sha` ships to the coder and the reviewer as `MAESTRO_REVIEW_BASE`. Without it the reviewer falls back to `git merge-base`, which is not the base the rest of the run measured against. `run_started_at` lives only in this context — flash keeps no ledger and has no resume.
+
+6. **Mint the run folder**, using the recipe in `.orchestrator/flash/artifact-format-flash.md` verbatim:
+
+```bash
+invocation_text="{the first five words of the user's brief}"
+run_dir=$(newrun "$(slugify "$invocation_text")")
+mkdir -p "$run_dir"
+```
+
+7. **Resolve `role_agent_type`** once, as described above.
+
+**Elapsed at every boundary.** After each step, print `Elapsed: {m}m`. Past `warn_after_minutes`, add `— over the {n}m mark`. The clock is advisory: it never stops the run, and no stop condition anywhere reads it.
