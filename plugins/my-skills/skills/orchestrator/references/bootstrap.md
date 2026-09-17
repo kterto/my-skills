@@ -101,6 +101,7 @@ Check for a resolvable **`simplify`** skill the same way, and record its availab
    !*/
    !.gitignore
    !config.json
+   !flash-config.json
    !PROJECT-CONTEXT.md
    !eval-baselines/**
    # --- END orchestrator-managed ---
@@ -110,6 +111,10 @@ Check for a resolvable **`simplify`** skill the same way, and record its availab
    `*` ignores every file; `!*/` lets git descend into subdirectories so the exceptions below can re-include paths inside them (without it, an excluded parent directory makes re-inclusion impossible). **Rewrite only the region between the markers**, preserving anything the project added underneath — the same "the project's choice wins" shape step 4 uses for `config.json` keys. If the markers are absent and the file exists, prepend the managed block rather than overwriting.
 
    **What is tracked, and why only these.** `config.json` must be tracked: Step 0b reads the three execution-policy keys and the six instrument keys (`references/config.md` → *The anchored set*) from the **merge-base** copy (`$mb:.orchestrator/config.json`), so an untracked file makes all nine unreachable and they fail closed to defaults forever — which silently returns every cycle cap and gate bound to a value the branch cannot be held to. `PROJECT-CONTEXT.md` is hand-curated shared project knowledge that a teammate's fresh clone must already have. Everything else is either **per-run state** (`run-manifest.json`, `verification-ledger.json`, `tmp/`) — branch-scoped, rewritten whole each run, and therefore unmergeable — or a **copy of the installed skill** (`artifact-format.md` and its `-html` / `-parallel` companions, `config.md`, `gate-config.md`, `lane-protocol.md`, `html-templates/`, the six `.cjs`, the rendered role files), which Lifecycle item 2 re-materializes the moment it goes missing. Tracking the copies lands a four-figure diff in a product PR on every skill upgrade; ignoring them costs nothing, because a fresh clone missing them simply triggers bootstrap.
+
+   **`flash-config.json` is tracked for the same reason `config.json` is, minus one.** It is hand-authored project policy — whether `orchestrator-flash` reviews at all, how many rework cycles it allows, whether it interviews — and a teammate's fresh clone has to inherit it or the project silently reverts to defaults on their machine. The `config.json` merge-base argument does **not** apply: flash reads its config from the working tree on purpose and anchors nothing. The inheritance argument alone is enough. Note especially that flash's config template deliberately does **not** write the `interview` key, so a project that pins it did so by hand — the exact class of decision an untracked file loses.
+
+   **`flash/` stays ignored**, and that is not an oversight: everything in it is a copy of the installed skill, re-materialized the moment its stamp goes stale, so it is the same case as `artifact-format.md` and the six `.cjs` — and flash's stamp moves more often than the orchestrator's, because its whole role set is six small files that change together.
 
    **This file is additive, never destructive.** `.gitignore` has no effect on paths git already tracks, so writing it into a project that currently commits its run state changes nothing on its own. Say so in the summary and print the one-line remedy rather than running it — the orchestrator never mutates the index:
 
