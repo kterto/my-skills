@@ -20,6 +20,8 @@ flagged: acceptance
 
 ### Post-run scan (after the orchestrator completes)
 
+**When there is no QA report, the result is `unknown`, never `none`.** A reduced pipeline such as `orchestrator-flash` runs no QA role and says so on its banner (`QA report: none — flash runs no QA`); a scan with no source to read has found nothing because it looked at nothing, and recording that as `none` turns an unexamined run into a clean one in the PR a human reads.
+
 After the orchestrator finishes and produces its QA report, PM scans that report for sections or flags indicating that human verification is required (e.g. a QA note labeled "manual verification needed", a checklist item marked untestable by automation, or any marker from the list below). If one or more such indicators are found and the story was not already `flagged: acceptance`, the detection result is:
 
 ```
@@ -33,6 +35,30 @@ If neither scan finds a marker, the detection result is:
 ```
 none
 ```
+
+### Reviewer Must Fix (flash)
+
+A flash run that returns `Status: READY_WITH_WARNINGS` ended with the reviewer's **open Must
+Fix** and an exhausted review budget (`orchestrator-flash/SKILL.md` → Step 5). That is a
+human-validation spot by the same logic as every other one here — a human has to look before
+this is done — and it is detected from the banner rather than from a scan:
+
+```
+flagged: reviewer-must-fix
+```
+
+Carry the banner's `Issues found:` Must Fix lines into the story's PR body beside the flag. It
+then follows the ordinary flagged flow: conservative mode halts the queue after the story,
+autonomous mode records the spot and continues, and either way PM still commits, syncs, pushes
+and opens the PR, per the invariant below.
+
+**`none` requires that both scans actually ran.** When the post-run scan had no report to open — a pipeline that produces none, such as `orchestrator-flash` — the result is:
+
+```
+unknown — no QA report produced
+```
+
+`unknown` is treated as `none` for flow purposes: it never halts a run on its own, exactly as the invariant below describes. It differs in the record: the PR body and the log row say the scan could not run, so a story nobody could check is not filed beside the stories that were checked and came back clean.
 
 ---
 
