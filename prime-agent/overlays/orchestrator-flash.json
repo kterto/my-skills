@@ -1,0 +1,21 @@
+{
+  "skill": "orchestrator-flash",
+  "insertAfterFrontmatter": [
+    "preamble.md",
+    "protocol.orchestrator.md"
+  ],
+  "replacements": [
+    {
+      "find": "> **Important — skill execution context:** this skill runs in the caller's session (typically the main conversation), not as an isolated subagent. You MUST use the host's subagent tool (`Agent` in Claude Code, `task` in opencode) to spawn each role as a real subagent. Do not write specs, plans, or code yourself — each artifact is produced inside its dedicated subagent context.",
+      "replace": "> **Important — skill execution context:** this skill runs in the caller's session (typically the main conversation), not as an isolated child. You MUST admit each role as a real RLM child with `rlm()`, per the Prime Agent orchestration protocol above, building its prompt from `.orchestrator/flash/{role}.md` (roles: `brainstormer`, `architect`, `coder`, `reviewer`). Do not write specs, plans, or code yourself — each artifact is produced inside its dedicated child context.",
+      "count": 1,
+      "why": "the pipeline preamble named the Claude/opencode subagent tools as the dispatch mechanism."
+    },
+    {
+      "find": "```\nAgent({\n  description: \"<3-5 word task summary>\",\n  subagent_type: role_agent_type,\n  prompt: \"<the preamble below, then the step's brief>\"\n})\n```",
+      "replace": "```python\nhandle = await rlm(prompt, name=\"brainstormer\")  # or architect | coder | reviewer\n```\n\n`rlm()` returns only an admission handle, never the child's result. Wait for each child's `agent_message` completion contract, validate the artifact it names, and only then join. `name` is the stable role name this skill uses throughout — it is what a retry addresses with `receiver_name=handle.name`.",
+      "count": 1,
+      "why": "the canonical call shape every dispatch step points at was Claude/opencode-only."
+    }
+  ]
+}
