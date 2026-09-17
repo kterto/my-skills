@@ -1,0 +1,9 @@
+{
+  "review": true,
+  "simplify": false,
+  "max_review_cycles": 1,
+  "warn_after_minutes": 90,
+  "test_cmd": null,
+  "typecheck_cmd": null,
+  "build_cmd": null
+}

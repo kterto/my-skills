@@ -275,7 +275,12 @@ tree_fences="$(printf '%s\n' "$tree_out" | sed -n 's/.* \([0-9]*\) python fences
 #     dispatch. SKILL.md kept its four, so the pair is duplicated rather than moved.
 #     The counter was not bumped with it, so this assertion has been red on every
 #     checkout since; reviewed here.
-[[ "$tree_fences" == "21" ]] || fail "linter modeled $tree_fences python fences in the emitted tree, expected 21 — fence selection changed, or a fence was added without review"
+# 21 -> 24: orchestrator-flash ships. Its overlay inserts protocol.orchestrator.md
+#     after the frontmatter — the same RLM dispatch pair the orchestrator carries,
+#     reused rather than copied, since flash dispatches children the same way — and
+#     its own spawn-shape replacement emits a third fence where the shared skill
+#     shows an Agent({...}) call. So +3, not +2: the protocol pair plus the call site.
+[[ "$tree_fences" == "24" ]] || fail "linter modeled $tree_fences python fences in the emitted tree, expected 24 — fence selection changed, or a fence was added without review"
 
 # 4f-bis. Cross-file section pointers resolve. Splitting SKILL.md and config.md into
 #     parallel/config-parallel references left 18 pointers naming a file that no longer

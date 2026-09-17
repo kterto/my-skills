@@ -1126,7 +1126,7 @@ When the idea survives, hand the spec to `/orchestrator` and let the full pipeli
 
 - [ ] **Step 4: Run the full suite to verify it passes**
 
-Run: `node --test plugins/my-skills/skills/orchestrator-flash/__tests__/`
+Run: `node --test 'plugins/my-skills/skills/orchestrator-flash/__tests__/*.test.cjs'`
 Expected: PASS — all five test files, 44 tests.
 
 - [ ] **Step 5: Commit**
@@ -1339,7 +1339,7 @@ checkGenerated(
 
 ```bash
 node scripts/stamp-flash-version.mjs
-node --test plugins/my-skills/skills/orchestrator-flash/__tests__/
+node --test 'plugins/my-skills/skills/orchestrator-flash/__tests__/*.test.cjs'
 node scripts/check-host-parity.mjs
 ```
 
@@ -1441,7 +1441,7 @@ node scripts/build-prime-agent.mjs --check
 node scripts/check-host-parity.mjs
 bash prime-agent/tests/install.sh
 bash prime-agent/tests/parity.sh
-node --test plugins/my-skills/skills/orchestrator-flash/__tests__/
+node --test 'plugins/my-skills/skills/orchestrator-flash/__tests__/*.test.cjs'
 ```
 
 Expected: all exit 0. `parity.sh` reporting a fence count other than `23` means the overlay inserted a different block than planned — reconcile the pin against reality, with a comment, rather than forcing it.
@@ -1488,12 +1488,21 @@ In that repository, invoke `/orchestrator-flash` with a small idea — e.g. "a C
 
 ```bash
 test "$(find plans -mindepth 1 -maxdepth 1 -type d | wc -l)" -eq 1
-find plans -mindepth 2 -maxdepth 2 -name '*.md' | wc -l    # expect 4
+find plans -mindepth 2 -maxdepth 2 -name '*.md' | wc -l    # expect 4 + one per review cycle
 find plans -mindepth 3 | wc -l                              # expect 0 — depth is exactly 2
-node /Volumes/ssd/Developer/my-skills/plugins/my-skills/skills/orchestrator/scripts/check-artifact-home.cjs .
+
+# The home gate resolves ROOT as the parent of its own directory and its automatic scope
+# is git BRANCH scope. A flash run's artifacts are untracked, so running it unmaterialized
+# or without `--` collects zero files and exits 0 even with a violation sitting in plans/.
+S=<repo>/plugins/my-skills/skills/orchestrator/scripts
+cp "$S/check-artifact-home.cjs" "$S/gate-scope.cjs" .orchestrator/
+node .orchestrator/check-artifact-home.cjs -- $(find plans -name '*.md')
+rm -f .orchestrator/check-artifact-home.cjs .orchestrator/gate-scope.cjs
 ```
 
-Expected: one run folder; four artifacts (`SPEC`, `FEAT`, `CR`, `FINAL`); nothing at depth 3; the home gate green. The gate needs a base ref on a repository with no `main` — pass one, or read its `--allow-empty` handling, because `gate-scope.cjs:16-20` exits non-zero rather than passing when it cannot resolve one.
+Expected: one run folder; `SPEC`, `FEAT`, `FINAL` and one `CR` per review cycle; nothing at depth 3; `artifact-home: OK`.
+
+**Prove the gate is live before trusting its green.** Touch `plans/SPEC-<token>-stray.md` and re-run it against that path: it must report `file at the plans/ root`. A gate that reports OK because it scanned nothing is the same vacuous green that decided flash runs no scoped gates at all — and it will happen here, because nothing in a flash run is ever committed.
 
 Also confirm by eye: the banner carried `Status: READY_TO_COMMIT`, `Pipeline: flash`, and the full `NOT VERIFIED` list; `.orchestrator/flash/` holds six files; nothing was committed.
 
@@ -1513,5 +1522,5 @@ git commit -m "docs(adr): record why flash emits the orchestrator's green"
 ## Notes for the executor
 
 - **Do not edit `plugins/my-skills/skills/orchestrator/templates/*.md`.** Moving those files moves `MATERIALIZED-VERSION`, which re-triggers bootstrap in every consumer project of the real orchestrator and reddens `check-host-parity.mjs`. Flash has its own templates for exactly this reason.
-- **`node --test` runs from the repo root**, and the test files resolve the repo root as five directories above `__tests__`. Moving the skill breaks that path.
+- **`node --test` runs from the repo root, and takes a quoted glob, not a directory** — Node 22 resolves a bare directory path as a module and dies with MODULE_NOT_FOUND. , and the test files resolve the repo root as five directories above `__tests__`. Moving the skill breaks that path.
 - **If a contract test fails after an intentional change, change the test with the reason in the message** — these tests encode decisions from the spec, so a silent edit erases the decision.
