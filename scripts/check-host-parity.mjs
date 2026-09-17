@@ -172,6 +172,13 @@ checkGenerated(
   "orchestrator MATERIALIZED-VERSION is stale — it names a digest of files that have since changed, so every project that compares against it reads \"in sync\" while running old copies.",
 )
 
+// ---- 4b. orchestrator-flash materialized-version stamp --------------------
+checkGenerated(
+  "stamp-flash-version.mjs",
+  "orchestrator-flash MATERIALIZED-VERSION: current",
+  "orchestrator-flash MATERIALIZED-VERSION is stale — a project's copy of the flash roles would compare equal to a tree it never received.",
+)
+
 // ---- 5. opencode hosted-install file manifest ------------------------------
 checkGenerated(
   "generate-opencode-skill-index.mjs",

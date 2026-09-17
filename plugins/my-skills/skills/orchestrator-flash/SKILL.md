@@ -196,3 +196,24 @@ Read this before trusting a green run.
 - **`READY_TO_COMMIT` here means less than it does from the orchestrator.** That is what the `Pipeline: flash` line and the `NOT VERIFIED` list exist to say.
 
 When the idea survives, hand the spec to `/orchestrator` and let the full pipeline claim what flash could not.
+
+## Bootstrap
+
+Flash materializes six files into the project, because a subagent reads the repo, not this skill's own directory.
+
+| Source | Destination |
+|---|---|
+| `templates/artifact-format-flash.md` | `.orchestrator/flash/artifact-format-flash.md` |
+| `templates/brainstormer.md` | `.orchestrator/flash/brainstormer.md` |
+| `templates/architect.md` | `.orchestrator/flash/architect.md` |
+| `templates/coder.md` | `.orchestrator/flash/coder.md` |
+| `templates/reviewer.md` | `.orchestrator/flash/reviewer.md` |
+| `templates/flash-config.template.json` | `.orchestrator/flash-config.json` — only when absent; never overwrite a user's config |
+
+Alongside them, copy this skill's `MATERIALIZED-VERSION` to `.orchestrator/flash/.materialized-version`.
+
+**Re-bootstrap when either is true:** any destination above is missing, or `.orchestrator/flash/.materialized-version` differs from the skill's `MATERIALIZED-VERSION`. The second test is the one that matters — a missing-file check cannot see a file that is present and two releases old, which is how the orchestrator shipped five commits with stale roles while nothing anywhere reported it.
+
+Never write flash role files into `.claude/agents`, `.agents/agents`, `.opencode/agent` or `.orchestrator/roles`. `scripts/sync-agents.sh` manages a closed six-name list in those directories and its `--prune` deletes everything else it finds there.
+
+Adding or removing a materialized file means editing this table, `FLASH_FILES` in `scripts/stamp-flash-version.mjs`, and re-running the stamp — together, or the skill re-bootstraps on every run.
