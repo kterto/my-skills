@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "files": {
+    "clean-code-gates/SKILL.md": {
+      "maxBytes": 18000,
+      "adr": "docs/adr/0026-skill-byte-budgets-and-the-admission-rule.md"
+    },
+    "commit-pr/SKILL.md": {
+      "maxBytes": 8035,
+      "adr": "docs/adr/0026-skill-byte-budgets-and-the-admission-rule.md"
+    },
+    "context-builder/SKILL.md": {
+      "maxBytes": 12682,
+      "adr": "docs/adr/0026-skill-byte-budgets-and-the-admission-rule.md"
+    },
+    "design-to-code/SKILL.md": {
+      "maxBytes": 3711,
+      "adr": "docs/adr/0026-skill-byte-budgets-and-the-admission-rule.md"
+    },
+    "explain-codebase/SKILL.md": {
+      "maxBytes": 41571,
+      "adr": "docs/adr/0026-skill-byte-budgets-and-the-admission-rule.md"
+    },
+    "orchestrator-flash/SKILL.md": {
+      "maxBytes": 30240,
+      "adr": "docs/adr/0026-skill-byte-budgets-and-the-admission-rule.md"
+    },
+    "orchestrator/SKILL.md": {
+      "maxBytes": 179160,
+      "adr": "docs/adr/0026-skill-byte-budgets-and-the-admission-rule.md"
+    },
+    "pr-review-report/SKILL.md": {
+      "maxBytes": 44127,
+      "adr": "docs/adr/0026-skill-byte-budgets-and-the-admission-rule.md"
+    },
+    "product-manager/SKILL.md": {
+      "maxBytes": 52015,
+      "adr": "docs/adr/0026-skill-byte-budgets-and-the-admission-rule.md"
+    },
+    "roadmap/SKILL.md": {
+      "maxBytes": 35148,
+      "adr": "docs/adr/0026-skill-byte-budgets-and-the-admission-rule.md"
+    },
+    "simplify/SKILL.md": {
+      "maxBytes": 11760,
+      "adr": "docs/adr/0026-skill-byte-budgets-and-the-admission-rule.md"
+    },
+    "spec-driven-eval/SKILL.md": {
+      "maxBytes": 39794,
+      "adr": "docs/adr/0026-skill-byte-budgets-and-the-admission-rule.md"
+    },
+    "validation-fixer/SKILL.md": {
+      "maxBytes": 93904,
+      "adr": "docs/adr/0026-skill-byte-budgets-and-the-admission-rule.md"
+    }
+  }
+}

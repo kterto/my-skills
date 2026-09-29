@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // check-host-parity.mjs — verify the three supported hosts ship the same skills.
 //
-//   node scripts/check-host-parity.mjs      # exit 1 on any drift
+//   node scripts/check-host-parity.mjs                  # exit 1 on any drift
+//   node scripts/check-host-parity.mjs --accept-moved   # the same, landing a reviewed skill-budget raise
 //
 // The repo supports Claude Code, opencode and Prime Agent. Each reaches a skill
 // by a different route, and only one of those routes had a guard:
@@ -21,7 +22,7 @@
 // It is why the eval profile had to be applied to two copies by hand, and why
 // forgetting the second one would have shipped a half-applied change.
 //
-// Three further checks ride along here rather than in commands of their own,
+// Four further checks ride along here rather than in commands of their own,
 // because this is the one thing a human runs before shipping and each of them
 // guards a file nothing else in the repo opens:
 //
@@ -47,6 +48,12 @@
 //   the copies in this repo and cannot see any other project's. Closing that wider
 //   gap is exactly what the version stamp exists for — the stamp travels into
 //   every project alongside the files it describes, this check travels nowhere.
+//
+//   The skill byte budgets — `check-skill-budgets.mjs`. A SKILL.md is read whole
+//   into every session that invokes it, and plugins/my-skills/skills/budgets.json
+//   holds each one to the ceiling an ADR set (ADR-0026). A branch that raises its
+//   own ceiling fails with BUDGET MOVED until a human passes --accept-moved. This
+//   script forwards that flag, so a reviewed raise lands from the same command.
 import { readdirSync, readFileSync, existsSync } from "node:fs"
 import { join, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -66,15 +73,15 @@ const PORTS = {
   "pr-review-report": "divergent",
 }
 
-// The six role files scripts/sync-agents.sh manages, and the four directories it
+// The six role files scripts/sync-agents.sh manages, and the five directories it
 // copies them into — one per host route: Claude Code reads .claude/agents (or
-// .agents/agents), opencode reads .opencode/agent, and the Prime port inlines
-// .orchestrator/roles into every child prompt. Kept in step with that script's
-// CANDIDATE_DIRS: a role added to the templates and not to both lists ships an
-// agent nothing ever refreshes. Only the BODY is compared, so the opencode
+// .agents/agents), opencode reads .opencode/agent (or .opencode/agents), and the
+// Prime port inlines .orchestrator/roles into every child prompt. Kept in step with
+// that script's CANDIDATE_DIRS: a role added to the templates and not to both lists
+// ships an agent nothing ever refreshes. Only the BODY is compared, so the opencode
 // frontmatter transform is not read as drift.
 const AGENT_ROLES = ["brainstormer", "architect", "coder", "tester", "reviewer", "qa"]
-const AGENT_DIRS = [".claude/agents", ".agents/agents", ".opencode/agent", ".orchestrator/roles"]
+const AGENT_DIRS = [".claude/agents", ".agents/agents", ".opencode/agent", ".opencode/agents", ".orchestrator/roles"]
 
 const body = (p) => {
   const lines = readFileSync(p, "utf8").split("\n")
@@ -211,9 +218,22 @@ for (const dir of presentAgentDirs) {
   problems.push(`${dir} has drifted from plugins/my-skills/skills/orchestrator/templates/.\n${details.map((l) => `    ${l}`).join("\n")}\n    Run: bash scripts/sync-agents.sh`)
 }
 
+// ---- 7. skill byte budgets ------------------------------------------------
+// Not a generator, so there is no --check and nothing to re-run: its own lines
+// say which file is over and by how much. A pass is forwarded too, because an
+// accepted BUDGET MOVED is the one line a reviewer must see in this run.
+const acceptMoved = process.argv.includes("--accept-moved") ? ["--accept-moved"] : []
+try {
+  const out = execFileSync("node", [join(repoRoot, "scripts", "check-skill-budgets.mjs"), ...acceptMoved], { cwd: repoRoot, stdio: "pipe", encoding: "utf8" })
+  for (const line of out.trim().split("\n")) if (line) notes.push(line)
+} catch (e) {
+  const out = `${e.stdout ?? ""}${e.stderr ?? ""}`.trim()
+  problems.push(`a skill is over its byte budget, or a budget is missing, malformed or raised (ADR-0026).\n${out.split("\n").map((l) => `    ${l}`).join("\n")}`)
+}
+
 for (const n of notes) console.log(`ok   ${n}`)
 if (problems.length === 0) {
-  console.log(`\nparity ok — every declared mirror matches its shared copy, prime-agent, the opencode index and the orchestrator stamp are current, and this checkout's agent copies match their templates`)
+  console.log(`\nparity ok — every declared mirror matches its shared copy, prime-agent, the opencode index and the orchestrator stamp are current, this checkout's agent copies match their templates, and every skill is within its byte budget`)
   process.exit(0)
 }
 console.error(`\n${problems.length} parity problem(s):`)
