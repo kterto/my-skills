@@ -73,3 +73,20 @@ test('the coder flips status twice and keeps no other bookkeeping', () => {
   assert.ok(!/append[^.]*progress|progress log|progress sidecar file/i.test(c),
     'the coder still writes a progress log');
 });
+
+test('the first flip names its value, and the plan vocabulary has it', () => {
+  // "Flip the status" with no target left each run to invent one; the vocabulary had none.
+  assert.match(tpl('coder'), /Flip the plan's frontmatter to `status: IN_PROGRESS` when you start/);
+  assert.match(tpl('artifact-format-flash'), /plan is `TODO`, `IN_PROGRESS` while the coder works, then `DONE` or `BLOCKED`/);
+});
+
+test('a rework reproduces its report through the same channel first, and leaves the plan alone', () => {
+  // A live or review rework hands the coder a finished plan and a report. A test that only
+  // asserts the store was called goes red, then green, while the defect it was for survives.
+  const c = tpl('coder');
+  const rework = c.slice(c.indexOf('## Rework'), c.indexOf('## Output to user'));
+  assert.ok(rework.startsWith('## Rework'), 'the coder has no rework rule');
+  assert.match(rework, /Handed a live report or a `CR` with the plan, first write a test that reproduces what it reports through the same channel/);
+  assert.match(rework, /watch it fail for that reason/);
+  assert.match(rework, /Leave the plan's tasks and `status` as they are, and return `Status: DONE`, or `Status: BLOCKED`/);
+});

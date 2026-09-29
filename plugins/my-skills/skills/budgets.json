@@ -22,8 +22,8 @@
       "adr": "docs/adr/0026-skill-byte-budgets-and-the-admission-rule.md"
     },
     "orchestrator-flash/SKILL.md": {
-      "maxBytes": 30240,
-      "adr": "docs/adr/0026-skill-byte-budgets-and-the-admission-rule.md"
+      "maxBytes": 16384,
+      "adr": "docs/adr/0029-flash-fits-the-smallest-window-and-runs-one-live-check.md"
     },
     "orchestrator/SKILL.md": {
       "maxBytes": 179160,

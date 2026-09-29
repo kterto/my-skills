@@ -27,6 +27,25 @@ test('the architect prints the two lines the pipeline parses', () => {
   assert.match(a, /^Plan: /m);
 });
 
+test('the live role prints the verdict line the pipeline branches on', () => {
+  assert.match(tpl('live'), /^LIVE: PASS \| FAIL \| NOT RUN$/m);
+  for (const f of ['Exercised:', 'Evidence:', 'Read-back:', 'Reason:']) assert.match(tpl('live'), new RegExp(`^${f}`, 'm'));
+  const md = skill();
+  const step = md.slice(md.indexOf('## Step 3c'), md.indexOf('## Step 4'));
+  for (const v of ['LIVE: PASS', 'LIVE: FAIL', 'LIVE: NOT RUN']) assert.ok(step.includes(v), `Step 3c has no branch for ${v}`);
+  assert.match(md, /`Exercised:` and `Reason:`/, 'Step 5 never says where the banner\'s flow and reason come from');
+});
+
+test('every prompt reads its role file first, and an artifact handed by ID comes with its path', () => {
+  // The prompt opens with the preamble, whose `Role file:` line is that first instruction. The
+  // path rule binds an artifact handed over, not the `ID to use:` a role has yet to write.
+  const md = skill();
+  assert.match(md, /The prompt's first instruction is \*\*read `\.orchestrator\/flash\/\{role\}\.md` and follow it\*\*/);
+  assert.match(md, /^Role file: \.orchestrator\/flash\/\{role\}\.md +← read this first$/m);
+  assert.match(md, /An artifact handed by ID travels with its path\./);
+  assert.doesNotMatch(md, /The prompt opens with|Every artifact ID travels with its path/);
+});
+
 test('a flash spec can never be DRAFT', () => {
   const b = tpl('brainstormer');
   assert.ok(!/status:\s*DRAFT/.test(b), 'the brainstormer can still emit a DRAFT spec');

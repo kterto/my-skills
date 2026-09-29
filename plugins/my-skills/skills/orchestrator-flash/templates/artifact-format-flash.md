@@ -27,7 +27,7 @@ plan: FEAT-20260916T101602Z-9f3c         # plan/code-review only; omit on spec a
 
 `related_to` is the run family key. `index-plans.cjs` groups by it, and it is what lets a later `/orchestrator` run join this run's family. Never omit it.
 
-Status vocabulary: spec is always `ACTIVE` — **a flash spec is never a draft**; plan is `TODO` then `DONE` or `BLOCKED`; code review is `APPROVED` or `REQUEST_CHANGES`; final is `COMPLETE`.
+Status vocabulary: spec is always `ACTIVE` — **a flash spec is never a draft**; plan is `TODO`, `IN_PROGRESS` while the coder works, then `DONE` or `BLOCKED`; code review is `APPROVED` or `REQUEST_CHANGES`; final is `COMPLETE`.
 
 ## Write path
 
