@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-16
+- **Amended by:** [ADR-0029](0029-flash-fits-the-smallest-window-and-runs-one-live-check.md) — the first amendment's decision 5 and the second amendment's section C: `READY_TO_COMMIT` also needs a live PASS, and `READY_WITH_WARNINGS` also means a live check that failed or did not run.
 - **Skills affected:** `orchestrator-flash` (`SKILL.md` → Step 5 banner and *What flash does not verify*); `product-manager` (unchanged by design — it drives flash with the matcher it already has).
 - **Source finding:** `docs/superpowers/specs/2026-09-16-orchestrator-flash-design.md` (decision D3 and its risk section).
 - **Precedent:** ADR-0024 (`rigor-levels-and-the-invariant-disclosure-set`), whose decision 1 anticipated this exact question; `docs/effort-tiers-design-note.md` → "Cheap green and expensive green must not look alike".
