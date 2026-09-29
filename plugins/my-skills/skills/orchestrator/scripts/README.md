@@ -1,7 +1,7 @@
 # Orchestrator runtime scripts
 
 These `.cjs` files are the load-bearing runtime for `output_format=html`. Bootstrap
-(references/bootstrap.md → B3 — Materialize) copies the six runtime scripts verbatim into a
+(references/bootstrap.md → B3 — Materialize) copies the seven runtime scripts verbatim into a
 target project's `.orchestrator/`, where they run with `.orchestrator/` as `__dirname` and
 the repo root as their `ROOT` (`path.resolve(__dirname, '..')`). Zero dependencies —
 Node's built-ins only, so no `npm install` in the target project.
@@ -14,6 +14,7 @@ Node's built-ins only, so no `npm install` in the target project.
 | `check-artifact-links.cjs` | Gate: every local link in a branch-added `plans/**.html` resolves on disk. |
 | `check-artifact-home.cjs` | Gate: every branch-added artifact sits in a legal home — a `plans/<RUN-TOKEN>-<slug>/` run folder, or one of the seven frozen legacy kind directories — at depth exactly 2. Runs in **both** md and html mode: it audits a path, not a render. |
 | `index-plans.cjs` | Generator: the whole `plans/` tree → one self-contained `plans/index.html`, grouped by **family** (every artifact answering one `SPEC-*`, across all the runs that touched it). Deterministic — byte-identical output for an unchanged tree, so it can be committed and `--check`ed. |
+| `run-state.cjs` | The run's resume point under `.orchestrator/runs/` (untracked): the active run, its NEXT step, a pending operator decision, decisions keyed by id and in-session budget raises. The conductor writes it at every step boundary; `status`, `watch`, the Claude Code Stop hook and the opencode plugin read it. |
 
 ## `index-plans.cjs` — the read view over `plans/`
 
@@ -83,6 +84,11 @@ conformance + injection + path-containment tests for the renderer. The two env s
 the top (`RENDER_ARTIFACT_TPL_DIR`, `RENDER_ARTIFACT_ALLOW_ROOT`) are no-ops in a real
 `.orchestrator/` run; they only let the suite find the scaffolds and a real allowed-base
 from the skill source tree.
+
+`node --test scripts/run-state.test.cjs scripts/run-state-skill.test.cjs` — **runnable from this
+repo.** The first pins `run-state.cjs` on temp projects. The second runs the commands `SKILL.md`'s
+*Run state* rule tells the conductor to run, as written, with an operator answer carrying backticks,
+`$` and quotes, and pins the prose a resume or a bounded gate must not lose.
 
 `gate-scope.test.cjs` and `gate-shell-injection.test.cjs` are **integration tests bound to
 a bootstrapped project layout** — they drive the gates in place at `<repo>/.orchestrator/`

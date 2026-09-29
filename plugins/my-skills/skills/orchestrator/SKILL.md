@@ -5,19 +5,28 @@ description: Multi-role pipeline orchestrator. Use when the user invokes "/orche
 
 # orchestrator
 
+> Needs a ~1M-token context window. On smaller hosts (GLM, DeepSeek flash), use orchestrator-flash or tlc-spec-driven instead. Lost your place after a compaction or a new session? Run `node .orchestrator/run-state.cjs status`, re-run `next <run>` with its NEXT label, then dispatch that step.
+
 This skill runs in the caller session and uses the host's subagent tool (`Agent` in Claude Code, `task` in opencode). It spawns each pipeline role via `subagent_type`. It is project-agnostic — no project facts are hard-coded.
 
 ## Lifecycle — auto-detect
 
 On invocation with a plain-language task description (and optional `--setup`):
 
-> **Already loaded? Do not reload.** A caller running several tasks in one session — the `product-manager` skill does exactly this, one run per user story — needs this protocol **once**, not once per task. If its text is still visible in your context, a second task is a **new pipeline run starting here at the Lifecycle**, not a re-read of the skill. **A new run rebinds everything**: `base_sha`, the spec, the cycle counters, the family counts. "Capture once" anywhere below means once per *run*, never once per session — carrying story 1's base into story 2 would diff the wrong tree. Re-invoking would duplicate roughly 26k tokens of protocol per task, and a ten-story milestone would spend most of a context window on copies of one document. Reload only when you genuinely cannot see this text any more — after compaction, or in a fresh session. Presence is the test, not recollection.
+> **Already loaded? Do not reload.** A caller running several tasks in one session — the `product-manager` skill does exactly this, one run per user story — needs this protocol **once**, not once per task. If its text is still visible in your context, a second task is a **new pipeline run starting here at the Lifecycle**, not a re-read of the skill. **A new run rebinds everything**: `base_sha`, the spec, the cycle counters, the family counts. "Capture once" anywhere below means once per *run*, never once per session — carrying story 1's base into story 2 would diff the wrong tree. Re-invoking would copy the whole protocol into the context once per task. Reload only when you genuinely cannot see this text any more — after compaction, or in a fresh session. Presence is the test, not recollection.
 
 1. Resolve config (see `references/config.md`): CLI args > `.orchestrator/config.json` > defaults.
-2. If `--setup` is present, OR `.orchestrator/config.json` does not exist, OR `.orchestrator/.materialized-version` does not exist, OR its contents differ from the skill's own `MATERIALIZED-VERSION` file — a sibling of this `SKILL.md` in the skill directory, read with the same mechanism you read this file — OR any file B3 materializes is missing — currently `.orchestrator/.gitignore`, `.orchestrator/artifact-format.md`, `.orchestrator/artifact-format-html.md`, `.orchestrator/artifact-format-parallel.md`, `.orchestrator/config.md`, `.orchestrator/gate-config.md`, `.orchestrator/lane-protocol.md`, the seven scaffolds in `.orchestrator/html-templates/`, the six runtime scripts `.orchestrator/{render-artifact,check-artifact-pairing,check-artifact-links,check-artifact-home,gate-scope,index-plans}.cjs`, and the six role files in this host's agent directory — → run **Bootstrap** (Steps B1–B3), then continue. **A project bootstrapped by an older skill version has `config.json` and none of the files added since**, so keying only on `config.json` would leave every role pointing at a reference that is not there. **The version compare exists because a materialized copy that is present but old is invisible to a missing-file test**, and every role reads those copies rather than the skill's own — this skill's own repository ran for five commits with its rendered role files behind their templates, so the `rigor=` preamble field shipped in the templates never reached the materialized tester role and no run ever carried it. **When the skill's own `MATERIALIZED-VERSION` is the file that is missing, the compare is not stale — it is unavailable**: treat the version condition as not met, say so in one line, and fall through to the missing-file tests. An install route that did not ship the stamp would otherwise bootstrap on every single run, and re-materializing the whole skill once per invocation is a worse failure than the staleness it is trying to catch.
+2. If `--setup` is present, OR `.orchestrator/config.json` does not exist, OR `.orchestrator/.materialized-version` does not exist, OR its contents differ from the skill's own `MATERIALIZED-VERSION` file — a sibling of this `SKILL.md` in the skill directory, read with the same mechanism you read this file — OR any file B3 materializes is missing — currently `.orchestrator/.gitignore`, `.orchestrator/artifact-format.md`, `.orchestrator/artifact-format-html.md`, `.orchestrator/artifact-format-parallel.md`, `.orchestrator/config.md`, `.orchestrator/gate-config.md`, `.orchestrator/lane-protocol.md`, the seven scaffolds in `.orchestrator/html-templates/`, the seven runtime scripts `.orchestrator/{render-artifact,check-artifact-pairing,check-artifact-links,check-artifact-home,gate-scope,index-plans,run-state}.cjs`, and the six role files in this host's agent directory (on opencode, whichever of `.opencode/agents/` or `.opencode/agent/` exists) — → run **Bootstrap** (Steps B1–B3), then continue. **A project bootstrapped by an older skill version has `config.json` and none of the files added since**, so keying only on `config.json` would leave every role pointing at a reference that is not there. **The version compare exists because a materialized copy that is present but old is invisible to a missing-file test**, and every role reads those copies rather than the skill's own. **When the skill's own `MATERIALIZED-VERSION` is the file that is missing, the compare is not stale — it is unavailable**: treat the version condition as not met, say so in one line, and fall through to the missing-file tests. An install route that did not ship the stamp would otherwise bootstrap on every single run, and re-materializing the whole skill once per invocation is a worse failure than the staleness it is trying to catch.
 3. Run **Pipeline** (Steps 0–6).
 4. Spec eval runs inside the review loop (Step 4e), before the QA exit gate.
 5. On `READY_TO_COMMIT` → run **Final report** (Step 7).
+
+**Run state — one rule for every step.** Each command below is `node .orchestrator/run-state.cjs …`, and `<run>` is `run_dir`'s basename, typed out, never a variable, since the watchdog reads it from the command. Single-quote free text, each `'` as `'\''`: in double quotes the shell runs backticks and expands `$`.
+
+- `start <run> --host {claude-code|opencode|prime}` as soon as Step 0a mints `run_dir` (exit 3 names another run still holding the project: supersede a `waiting` one with `--force`, and ask the operator first (`AskUserQuestion` / `question`) about an `active` one); `next <run> 'Step {N} — {what}' --note '{the paths, ids and cycle counts a resume needs}'` on entering each step and sub-step from Step 1 on; `done <run>` once Step 7b prints its `pipeline complete` banner.
+- Once started, before ending the turn on a `STALLED` banner or on anything else that waits for the operator, run `wait <run> '{its Status line, or what you are waiting for}'`.
+- **Decisions are keyed by id.** Before asking the operator about an FR, gap, AC or requirement id, run `lookup <run> {id} --spec {spec_id} --all`; on a hit whose `question` asks what you would, use its answer and print `Decision reused: {id} — {answer}`. Record every answer about an id with `decide <run> {id} --spec {spec_id} --question '{q}' --answer '{a}'`, and a recorded default you apply without asking with `--by default`.
+- **The six execution budgets can be raised in session, never lowered**: `max_contract_amendments`, `max_review_cycles`, `max_family_cycles`, `max_qa_cycles`, `max_run_minutes` and `gate_wall_clock_minutes`, each starting from its Step 0b value. When a started run reaches one, you may ask the operator (`AskUserQuestion` / `question`) whether to raise it instead of stopping: show the cap, its current value and the proposed one, and never label the raise "(Recommended)". On approval run `raise <run> {key} {to} --from {current} --approval '{the answer, verbatim}'` and continue at max(resolved value, highest raise) — re-derive `review_budget` and `eval_remediation_budget` when the key feeds them, pass QA a raised `gate_wall_clock_minutes=` line, and on a resume read it back with `budget <run> {key}`. No raise touches `max_eval_cycles`, `max_spec_requirements`, `rigor`, `parallelism` or `max_parallel_lanes`, and no role raises anything.
 
 ## Bootstrap
 
@@ -134,7 +143,7 @@ delta={cycle delta file list}       ← reviewer spawns on cycle >= 2 ONLY; omit
 - `output_format` is resolved once per run (CLI arg > `.orchestrator/config.json` > default `md`).
 - `automation_level` is resolved once per run (CLI `--mode` > `.orchestrator/config.json` > default `manual`). Only the brainstormer changes behavior on it: `manual` interviews the user; `autonomous` resolves open questions with the brainstormer's own defaults and produces a READY spec without prompting. Include it in every preamble for consistency, but the other five roles ignore it.
 - `rigor` is resolved once per run at Step 0b (CLI `--rigor` > `$mb:.orchestrator/config.json` > `hardened`) and is **read-only for every role**. It names what a green run claims — `sketch`: it runs; `delivery`: it does what the Acceptance says and the happy path is proven; `hardened`: plus the gates hold and the mutants die. Roles branch on it where their template says so (the coder's phase-exit gates, the tester's e2e observation, QA's block-or-report and verdict, the reviewer's severity floor); the full table is `.orchestrator/config.md` → `rigor`. **A role may never set, raise or lower it** — one that judges the level wrong for the work records that as a finding and proceeds at the level it was given (ADR-0024). It scales what the run *does*, never what the run *reports*: every artifact's disclosure fields are required identically at all three levels.
-- `run_dir` names the **one folder this run writes into** — `plans/<YYYYMMDD>T<HHMMSS>Z-<4hex>-<slug>`, minted once at Step 0 pre-flight (below) — and it is sent **unconditionally, to all six roles, on every spawn**, sequential and parallel alike. The role's write path is a concatenation it checks by **string equality**, never by listing a directory: `{run_dir}/{the ID you were given}-{your slug}.md`, with the `.progress.md` sidecar and the `html`-mode `.html` render beside it. **Depth is exactly 2** — `plans/<run-folder>/<file>` — and that is load-bearing rather than tidy: an artifact carrying `href="../../docs/adr/015.md"` resolves at that depth and reports `1 broken local link(s)` one level deeper under the shipped `check-artifact-links.cjs`, and the reference project emits 22 such escapes to `docs/adr`, `docs/sprint` and `docs/design_contracts`. There is no `plans/runs/` wrapper and no kind subdirectory inside a run folder. **Write-path precedence is normative and lives in one place** — `.orchestrator/artifact-format.md` → *Write-path precedence* — in this order: `MAESTRO_CR_TARGET_PATH` (absolute, reviewer only, unchanged, and explicitly exempt from every path check) > `run_dir=` from the preamble > `dirname()` of an input artifact path the role was handed, unless that dirname is a frozen legacy directory > the role's own `newrun` mint. Every role template also carries the sentence that settles the last ambiguity: **`run_dir=` is authoritative, and where `.orchestrator/PROJECT-CONTEXT.md`'s Conventions section names a plan directory it is describing the legacy tree and never overrides the preamble.**
+- `run_dir` names the **one folder this run writes into** — `plans/<YYYYMMDD>T<HHMMSS>Z-<4hex>-<slug>`, minted once at Step 0 pre-flight (below) — and it is sent **unconditionally, to all six roles, on every spawn**, sequential and parallel alike. The role's write path is a concatenation it checks by **string equality**, never by listing a directory: `{run_dir}/{the ID you were given}-{your slug}.md`, with the `.progress.md` sidecar and the `html`-mode `.html` render beside it. **Depth is exactly 2** — `plans/<run-folder>/<file>` — and that is load-bearing rather than tidy: an artifact carrying `href="../../docs/adr/015.md"` resolves at that depth and reports `1 broken local link(s)` one level deeper under the shipped `check-artifact-links.cjs`. There is no `plans/runs/` wrapper and no kind subdirectory inside a run folder. **Write-path precedence is normative and lives in one place** — `.orchestrator/artifact-format.md` → *Write-path precedence* — in this order: `MAESTRO_CR_TARGET_PATH` (absolute, reviewer only, unchanged, and explicitly exempt from every path check) > `run_dir=` from the preamble > `dirname()` of an input artifact path the role was handed, unless that dirname is a frozen legacy directory > the role's own `newrun` mint. Every role template also carries the sentence that settles the last ambiguity: **`run_dir=` is authoritative, and where `.orchestrator/PROJECT-CONTEXT.md`'s Conventions section names a plan directory it is describing the legacy tree and never overrides the preamble.**
 - **`run_dir=` is unconditional, and that is the deliberate difference from every other key here.** `lane=`, `contract=`, `leaves=`, `tree=`, `aggregate=` and `delta=` signal by their *absence*; this one has no meaning to omit. A role that must not guess its own directory needs the line on **every** path, so a parallel-only or producing-roles-only key would leave exactly the spawns that write artifacts deriving a path instead of reading one — the search this key exists to delete. Its cost is stated plainly in the byte-identical note below.
 - **Every spawn that names an artifact by ID also names its path.** `Plan: {plan_path}` accompanies `Implement plan {id}`, `Run tests for plan {id}`, `Review plan {id}` and `Run the QA suite for plan {id}`, and it carries the path of *that* plan — the parent `PACT`'s path wherever a step's parallel-path note substitutes `root_plan_id` for `plan_id`. Without it a role holds an ID and no directory, which is precisely the directory search `run_dir` and precedence rule 3 exist to remove; with it, precedence rule 3 has something to bind when a role is ever run without a preamble.
 - `ID to use:` is included for the roles that create a numbered artifact (brainstormer→SPEC, architect→FEAT/FIX/QAF, tester→TEST, reviewer→CR, qa→QA). The coder creates no new artifact, so it gets the preamble WITHOUT an `ID to use:` line — but it gets `run_dir=` like every other role, because it still writes the plan's `.progress.md` and mutates the plan beside it.
@@ -218,12 +227,10 @@ remove or to name. Every stop *after* the mint ends with `rmdir "$run_dir" 2>/de
 **This gate exists because the in-run counters cannot see the thing that actually runs away.**
 `max_review_cycles`, `max_qa_cycles` and `max_eval_cycles` are scoped to one invocation and start at
 zero every time, so a new run on the same spec — whichever launched it, this orchestrator or a person
-starting it by hand — begins with a clean budget no matter how much rework preceded it. On the run this gate was written for, the in-run counter
-peaked at 4 of a permitted 10 while the family reached 13 reviews across 11 slugs, and every cap held
-the whole time. **The count is what discriminates**: across 63 real families the median is 2 reviews
-and that cascade reached 9. G8's rework *ratio* cannot do this job — it converges as a family worsens,
-scoring the cascade 0.67 — which is why it reports and this gate stops. A budget that only counts inside a run
-cannot bound work that escapes by starting a new one.
+starting it by hand — begins with a clean budget no matter how much rework preceded it. **The count is
+what discriminates**: G8's rework *ratio* cannot do this job — it converges as a family worsens — which
+is why it reports and this gate stops. A budget that only counts inside a run cannot bound work that
+escapes by starting a new one.
 
 `--override-family-budget` skips this gate for one invocation. Record it where every role can see it: append
 `ORCHESTRATOR — family budget overridden ({family_cr_count}/{max_family_cycles})` to the plan's
@@ -232,7 +239,7 @@ record it only in the run manifest** — that file is written at Step 2c, which 
 `off` run, so on the default path the audit trail would not exist at all. Skip the gate only when the invocation names no existing spec — a genuinely new feature has no family
 yet. When it is skipped, `family_cr_count` is `0`; bind it either way, since Step 7's report prints it.
 
-**Bind `review_budget = max(1, min(max_review_cycles, max_family_cycles − family_cr_count − eval_reserve))` at Step 0b, once, and test Step 4's cap against it.** `max_review_cycles` defaults to `10` and `max_family_cycles` to `6`, and the family gate is a **pre-flight** check — so on a new spec, where `family_cr_count` is `0`, the in-run cap can never bind and one invocation may legally spend the whole cross-run family budget before anything notices. Clamping is what makes the in-run counter honest about the budget it is actually drawing on. **`--max-review` raises the in-run bound; nothing raises the remainder** — a flag is the invoking user's authority over this run, not over the family's history, and `--override-family-budget` is the control that exists for that.
+**Bind `review_budget = max(1, min(max_review_cycles, max_family_cycles − family_cr_count − eval_reserve))` at Step 0b, once, and test Step 4's cap against it.** `max_review_cycles` defaults to `10` and `max_family_cycles` to `6`, and the family gate is a **pre-flight** check — so on a new spec, where `family_cr_count` is `0`, the in-run cap can never bind and one invocation may legally spend the whole cross-run family budget before anything notices. Clamping is what makes the in-run counter honest about the budget it is actually drawing on. **`--max-review` raises the in-run bound; no flag raises the remainder** — a flag is the invoking user's authority over this run, not over the family's history, and `--override-family-budget` is the control that exists for that.
 
 **Resolve `max_family_cycles` before either consumer reads it.** Step 0's family gate compares against it and Step 0b validates it, so the gate and this clamp must not compute against two different numbers: apply *Bounds* validation first, then run the gate and bind `review_budget` from the same resolved value. Otherwise a malformed cap — a string, a negative — lets the gate and the clamp disagree about one budget, and a negative remainder would clamp the run to a budget it is already past before its first review exists.
 
@@ -300,7 +307,7 @@ If the current branch is also protected (dirty + protected), drop option 1 from 
 
 - **Use current branch:** no-op. Continue to Step 0b.
 - **New branch:** ask for a branch name. Default: `orch/{YYYY-MM-DD-HHMM}-{first-3-or-4-kebab-words-of-input}` (e.g. `orch/2026-05-21-1430-add-list-sharing`). Run `git checkout -b {name}`. Verify with `git rev-parse --abbrev-ref HEAD`.
-- **New worktree:** ask for branch name (same default as above) and worktree path. Default path: `../{repo-name}-{slug}`, or `.worktrees/{slug}` if `.worktrees/` already exists in the repo. Run `git worktree add {path} -b {name}`. `cd {path}` for the rest of the pipeline — every subagent invocation, every file path, every `git` call from here on is rooted at the worktree.
+- **New worktree:** ask for branch name (same default as above) and worktree path. Default path: `../{repo-name}-{slug}`, or `.worktrees/{slug}` if `.worktrees/` already exists in the repo. Run `git worktree add {path} -b {name}`; a checkout holds only tracked files, so copy B3's in: `mkdir -p {path}/.orchestrator && cp -R .orchestrator/{*.cjs,artifact-format*.md,config.md,gate-config.md,lane-protocol.md,html-templates} {path}/.orchestrator/`. `cd {path}` for the rest of the pipeline — every subagent invocation, every file path, every `git` call from here on is rooted at the worktree, and so is the run state the watchdog follows.
 - **Commit first:** show `git diff --stat` and `git diff` (truncated) and propose a Conventional-Commit message based on the dirty diff. Confirm with the user, then `git add` the affected paths explicitly (never `git add -A`) and `git commit`. After commit, re-run the case detection.
 - **Stash:** run `git stash push -u -m "orchestrator pre-flight {ISO-timestamp}"`. Explicitly tell the user: *"Your changes are stashed as `{stash-ref}`. Run `git stash pop` after the pipeline finishes."* After the stash, re-run the case detection.
 - **Cancel:** stop. Print:
@@ -576,23 +583,12 @@ which starts a fresh run under the family budget — and if that budget is now e
 the run shape may not have. **Run Step 7c before stopping**, as the scope band does.
 
 The point is that the run can answer *how long have I been going* at all: cycle counts are a proxy
-for spend that stops tracking the moment one cycle costs ten times another, and a run that reached
-every one of its cycle caps can still have spent fifteen hours without a single mechanism noticing.
+for spend that stops tracking the moment one cycle costs ten times another.
 
 **The stop is off by default** (`max_run_minutes: 0`), because a badly chosen bound stops good runs.
 Set it once the project has a baseline for what its runs cost — and the elapsed line printed at every
 boundary, plus the `Run cost:` line in the terminal banner (Step 7b), is how that baseline is
-acquired. Off-by-default is a defensible choice for a stop; it was never a defensible choice for a
-number, and for its first year this meter had no way to report one.
-
-**`suites[]` has consumers; `boundaries[]` does not yet.** The tester, QA and the outer join all read
-`suites[]` through the inheritance rule above. `boundaries[]` is read by the `delta=` line the reviewer
-receives on cycles of two or more, which is computed by diffing the previous boundary's tree against
-the current one. That consumer is what the boundary was written for; until it existed the rows were
-kept anyway, because a boundary with no consumer is cheap while a consumer with no boundary is
-impossible. **`tree=` is emitted only to the spawns that
-read it** — the tester and QA — and to no other role: a line every role carries and none uses is how
-`MAESTRO_PREV_CR_REF` came to sit in a role template, referenced and never set — it has since been removed from `templates/reviewer.md`, where it stood as a live hook for the per-cycle narrowing ADR-0022 declined to ship.
+acquired.
 
 #### 0b — Initialise counters
 
@@ -607,7 +603,7 @@ Read cycle caps from config. **An absent key takes its value from the resolved l
 - `max_eval_cycles` — from **`$mb`**; default `0` / `1` / `2` by level. At `sketch` the eval is `SKIPPED` — which the banner must say, not omit.
 - `max_family_cycles` — from **`$mb`**; default `2` / `3` / `6` by level.
 - `max_run_minutes` — from `.orchestrator/config.json`; default `0` (disabled) if absent. Not anchored: it caps nothing the branch is graded on, and the meter reports whatever it is set to.
-- `gate_wall_clock_minutes` — from **`$mb`**; default `15` if absent. Passed through to QA; the orchestrator itself only forwards it.
+- `gate_wall_clock_minutes` — from **`$mb`**; default `15` if absent. QA reads it itself; Step 5 passes it only once raised.
 
 **`$mb` above is the merge-base copy, and it is not optional** — `rigor` and the six anchored cycle and bound keys are read there and nowhere else, per *the anchored set* below. Read them once, here, and print the moved line before the banner.
 
@@ -759,9 +755,8 @@ its reason**, never omitted silently. An absent row and a clean row must not loo
 
 **What it buys.** Otherwise every later role — the coder at phase exit, the tester, the reviewer, QA,
 the eval — answers *is this red mine?* by hand, from `git show` archaeology, independently, every
-time. On the run this sub-step was written for, one test was re-diagnosed in **44 of 49 artifacts**,
-and archaeology of that shape was 5.5% of everything the run wrote. The rule that consumes these rows
-is normative in `.orchestrator/gate-config.md` → *Attributing a finding to the stage that owns it*.
+time. The rule that consumes these rows is normative in `.orchestrator/gate-config.md` →
+*Attributing a finding to the stage that owns it*.
 
 **Leave the tree as you found it.** A sweep that writes coverage output, a report directory, or any
 other non-ignored artifact has moved the tree off `tree_base`, and every boundary and every
@@ -791,8 +786,7 @@ describes.
 **This is the only way a second run joins the first run's family.** A re-run that mints a fresh
 `SPEC-*` writes every artifact into a brand-new family, so the pre-flight budget and G8 both start from
 zero however much rework preceded them — the budget would measure one invocation and call it a family.
-That is precisely the property the cascade exploited: 11 slugs, every counter reset, nothing ever over
-budget. A brief that merely *resembles* an existing spec is **not** reuse: resemblance is a guess, and
+A brief that merely *resembles* an existing spec is **not** reuse: resemblance is a guess, and
 guessing wrong silently merges two features' histories. Only an explicit id or path counts.
 
 Otherwise compute the spec ID: `newid SPEC`. Invoke the **brainstormer** subagent with the user's raw input, prepending the mandatory role-prompt preamble.
@@ -947,9 +941,7 @@ particular stop: the architect's plan is deliberately kept on disk (below) so an
 
 **Why this is a stop and not a warning.** The family budget is the only cross-run bound, it is checked
 **pre-flight** against prior history, and on a brand-new spec that history is empty — so a single first
-invocation may legally spend all of it, which is exactly what the run this band was written for did:
-53 requirements, 145 tasks, 122 files admitted as one deliverable, six of six family reviews consumed,
-and every follow-up item now needing `--override-family-budget` to start.
+invocation may legally spend all of it.
 
 **Be exact about what has been spent when it fires.** This step validates a plan the architect has
 already written, so the stop discards one architect pass — not zero. It is still the cheapest stop
@@ -972,12 +964,9 @@ requirement count, which never shrinks. That is the intended shape: the override
 saying "yes, this size, again", and it is recorded each time. A project that decides the size is
 correct should raise `max_spec_requirements` rather than carry the flag forever.
 
-**Size is a multiplier, not a threshold — calibrate accordingly.** Across 218 specs on the reference
-machine the median is 14 requirements and p75 is ~25, and larger specs do draw more reviews (mean 2.0
-→ 3.2–3.5; three-or-more-round families 23% → 68–75%). But the worst family in that corpus is a
-12-requirement spec, and its largest spec took three reviews. This band catches the tail; it does not
-predict the hard ones, and it must not be sold as if it does. `references/config.md` →
-`max_spec_requirements` carries the full calibration.
+**Size is a multiplier, not a threshold — calibrate accordingly.** This band catches the tail; it
+does not predict the hard ones, and it must not be sold as if it does. `references/config.md` →
+`max_spec_requirements` carries the calibration.
 
 **Gate-completeness check (mandatory, same pass).** Read the plan's `## Verification (per phase)` section. It must close with a `### Gate coverage` table carrying **one row per runtime gate id — G1, G2, G4, G5, G6, G7** — each with a non-empty `Carried by` cell naming the command that runs it, or the literal `n/a` with a reason. If the section is absent altogether, the architect's summary must have printed `Verification: QA-only — {reason}`. A missing table, a short one, an empty `Carried by` cell, or an unreasoned `QA-only` all fail: re-invoke the architect once, quoting the specific gate letters that are missing or unfilled, and stop and report if it is still incomplete after the retry. **Same pass, the command table.** The section also carries a `| Command | Scope | Phases | Path condition |` table, every row with a non-empty `Scope` cell drawn from the closed set `changed-files | whole-project | advisory-instrument | deferred-to-join`. Two cells fail on sight and are re-invoked along with everything else: a `whole-project` token on a command that runs tests, and any `deferred-to-join` token on a plan that carries no lane — there is no join on a sequential or remediation run to redeem it at. **Skip this check entirely when the project holds no `.cleancode-gates.json` anywhere** — with no gate config there are no gates to account for, and this degrades exactly as Bootstrap B2's optional dependencies do.
 
@@ -1159,9 +1148,8 @@ line to the running status output:
 ORCHESTRATOR — review budget: {review_cycle}/{review_budget} used, 2 remaining
 ```
 
-The run this warning exists for learned its budget was spent by reading its own final report. Two
-cycles is the point at which an operator can still choose to narrow the remaining work, waive a
-Should Fix, or stop and split — a warning at one is a notification, not a decision point.
+Two cycles is the point at which an operator can still choose to narrow the remaining work, waive
+a Should Fix, or stop and split — a warning at one is a notification, not a decision point.
 
 If `review_cycle >= review_budget`:
 
@@ -1409,8 +1397,8 @@ only when it is one of:
   authorization, or transport-trust obligation, **or** when the root plan's `## Requirement Coverage`
   map maps it to such a requirement. Quote the spec line you matched in the 4a prompt. If you cannot
   point at one, it is not this trigger — fall through and record it. This carve-out is not
-  decoration: on the run this floor was written for, the eval's top-ranked gap was the only assertion
-  that mTLS validates its CA, and any floor expressed as a number would have discarded it.
+  decoration: a floor expressed as a number would have discarded a top-ranked gap that was a run's
+  only security assertion.
 
 **A confirmed red Engineering Gate is not an item in this set and this floor never applies to it.**
 It is not a gap-list row; it reaches `eval_status` through its own term in the derivation and is
@@ -1461,8 +1449,7 @@ untouched, and still applies to every red this run produced. What it did not dis
 that was *already* red: standing lint debt, a generated file the formatter disagrees with, an
 environment-dependent tool. Those are the normal state of a real repository, and halting for one buys
 nothing, because no remediation inside the run can change it either — the run simply waits for a human
-to say "that was already broken". On the run this rule was written for that wait was **4 hours 43
-minutes**, overnight, on formatter line-wrap in three *generated* localization files.
+to say "that was already broken".
 
 **Otherwise — stop, whatever the gap list holds.** No `FIX` plan authored from the gap list can close a red gate —
 the actionable set is built from gap rows that grade spec requirements, and "the build command exits
@@ -1564,6 +1551,7 @@ contract={pact_path}   ← parallel path ONLY; omit the line entirely on a seque
 leaves={comma-separated leaf FEAT IDs, in dispatch order}   ← parallel path ONLY; omit the line entirely on a sequential run
 tree={hash minted now with Step 0a's recipe}   ← both paths; the suite-inheritance match key
 aggregate={path to .orchestrator/join-digest.md}   ← parallel path ONLY, and only when the digest built and its integrity check passed; omit the line entirely otherwise
+gate_wall_clock_minutes={the raised value}   ← only after an in-session raise; omit the line otherwise
 
 Run the QA suite for plan {plan_id}. The plan is DONE and has an APPROVED CR.
 Plan: {plan_path}
@@ -1589,7 +1577,9 @@ verification below, once the frontmatter is in hand:
 > **`BLOCKED` outranks `BLOCKED_STALE`:** a report carrying both a measured failure and a stale gate
 > is `BLOCKED`, because a measured failure is something a fix plan can act on and is the more
 > actionable of the two. Synthesize `BLOCKED_STALE` only from `READY_TO_COMMIT` or
-> `READY_WITH_WARNINGS`, and say in the banner which one it replaced.
+> `READY_WITH_WARNINGS`, and say in the banner which one it replaced. **`unmeasured_bounded:` never
+> synthesizes it** — a gate bounded under `on_bound: disclose` is disclosed on the FINAL's
+> `Unmeasured:` line, and nothing stops over it.
 
 **File verification (mandatory before continuing):**
 
@@ -1602,7 +1592,7 @@ both modes; `artifact-format.md` → *Core rule* guarantees it). If the file doe
 
 #### If READY_WITH_WARNINGS:
 
-All blocking gates passed; the plan is safe to commit. This status indicates that the **family's** G8 rework ratio landed in `0.5 < r ≤ 1.5` (HIGH_REWORK), which is advisory. Above `1.5` it is flagged more prominently; it never blocks — the family budget gate at Step 0 is what stops a runaway family, and it keys on the raw review count, not on this ratio. Treat this as equivalent to READY_TO_COMMIT for flow purposes:
+Every measured blocking gate passed; the plan is safe to commit. This status indicates that the **family's** G8 rework ratio landed in `0.5 < r ≤ 1.5` (HIGH_REWORK), which is advisory. Above `1.5` it is flagged more prominently; it never blocks — the family budget gate at Step 0 is what stops a runaway family, and it keys on the raw review count, not on this ratio. A non-empty `unmeasured_bounded:` also lands here; print the `Warning:` line for each cause present. Treat this as equivalent to READY_TO_COMMIT for flow purposes:
 
 1. Surface the warning to the user:
 
@@ -1610,9 +1600,10 @@ All blocking gates passed; the plan is safe to commit. This status indicates tha
    ORCHESTRATOR — QA READY_WITH_WARNINGS
    QA report: {qa_report_path}
    Warning: G8 HIGH_REWORK — family rework ratio {g8_family, or n/a} (advisory; the family budget gate at Step 0 is what stops a runaway family). Review the QA report before committing.
+   Warning: {gate} bounded at {N} min — unmeasured, not a pass
    ```
 
-2. Carry the warning into the final report (Step 7).
+2. Carry each warning into the final report (Step 7).
 3. Proceed to the Final report (Step 7).
 
 #### If BLOCKED_STALE:
@@ -1721,7 +1712,7 @@ Follow your full reviewer workflow and print the structured output summary.
 
 > **On the parallel path this re-review is invoked with `root_plan_id` — the parent `PACT` ID — not `qaf_plan_id`**, exactly as Step 4 is (Step 3j.3), with the `QAF` plan as a related input.
 >
-> **The four lines added above were absent, and each absence cost something different.** Without `root_plan=` the reviewer resolves its requirement-coverage map from the `QAF` plan, which carries none by design — so a `5c` re-review gates on that plan's acceptance criteria alone and silently drops every requirement the run has tracked since Step 2. That is precisely the leak Step 4c's note describes, one loop further in, and it is a **both-path** defect: `root_plan=` and `MAESTRO_REVIEW_BASE=` are emitted on an `off` run at Step 4 already, so adding them here restores consistency rather than widening a sequential run's prompt with anything new. Without `MAESTRO_REVIEW_BASE` the reviewer falls back to `git merge-base`, which is not the base the rest of the run measured against, so its snapshot and QA's disagree about what changed. Without `leaves=` a parallel run re-walks the contract tree to rebuild a set the orchestrator never lost, and without `contract=` it cannot even find the tree's root without searching — step 1 of the `PACT` ID resolution rule reads that line, so its absence drops every join onto the recursive `find` kept only for legacy runs. Of the run's reviewer spawns, `5c` was the only one missing the first three; **`contract=` was missing from both of them, Step 4 included, and from every tester and QA join spawn as well** — which is what made `references/parallel.md`'s "all three join spawns carry `contract={pact_path}`" false on every run.
+> **The four lines added above were absent, and each absence cost something different.** Without `root_plan=` the reviewer resolves its requirement-coverage map from the `QAF` plan, which carries none by design — so a `5c` re-review gates on that plan's acceptance criteria alone and silently drops every requirement the run has tracked since Step 2. That is precisely the leak Step 4c's note describes, one loop further in, and it is a **both-path** defect: `root_plan=` and `MAESTRO_REVIEW_BASE=` are emitted on an `off` run at Step 4 already, so adding them here restores consistency rather than widening a sequential run's prompt with anything new. Without `MAESTRO_REVIEW_BASE` the reviewer falls back to `git merge-base`, which is not the base the rest of the run measured against, so its snapshot and QA's disagree about what changed. Without `leaves=` a parallel run re-walks the contract tree to rebuild a set the orchestrator never lost, and without `contract=` it cannot even find the tree's root without searching — step 1 of the `PACT` ID resolution rule reads that line, so its absence drops every join onto the recursive `find` kept only for legacy runs.
 
 **Verify** the new CR file exists at the path reported in reviewer output. If missing, re-invoke reviewer once; if still missing, stop and report.
 
@@ -1748,7 +1739,7 @@ If an agent output is ambiguous or missing the expected pattern, re-read the rel
 
 > **The `Plan:` line the orchestrator *sends* is not the `Plan:` line it *reads*.** Every spawn that names a plan by ID also names its path (*Mandatory role-prompt preamble* above), so a coder, tester, reviewer or QA prompt now carries a `Plan:` **input** line — while the table's `Plan: {path}` pattern is the **architect's output**, parsed from the architect's summary and from nowhere else. Never read a role's own prompt back as its output, and **never add a `Plan:` line to an architect prompt**, where it would be indistinguishable from the line that step exists to extract. The architect is handed its input as `Source spec:`, `Source CR file:`, `Source QA report:` or `Source eval report:` for exactly this reason.
 
-> **Note — BLOCKED_STALE is orchestrator-synthesized:** the qa agent never emits the literal string `BLOCKED_STALE`. The orchestrator infers it from the QA report's `stale_gates:` frontmatter, written by `templates/qa.md` → Step 0 when a gate exceeds `gate_wall_clock_minutes`. **An absent key means a report from before that step existed, not a clean run** — Step 0 emits `stale_gates: []` when nothing timed out. Do not expect this value in the qa agent's `Status:` output line.
+> **Note — BLOCKED_STALE is orchestrator-synthesized:** the qa agent never emits the literal string `BLOCKED_STALE`. The orchestrator infers it from the QA report's `stale_gates:` frontmatter, written by `templates/qa.md` → Step 0 when a `stop` gate exceeds `gate_wall_clock_minutes`. **An absent key means a report from before that step existed, not a clean run** — Step 0 emits `stale_gates: []` when nothing timed out. Do not expect this value in the qa agent's `Status:` output line.
 
 ### Rules
 
@@ -1775,7 +1766,7 @@ If an agent output is ambiguous or missing the expected pattern, re-read the rel
 - Never call `newid FEAT` twice for the same leaf — Step 2c allocates unsplit lanes' plan IDs, Step 2s allocates sub-lanes'; a second call succeeds silently and orphans the plans (Steps 2s.1, 2L).
 - `simplify` and the full test suite run **exactly once per run**, at the outer join — never per lane, never per sub-lane, at any depth (Step 3j).
 - Cap contract amendments at `max_contract_amendments` — **one budget shared across both levels** (Step 3j.2).
-- Never specify a level-specific behavior only in a join step or in ladder option text — every one needs a numbered dispatch step. (This is why the previous `full` never ran: it was described only inside the join and the ladder, so there was nothing to spawn.)
+- Never specify a level-specific behavior only in a join step or in ladder option text — every one needs a numbered dispatch step.
 - Parallel mode changes **what is spawned**, never the never-commit rule: the run still ends at `READY_TO_COMMIT`, and neither join produces a commit.
 
 ## Final report
@@ -1816,12 +1807,10 @@ step**, which is why it sits above the file verification rather than beside the 
 return below —
 the STALLED spec-eval stop, the missing-FINAL stop, a red Step 7d gate — ends a run that has *already*
 written artifacts, and an index regenerated only on the runs that reach the banner is an index that
-silently omits every run that did not. It costs about a tenth of a second on a 750-artifact tree and
-rewrites exactly one file, and re-running it is harmless: the generator is deterministic, and two runs
-over an unchanged tree are byte-identical. **So run it again whenever a branch below writes another
-artifact** — the eval retry on the STALLED path, the retried persistence — before you print that
-branch's report. A second tenth of a second is the entire price of an index that is never behind the
-tree it describes.
+silently omits every run that did not. It rewrites exactly one file, and re-running it is harmless:
+the generator is deterministic, and two runs over an unchanged tree are byte-identical. **So run it
+again whenever a branch below writes another artifact** — the eval retry on the STALLED path, the
+retried persistence — before you print that branch's report.
 
 **`plans/index.html` is a derived view; the artifacts remain the source of truth.** It is generated
 from them and never hand-edited, so anything only the index claims is wrong by construction, and a
@@ -1892,8 +1881,7 @@ nothing validated **where** an artifact landed, and because bootstrap runs zero 
 comes into being as a side effect of the first write into it, so one typo in a role's write path
 silently creates a top-level directory that reads as intentional forever after. The depth is what
 carries the cost: an artifact linking sideways with `href="../../docs/adr/015.md"` resolves from
-`plans/<run>/` and reports `1 broken local link(s)` one level deeper, and the reference project emits
-22 such escapes.
+`plans/<run>/` and reports `1 broken local link(s)` one level deeper.
 
 A red home gate blocks the banner exactly as a missing FINAL file does. **Fix it by moving the named
 artifact into `{run_dir}`, never by creating a directory that makes its current path legal** — the
@@ -1904,7 +1892,7 @@ its gates are green. A red gate blocks the banner exactly as a missing FINAL fil
 (re-render or fix frontmatter) before proceeding.
 
 In addition, PRINT the report below to stdout (the printed summary is the same regardless of
-mode). If READY_WITH_WARNINGS arrived from QA, carry the G8 warning into the Issues found list.
+mode). If READY_WITH_WARNINGS arrived from QA, carry each `Warning:` line into the Issues found list.
 
 ```
 ORCHESTRATOR — pipeline complete
@@ -1919,6 +1907,7 @@ Rigor: {sketch | delivery | hardened} (from {--rigor | roadmap story | $mb confi
 Delivered: {m} / {t} spec requirements carry passing evidence
 Unmeasured: {gate — state, comma-separated, e.g. "G2 — MISSING_TOOL, G6 — UNMEASURED (no denominator)"} (or "none")
 Instrument moved: {key old → new (direction), comma-separated — config keys and gate-config fields together} (or "none")
+Budgets raised in session: {the output of `run-state.cjs raises <run>`, one per line, or "none"}
 Deferred by decision: {criterion — reason, one per line, or "none"}
 Issues found:
   - {issue} (or "none")
@@ -1957,7 +1946,8 @@ what the run has to show for it, and both come from evidence already on disk:
   never a ratio.** An ungraded run has no delivery claim to make, and a missing line reads as zero
   problems rather than as no evidence.
 - **`Unmeasured:`** — every G1–G7 gate the QA report records as `MISSING_TOOL` or `UNMEASURED`, plus
-  every entry in its `stale_gates:` frontmatter, each with the state that produced it. QA already
+  every entry in its `stale_gates:` frontmatter, each with the state that produced it; an
+  `unmeasured_bounded:` entry prints once, as `{gate} (bounded at {N} min)`. QA already
   computes this set and already reports it prominently in its own file; this line is what carries it
   to the one artifact the user actually reads at the end. `READY_TO_COMMIT` deliberately admits these
   verdicts as non-failures (`templates/qa.md` → Step 6) — which is defensible *only* if the terminal
@@ -1973,8 +1963,8 @@ what the run has to show for it, and both come from evidence already on disk:
   it is required identically at all three levels (ADR-0024, *the invariant disclosure set*).
 
 - **`Instrument moved:`** — every anchored key whose working-tree value disagreed with the merge-base:
-  the nine config keys resolved at Step 0b (`references/config.md` → *The anchored set*) and the four
-  `.cleancode-gates.json` field families the gate runner reports in `report.instrument.moves`
+  the nine config keys resolved at Step 0b (`references/config.md` → *The anchored set*) and the
+  `.cleancode-gates.json` fields the gate runner reports in `report.instrument.moves`
   (`references/gate-config.md`). Copy the values and directions; do not re-derive them and do not
   summarise the list. The run already executed on the merge-base values, so this line changes no
   verdict — it exists because a branch that moved its own instrument, in either direction, is

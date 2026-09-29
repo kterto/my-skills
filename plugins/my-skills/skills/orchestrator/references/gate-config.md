@@ -86,7 +86,7 @@ RIGOR sketch — 3 blockers demoted to warning (G2, G5); G6 skipped
 
 `.cleancode-gates.json` holds every blocking number, it is deep-merged user-wins, and it sits **inside the tree being measured**. So the cheapest path to a green gate does not run through the code — it runs through the config: widen `exempt`, drop a `root`, lower a threshold, all inside the change under review, all silent. That is the same failure `SKILL.md` Step 0b anchors `.orchestrator/config.json` against, one level down.
 
-**Four field families resolve from `$mb` — the merge-base — and the gate runs on those values:**
+**Four field families resolve from `$mb` — the merge-base — and the gate runs on those values, with `gates.<id>.on_bound`:**
 
 | Anchored to `$mb` | Read from the working tree |
 |---|---|
@@ -94,8 +94,9 @@ RIGOR sketch — 3 blockers demoted to warning (G2, G5); G6 skipped
 | `stacks.<stack>.exclude` | `gates.<id>.runner` |
 | `gates.<id>.exempt` | `gates.<id>.budget` |
 | `gates.<id>.thresholds` | `stacks.<stack>.baseline`, everything else |
+| `gates.<id>.on_bound` | |
 
-The line between the columns is **what is measured and how hard** versus **how the measurement is performed**. A branch legitimately swaps a test runner or raises a G6 time budget; a branch that lowers `mutationScore` is editing the verdict it is about to be judged by.
+The line between the columns is **what is measured and how hard** versus **how the measurement is performed**. `on_bound` is neither: it decides whether a run waits for an operator over a bounded gate, and QA reads it from `$mb` (`templates/qa.md` → Step 0), so the trunk decides that, never the branch under review. A branch legitimately swaps a test runner or raises a G6 time budget; a branch that lowers `mutationScore` is editing the verdict it is about to be judged by.
 
 **When the runner does this for you.** `clean-code-gates` anchors on its own whenever it knows a base ref — any `--scope diff[:<ref>]`, or an explicit `--base-ref <ref>` — emits the moved line on stderr and in `report.md`, and carries `report.instrument` as data. **Always give it the ref**: a `project`, `module` or `files` scope has no base, reports `anchored: false`, and reads the working-tree config. Run the gates against the same base the changed-file set below is computed from.
 

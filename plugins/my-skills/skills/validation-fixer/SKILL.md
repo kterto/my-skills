@@ -698,8 +698,9 @@ For each work unit, in order:
      "did NOT signal success" branch below — bug-12.)
    - **Under `orchestrator-flash`, `READY_WITH_WARNINGS` is not a success terminal.** The two
      pipelines spell it the same and mean different things: from the orchestrator it is the
-     advisory G8 rework ratio with every blocking gate passed; from flash it means the run
-     ended with the reviewer's **open Must Fix** and the review budget exhausted
+     advisory G8 rework ratio, or a G6 bounded under `on_bound: disclose` (named on the
+     banner's `Unmeasured:` line), with every measured blocking gate passed; from flash it
+     means the run ended with the reviewer's **open Must Fix** and the review budget exhausted
      (`orchestrator-flash/SKILL.md` → Step 5). The one verification flash performs said *do
      not ship this*. Commit the work unit anyway — it exists, it is coherent, and leaving it
      uncommitted loses it — but resolve the outcome as **must-fix** (the fourth row of the
