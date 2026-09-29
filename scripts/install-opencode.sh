@@ -5,7 +5,8 @@
 # local skill directories to ~/.config/opencode/opencode.json for newer opencode
 # releases. Also creates or refreshes matching slash commands in
 # ~/.config/opencode/commands, overlaying any hand-written opencode command
-# templates from this repo.
+# templates from this repo, and links the orchestrator watchdog plugin into
+# ~/.config/opencode/plugins.
 
 set -euo pipefail
 
@@ -14,9 +15,11 @@ INSTALL_DIR="${MY_SKILLS_INSTALL_DIR:-$HOME/.config/opencode/my-skills}"
 CONFIG_FILE="${OPENCODE_CONFIG_FILE:-$HOME/.config/opencode/opencode.json}"
 GLOBAL_SKILLS_DIR="${OPENCODE_SKILLS_DIR:-$HOME/.config/opencode/skills}"
 GLOBAL_COMMANDS_DIR="${OPENCODE_COMMANDS_DIR:-$HOME/.config/opencode/commands}"
+GLOBAL_PLUGINS_DIR="${OPENCODE_PLUGINS_DIR:-$HOME/.config/opencode/plugins}"
 SHARED_SKILLS_PATH="$INSTALL_DIR/plugins/my-skills/skills"
 OPENCODE_SKILLS_PATH="$INSTALL_DIR/.opencode/skills"
 OPENCODE_COMMANDS_PATH="$INSTALL_DIR/.opencode/commands"
+WATCHDOG_PLUGIN_PATH="$INSTALL_DIR/plugins/my-skills/hooks/opencode/orchestrator-watchdog.js"
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -28,7 +31,7 @@ require_cmd() {
 require_cmd git
 require_cmd node
 
-mkdir -p "$(dirname "$INSTALL_DIR")" "$(dirname "$CONFIG_FILE")" "$GLOBAL_SKILLS_DIR" "$GLOBAL_COMMANDS_DIR"
+mkdir -p "$(dirname "$INSTALL_DIR")" "$(dirname "$CONFIG_FILE")" "$GLOBAL_SKILLS_DIR" "$GLOBAL_COMMANDS_DIR" "$GLOBAL_PLUGINS_DIR"
 
 if [ -d "$INSTALL_DIR/.git" ]; then
   echo "Updating $INSTALL_DIR"
@@ -66,6 +69,21 @@ for skills_dir in "$SHARED_SKILLS_PATH" "$OPENCODE_SKILLS_PATH"; do
     echo "linked opencode skill $name -> ${skill%/}"
   done
 done
+
+# opencode loads every *.js in its plugins directory at startup. The link resolves
+# to the checkout, where the plugin requires the Stop hook rules beside it.
+watchdog_target="$GLOBAL_PLUGINS_DIR/my-skills-orchestrator-watchdog.js"
+if [ -f "$WATCHDOG_PLUGIN_PATH" ]; then
+  if [ -L "$watchdog_target" ]; then
+    rm "$watchdog_target"
+  elif [ -e "$watchdog_target" ]; then
+    mv "$watchdog_target" "$watchdog_target.bak-$ts"
+    echo "backed up existing opencode plugin my-skills-orchestrator-watchdog.js -> my-skills-orchestrator-watchdog.js.bak-$ts"
+  fi
+
+  ln -s "$WATCHDOG_PLUGIN_PATH" "$watchdog_target"
+  echo "linked opencode plugin my-skills-orchestrator-watchdog.js -> $WATCHDOG_PLUGIN_PATH"
+fi
 
 SKILLS_PATHS="$SHARED_SKILLS_PATH"
 if [ -d "$OPENCODE_SKILLS_PATH" ]; then
@@ -193,6 +211,7 @@ for skills_dir in "$SHARED_SKILLS_PATH" "$OPENCODE_SKILLS_PATH"; do
 done
 echo "opencode global skill links installed in: $GLOBAL_SKILLS_DIR"
 echo "opencode slash commands installed in: $GLOBAL_COMMANDS_DIR"
+echo "opencode orchestrator watchdog plugin linked in: $GLOBAL_PLUGINS_DIR"
 echo "Config updated: $CONFIG_FILE"
 echo "Run this installer again to update skills and command templates."
-echo "Restart opencode to load the skills."
+echo "Restart opencode to load the skills and the plugin."
