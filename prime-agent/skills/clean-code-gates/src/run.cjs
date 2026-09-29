@@ -2,7 +2,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { detectPackages } = require('./detect.cjs');
-const { loadConfig } = require('./config.cjs');
+const { loadConfig, configWarnings } = require('./config.cjs');
 const { resolveScope, fileStack, defaultBaseRef } = require('./scope.cjs');
 const { selectGates, assertRequestedGates, assertResolvedGates } = require('./gates/registry.cjs');
 const { scanNoComments } = require('./gates/g5-no-comments.cjs');
@@ -130,7 +130,7 @@ function run({ root, options, io }) {
   const exitCode = report.summary.status === 'blocked' ? 1
     : report.summary.status === 'error' ? 4
     : (options.requireTools && report.summary.gatesMissingTool.length ? 2 : 0);
-  return { report, exitCode };
+  return { report, exitCode, warnings: configWarnings(cfg) };
 }
 
 module.exports = { run, registerAdapter, assertNonEmptyScope, sourcePredicate, resolveAnchorRef };

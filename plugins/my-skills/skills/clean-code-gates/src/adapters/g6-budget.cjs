@@ -21,4 +21,21 @@ function g6Budget(g6cfg) {
   };
 }
 
-module.exports = { G6_BUDGET_DEFAULTS, g6Budget };
+/**
+ * The policy a G6 killed on `totalSeconds` records: `disclose`, the default both
+ * stacks write, or `stop`. It says whether a run waits for an operator over a
+ * bounded gate — the orchestrator applies it when QA's own wall clock stops one —
+ * and never the verdict: a bounded G6 is the same non-pass under both
+ * (`docs/adr/0028-bounded-g6-is-disclosed-not-a-stop.md`). Anything else falls
+ * back to `stop`, the conservative reading, so a typo costs a wait and never a
+ * disclosure nobody chose — and `configWarnings` names it once per run.
+ */
+const G6_ON_BOUND = ['disclose', 'stop'];
+
+function g6OnBound(g6cfg) {
+  const v = g6cfg ? g6cfg.on_bound : undefined;
+  if (v == null) return 'disclose';
+  return G6_ON_BOUND.includes(v) ? v : 'stop';
+}
+
+module.exports = { G6_BUDGET_DEFAULTS, G6_ON_BOUND, g6Budget, g6OnBound };

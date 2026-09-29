@@ -51,6 +51,8 @@ Every gate is implemented for both stacks. A gate reports `missing_tool` (never 
 
 **G6 tooling (dart-flutter):** the mutation gate runs the `mutation_test` pub package by default (`dart pub global activate mutation_test`). It writes a generated config naming exactly the in-scope files plus the project's test command, runs `dart pub global run mutation_test -f junit`, and derives the score from the junit report — `<testsuite tests= failures=>` sums to total/undetected, and each failing `<testcase>` carries its file in `classname` and its line in the failure body. junit is the only format with both halves: the plain `xml` report lists undetected mutations with no total, so no score can be derived from it. When `coverage/lcov.info` exists it is passed with `-c`, so only covered statements are mutated. Set `gates.G6.tool: "dart_mutant"` to use the external `dart_mutant` CLI instead (`brew install dart_mutant`), which parses a Stryker-compatible JSON report and scores over its whole `--glob` rather than the exact scope. Either tool compares against `.cleancode-gates.json`'s `mutationScore`: `mutation_test`'s own `<threshold>` element is never emitted and its exit code never read, so the config remains the single source of every number. Surviving mutants are reported as warnings. Both run without leaving a report directory, worktree, or `pub get` litter (reports go to a temp dir removed after parsing). Note `mutation_test` edits target files **in place** and restores them on a clean exit, where `dart_mutant` sandboxes; the adapter snapshots every target before the run and restores anything that differs afterwards, so a crash or a killed tool cannot leave a live mutation in the tree (a `SIGKILL` to the gate process itself is the documented residual).
 
+**G6 bound policy (both stacks):** a G6 child killed on `gates.G6.budget.totalSeconds` reports `measurement.state: "unmeasured"` with `reason: "bounded"`, plus `onBound`: the `gates.G6.on_bound` policy in force, `"disclose"` (the default written for both stacks) or `"stop"`. An unrecognised value resolves to `"stop"` and prints one `warning:` line on stderr. It never changes the verdict: a bounded G6 is `status: "error"` with a blocker under either policy, never a pass. With a base ref (`--scope diff[:<ref>]` or `--base-ref`) the policy is read from the merge base, like the thresholds, and a branch that changes it is reported as an instrument move; without one it is the working tree's. The orchestrator applies `on_bound` only when QA's own wall clock (`gate_wall_clock_minutes`) stops a gate, and discloses a G6 bounded here under either policy (ADR-0028 leaves routing it by `on_bound` open). A runner killed by any other signal reports `reason: "killed"`, never `bounded`.
+
 ---
 
 ## Stack detection and config
@@ -73,7 +75,7 @@ Detection results are used to auto-create `.cleancode-gates.json` in the project
         "G2": { "tool": "eslint", "thresholds": { "complexity": 8, "maxDepth": 2, "maxLinesPerFunction": 30, "maxParams": 4, "maxStatements": 15 } },
         "G4": { "tool": "eslint" },
         "G5": { "tool": "builtin" },
-        "G6": { "tool": "stryker", "thresholds": { "mutationScore": 70 } },
+        "G6": { "tool": "stryker", "thresholds": { "mutationScore": 70 }, "on_bound": "disclose" },
         "G7": { "tool": "dependency-cruiser" }
       },
       "baseline": ".eslint-baseline.json"

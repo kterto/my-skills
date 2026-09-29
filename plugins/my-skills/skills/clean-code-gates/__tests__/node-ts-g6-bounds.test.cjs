@@ -19,6 +19,8 @@ const path = require('node:path');
 
 const adapter = require('../src/adapters/node-ts.cjs');
 const { defaultStackConfig } = require('../defaults.cjs');
+const { g6OnBound } = require('../src/adapters/g6-budget.cjs');
+const { buildReport } = require('../src/report.cjs');
 
 const { g6Score, g6Verdict, g6Budget, writeStrykerConfig, runG6 } = adapter._internals || {};
 
@@ -137,6 +139,7 @@ test('writeStrykerConfig: the per-mutant cap reaches the generated config', () =
     maxMutants: 400,
   });
   const written = JSON.parse(fs.readFileSync(p, 'utf8'));
+  fs.rmSync(path.dirname(p), { recursive: true, force: true });
   assert.equal(written.timeoutMS, 30000);
 });
 
@@ -160,5 +163,87 @@ test('runG6: a child killed on the clock reports unmeasured, not pass', () => {
   const r = runG6(['src/a.ts'], cfg, { root }, { execFileSync });
   assert.equal(r.status, 'error');
   assert.equal(r.measurement.state, 'unmeasured');
-  assert.equal(r.measurement.reason, 'killed-on-clock');
+  assert.equal(r.measurement.reason, 'bounded');
+});
+
+test('runG6: a runner killed by a signal inside the budget reports killed, never bounded', () => {
+  // The OOM killer, a crash or an operator: nothing the engine's own clock did.
+  const root = tmpProject();
+  const execFileSync = () => {
+    const e = new Error('Command failed: stryker run');
+    e.signal = 'SIGKILL';
+    e.status = null;
+    throw e;
+  };
+  const r = runG6(['src/a.ts'], cfg, { root }, { execFileSync });
+  assert.equal(r.status, 'error');
+  assert.equal(r.measurement.state, 'unmeasured');
+  assert.equal(r.measurement.reason, 'killed');
+  assert.equal(r.measurement.onBound, undefined, 'only the engine\'s own bound carries the policy');
+  assert.match(r.findings[0].message, /killed by SIGKILL/);
+  assert.doesNotMatch(r.findings[0].message, /exceeded/);
+});
+
+test('runG6: both temp dirs are removed on every path', () => {
+  const root = tmpProject();
+  const paths = (args) => {
+    const cfgPath = args[1];
+    return { cfgDir: path.dirname(cfgPath), reportPath: JSON.parse(fs.readFileSync(cfgPath, 'utf8')).jsonReporter.fileName };
+  };
+  const outcomes = {
+    scored: (bin, args) => {
+      const { reportPath } = paths(args);
+      fs.writeFileSync(reportPath, JSON.stringify({ files: { 'src/a.ts': { mutants: [mutant('Killed')] } } }));
+    },
+    bounded: () => { const e = new Error('spawn timed out'); e.code = 'ETIMEDOUT'; throw e; },
+    unparseable: (bin, args) => { fs.writeFileSync(paths(args).reportPath, '{ torn'); },
+  };
+  for (const [label, behave] of Object.entries(outcomes)) {
+    let seen = null;
+    const execFileSync = (bin, args, o) => {
+      seen = paths(args);
+      return behave(bin, args, o);
+    };
+    const r = runG6(['src/a.ts'], cfg, { root }, { execFileSync });
+    assert.ok(r.status, label);
+    assert.ok(!fs.existsSync(seen.cfgDir), `${label}: the Stryker config dir was left behind`);
+    assert.ok(!fs.existsSync(path.dirname(seen.reportPath)), `${label}: the report dir was left behind`);
+  }
+});
+
+// ---- the bound policy (gates.G6.on_bound) --------------------------------
+
+test('g6OnBound: disclose by default, stop for any value it does not recognise', () => {
+  assert.equal(g6OnBound(cfg.gates.G6), 'disclose');
+  assert.equal(g6OnBound({}), 'disclose', 'an absent key is the default, not an invalid value');
+  assert.equal(g6OnBound({ on_bound: 'stop' }), 'stop');
+  assert.equal(g6OnBound({ on_bound: 'disclosed' }), 'stop', 'a typo falls back to the legacy park');
+});
+
+test('runG6: a bounded run carries its policy, and is the same non-pass under every policy', () => {
+  const root = tmpProject();
+  const execFileSync = () => {
+    const e = new Error('spawn timed out');
+    e.code = 'ETIMEDOUT';
+    throw e;
+  };
+  const withPolicy = (onBound) => ({ ...cfg, gates: { ...cfg.gates, G6: { ...cfg.gates.G6, on_bound: onBound } } });
+  const runs = {
+    disclose: runG6(['src/a.ts'], cfg, { root }, { execFileSync }),
+    stop: runG6(['src/a.ts'], withPolicy('stop'), { root }, { execFileSync }),
+    typo: runG6(['src/a.ts'], withPolicy('disclosed'), { root }, { execFileSync }),
+  };
+  assert.equal(runs.disclose.measurement.onBound, 'disclose');
+  assert.equal(runs.stop.measurement.onBound, 'stop');
+  assert.equal(runs.typo.measurement.onBound, 'stop');
+  for (const r of Object.values(runs)) {
+    assert.equal(r.measurement.state, 'unmeasured');
+    assert.equal(r.measurement.reason, 'bounded');
+    assert.equal(r.measurement.budgetSeconds, 1800);
+    const report = buildReport({ scope: { kind: 'files', files: ['src/a.ts'], stacks: ['node-ts'] }, gateResults: [r] });
+    assert.notEqual(report.summary.status, 'pass', 'a bounded G6 must never read as a pass');
+  }
+  // The policy decides whether a run waits, never its verdict.
+  const verdict = (r) => ({ ...r, measurement: { ...r.measurement, onBound: undefined } });
+  assert.deepStrictEqual(verdict(runs.disclose), verdict(runs.stop));
 });
