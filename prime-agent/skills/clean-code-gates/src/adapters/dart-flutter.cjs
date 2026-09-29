@@ -5,7 +5,7 @@ const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { G1_EXEMPTIONS } = require('../../defaults.cjs');
 const { toPosix } = require('../scope.cjs');
-const { g6Budget } = require('./g6-budget.cjs');
+const { g6Budget, g6OnBound } = require('./g6-budget.cjs');
 
 /**
  * dart-flutter adapter.
@@ -856,12 +856,19 @@ ${fileEls}
     } catch (err) {
       // Three different failures arrive here. ETIMEDOUT means we killed it
       // mid-run, so whatever is on disk covers an arbitrary prefix of the scope
-      // — a partial measurement, never a score. An abort on the unmodified
-      // baseline means the project's own suite is red before any mutation, which
-      // is a precondition failure and not a mutation result. Anything else is
-      // mutation_test's own quality gate firing: the report is complete and our
-      // threshold comparison is the one that counts.
-      if (err && err.code === 'ETIMEDOUT') return { reason: 'run-timeout' };
+      // — a partial measurement, never a score; it is the engine's own bound,
+      // reported `bounded` with the policy that says whether the consumer waits.
+      // An abort on the unmodified baseline means the project's own suite is red
+      // before any mutation, which is a precondition failure and not a mutation
+      // result. Anything else is mutation_test's own quality gate firing: the
+      // report is complete and our threshold comparison is the one that counts.
+      if (err && err.code === 'ETIMEDOUT') {
+        return {
+          reason: 'bounded',
+          detail: `exceeded the ${budget.totalSeconds}s budget`,
+          onBound: g6OnBound(g6cfg),
+        };
+      }
       const out = `${(err && err.stdout) || ''}${(err && err.stderr) || ''}`.trim();
       if (BASELINE_RED.test(out)) {
         return {
@@ -1054,6 +1061,7 @@ function g6Unmeasured(run, { targets, threshold, command, tool }) {
       chargeable: run.chargeable ?? null,
       worstCaseSeconds: run.worstCaseSeconds ?? null,
       budgetSeconds: b.totalSeconds ?? null,
+      ...(run.onBound ? { onBound: run.onBound } : {}),
     },
     findings: [{
       id: 'G6:unmeasured',

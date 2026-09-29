@@ -504,9 +504,10 @@ test('a gate result with a measurement block conforms to report.schema.json', ()
         findings: [],
         measurement: {
           state: 'unmeasured',
-          reason: 'killed-on-clock',
+          reason: 'bounded',
           mutants: null,
           budgetSeconds: 1800,
+          onBound: 'disclose',
         },
       },
       {
@@ -529,4 +530,14 @@ test('schema: measurement.state rejects a value outside the four documented stat
     schema,
   );
   assert.ok(errs.length > 0, 'an undocumented measurement state must not validate');
+});
+
+test('schema: measurement.onBound rejects a value outside the two policies', () => {
+  const errs = validate(
+    corrupt((r) => {
+      r.gates[0].measurement = { state: 'unmeasured', reason: 'bounded', onBound: 'maybe' };
+    }),
+    schema,
+  );
+  assert.deepStrictEqual(errs, ['$.gates[0].measurement.onBound: must be one of ["disclose","stop"], got "maybe"']);
 });

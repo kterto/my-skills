@@ -14,7 +14,7 @@ Authored agent skills for [Claude Code](https://code.claude.com), [opencode](htt
 | `simplify` | Reviews changed code across five cleanup angles (reuse, simplification, efficiency, altitude, quotable convention violations) and applies the fixes in the working tree. Quality only — it does not fix correctness bugs, but it reports the ones it observes on a `Bugs:` line, one per `file:line`, for its caller to act on. Fans the angles out as concurrent subagents when the host allows, single-pass inline otherwise. Never commits. |
 | `design-to-code` | Translates Claude design output files (self-contained HTML with tokens, reviewer comments, component states) into pixel-perfect, correctly-behaving code. |
 | `orchestrator` | Project-agnostic 6-agent pipeline (brainstormer → architect → coder → tester → reviewer → qa) with a context-confidence gate, spec-driven-eval integration, and a final Markdown/HTML report. Auto-detects first-run bootstrap vs. straight pipeline execution. Optional **parallel lane execution** (`--parallel lanes|full|ask`) fans architect+coder out across disjoint lanes — and, under `full`, nested sub-lanes — behind a frozen interface contract, with resumable halted runs. |
-| `orchestrator-flash` | Reduced-verification sibling of `orchestrator` for hackathon-speed validation: brainstormer → architect → coder plus an optional gating reviewer — four spawns and four artifacts against the orchestrator's eight and ten. No tester, no QA, no spec grading; typecheck and build run advisory and nothing blocks. Config-driven (`review`, `simplify`, `max_review_cycles`, and an advisory `warn_after_minutes` that warns and never stops). Emits `READY_TO_COMMIT` so existing wrappers keep working, and names every check it skipped on the banner so a cheap green never reads as an expensive one. Never commits. |
+| `orchestrator-flash` | Reduced-verification sibling of `orchestrator` for hackathon-speed validation: brainstormer → architect → coder plus an optional gating reviewer — five spawns, one of them a live check of the user's own flow, and four artifacts against the orchestrator's eight and ten. No tester, no QA, no spec grading; typecheck and build run advisory and nothing blocks. Config-driven (`review`, `simplify`, `max_review_cycles`, and an advisory `warn_after_minutes` that warns and never stops). Emits `READY_TO_COMMIT` so existing wrappers keep working, and names every check it skipped on the banner so a cheap green never reads as an expensive one. Never commits. |
 | `roadmap` | Decomposes a project spec into an auditable milestone→phase→user-story roadmap under `/roadmap/`, with append-only audit logs, orchestrator-ready user-story briefs, `/roadmap sync` trailer stamping, diff+preserve re-evaluation, release bands, and doc-only mutation ops. |
 | `product-manager` | Autonomously drives roadmap stories to completion and manages roadmap planning PRs — runs story briefs through the orchestrator, commits with `Roadmap-Story:`, syncs the roadmap, pushes/opens PRs, and exposes `assign`/`park`/`add-spec`/`add-milestone`/`add-phase`/`add-ticket`/`revise`/release-management verbs. |
 | `pr-review-report` | Reviews the current branch against an auto-detected base and emits paired `docs/reviews/<branch_slug>-<date>.{html,md}` artifacts — a self-contained interactive HTML report (architecture with recommend-only ADR flags, security, bugs/improvements lenses; rendered diff with inline annotations; severity-coded findings) plus a Markdown findings backlog shaped to hand off to `validation-fixer`. Reconciles triage across runs via a reviewer-local `.pr-review/review-state.json`, merges an existing backlog by fingerprint on re-review, and proposes optional review memory. |
@@ -389,8 +389,10 @@ my-skills/
 │   └── my-skills/
 │       ├── .claude-plugin/
 │       │   └── plugin.json      # plugin manifest
+│       ├── hooks/               # orchestrator watchdog: Claude Code Stop hook + opencode plugin
 │       └── skills/
 │           ├── index.json       # opencode remote skill index
+│           ├── budgets.json     # SKILL.md byte ceilings (ADR-0026)
 │           ├── context-builder/SKILL.md
 │           ├── clean-code-gates/SKILL.md
 │           ├── commit-pr/SKILL.md
@@ -438,6 +440,8 @@ A local checkout works too:
 ```
 
 Skills are then invocable as `/my-skills:clean-code-gates`, `/my-skills:commit-pr`, `/my-skills:orchestrator`, `/my-skills:roadmap`, `/my-skills:product-manager`, etc.
+
+The plugin also registers a Stop hook (`plugins/my-skills/hooks/`) that hands the turn back to an orchestrator conductor that ended it mid-run. In a project with no active orchestrator run it exits at once and does nothing.
 
 ## Install (Prime Agent)
 
@@ -488,7 +492,7 @@ skill with `/skill:<name>` — for example `/skill:orchestrator`.
 
 ## Install (opencode)
 
-Recommended install: clone/update this repo under `~/.config/opencode/`, symlink each shared skill and opencode-specific skill into `~/.config/opencode/skills/`, create or refresh matching slash commands under `~/.config/opencode/commands/`, and add the skill directories to `skills.paths` for newer opencode releases.
+Recommended install: clone/update this repo under `~/.config/opencode/`, symlink each shared skill and opencode-specific skill into `~/.config/opencode/skills/`, create or refresh matching slash commands under `~/.config/opencode/commands/`, link the orchestrator watchdog plugin (it re-prompts a conductor that goes idle mid-run) into `~/.config/opencode/plugins/`, and add the skill directories to `skills.paths` for newer opencode releases.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/kterto/my-skills/main/scripts/install-opencode.sh | bash
@@ -514,6 +518,14 @@ done
 for skill in ~/.config/opencode/my-skills/.opencode/skills/*; do
   [ -d "$skill" ] && ln -sfn "$skill" ~/.config/opencode/skills/"$(basename "$skill")"
 done
+```
+
+And link the watchdog plugin. It must stay a symlink: the plugin loads the Stop hook's rules from beside its real path.
+
+```bash
+mkdir -p ~/.config/opencode/plugins
+ln -sf ~/.config/opencode/my-skills/plugins/my-skills/hooks/opencode/orchestrator-watchdog.js \
+  ~/.config/opencode/plugins/my-skills-orchestrator-watchdog.js
 ```
 
 To add slash commands manually, create files like `~/.config/opencode/commands/roadmap.md`:
@@ -558,7 +570,7 @@ Hosted URL install is also supported by opencode's `skills.urls` loader:
 }
 ```
 
-Prefer the local installer for regular use: opencode currently caches remote skill files by skill name, so updates from `skills.urls` may require clearing opencode's skill cache before restart.
+Prefer the local installer for regular use: the hosted route downloads skills only, never the watchdog plugin, and opencode currently caches remote skill files by skill name, so updates from `skills.urls` may require clearing opencode's skill cache before restart.
 
 ## Updating (Claude Code)
 
@@ -606,7 +618,7 @@ can also be published as `@kterto/my-skills-prime-agent`; it includes the
 The installer is a **global, machine-wide** wire-up (`~/.config/opencode/`), not per-project — run it once and every opencode project on the machine sees the skills. It installs from the **remote**, not your local working copy, so a skill change reaches opencode only after it lands on the remote default branch. To ship an edit:
 
 1. **Push the skill change to remote `main`.** Edit under `plugins/my-skills/skills/<name>/` (and, for `pr-review-report` / `spec-driven-eval`, keep their `.opencode/skills/<name>/` override port in parity — those two ports *replace* the marketplace copy in opencode). Commit and push/merge to `main`.
-2. **Re-run the installer.** It is intentionally idempotent — it `git pull --ff-only`s the checkout, refreshes skill symlinks, regenerates slash-command files, re-applies the hand-written `.opencode/commands/*.md` wrappers (e.g. the `roadmap` / `product-manager` verb surfaces) over the generated ones, and preserves any pre-existing unmanaged command/skill directory by moving it to a timestamped `.bak-*` path:
+2. **Re-run the installer.** It is intentionally idempotent — it `git pull --ff-only`s the checkout, refreshes skill symlinks and the watchdog plugin link, regenerates slash-command files, re-applies the hand-written `.opencode/commands/*.md` wrappers (e.g. the `roadmap` / `product-manager` verb surfaces) over the generated ones, and preserves any pre-existing unmanaged command/skill directory by moving it to a timestamped `.bak-*` path:
 
    ```bash
    curl -fsSL https://raw.githubusercontent.com/kterto/my-skills/main/scripts/install-opencode.sh | bash
@@ -630,7 +642,7 @@ The orchestrator's agent role files (`architect`, `brainstormer`, `coder`, `qa`,
 The script copies the six managed agent files from this checkout's templates into the project — never touching `PROJECT-CONTEXT.md` or `config.json`. It picks targets two ways:
 
 - **Config override** — if `.orchestrator/config.json` has a non-empty `agent_sync_targets` array (relative dir paths), those are synced (created if missing).
-- **Auto-detect** (default) — every known agent dir that already exists (`.claude/agents`, `.agents/agents`) is refreshed; it never creates new dirs.
+- **Auto-detect** (default) — every known agent dir that already exists (`.claude/agents`, `.agents/agents`, `.opencode/agent`, `.opencode/agents`, `.orchestrator/roles`) is refreshed. The one dir it creates is `.opencode/agents`, when the project has `.opencode/` but neither opencode dir; restart any running opencode session afterwards.
 
 Files in a target dir that aren't part of the managed set are listed as `extra`; pass `--prune` to remove them (git-recoverable).
 

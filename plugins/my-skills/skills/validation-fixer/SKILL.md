@@ -222,7 +222,7 @@ shared-worktree model, not a replacement for it.
 
 **This step runs only when the chosen framework is `orchestrator` or `orchestrator-flash`.** Both take identical severity routing.
 
-> **Document-scoped substitution.** From here to the end of this document, "the orchestrator" means **whichever pipeline the user chose** in Step 2, and the run's banner says which one produced each result. Two consequences are not interchangeable and are called out where they matter: flash also terminates at `READY_WITH_WARNINGS`, which under flash means an open Must Fix (Step 3.4); and "the full pipeline" is only full under `orchestrator` — under flash, escalating an item to a dedicated run buys it a reviewer and a plan, not a tester, a QA pass or any gate. For
+> **Document-scoped substitution.** From here to the end of this document, "the orchestrator" means **whichever pipeline the user chose** in Step 2, and the run's banner says which one produced each result. Two consequences are not interchangeable and are called out where they matter: flash also terminates at `READY_WITH_WARNINGS`, which under flash means an open Must Fix or a live check that did not pass (Step 3.4); and "the full pipeline" is only full under `orchestrator` — under flash, escalating an item to a dedicated run buys it a reviewer and a plan, not a tester, a QA pass or any gate. For
 `superpowers` and `gsd`, **skip Step 2.5 entirely** — those frameworks keep their
 per-item loop unchanged (one open item at a time, in document order, exactly as
 Step 3 already describes). Severity routing is an orchestrator-only refinement; it
@@ -698,15 +698,16 @@ For each work unit, in order:
      "did NOT signal success" branch below — bug-12.)
    - **Under `orchestrator-flash`, `READY_WITH_WARNINGS` is not a success terminal.** The two
      pipelines spell it the same and mean different things: from the orchestrator it is the
-     advisory G8 rework ratio with every blocking gate passed; from flash it means the run
-     ended with the reviewer's **open Must Fix** and the review budget exhausted
-     (`orchestrator-flash/SKILL.md` → Step 5). The one verification flash performs said *do
-     not ship this*. Commit the work unit anyway — it exists, it is coherent, and leaving it
-     uncommitted loses it — but resolve the outcome as **must-fix** (the fourth row of the
-     taxonomy below), never *fixed*: the item stays open, its status line carries the banner's
-     `Issues found:` Must Fix lines verbatim, and Step 6 lists it in the attention bucket. A
-     file of validation bugs is the last place a reviewer's blocking finding should survive
-     only inside an untracked FINAL.
+     advisory G8 rework ratio, or a G6 bounded under `on_bound: disclose` (named on the
+     banner's `Unmeasured:` line), with every measured blocking gate passed; from flash it
+     means an **open Must Fix** or a live check that did not pass
+     (`orchestrator-flash/SKILL.md` → Step 5): flash's own checks did not clear it. Commit
+     the work unit anyway — it exists, it is coherent, and leaving it uncommitted loses it —
+     but resolve the outcome as **must-fix** (the fourth row of the taxonomy below), never
+     *fixed*: the item stays open, its status line carries the banner's Must Fix lines and
+     any `live check (…)` entry verbatim, and Step 6 lists it in the attention bucket. A file
+     of validation bugs is the last place a blocking finding should survive only inside an
+     untracked FINAL.
    - **HEAD unchanged, tree dirty, framework signaled success** (the orchestrator returned
      `READY_TO_COMMIT` / `READY_WITH_WARNINGS`, or flash returned `READY_TO_COMMIT`; a
      superpowers entry finished with real changes) → **validation-fixer owns the commit** as the pipeline's caller (the
@@ -788,7 +789,7 @@ For each work unit, in order:
    | --- | --- | --- |
    | **fixed** | success terminal **and** an accepted owned/framework commit exists in `BEFORE_SHA..AFTER_SHA` (passes the acceptance gate A–D) | `- [x]` + `_fixed via <framework>[/<sp-skill>] · <sha(s)> · <date>_` |
    | **rejected** | **checkpoint-mode only** — the user rejected the Step-3.4 commit diff, so validation-fixer rolled the code back (bug-11) and **kept no commit** | **bare `- [ ]`**, **no** status line (drop any prior one) |
-   | **must-fix** | **flash only** — `READY_WITH_WARNINGS`, i.e. an accepted commit exists **and** the reviewer left an open Must Fix | `- [ ]` (stays open) + `_committed via orchestrator-flash · <sha(s)> · <date> — open Must Fix: <each line from the banner's `Issues found:`>_` |
+   | **must-fix** | **flash only** — `READY_WITH_WARNINGS`, i.e. an accepted commit exists **and** a Must Fix or an unpassed live check is open | `- [ ]` (stays open) + `_committed via orchestrator-flash · <sha(s)> · <date> — open: <each MUST FIX line and any live check entry from the banner>_` |
    | **attempted** | any **other** no-commit outcome — the framework blocked/errored/no-op'd, committed-then-blocked (bug-12), or the owned/framework commit failed the acceptance gate; **and every autonomous no-commit outcome** | `- [~]` + `_attempted via <framework> · no commit · <date> — needs attention_` |
 
    The single-item lanes (dedicated, main-agent) and the batch lane below all resolve to
@@ -796,9 +797,9 @@ For each work unit, in order:
 
    **must-fix is the only outcome that keeps a commit and keeps the item open**, and it exists
    because flash can produce exactly that state. It is not a rollback: the code stands, the
-   commit stands, and the item stays on the list because the only reviewer that saw it said it
-   is not done. On a batch, one member's Must Fix resolves **that member** to must-fix and
-   leaves the rest `- [x]` — the shared commit is not rolled back for it.
+   commit stands, and the item stays on the list because flash's own checks did not clear
+   it. On a batch, one member's Must Fix resolves **that member** to must-fix and leaves the
+   rest `- [x]` — the shared commit is not rolled back for it.
 
    **rejected is checkpoint-mode-only.** Opting into **autonomous** mode *is* the standing
    approval to commit each work unit, so an autonomous run has **no** user-rejection path:

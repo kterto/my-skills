@@ -305,11 +305,81 @@ test('a run we killed on the clock is not scored from its partial report', () =>
     // The shape runMutationTest really returns when execFileSync raised
     // ETIMEDOUT: no xml reaches the verdict, because a partial report is not a
     // measurement.
-    runMutationTest: () => ({ unmeasured: true, reason: 'run-timeout', budget: { totalSeconds: 1800 } }),
+    runMutationTest: () => ({
+      unmeasured: true,
+      reason: 'bounded',
+      detail: 'exceeded the 1800s budget',
+      onBound: 'disclose',
+      budget: { totalSeconds: 1800 },
+    }),
   });
   assert.strictEqual(r.status, 'error');
   assert.strictEqual(r.measurement.state, 'unmeasured');
-  assert.strictEqual(r.measurement.reason, 'run-timeout');
+  assert.strictEqual(r.measurement.reason, 'bounded');
+});
+
+// ---- the bound policy (gates.G6.on_bound) --------------------------------
+
+// One mutant on a covered line: the preflight admits it (1 x 120 s fits the
+// 1800 s default), so the scoring run is where the clock can fire.
+const ONE_MUTANT_DRY_RUN = `<?xml version="1.0"?>
+<testsuites>
+  <testsuite id="0" name="x" package="x" tests="1" failures="1" errors="0" time="0.0">
+    <testcase name="Line1_x_0" classname="lib/calc.dart" time="0.0">
+      <failure type="undetected" message="undetected"/>
+    </testcase>
+  </testsuite>
+</testsuites>`;
+
+/** A mutation_test child whose dry run succeeds and whose scoring run is killed on the clock. */
+function killedOnTheClock() {
+  let onDisk = null;
+  let call = 0;
+  return {
+    execFileSync: () => {
+      call += 1;
+      if (call === 1) { onDisk = ONE_MUTANT_DRY_RUN; return ''; }
+      const err = new Error('spawnSync dart ETIMEDOUT');
+      err.code = 'ETIMEDOUT';
+      throw err;
+    },
+    readReport: () => onDisk,
+    dropReport: () => { onDisk = null; },
+  };
+}
+
+const withOnBound = (onBound) => ({ ...dartCfg, gates: { ...dartCfg.gates, G6: { ...dartCfg.gates.G6, on_bound: onBound } } });
+
+test('runMutationTest reports a scoring run killed on totalSeconds as bounded, with its policy', () => {
+  const run = runMutationTest(
+    { cmd: 'flutter', pre: [] }, dartCfg, io, ['lib/calc.dart'], dartCfg.gates.G6, killedOnTheClock(),
+  );
+  assert.ok(run.unmeasured, `expected an unmeasured run, got ${JSON.stringify(run)}`);
+  assert.strictEqual(run.reason, 'bounded');
+  assert.strictEqual(run.onBound, 'disclose', 'the default both stacks write');
+  assert.match(run.detail, /1800s budget/);
+});
+
+test('a G6 killed on its own bound is unmeasured (bounded) and the same non-pass under every policy', () => {
+  const runs = {};
+  for (const [configured, expected] of [['disclose', 'disclose'], ['stop', 'stop'], ['disclosed', 'stop']]) {
+    const r = runG6(['lib/calc.dart'], withOnBound(configured), io, {
+      resolveFlutter: flutterOk,
+      mutationTestAvailable: () => true,
+      runMutationTest: (flutter, stackCfg, io2, targets, g6) =>
+        runMutationTest(flutter, stackCfg, io2, targets, g6, killedOnTheClock()),
+    });
+    assert.strictEqual(r.status, 'error');
+    assert.strictEqual(r.measurement.state, 'unmeasured');
+    assert.strictEqual(r.measurement.reason, 'bounded');
+    assert.strictEqual(r.measurement.onBound, expected, `on_bound ${configured}`);
+    assert.ok(r.findings.some((f) => f.severity === 'blocker' && /1800s budget/.test(f.message)),
+      'a bounded G6 must never read as a pass, and must say which bound it hit');
+    runs[configured] = r;
+  }
+  // The policy decides whether a run waits, never its verdict.
+  const verdict = (r) => ({ ...r, measurement: { ...r.measurement, onBound: undefined } });
+  assert.deepStrictEqual(verdict(runs.disclose), verdict(runs.stop));
 });
 
 test('the reason a run could not be measured reaches the report', () => {

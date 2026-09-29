@@ -127,6 +127,25 @@ test('keys that are not instruments keep reading from the working tree', () => {
   assert.strictEqual(cfg.instrument.moves.length, 0);
 });
 
+test('on_bound is read from the merge-base, as QA reads it, and a flip on the branch is reported', () => {
+  // Whether a run waits over a bounded G6 is the trunk's decision (ADR-0028): the report
+  // must carry the policy QA acts on, not the one the branch under review wrote.
+  const d = tmp();
+  writeWorking(d, NODE({ G6: { on_bound: 'disclose' } }));
+  const cfg = loadConfig(d, ['node-ts'], { baseRef: 'mb', readBase: base(NODE({ G6: { on_bound: 'stop' } })) });
+  assert.strictEqual(cfg.stacks['node-ts'].gates.G6.on_bound, 'stop');
+  assert.deepStrictEqual(cfg.instrument.moves, [{
+    key: 'node-ts.gates.G6.on_bound', from: 'stop', to: 'disclose', direction: 'loosening',
+  }]);
+  assert.match(formatInstrumentLine(cfg.instrument), /node-ts\.gates\.G6\.on_bound stop → disclose \(loosening\)/);
+
+  // The other way is a tightening, and still runs on the base value.
+  writeWorking(d, NODE({ G6: { on_bound: 'stop' } }));
+  const tighter = loadConfig(d, ['node-ts'], { baseRef: 'mb', readBase: base(null) });
+  assert.strictEqual(tighter.stacks['node-ts'].gates.G6.on_bound, 'disclose');
+  assert.strictEqual(tighter.instrument.moves[0].direction, 'tightening');
+});
+
 test('no config at the merge-base anchors to the built-in defaults, never to the working tree', () => {
   const d = tmp();
   writeWorking(d, NODE({ G1: { thresholds: { statements: 10 } } }));

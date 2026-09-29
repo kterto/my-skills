@@ -5,6 +5,7 @@ const cp = require('node:child_process');
 const { defaultStackConfig } = require('../defaults.cjs');
 const { anchorInstrument } = require('./instrument.cjs');
 const { assertBaseRefShape } = require('./baseref.cjs');
+const { G6_ON_BOUND } = require('./adapters/g6-budget.cjs');
 
 const CONFIG_NAME = '.cleancode-gates.json';
 
@@ -84,4 +85,19 @@ function loadConfig(root, detected, opts = {}) {
   return { ...cfg, instrument: { anchored: true, baseRef: opts.baseRef, source: baseUser ? 'merge-base' : 'defaults', moves } };
 }
 
-module.exports = { loadConfig, CONFIG_NAME, deepMerge };
+/**
+ * Values the resolved config holds that the run cannot honour as written. Each
+ * still resolves — an unrecognised `gates.G6.on_bound` to `stop` — and each is
+ * named once per run, here, rather than by every adapter that reads it.
+ */
+function configWarnings(cfg) {
+  const warnings = [];
+  for (const [stack, s] of Object.entries((cfg && cfg.stacks) || {})) {
+    const v = (((s || {}).gates || {}).G6 || {}).on_bound;
+    if (v == null || G6_ON_BOUND.includes(v)) continue;
+    warnings.push(`${stack}.gates.G6.on_bound ${JSON.stringify(v)} is not one of ${G6_ON_BOUND.join(', ')} — resolving to stop`);
+  }
+  return warnings;
+}
+
+module.exports = { loadConfig, configWarnings, CONFIG_NAME, deepMerge };

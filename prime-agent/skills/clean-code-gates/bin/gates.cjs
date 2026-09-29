@@ -22,7 +22,8 @@ function main() {
   let result;
   try { result = run({ root, options, io: { version: require('../package.json').version } }); }
   catch (e) { process.stderr.write(`error: ${e.message}\n`); process.exit(3); }
-  const { report, exitCode } = result;
+  const { report, exitCode, warnings = [] } = result;
+  for (const w of warnings) process.stderr.write(`warning: ${w}\n`);
   // Non-suppressible, and on stderr so it survives `--out -` being piped into a
   // consumer. There is no flag that turns it off: a disclosure a run can silence
   // is the loophole with one more step in it.

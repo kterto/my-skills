@@ -6,7 +6,7 @@
 //   node scripts/stamp-orchestrator-version.mjs --check   # verify it, exit 1 on drift
 //
 // Bootstrap (references/bootstrap.md → B3) copies the six role templates into the
-// host's agent directory and the six references, the html scaffolds and the four
+// host's agent directory and the six references, the html scaffolds and the seven
 // runtime .cjs into `target/.orchestrator/`. It re-runs when one of those files is
 // MISSING — a trigger that by construction cannot see a file that is present but
 // two releases old. That is the bug this script exists to make visible: a project
@@ -71,6 +71,7 @@ export const SKILL_FILES = [
   "scripts/check-artifact-links.cjs",
   "scripts/check-artifact-home.cjs",
   "scripts/gate-scope.cjs",
+  "scripts/run-state.cjs",
 ]
 
 const HTML_TEMPLATE_DIR = "templates/html"

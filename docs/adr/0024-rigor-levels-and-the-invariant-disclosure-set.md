@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-12
+- **Amended by:** [ADR-0027](0027-execution-budgets-raisable-in-session.md) — decisions 2 and 3, for the six execution budgets only.
 - **Skills affected:** `orchestrator` (`SKILL.md` → Step 0b resolution and the Step 7b banner stamp; `references/config.md` → the `rigor` key, the preset table, *The anchored set*; `templates/config.template.json`); `clean-code-gates` (`--rigor`, the anchored `rigor` field, block-vs-report demotion); `product-manager` (pass-through, PR stamp, log column); `roadmap` (the `rigor` band, its badge, the release-matrix annotation).
 - **Source finding:** `docs/measurement-alignment-audit-2026-09-11.md` (P2, P6, P9) and `docs/effort-tiers-design-note.md`. The presets are calibrated against 258 specs and 251 run families on this machine; the calibration is in the design note, not restated here.
 - **Precedent:** ADR-0001 (`orthogonal-system-band`) for the band mechanics; the two-trust-anchors invariant in `PROJECT-CONTEXT.md` and `orchestrator/references/config.md` → *The anchored set* for the anchoring.

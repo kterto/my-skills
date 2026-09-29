@@ -209,7 +209,12 @@
               },
               "reason": {
                 "type": "string",
-                "description": "Why the measurement is partial or unmeasured, e.g. killed-on-clock, no-report, nothing-ran, mutant-cap, time-budget."
+                "description": "Why the measurement is partial or unmeasured, e.g. bounded (the child was killed on gates.G6.budget.totalSeconds), killed (by any other signal), no-report, nothing-ran, mutant-cap, time-budget, rigor-<level>."
+              },
+              "onBound": {
+                "type": "string",
+                "enum": ["disclose", "stop"],
+                "description": "Present when reason is bounded: the gates.G6.on_bound policy in force, read from the merge base when the run has a base ref. It never changes the verdict, which is a non-pass under both. The orchestrator applies on_bound only when QA's own wall clock stops a gate, and discloses an engine-bounded G6 under either policy. See docs/adr/0028."
               }
             }
           },

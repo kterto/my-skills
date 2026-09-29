@@ -159,6 +159,15 @@ node <skill-dir>/bin/gates.cjs --scope diff --gates G5 --out -
   a large project is a scheduled artifact, not a per-change gate — use `--scope diff` or a
   narrow module.
 
+  **A run killed on `totalSeconds` is `bounded`.** Its measurement reads `reason: "bounded"` and
+  carries `onBound`, the `gates.G6.on_bound` policy in force: `disclose` (the default on both
+  stacks) or `stop`. Any other value resolves to `stop` and prints one warning. Given a base ref
+  the policy is read from the merge base, like the thresholds, and a branch that changes it is an
+  instrument move. It never changes the verdict, a non-pass under both. The orchestrator applies
+  `on_bound` only when QA's own `gate_wall_clock_minutes` stops a gate; a G6 bounded here is
+  disclosed under either policy (`docs/adr/0028` in the authoring repo). A runner killed by any
+  other signal reports `reason: "killed"`, never `bounded`.
+
   **What each stack enforces, stated rather than assumed.** `perMutantSeconds` and
   `totalSeconds` are enforced on both stacks: the per-mutant cap is written into the generated
   tool config (Stryker's `timeoutMS`) and the child is spawned with a hard `timeout` and

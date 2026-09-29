@@ -16,9 +16,16 @@ A plan ID (e.g. `FEAT-001`). The plan must have `status: DONE` and a correspondi
 ## Step 0 — Gate wall-clock budget (mandatory)
 
 Read `gate_wall_clock_minutes` from `.orchestrator/config.json` (integer ≥ 0; default `15`; `0`
-disables the bound). **Run each Clean Code gate command in Step 4b under that bound.** On a command
-that exceeds it: stop it, record that gate's verdict as `UNMEASURED`, and add the gate to the
-report's `stale_gates:` frontmatter list with the elapsed minutes.
+disables the bound; a `gate_wall_clock_minutes=` line in your prompt wins). **Run each Clean Code
+gate command in Step 4b under that bound.** On a command that exceeds it: stop it and record that
+gate's verdict as `UNMEASURED`. Then read the gate's `gates.<G>.on_bound` from the merge-base
+`.cleancode-gates.json` (`git show $mb:./.cleancode-gates.json`); an absent key or file means
+`disclose` for G6 and `stop` for every other gate, and an unrecognised value means `stop`.
+
+- **`disclose`** — add the gate to the report's `unmeasured_bounded:` frontmatter list with the
+  elapsed minutes, and **not** to `stale_gates:`. The report status is then at most
+  `READY_WITH_WARNINGS` (Step 6).
+- **`stop`** — add it to `stale_gates:` with the elapsed minutes.
 
 **The bound is on Step 4b's gate commands only — not on the Step 3 test suite and not on Step 4's
 lint, type or format checks.** Two reasons, and both matter. A gate has an **id** (`G1`…`G7`), a row
@@ -33,18 +40,18 @@ should paper over by inventing a verdict for it.
 verification ledger's inheritance rule would otherwise let that non-execution be inherited as a
 recorded outcome at that tree for the rest of the run.
 
-A stale gate is **not** a failure. It is a gate whose result is unknown, and the difference matters:
-a fail is something a fix plan can act on, while a timeout is an operator decision about tooling or
-scope that no remediation cycle can reach. Never enter the QA-remediation loop over one, and never
-let it read as a pass.
+A stale or bounded gate is **not** a failure. It is a gate whose result is unknown, and the difference
+matters: a fail is something a fix plan can act on, while a timeout is an operator decision about
+tooling or scope that no remediation cycle can reach. Never enter the QA-remediation loop over one,
+and never let it read as a pass.
 
-**This is the only producer of `stale_gates:`, and the orchestrator's `BLOCKED_STALE` status is
-synthesized from it** (`SKILL.md` Step 5d). If this step never writes the key, that status is
-unreachable and a hung gate simply hangs the run — which is exactly what a mutation runner that
-spends 43 minutes spawning nothing looks like from here.
+**This is the only producer of `stale_gates:` and `unmeasured_bounded:`, and the orchestrator's
+`BLOCKED_STALE` status is synthesized from the first, never the second** (`SKILL.md` Step 5d). If
+this step never writes the key, that status is unreachable and a hung gate simply hangs the run —
+which is exactly what a mutation runner that spends 43 minutes spawning nothing looks like from here.
 
-Emit `stale_gates: []` when nothing exceeded the bound, so the key's absence always means an older
-report rather than a clean one.
+Emit `stale_gates: []` and `unmeasured_bounded: []` when empty, so a key's absence always means an
+older report rather than a clean one.
 
 ## Step 1 — Validate preconditions (mandatory)
 
@@ -397,6 +404,7 @@ test_failures: {N}
 lint_errors: {N}
 type_errors: {N}
 stale_gates: []   # or [{gate: G6, elapsed_minutes: 43}, ...] — gates that exceeded Step 0's bound
+unmeasured_bounded: []   # or [{gate: G6, elapsed_minutes: 15}, ...] — Step 0's `disclose` gates
 ---
 
 ## Summary
@@ -452,7 +460,7 @@ stale_gates: []   # or [{gate: G6, elapsed_minutes: 43}, ...] — gates that exc
 
 {If READY_TO_COMMIT}: All checks pass. Safe to commit and open PR.
 {If BLOCKED}: Invoke `/architect` with this QA report path (`{run_dir}/QA-{NNN}-{slug}.md`) to generate a QAF remediation plan. Each failure and error will become a task.
-{If READY_WITH_WARNINGS}: All blocking checks pass but the family's G8 ratio is in 0.5 < r ≤ 1.5 (HIGH_REWORK). Plan can ship; flag for human root-cause investigation.
+{If READY_WITH_WARNINGS}: All blocking checks pass but the family's G8 ratio is in 0.5 < r ≤ 1.5 (HIGH_REWORK); or every measured blocking check passes and a gate hit its bound (`unmeasured_bounded:`), which is unmeasured, not a pass. Plan can ship; flag for human root-cause investigation.
 ```
 
 ## Step 6 — Set status
@@ -465,14 +473,14 @@ stale_gates: []   # or [{gate: G6, elapsed_minutes: 43}, ...] — gates that exc
 **G6 below `hardened` is `UNMEASURED (rigor-<level>)`**, listed with the other unmeasured gates and forwarded to the FINAL banner's `Unmeasured:` line. It is not a pass and it is not a missing tool.
 
 **A `MISSING_TOOL` or `UNMEASURED` verdict does not block on its own.** It is not a failure and not a pass: it means no value exists to compare, so blocking on it asks the pipeline to fix something no plan can reach — a stack with no mutation runner never installs one mid-run, and `flutter test --coverage` will not start emitting branch records. Report it prominently, name it in the verdict rationale, and let the run proceed on the gates that *were* measured. Adjudicating it case by case is what let two QA reports on the same feature, hours apart, reach opposite verdicts on an identical unmeasured gate.
-- **READY_WITH_WARNINGS**: All blocking checks pass but the family's G8 ratio is in `0.5 < r ≤ 1.5` (HIGH_REWORK). Plan can ship; flag in report so the human investigates root cause.
+- **READY_WITH_WARNINGS**: All blocking checks pass but the family's G8 ratio is in `0.5 < r ≤ 1.5` (HIGH_REWORK); or every measured blocking check passes and `unmeasured_bounded:` is non-empty — a bounded gate is unmeasured, not a pass. Plan can ship; flag in report so the human investigates root cause.
 
-**A non-empty `stale_gates:` is never `READY_TO_COMMIT`.** A gate stopped on the clock is unmeasured
-*because this run ran out of time on it*, which is not the same as a gate that could never be
-measured here — the distinction Step 0 exists to draw. Set `READY_WITH_WARNINGS` at best, name every
-stale gate and its elapsed minutes in the verdict rationale, and never print "all checks pass" over
-one. The orchestrator reads the key and synthesizes `BLOCKED_STALE` from it; a report that buries a
-timeout inside a clean verdict defeats that.
+**A non-empty `stale_gates:` or `unmeasured_bounded:` is never `READY_TO_COMMIT`.** A gate stopped on
+the clock is unmeasured *because this run ran out of time on it*, which is not the same as a gate that
+could never be measured here — the distinction Step 0 exists to draw. Set `READY_WITH_WARNINGS` at
+best, name every such gate and its elapsed minutes in the verdict rationale, and never print "all
+checks pass" over one. The orchestrator synthesizes `BLOCKED_STALE` from `stale_gates:` and discloses
+`unmeasured_bounded:`; a report that buries a timeout inside a clean verdict defeats both.
 
 ## Step 7 — Update plan and progress files
 

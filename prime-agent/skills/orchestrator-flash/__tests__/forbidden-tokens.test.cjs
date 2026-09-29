@@ -50,7 +50,7 @@ test('the reviewer base is shipped under the name four roles already read', () =
 test('roles are spawned as a generic agent type, never a registered role name', () => {
   const md = readFileSync(join(FLASH, 'SKILL.md'), 'utf8');
   assert.match(md, /general-purpose/);
-  assert.ok(!/subagent_type:\s*"(brainstormer|architect|coder|reviewer)"/.test(md),
+  assert.ok(!/subagent_type:\s*"(brainstormer|architect|coder|live|reviewer)"/.test(md),
     'flash registers a role agent type that sync-agents.sh --prune would delete');
 });
 

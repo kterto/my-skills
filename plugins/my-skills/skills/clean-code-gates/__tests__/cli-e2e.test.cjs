@@ -101,6 +101,21 @@ test('a gate that produces no verdict exits 4, independent of --require-tools', 
   assert.strictEqual(forced.status, 4, 'exit 4 outranks the opt-in exit 2');
 });
 
+test('an unrecognised G6 on_bound prints one warning and the run goes on', () => {
+  const d = project();
+  fs.writeFileSync(path.join(d, '.cleancode-gates.json'), JSON.stringify({
+    schemaVersion: '1.0',
+    stacks: { 'node-ts': { gates: { G6: { on_bound: 'nope' } } } },
+  }));
+  const r = cli(d, ['--scope', 'files:src/a.ts', '--gates', 'G5', '--out', '-']);
+
+  assert.strictEqual(r.status, 0, 'a policy value is not a verdict');
+  const warnings = r.stderr.split('\n').filter((l) => l.startsWith('warning:'));
+  assert.deepStrictEqual(warnings, [
+    'warning: node-ts.gates.G6.on_bound "nope" is not one of disclose, stop — resolving to stop',
+  ]);
+});
+
 test('--scaffold exits 0, prints install commands, and changes nothing', () => {
   const d = project();
   const before = fs.readdirSync(d).sort();

@@ -38,19 +38,21 @@ none
 
 ### Reviewer Must Fix (flash)
 
-A flash run that returns `Status: READY_WITH_WARNINGS` ended with the reviewer's **open Must
-Fix** and an exhausted review budget (`orchestrator-flash/SKILL.md` → Step 5). That is a
-human-validation spot by the same logic as every other one here — a human has to look before
-this is done — and it is detected from the banner rather than from a scan:
+A flash run that returns `Status: READY_WITH_WARNINGS` ended with an **open Must Fix** (the
+reviewer's, its budget spent, or a live check that failed) or with a live check that did not
+run (`orchestrator-flash/SKILL.md` → Step 5). That is a human-validation spot by the same logic
+as every other one here — a human has to look before this is done — and it is detected from the
+banner rather than from a scan:
 
 ```
 flagged: reviewer-must-fix
 ```
 
-Carry the banner's `Issues found:` Must Fix lines into the story's PR body beside the flag. It
-then follows the ordinary flagged flow: conservative mode halts the queue after the story,
-autonomous mode records the spot and continues, and either way PM still commits, syncs, pushes
-and opens the PR, per the invariant below.
+Carry the banner's `Issues found:` Must Fix lines, and any `live check (…)` entry from
+`NOT VERIFIED:`, into the story's PR body beside the flag. It then follows the ordinary flagged
+flow: conservative mode halts the queue after the story, autonomous mode records the spot and
+continues, and either way PM still commits, syncs, pushes and opens the PR, per the invariant
+below.
 
 **`none` requires that both scans actually ran.** When the post-run scan had no report to open — a pipeline that produces none, such as `orchestrator-flash` — the result is:
 

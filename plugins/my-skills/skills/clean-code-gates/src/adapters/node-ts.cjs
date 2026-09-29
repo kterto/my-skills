@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
-const { g6Budget } = require('./g6-budget.cjs');
+const { g6Budget, g6OnBound } = require('./g6-budget.cjs');
 const { G1_EXEMPTIONS } = require('../../defaults.cjs');
 const { toPosix } = require('../scope.cjs');
 
@@ -645,6 +645,7 @@ function g6Unmeasured(run, { targets, threshold, command }) {
       reason,
       mutants: run.mutants ?? null,
       budgetSeconds: run.budget ? run.budget.totalSeconds : null,
+      ...(run.onBound ? { onBound: run.onBound } : {}),
     },
     findings: [{
       id: 'G6:unmeasured',
@@ -752,44 +753,64 @@ function runG6(files, stackCfg, io, deps = {}) {
   const reportPath = path.join(reportDir, 'mutation.json');
   const cfgPath = writeStrykerConfig(targets, reportPath, excludedMutations, runner, budget);
 
-  let killed = false;
   try {
-    exec(strykerBin, ['run', cfgPath], {
-      cwd: io.root,
-      stdio: ['ignore', 'ignore', 'ignore'],
-      maxBuffer: 64 * 1024 * 1024,
-      // Without this the 43-minute-hang class stays unmitigated on this stack:
-      // the dart adapter has carried both since the run that motivated them,
-      // and node-ts spawned Stryker with no clock at all. SIGKILL because a
-      // wedged runner is exactly what SIGTERM is already failing to stop.
-      timeout: budget.totalSeconds * 1000,
-      killSignal: 'SIGKILL',
-    });
-  } catch (err) {
-    // Stryker exits non-zero when a break threshold is hit and still writes the
-    // report, so a failure here is not itself the signal. Being killed on the
-    // clock is: whatever is on disk then is a partial run nobody asked for.
-    if (err && (err.code === 'ETIMEDOUT' || err.signal === 'SIGKILL')) killed = true;
-  }
+    let stopped = null;
+    try {
+      exec(strykerBin, ['run', cfgPath], {
+        cwd: io.root,
+        stdio: ['ignore', 'ignore', 'ignore'],
+        maxBuffer: 64 * 1024 * 1024,
+        // Without this the 43-minute-hang class stays unmitigated on this stack:
+        // the dart adapter has carried both since the run that motivated them,
+        // and node-ts spawned Stryker with no clock at all. SIGKILL because a
+        // wedged runner is exactly what SIGTERM is already failing to stop.
+        timeout: budget.totalSeconds * 1000,
+        killSignal: 'SIGKILL',
+      });
+    } catch (err) {
+      // Stryker exits non-zero when a break threshold is hit and still writes the
+      // report, so a failure here is not itself the signal. Being stopped is:
+      // whatever is on disk then is a partial run nobody asked for. Only the
+      // timeout is the engine's own bound, as in the dart adapter. A runner killed
+      // by anything else — the OOM killer, a crash, an operator — says so, and
+      // never reads as a budget it did not reach.
+      if (err && err.code === 'ETIMEDOUT') stopped = { reason: 'bounded' };
+      else if (err && err.signal) stopped = { reason: 'killed', signal: err.signal };
+    }
 
-  if (killed) {
-    return g6Verdict(null, {
-      ...opts,
-      unmeasured: {
-        reason: 'killed-on-clock',
-        detail: `exceeded the ${budget.totalSeconds}s budget`,
-      },
-    });
-  }
-  if (!fs.existsSync(reportPath)) return g6Verdict(null, opts);
-  let report;
-  try {
-    report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
-  } catch {
-    return g6Verdict(null, { ...opts, unmeasured: { reason: 'unparseable-report' } });
-  }
+    // The engine's own bound. `bounded` under either policy: `onBound` records the
+    // policy in force, and the verdict stays the same non-pass.
+    if (stopped && stopped.reason === 'bounded') {
+      return g6Verdict(null, {
+        ...opts,
+        unmeasured: {
+          reason: 'bounded',
+          detail: `exceeded the ${budget.totalSeconds}s budget`,
+          onBound: g6OnBound(g6Cfg),
+        },
+      });
+    }
+    if (stopped) {
+      return g6Verdict(null, {
+        ...opts,
+        unmeasured: { reason: 'killed', detail: `the runner was killed by ${stopped.signal}, inside the ${budget.totalSeconds}s budget` },
+      });
+    }
+    if (!fs.existsSync(reportPath)) return g6Verdict(null, opts);
+    let report;
+    try {
+      report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+    } catch {
+      return g6Verdict(null, { ...opts, unmeasured: { reason: 'unparseable-report' } });
+    }
 
-  return g6Verdict(report, opts);
+    return g6Verdict(report, opts);
+  } finally {
+    // Both temp dirs go on every path, as the dart adapter's outDir does: the
+    // report is read above, and nothing else points at either.
+    fs.rmSync(reportDir, { recursive: true, force: true });
+    fs.rmSync(path.dirname(cfgPath), { recursive: true, force: true });
+  }
 }
 
 // ---- G7: dependency structure (dependency-cruiser) ---------------------

@@ -16,12 +16,18 @@
 #   1. If <project>/.orchestrator/config.json has a non-empty "agent_sync_targets"
 #      array, those relative dirs are the targets (created if missing).
 #   2. Otherwise auto-detect: every known role dir that ALREADY exists is synced —
-#      .claude/agents and .agents/agents (Claude Code), .opencode/agent (opencode),
-#      .orchestrator/roles (the Prime Agent port). Auto-detect never creates a dir.
+#      .claude/agents and .agents/agents (Claude Code), .opencode/agent and
+#      .opencode/agents (opencode reads both), .orchestrator/roles (the Prime Agent
+#      port).
+#   Either way one dir is created unasked: .opencode/agents, when the project has
+#   .opencode/ but neither opencode dir and no target names one — as bootstrap B3 does,
+#   whatever the host. Without it opencode never gets the roles at all, and an opencode
+#   session that is already running reads its agents only at startup, so it must be
+#   restarted before it can spawn them.
 #
 # Rendering mirrors orchestrator bootstrap B3 step 1, so a synced file is what a fresh
 # bootstrap on that host would have written. Every host takes the template body verbatim.
-# .opencode/agent alone gets opencode frontmatter instead of the template's: the
+# The two opencode dirs alone get opencode frontmatter instead of the template's: the
 # template's description, mode: subagent, and a model only when it is provider-qualified
 # (anthropic/claude-opus-5 survives; the Claude-only shorthand opus, sonnet, haiku and
 # inherit do not, on either side of the merge).
@@ -56,7 +62,7 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SRC="$REPO_DIR/plugins/my-skills/skills/orchestrator/templates"
 
 MANAGED=(architect.md brainstormer.md coder.md qa.md reviewer.md tester.md)
-CANDIDATE_DIRS=(.claude/agents .agents/agents .opencode/agent .orchestrator/roles)
+CANDIDATE_DIRS=(.claude/agents .agents/agents .opencode/agent .opencode/agents .orchestrator/roles)
 FOREIGN_DIRS=(.codex/agents .cursor/rules)
 
 prune=0
@@ -66,8 +72,8 @@ for arg in "$@"; do
   case "$arg" in
     --prune) prune=1 ;;
     --dry-run) dry=1 ;;
-    # Range ends on the last header line (currently 48); re-check it when editing the header.
-    -h|--help) sed -n '2,48p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    # Range ends on the last header line (currently 55); re-check it when editing the header.
+    -h|--help) sed -n '2,55p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*) echo "error: unknown flag '$arg'" >&2; exit 2 ;;
     *) project="$arg" ;;
   esac
@@ -236,6 +242,26 @@ render_role() {
 targets=()
 target_rels=" "
 created_note=""
+
+# The one dir either mode creates (see the header): the project uses opencode, and no
+# opencode role dir exists or is already a target.
+opencode_gap() {
+  [ -d "$project/.opencode" ] || return 1
+  [ ! -d "$project/.opencode/agent" ] && [ ! -d "$project/.opencode/agents" ] || return 1
+  case "$target_rels" in
+    *" .opencode/agent "* | *" .opencode/agents "*) return 1 ;;
+  esac
+}
+add_opencode_agents() {
+  if [ "$dry" -eq 1 ]; then
+    created_note="$created_note  would create .opencode/agents\n"
+  else
+    mkdir -p "$project/.opencode/agents"
+    created_note="$created_note  created .opencode/agents — restart any running opencode session before it can spawn these roles\n"
+  fi
+  targets+=("$project/.opencode/agents")
+  target_rels="$target_rels.opencode/agents "
+}
 config="$project/.orchestrator/config.json"
 config_targets=""
 if [ -f "$config" ]; then
@@ -268,12 +294,16 @@ if [ -n "$config_targets" ]; then
     targets+=("$dir")
     target_rels="$target_rels$line "
   done <<< "$config_targets"
+  # An explicit list written before the project took up opencode must not keep the roles from it.
+  if opencode_gap; then add_opencode_agents; fi
   echo "targets: from config.json agent_sync_targets"
 else
   for cand in "${CANDIDATE_DIRS[@]}"; do
     if [ -d "$project/$cand" ]; then
       targets+=("$project/$cand")
       target_rels="$target_rels$cand "
+    elif [ "$cand" = ".opencode/agents" ] && opencode_gap; then
+      add_opencode_agents
     fi
   done
   echo "targets: auto-detected existing role dirs"
@@ -330,7 +360,7 @@ for dir in "${targets[@]}"; do
   rel="${dir#$project/}"
   flavor="verbatim"
   case "$rel" in
-    .opencode/agent|*/.opencode/agent) flavor="opencode" ;;
+    .opencode/agent|.opencode/agents|*/.opencode/agent|*/.opencode/agents) flavor="opencode" ;;
   esac
   if [ "$flavor" = "opencode" ]; then
     echo "== $rel (opencode frontmatter) =="

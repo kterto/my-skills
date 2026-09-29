@@ -7,10 +7,12 @@ const { LEVELS, DEFAULT_LEVEL } = require('./rigor.cjs');
  * a green gate runs through the config rather than through the code: widen
  * `exempt`, drop a root, lower a threshold, all inside the change under review.
  * Four field families decide *what is measured and how hard*, and those are the
- * ones anchored to the merge-base. Everything else — which tool runs it, which
- * runner, the G6 budget, the baseline path — describes how the measurement is
- * performed and is left to the working tree, where a branch legitimately needs
- * to change it.
+ * ones anchored to the merge-base. `on_bound` joins them: it decides whether a
+ * run waits for an operator over a bounded gate, and QA reads it from the merge
+ * base (ADR-0028), so the report must carry the same value QA acts on.
+ * Everything else — which tool runs it, which runner, the G6 budget, the
+ * baseline path — describes how the measurement is performed and is left to the
+ * working tree, where a branch legitimately needs to change it.
  */
 
 /** Thresholds a run must reach: lowering one loosens the gate. */
@@ -56,6 +58,18 @@ function rigorMove(anchor, working) {
   return { key: 'rigor', from, to, direction: LEVELS.indexOf(to) < LEVELS.indexOf(from) ? 'loosening' : 'tightening' };
 }
 
+/**
+ * `stop` → `disclose` takes away an operator stop the trunk asked for, which is
+ * the loosening; the verdict is the same non-pass either way. A value outside
+ * the pair is `changed`, never guessed.
+ */
+function boundMove(key, from, to) {
+  if (from === undefined || to === undefined || from === to) return null;
+  const direction = from === 'stop' && to === 'disclose' ? 'loosening'
+    : from === 'disclose' && to === 'stop' ? 'tightening' : 'changed';
+  return { key, from, to, direction };
+}
+
 function stackMoves(stack, anchor, working) {
   const moves = [];
   const roots = listMove(`${stack}.roots`, anchor.roots, working.roots, 'removed');
@@ -73,6 +87,8 @@ function stackMoves(stack, anchor, working) {
     }
     const exempt = listMove(`${stack}.gates.${gate}.exempt`, a.exempt, w.exempt, 'added');
     if (exempt) moves.push(exempt);
+    const onBound = boundMove(`${stack}.gates.${gate}.on_bound`, a.on_bound, w.on_bound);
+    if (onBound) moves.push(onBound);
   }
   return moves;
 }
@@ -101,6 +117,7 @@ function anchorInstrument(working, anchor) {
       if (a.gates[gate].thresholds) gates[gate].thresholds = a.gates[gate].thresholds;
       if (a.gates[gate].exempt) gates[gate].exempt = a.gates[gate].exempt;
       else delete gates[gate].exempt;
+      if (a.gates[gate].on_bound !== undefined) gates[gate].on_bound = a.gates[gate].on_bound;
     }
     cfg.stacks[stack] = { ...w, gates };
     if (a.roots) cfg.stacks[stack].roots = a.roots;
