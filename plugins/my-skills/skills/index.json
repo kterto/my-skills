@@ -174,9 +174,11 @@
         "__tests__/final-artifact.test.cjs",
         "__tests__/fixtures/final-good.md",
         "__tests__/forbidden-tokens.test.cjs",
+        "__tests__/live-check.test.cjs",
         "__tests__/materialized-set.test.cjs",
         "__tests__/reviewer-snapshot.test.cjs",
         "__tests__/run-folder.test.cjs",
+        "__tests__/small-window.test.cjs",
         "__tests__/wire-protocol.test.cjs",
         "MATERIALIZED-VERSION",
         "SKILL.md",
@@ -185,6 +187,7 @@
         "templates/brainstormer.md",
         "templates/coder.md",
         "templates/flash-config.template.json",
+        "templates/live.md",
         "templates/reviewer.md"
       ]
     },

@@ -7,7 +7,9 @@
  */
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { readFileSync, existsSync } = require('node:fs');
+const { execFileSync } = require('node:child_process');
+const { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = require('node:fs');
+const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 
 const REPO = join(__dirname, '..', '..', '..', '..', '..');
@@ -28,13 +30,14 @@ test('every digested file exists in the skill', () => {
   }
 });
 
-test('the digested set is exactly the six materialized files', () => {
+test('the digested set is exactly the seven materialized files', () => {
   assert.deepEqual(stampFiles().sort(), [
     'templates/architect.md',
     'templates/artifact-format-flash.md',
     'templates/brainstormer.md',
     'templates/coder.md',
     'templates/flash-config.template.json',
+    'templates/live.md',
     'templates/reviewer.md',
   ]);
 });
@@ -79,6 +82,47 @@ test('the allow-list tracks the flash config and ignores the flash role copies',
     'flash-config.json is hand-authored project policy and would be invisible to a teammate\'s clone');
   assert.ok(!/^!flash\//m.test(md),
     'the materialized role copies are tracked — every flash version bump would land in a product PR');
+});
+
+test('a first run is not dirty from its own bootstrap: the guard exempts exactly what bootstrap leaves', () => {
+  // On a flash-only project, bootstrap writes `.gitignore` and `flash-config.json`, and the
+  // allow-list un-ignores both. A guard that counted them would ask about a mess the run just
+  // made, on every first run, and stall product-manager's first story on it. The plain porcelain
+  // collapses them to `?? .orchestrator/`, so the guard reads every untracked file.
+  const md = skill();
+  const guard = /^4\. \*\*Guard the workspace\.\*\*.*$/m.exec(md)?.[0];
+  assert.ok(guard, 'Step 0 has no workspace guard');
+  assert.match(guard, /`git status --porcelain -uall`/);
+  const exempt = [...guard.matchAll(/`(\?\? [^`]+)`/g)].map((m) => m[1]);
+
+  const root = mkdtempSync(join(tmpdir(), 'flash-guard-'));
+  try {
+    const env = { ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('GIT_'))), GIT_CEILING_DIRECTORIES: tmpdir() };
+    const git = (...args) => execFileSync('git', ['-c', 'core.excludesFile=/dev/null', '-c', 'core.hooksPath=/dev/null', '-c', 'commit.gpgsign=false', ...args],
+      { cwd: root, env, encoding: 'utf8' });
+    git('init', '-q');
+    git('-c', 'user.name=flash', '-c', 'user.email=flash@example.invalid', 'commit', '-q', '--allow-empty', '-m', 'init');
+    // Bootstrap as the section says: the role files, the stamp, the config, and the .gitignore block.
+    mkdirSync(join(root, '.orchestrator', 'flash'), { recursive: true });
+    for (const f of ['artifact-format-flash.md', 'brainstormer.md', 'architect.md', 'coder.md', 'live.md', 'reviewer.md']) {
+      copyFileSync(join(FLASH, 'templates', f), join(root, '.orchestrator', 'flash', f));
+    }
+    copyFileSync(join(FLASH, 'MATERIALIZED-VERSION'), join(root, '.orchestrator', 'flash', '.materialized-version'));
+    copyFileSync(join(FLASH, 'templates', 'flash-config.template.json'), join(root, '.orchestrator', 'flash-config.json'));
+    const block = /```gitignore\n([\s\S]*?)```/.exec(md);
+    assert.ok(block, 'the Bootstrap section has no .gitignore block');
+    writeFileSync(join(root, '.orchestrator', '.gitignore'), block[1]);
+    const dirty = git('status', '--porcelain', '-uall').split('\n').filter(Boolean);
+    assert.deepEqual(dirty.sort(), exempt.sort(), 'the guard\'s exemptions are not what bootstrap leaves untracked');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('a proceed on a protected branch still cuts the flash branch, named from the brief', () => {
+  const guard = /^4\. \*\*Guard the workspace\.\*\*.*$/m.exec(skill())?.[0] ?? '';
+  assert.match(guard, /Clean or proceeding, on `main`, `master`, `develop`, `dev` or `release\/\*` cut and switch to `flash\/<slug>`/);
+  assert.match(guard, /`<slug>` the `slugify` of the brief's first five words/, 'the guard names a slug that nothing has minted yet');
 });
 
 test('the stamp file exists and is a single hex line', () => {

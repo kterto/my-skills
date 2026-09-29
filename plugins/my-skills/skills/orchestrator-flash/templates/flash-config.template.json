@@ -5,5 +5,7 @@
   "warn_after_minutes": 90,
   "test_cmd": null,
   "typecheck_cmd": null,
-  "build_cmd": null
+  "build_cmd": null,
+  "live_cmd": null,
+  "live_minutes": 15
 }

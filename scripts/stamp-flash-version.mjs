@@ -34,6 +34,7 @@ export const FLASH_FILES = [
   "templates/brainstormer.md",
   "templates/architect.md",
   "templates/coder.md",
+  "templates/live.md",
   "templates/reviewer.md",
 ]
 
