@@ -1,0 +1,15 @@
+{
+  "id": "select",
+  "kind": "synthetic",
+  "class": "e2e suites chosen by feature name, so the other callers of the changed code went untested",
+  "caught_by": "gates.cjs select maps each changed file to the tests that reach it through the import graph or, where every e2e suite boots the whole app, to the specs that call a route the change reaches. Every pick carries its reason, and a selection over its max is red",
+  "missed_by": "a name pattern, which selected the suites of the feature being built and none of the others that call the changed code",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/clean-code-gates/__tests__/instruments-select.test.cjs",
+  "evidence": "docs/adr/0030-the-engine-measures-at-the-tree.md#5-selection-maps-a-change-to-the-suites-and-flows-that-exercise-it",
+  "private_ref": "inc3-15.2"
+}

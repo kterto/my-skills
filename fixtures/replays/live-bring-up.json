@@ -1,0 +1,15 @@
+{
+  "id": "live-bring-up",
+  "kind": "synthetic",
+  "class": "a repository defect, a migration chain that fails on every fresh database, typed as an environment failure and waited out",
+  "caught_by": "live up types each failure from its log: a failed database build is repo-defect (red, exit 1) unless an environment signature matches, and an up or readiness failure is blocked-env (not-run, exit 4) unless a repo-defect signature matches. Only the block's allowed_repairs run, once each, and live down stops every service",
+  "missed_by": "one undifferentiated environment failure, which a broken migration also reads as",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/clean-code-gates/__tests__/instruments-live.test.cjs",
+  "evidence": "docs/adr/0030-the-engine-measures-at-the-tree.md#7-the-live-block-declared-isolation-typed-bring-up-read-only-read-back",
+  "private_ref": "inc3-15.5"
+}

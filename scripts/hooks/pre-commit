@@ -1,0 +1,13 @@
+#!/bin/sh
+# pre-commit — run the host-parity check, which also runs the skill budget check,
+# before every commit, and refuse the commit when it fails (ADR-0030).
+#
+# Not enabled by default. Enable it for this clone with:
+#
+#   git config core.hooksPath scripts/hooks
+#
+# CI runs the same check, so the hook only moves a failure to before the commit.
+
+cd "$(dirname "$0")/../.." || exit 1
+node scripts/check-host-parity.mjs
+exit $?

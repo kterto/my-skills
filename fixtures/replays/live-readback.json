@@ -1,0 +1,14 @@
+{
+  "id": "live-readback",
+  "kind": "synthetic",
+  "class": "a live outcome confirmed only through the code path that produced it",
+  "caught_by": "live readback <store> <sql> queries the store through its declared command, refuses any SQL that is not read-only on a read_only store, and passes the SQL as one argument the shell never interpolates",
+  "missed_by": "the builder's own tests, the channel that had passed the defect",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/clean-code-gates/__tests__/instruments-live.test.cjs",
+  "evidence": "docs/adr/0030-the-engine-measures-at-the-tree.md#7-the-live-block-declared-isolation-typed-bring-up-read-only-read-back"
+}

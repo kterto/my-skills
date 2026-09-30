@@ -51,9 +51,10 @@
 //
 //   The skill byte budgets — `check-skill-budgets.mjs`. A SKILL.md is read whole
 //   into every session that invokes it, and plugins/my-skills/skills/budgets.json
-//   holds each one to the ceiling an ADR set (ADR-0026). A branch that raises its
-//   own ceiling fails with BUDGET MOVED until a human passes --accept-moved. This
-//   script forwards that flag, so a reviewed raise lands from the same command.
+//   holds each one to the ceiling an ADR set (ADR-0026), and an engine's code to a
+//   line ceiling (ADR-0030). A branch that raises or deletes its own ceiling fails
+//   with BUDGET MOVED until a human passes --accept-moved. This script forwards
+//   that flag, so a reviewed raise lands from the same command.
 import { readdirSync, readFileSync, existsSync } from "node:fs"
 import { join, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -228,12 +229,12 @@ try {
   for (const line of out.trim().split("\n")) if (line) notes.push(line)
 } catch (e) {
   const out = `${e.stdout ?? ""}${e.stderr ?? ""}`.trim()
-  problems.push(`a skill is over its byte budget, or a budget is missing, malformed or raised (ADR-0026).\n${out.split("\n").map((l) => `    ${l}`).join("\n")}`)
+  problems.push(`a skill is over its byte or line budget, or a budget is missing, malformed, raised or deleted (ADR-0026, ADR-0030).\n${out.split("\n").map((l) => `    ${l}`).join("\n")}`)
 }
 
 for (const n of notes) console.log(`ok   ${n}`)
 if (problems.length === 0) {
-  console.log(`\nparity ok — every declared mirror matches its shared copy, prime-agent, the opencode index and the orchestrator stamp are current, this checkout's agent copies match their templates, and every skill is within its byte budget`)
+  console.log(`\nparity ok — every declared mirror matches its shared copy, prime-agent, the opencode index and the orchestrator stamp are current, this checkout's agent copies match their templates, and every skill is within its byte and line budgets`)
   process.exit(0)
 }
 console.error(`\n${problems.length} parity problem(s):`)

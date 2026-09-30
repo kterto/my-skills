@@ -1,0 +1,15 @@
+{
+  "id": "guard-proof",
+  "kind": "synthetic",
+  "class": "a guard that cannot fail: it passes a second kind of the defect it was written for",
+  "caught_by": "sweep --prove plants varied offenders (shape plants in memory, command plants on disk under a journal) and proves the guard only when every plant flips it: red on each planted offender, and green on a planted fix while the real tree is red",
+  "missed_by": "a guard written against the first instance, which passed a second kind of offender: an optional field made required",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/clean-code-gates/__tests__/instruments-plants.test.cjs",
+  "evidence": "docs/adr/0030-the-engine-measures-at-the-tree.md#6-sweeps-are-repo-wide-and-a-guard-is-proven-before-it-is-trusted",
+  "private_ref": "inc3-15.3"
+}

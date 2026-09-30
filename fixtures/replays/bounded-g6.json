@@ -1,0 +1,14 @@
+{
+  "id": "bounded-g6",
+  "kind": "history",
+  "class": "a run parked for hours on a mutation gate that cannot finish inside its bound",
+  "caught_by": "gates.G6.on_bound: a G6 over its bound is unmeasured with the reason bounded, never a pass. Under disclose, the default, QA lists it in unmeasured_bounded: and the run ends READY_WITH_WARNINGS without stopping; under stop it stops as before",
+  "missed_by": "BLOCKED_STALE on every bounded G6: 17.7 hours of parks over 3 runs, each ending in the answer the pipeline could have printed without asking (ADR-0028)",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/clean-code-gates/__tests__/node-ts-g6-bounds.test.cjs",
+  "evidence": "docs/adr/0028-bounded-g6-is-disclosed-not-a-stop.md#2-the-engine-gatesg6on_bound"
+}

@@ -1,0 +1,14 @@
+{
+  "id": "live-block",
+  "kind": "synthetic",
+  "class": "a shared developer database called ephemeral, or a live check with no recipe read as done",
+  "caught_by": "the fenced live block in PROJECT-CONTEXT's Test tooling section, read from the merge base: live check validates it and discloses its declared isolation, shared-dev or ephemeral, on every verdict. With no block, every live mode is not-run (no-live-recipe), exit 4",
+  "missed_by": "live checks against whatever the developer's containers held, with no declared isolation",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/clean-code-gates/__tests__/instruments-live.test.cjs",
+  "evidence": "docs/adr/0030-the-engine-measures-at-the-tree.md#7-the-live-block-declared-isolation-typed-bring-up-read-only-read-back"
+}

@@ -1,0 +1,15 @@
+{
+  "id": "consumer-sweep",
+  "kind": "synthetic",
+  "class": "a changed domain rule whose other consumers keep enforcing the old one",
+  "caught_by": "a consumers guard: when a changed file matches its trigger, sweep --changed lists every file that imports the trigger or matches its patterns, with the import chain and the lines (listed); otherwise the guard is quiet",
+  "missed_by": "a spec that said the other consumer needed no rework, which nothing checked",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/clean-code-gates/__tests__/instruments-sweep.test.cjs",
+  "evidence": "docs/adr/0030-the-engine-measures-at-the-tree.md#6-sweeps-are-repo-wide-and-a-guard-is-proven-before-it-is-trusted",
+  "private_ref": "inc3-15.4"
+}

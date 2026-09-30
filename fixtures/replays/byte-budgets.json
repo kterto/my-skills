@@ -1,0 +1,14 @@
+{
+  "id": "byte-budgets",
+  "kind": "history",
+  "class": "a session-resident skill file that regrows after every cut",
+  "caught_by": "budgets.json holds a byte ceiling for every SKILL.md, read from the merge base: check-skill-budgets.mjs fails a file over its ceiling, and a ceiling raised on the branch prints BUDGET MOVED and fails until a human passes --accept-moved",
+  "missed_by": "cuts and ADRs: the orchestrator's SKILL.md grew 7.1 times in under three months, and 74% of its first cut came back in 22 days (ADR-0026)",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "scripts/__tests__/check-skill-budgets.test.mjs",
+  "evidence": "docs/adr/0026-skill-byte-budgets-and-the-admission-rule.md#2-the-check-fails-and-a-branch-cannot-raise-its-own-ceiling"
+}

@@ -1,0 +1,15 @@
+{
+  "id": "sweep-shapes",
+  "kind": "synthetic",
+  "class": "a defect class with more instances than the one found: input fields no validator covers, under a pipe that rejects unknown properties",
+  "caught_by": "gates.cjs sweep --shape runs a regex or decorated-fields shape across the whole repository, never the diff, and reports every hit with the number of files it visited",
+  "missed_by": "a diff-scoped check, and the other instances were not in the diff",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/clean-code-gates/__tests__/instruments-shapes.test.cjs",
+  "evidence": "docs/adr/0030-the-engine-measures-at-the-tree.md#6-sweeps-are-repo-wide-and-a-guard-is-proven-before-it-is-trusted",
+  "private_ref": "inc3-15.3"
+}

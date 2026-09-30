@@ -1,0 +1,14 @@
+{
+  "id": "in-session-raise",
+  "kind": "history",
+  "class": "an execution budget reached mid-run that only a pull request to main could lift, while the run waited",
+  "caught_by": "the operator approves a higher cap for one of six execution budgets when asked, run-state.cjs raise records the answer verbatim, budget reads the cap back after a resume, and raises prints every raise in the FINAL; lowering a budget still takes a PR",
+  "missed_by": "the anchored config alone: 5 cap questions, 2 PRs, 2 merges and about 7.9 hours of waiting in one run (ADR-0027)",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/orchestrator/scripts/run-state.test.cjs",
+  "evidence": "docs/adr/0027-execution-budgets-raisable-in-session.md#1-six-execution-budgets-can-be-raised-mid-run-by-the-invoking-human-on-the-record"
+}

@@ -1,0 +1,14 @@
+{
+  "id": "flash-live-check",
+  "kind": "history",
+  "class": "a defect on a user-visible flow that no automated check looked at, found by the user after the merge",
+  "caught_by": "flash's live role brings up the smallest running surface, drives one flow worded from the brief, confirms it by an independent read-back and reports exactly one of LIVE: PASS, LIVE: FAIL or LIVE: NOT RUN. READY_TO_COMMIT needs a PASS, and NOT RUN is never one",
+  "missed_by": "flash's reviewer re-ran component tests that drive the form programmatically and passed over the defect the user found 13 minutes after the merge (ADR-0029)",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/orchestrator-flash/__tests__/live-check.test.cjs",
+  "evidence": "docs/adr/0029-flash-fits-the-smallest-window-and-runs-one-live-check.md#4-one-live-check-on-every-run"
+}

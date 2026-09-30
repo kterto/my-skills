@@ -5,6 +5,10 @@
       "maxBytes": 18000,
       "adr": "docs/adr/0026-skill-byte-budgets-and-the-admission-rule.md"
     },
+    "clean-code-gates/references/instruments.md": {
+      "maxBytes": 12288,
+      "adr": "docs/adr/0030-the-engine-measures-at-the-tree.md"
+    },
     "commit-pr/SKILL.md": {
       "maxBytes": 8035,
       "adr": "docs/adr/0026-skill-byte-budgets-and-the-admission-rule.md"
@@ -52,6 +56,14 @@
     "validation-fixer/SKILL.md": {
       "maxBytes": 93904,
       "adr": "docs/adr/0026-skill-byte-budgets-and-the-admission-rule.md"
+    }
+  },
+  "code": {
+    "clean-code-gates": {
+      "maxLines": 6132,
+      "include": ["bin/**/*.cjs", "bin/**/*.js", "bin/**/*.mjs", "src/**/*.cjs", "src/**/*.js", "src/**/*.mjs", "*.cjs", "*.js", "*.mjs"],
+      "exclude": ["__tests__/**"],
+      "adr": "docs/adr/0030-the-engine-measures-at-the-tree.md"
     }
   }
 }
