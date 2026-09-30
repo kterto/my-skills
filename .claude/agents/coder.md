@@ -272,9 +272,9 @@ Rules for this sub-step:
    - **The tester's coverage command** (`templates/tester.md` → Step 4) is a whole-app execution by
      construction. Its *measurement* scope stays changed-files-only — execution scope and measurement
      scope are different things, and this rule narrows neither of the tester's.
-   - **QA's Step 3** runs every suite the plan touched. **This is the barrier that binds on a `FIX` or
-     `QAF` plan**, which is the one a remediation coder should point at when tempted to run the suite
-     itself.
+   - **QA's Step 3** runs the project's declared barrier tiers or, without tiers, every suite the plan
+     touched. **This is the barrier that binds on a `FIX` or `QAF` plan**, which is the one a
+     remediation coder should point at when tempted to run the suite itself.
    - **The outer join**, on the parallel path, where `simplify` and the full test suite run exactly
      **once per run**, over the union of every leaf's diff, at any depth — never per lane and never
      per sub-lane. Running it concurrently from within a leaf would test a workspace that other coders
