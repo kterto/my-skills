@@ -90,9 +90,19 @@ repo.** The first pins `run-state.cjs` on temp projects. The second runs the com
 *Run state* rule tells the conductor to run, as written, with an operator answer carrying backticks,
 `$` and quotes, and pins the prose a resume or a bounded gate must not lose.
 
-`gate-scope.test.cjs` and `gate-shell-injection.test.cjs` are **integration tests bound to
-a bootstrapped project layout** — they drive the gates in place at `<repo>/.orchestrator/`
+`node --test scripts/qa-barrier-prose.test.cjs` — **runnable from this repo.** Pins the prose that
+makes QA's Step 3 run the clean-code-gates barrier, record one ledger row per tier, read a
+`not-run` tier as stale and never narrow a suite by name, plus the two-producer `stale_gates:`
+wording in Step 0, Step 6, `SKILL.md` Step 5d, `references/config.md` and `templates/coder.md`.
+From a repository checkout it also pins the touchpoint's entry in `fixtures/admission.json`; an
+installed copy, with no registry above it, skips that one test.
+
+`gate-scope.test.cjs` and `gate-shell-injection.test.cjs` are **integration tests of
+a bootstrapped project layout** — they drive the gates in place at `<project>/.orchestrator/`
 against `git` shims and a real `plans/` corpus, and `gate-scope.test.cjs` also exercises
-the roadmap skill's `roadmap/check-timestamp-parity.cjs`. Run them from a project root
-after `/orchestrator --setup` (their native habitat), not from this source tree. They are
-kept here as the canonical, faithful copies that bootstrap materializes.
+the roadmap skill's `roadmap/check-timestamp-parity.cjs`. In a project after
+`/orchestrator --setup` they test the gates where they stand. **Runnable from this repo**
+too: here each first builds that layout in a temp project (a one-commit git repository
+with `plans/`, the three gate scripts under `.orchestrator/` and the roadmap gate under
+`roadmap/`) and removes it on exit. They are kept here as the canonical, faithful copies
+that bootstrap materializes.

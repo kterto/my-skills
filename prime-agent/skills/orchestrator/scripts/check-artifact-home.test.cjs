@@ -202,7 +202,13 @@ expectViolation('empty explicit audit list', ['--'], /empty explicit audit list/
 // ---------- branch scope ----------
 
 const gitOk = spawnSync('git', ['--version'], { encoding: 'utf8' }).status === 0;
-const GIT_ENV = { ...ENV, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' };
+// user.useConfigOnly forbids git to guess an identity from the host, as a CI runner with a
+// dotless hostname cannot: an identity the env does not give fails here on every host.
+const GIT_ENV = {
+  ...ENV, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null',
+  GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'user.useConfigOnly', GIT_CONFIG_VALUE_0: 'true',
+  GIT_AUTHOR_NAME: 'T', GIT_AUTHOR_EMAIL: 't@example.com', GIT_COMMITTER_NAME: 'T', GIT_COMMITTER_EMAIL: 't@example.com',
+};
 const git = (cwd, args) => spawnSync('git', args, { cwd, encoding: 'utf8', env: GIT_ENV });
 
 if (!gitOk) {

@@ -4,154 +4,9 @@ const assert = require('node:assert');
 const path = require('node:path');
 const fs = require('node:fs');
 const { buildReport } = require('../src/report.cjs');
-
-const TYPE_PREDICATES = {
-  object: v => v !== null && typeof v === 'object' && !Array.isArray(v),
-  array: v => Array.isArray(v),
-  string: v => typeof v === 'string',
-  integer: v => Number.isInteger(v),
-  number: v => typeof v === 'number',
-  boolean: v => typeof v === 'boolean',
-  null: v => v === null,
-};
-
-function describeValue(value) {
-  if (value === null) return 'null';
-  if (Array.isArray(value)) return 'array';
-  return typeof value;
-}
-
-function checkType(value, type, path, errs) {
-  if (!type) return true;
-  const allowed = Array.isArray(type) ? type : [type];
-  if (allowed.some(t => TYPE_PREDICATES[t] && TYPE_PREDICATES[t](value))) return true;
-  errs.push(`${path}: expected type ${allowed.join('|')}, got ${describeValue(value)}`);
-  return false;
-}
-
-/** `format` asserts, it does not annotate; an unrecognized value is a validator error, never a silent pass. */
-const FORMAT_PREDICATES = {
-  'date-time': v => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(v),
-};
-
-/** One entry per honoured assertion keyword; `checkNode` dispatches through this table and nothing else. */
-const ASSERTIONS = {
-  type: (value, schema, path, errs) => checkType(value, schema.type, path, errs),
-  const: (value, schema, path, errs) => {
-    if (value === schema.const) return;
-    errs.push(`${path}: must equal ${JSON.stringify(schema.const)}, got ${JSON.stringify(value)}`);
-  },
-  enum: (value, schema, path, errs) => {
-    if (schema.enum.includes(value)) return;
-    errs.push(`${path}: must be one of ${JSON.stringify(schema.enum)}, got ${JSON.stringify(value)}`);
-  },
-  minimum: (value, schema, path, errs) => {
-    if (!TYPE_PREDICATES.number(value) || value >= schema.minimum) return;
-    errs.push(`${path}: must be >= ${schema.minimum}, got ${JSON.stringify(value)}`);
-  },
-  pattern: (value, schema, path, errs) => {
-    if (!TYPE_PREDICATES.string(value) || new RegExp(schema.pattern).test(value)) return;
-    errs.push(`${path}: must match ${schema.pattern}, got ${JSON.stringify(value)}`);
-  },
-  format: (value, schema, path, errs) => {
-    const matchesFormat = FORMAT_PREDICATES[schema.format];
-    if (!matchesFormat) throw new Error(`${path}: unsupported schema format "${schema.format}"`);
-    if (!TYPE_PREDICATES.string(value) || matchesFormat(value)) return;
-    errs.push(`${path}: must be a valid ${schema.format}, got ${JSON.stringify(value)}`);
-  },
-  required: (value, schema, path, errs) => {
-    if (!TYPE_PREDICATES.object(value)) return;
-    for (const key of schema.required) {
-      if (!Object.hasOwn(value, key)) errs.push(`${path}: missing required key "${key}"`);
-    }
-  },
-  additionalProperties: (value, schema, path, errs) => {
-    if (schema.additionalProperties !== false || !TYPE_PREDICATES.object(value)) return;
-    const known = schema.properties || {};
-    for (const key of Object.keys(value)) {
-      if (!Object.hasOwn(known, key)) errs.push(`${path}: unknown key "${key}"`);
-    }
-  },
-  properties: (value, schema, path, errs) => {
-    if (!TYPE_PREDICATES.object(value)) return;
-    for (const [key, subSchema] of Object.entries(schema.properties)) {
-      if (key in value) checkNode(value[key], subSchema, `${path}.${key}`, errs);
-    }
-  },
-  items: (value, schema, path, errs) => {
-    if (!Array.isArray(value)) return;
-    value.forEach((item, i) => checkNode(item, schema.items, `${path}[${i}]`, errs));
-  },
-};
-
-const POST_TYPE_KEYWORDS = Object.keys(ASSERTIONS).filter(keyword => keyword !== 'type');
-
-/** Generic recursive check. The honoured keyword set is exactly the keys of `ASSERTIONS`. */
-function checkNode(value, schema, path, errs) {
-  if (!TYPE_PREDICATES.object(schema)) return;
-  if (!ASSERTIONS.type(value, schema, path, errs)) return;
-  for (const keyword of POST_TYPE_KEYWORDS) {
-    if (keyword in schema) ASSERTIONS[keyword](value, schema, path, errs);
-  }
-}
-
-/** Core keywords: they identify and version the schema document itself and constrain no instance. */
-const CORE_KEYWORDS = new Set(['$schema', '$id']);
-
-/** Keywords that annotate rather than assert; they are allowed to be unimplemented. */
-const ANNOTATION_KEYWORDS = new Set([
-  'title', 'description', 'default', 'examples', 'deprecated', 'readOnly', 'writeOnly', '$comment',
-]);
-
-/**
- * Every keyword set that carries no assertion, keyed by name. `unhandledKeywords` and the
- * disjointness guard both read this registry, so a set added here is covered by both at once and
- * a set added anywhere else is covered by neither — there is one place to look.
- */
-const NON_ASSERTING_SETS = { CORE_KEYWORDS, ANNOTATION_KEYWORDS };
-
-/** True when the keyword belongs to any non-asserting set, so the coverage guard may skip it. */
-function isNonAsserting(keyword) {
-  return Object.values(NON_ASSERTING_SETS).some(set => set.has(keyword));
-}
-
-/**
- * Schema-aware walk: keys of a schema node are keywords, but keys under `properties` are
- * property names. Only `properties.*`, `items`, and an object-valued `additionalProperties`
- * are sub-schemas; `required`/`enum` array contents and boolean `additionalProperties` are values.
- *
- * Deliberate divergence from `checkNode`: this walk descends an object-valued
- * `additionalProperties`, a form `checkNode` does not enforce. The divergence is the safe
- * direction — descending finds MORE keywords, so the coverage guard stays stricter; teaching this
- * walk to stop descending would leave keywords nested inside an object-form sub-schema uncounted
- * and make the guard silently permissive. `unsupportedKeywordForms` is the guard that closes the
- * loop: it goes red the day `report.schema.json` actually adopts the object form (or tuple-form
- * `items`), so the unenforced form can never arrive unannounced.
- */
-function collectSchemaKeywords(node, found = new Set()) {
-  if (!TYPE_PREDICATES.object(node)) return found;
-  for (const [keyword, sub] of Object.entries(node)) {
-    found.add(keyword);
-    if (keyword === 'properties') Object.values(sub).forEach(s => collectSchemaKeywords(s, found));
-    if (keyword === 'items' || keyword === 'additionalProperties') collectSchemaKeywords(sub, found);
-  }
-  return found;
-}
-
-/** Keywords the given schema asserts with that `checkNode` would silently ignore. */
-function unhandledKeywords(schemaNode) {
-  const implemented = new Set(Object.keys(ASSERTIONS));
-  return [...collectSchemaKeywords(schemaNode)]
-    .filter(keyword => !implemented.has(keyword) && !isNonAsserting(keyword))
-    .sort();
-}
-
-/** Structural validator against report.schema.json (no external deps). */
-function validate(report, schema) {
-  const errs = [];
-  checkNode(report, schema, '$', errs);
-  return errs;
-}
+const {
+  validate, unhandledKeywords, unsupportedKeywordForms, ASSERTIONS, NON_ASSERTING_SETS,
+} = require('./helpers/schema-validate.cjs');
 
 const sampleReport = buildReport({
   scope: { kind: 'project', files: ['a.ts'], stacks: ['node-ts'] },
@@ -173,7 +28,7 @@ const schemaPath = path.join(__dirname, '../schema/report.schema.json');
 const schema = JSON.parse(fs.readFileSync(schemaPath, 'utf8'));
 
 test('buildReport output conforms to report.schema.json (top-level required keys and types)', () => {
-  const errs = validate(sampleReport, schema);
+  const errs = validate(schema, sampleReport);
   assert.deepStrictEqual(errs, [], `schema violations: ${errs.join('; ')}`);
 });
 
@@ -205,7 +60,7 @@ test('buildReport output with an errored gate conforms to report.schema.json', (
   });
   assert.strictEqual(errored.summary.status, 'error');
   assert.deepStrictEqual(errored.summary.gatesErrored, ['G1']);
-  const errs = validate(errored, schema);
+  const errs = validate(schema, errored);
   assert.deepStrictEqual(errs, [], `schema violations: ${errs.join('; ')}`);
 });
 
@@ -237,7 +92,7 @@ const negativeCases = [
 
 for (const [label, mutate] of negativeCases) {
   test(`validator rejects an invalid report: ${label}`, () => {
-    const errs = validate(corrupt(mutate), schema);
+    const errs = validate(schema, corrupt(mutate));
     assert.ok(errs.length >= 1, `expected at least one violation for ${label}, got none`);
   });
 }
@@ -255,7 +110,7 @@ test('a report whose instrument moved conforms to report.schema.json', () => {
     },
     now: '2026-05-31T00:00:00Z', version: '0.1.0',
   });
-  assert.deepStrictEqual(validate(moved, schema), []);
+  assert.deepStrictEqual(validate(schema, moved), []);
 });
 
 test('a report whose rigor demoted and skipped gates conforms to report.schema.json', () => {
@@ -269,7 +124,7 @@ test('a report whose rigor demoted and skipped gates conforms to report.schema.j
     rigor: { level: 'sketch', source: 'cli', demoted: { G2: 1 }, reportOnly: ['G2'], skipped: ['G6'] },
     now: '2026-05-31T00:00:00Z', version: '0.1.0',
   });
-  assert.deepStrictEqual(validate(r, schema), []);
+  assert.deepStrictEqual(validate(schema, r), []);
 });
 
 test('a report built with no rigor still carries the hardened stamp', () => {
@@ -280,7 +135,7 @@ test('a report built with no rigor still carries the hardened stamp', () => {
 test('a report built with no instrument still carries the unanchored block', () => {
   assert.deepStrictEqual(sampleReport.instrument,
     { anchored: false, baseRef: null, source: 'working-tree', moves: [] });
-  assert.deepStrictEqual(validate(sampleReport, schema), []);
+  assert.deepStrictEqual(validate(schema, sampleReport), []);
 });
 
 test('schema: gate finding required fields and severity enum', () => {
@@ -381,7 +236,7 @@ test('keyword-coverage guard ignores every documentary keyword but still reports
 test('validator raises on an unrecognized `format` value rather than ignoring it', () => {
   const fixture = { type: 'object', properties: { id: { type: 'string', format: 'uuid' } } };
   assert.throws(
-    () => validate({ id: 'not-a-uuid' }, fixture),
+    () => validate(fixture, { id: 'not-a-uuid' }),
     /unsupported schema format "uuid"/,
   );
 });
@@ -402,7 +257,7 @@ const rightReasonCases = [
 
 for (const [keyword, mutate, expected] of rightReasonCases) {
   test(`validator rejects for the right reason — ${keyword}`, () => {
-    assert.deepStrictEqual(validate(corrupt(mutate), schema), [expected]);
+    assert.deepStrictEqual(validate(schema, corrupt(mutate)), [expected]);
   });
 }
 
@@ -416,7 +271,7 @@ const boundaryCases = [
 
 for (const [label, mutate] of boundaryCases) {
   test(`validator accepts a valid report: ${label}`, () => {
-    const errs = validate(corrupt(mutate), schema);
+    const errs = validate(schema, corrupt(mutate));
     assert.deepStrictEqual(errs, [], `unexpected violations: ${errs.join('; ')}`);
   });
 }
@@ -425,11 +280,11 @@ test('format: date-time accepts the RFC-3339 forms and rejects the near misses',
   const accepted = ['2026-05-31T00:00:00Z', '2026-05-31T00:00:00.123Z', '2026-05-31T00:00:00+02:00'];
   const rejected = ['2026-05-31 00:00:00', '2026-05-31T00:00:00', '2026-05-31', ''];
   for (const value of accepted) {
-    assert.deepStrictEqual(validate(corrupt(r => { r.generatedAt = value; }), schema), [], `should accept ${value}`);
+    assert.deepStrictEqual(validate(schema, corrupt(r => { r.generatedAt = value; })), [], `should accept ${value}`);
   }
   for (const value of rejected) {
     assert.deepStrictEqual(
-      validate(corrupt(r => { r.generatedAt = value; }), schema),
+      validate(schema, corrupt(r => { r.generatedAt = value; })),
       [`$.generatedAt: must be a valid date-time, got ${JSON.stringify(value)}`],
       `should reject ${value}`,
     );
@@ -448,23 +303,6 @@ test('every non-asserting keyword set is disjoint from the implemented set', () 
     );
   }
 });
-
-/**
- * `unhandledKeywords` guards keyword *names*. `additionalProperties` and `items` are each honoured
- * in one form only — the boolean form and the single-sub-schema form — so the schema adopting the
- * object form or the tuple form would be unenforced AND unreported by that guard. This guards the
- * forms, and goes red the day the schema starts using one the validator does not walk.
- */
-function unsupportedKeywordForms(node, path = '$', found = []) {
-  if (!TYPE_PREDICATES.object(node)) return found;
-  if (Array.isArray(node.items)) found.push(`${path}.items: tuple form`);
-  if (TYPE_PREDICATES.object(node.additionalProperties)) found.push(`${path}.additionalProperties: sub-schema form`);
-  if (node.properties) {
-    for (const [key, sub] of Object.entries(node.properties)) unsupportedKeywordForms(sub, `${path}.${key}`, found);
-  }
-  if (TYPE_PREDICATES.object(node.items)) unsupportedKeywordForms(node.items, `${path}[]`, found);
-  return found;
-}
 
 test('report.schema.json uses only the keyword forms the validator actually walks', () => {
   const unsupported = unsupportedKeywordForms(schema);
@@ -518,26 +356,26 @@ test('a gate result with a measurement block conforms to report.schema.json', ()
     now: '2026-09-11T00:00:00Z',
     version: '0.1.0',
   });
-  const errs = validate(measured, schema);
+  const errs = validate(schema, measured);
   assert.deepStrictEqual(errs, [], `schema violations: ${errs.join('; ')}`);
 });
 
 test('schema: measurement.state rejects a value outside the four documented states', () => {
   const errs = validate(
+    schema,
     corrupt((r) => {
       r.gates[0].measurement = { state: 'probably-fine' };
     }),
-    schema,
   );
   assert.ok(errs.length > 0, 'an undocumented measurement state must not validate');
 });
 
 test('schema: measurement.onBound rejects a value outside the two policies', () => {
   const errs = validate(
+    schema,
     corrupt((r) => {
       r.gates[0].measurement = { state: 'unmeasured', reason: 'bounded', onBound: 'maybe' };
     }),
-    schema,
   );
   assert.deepStrictEqual(errs, ['$.gates[0].measurement.onBound: must be one of ["disclose","stop"], got "maybe"']);
 });

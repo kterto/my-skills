@@ -1,0 +1,190 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://clean-code-gates/schema/live.schema.json",
+  "title": "CleanCodeGatesLive",
+  "description": "`gates.cjs live` output (contract §8). Mode-specific keys follow `reason`: check → block; up → services, db, repairs, refused; down → services, refused; readback → readback, refused. With no block only result and reason follow timing.",
+  "type": "object",
+  "required": ["schemaVersion", "kind", "mode", "generatedAt", "tool", "tree", "instruments", "isolation", "status", "timing", "result", "reason"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "type": "string", "const": "1.0" },
+    "kind": { "type": "string", "const": "live" },
+    "mode": { "type": "string", "enum": ["check", "up", "readback", "down"] },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "tool": {
+      "type": "object",
+      "required": ["name", "version"],
+      "additionalProperties": false,
+      "properties": { "name": { "type": "string", "const": "clean-code-gates" }, "version": { "type": "string" } }
+    },
+    "tree": {
+      "type": "object",
+      "required": ["base", "baseTree", "candidateTree"],
+      "additionalProperties": false,
+      "properties": {
+        "base": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" },
+        "baseTree": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" },
+        "candidateTree": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" }
+      }
+    },
+    "instruments": {
+      "type": "object",
+      "required": ["source", "from", "digest", "moves"],
+      "additionalProperties": false,
+      "properties": {
+        "source": { "type": "string", "enum": ["merge-base", "defaults", "instruments-from"] },
+        "from": { "type": ["string", "null"] },
+        "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "moves": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["key", "change", "direction"],
+            "additionalProperties": false,
+            "properties": {
+              "key": { "type": "string" },
+              "change": { "type": "string", "enum": ["added", "removed", "changed", "invalid"], "description": "invalid: the working tree's config is broken (key `config`), so its additions are ignored and the base's instruments run." },
+              "direction": { "type": "string", "enum": ["tightening", "loosening", "changed"] }
+            }
+          }
+        }
+      }
+    },
+    "isolation": { "type": ["string", "null"], "enum": ["shared-dev", "ephemeral", null] },
+    "status": { "type": "string", "enum": ["pass", "red", "not-run"] },
+    "timing": { "type": "object", "description": "Every duration, in ms: services.<name>.{up_ms, ready_ms, down_ms}, db_ms, repairs_ms, readback_ms." },
+    "result": { "type": "string", "enum": ["pass", "fail", "not-run"] },
+    "reason": { "type": ["string", "null"], "enum": ["assertion", "timeout", "blocked-env", "repo-defect", "no-live-recipe", null] },
+    "block": {
+      "type": "object",
+      "description": "live check: the block's facts, with names sorted and no consent url.",
+      "required": ["version", "isolation", "db_build", "db", "services", "allowed_repairs", "surfaces", "flows", "readback", "consent"],
+      "additionalProperties": false,
+      "properties": {
+        "version": { "type": "integer", "const": 1 },
+        "isolation": { "type": "string", "enum": ["shared-dev", "ephemeral"] },
+        "db_build": { "type": ["string", "null"], "enum": ["migrate-deploy", "schema-push", "none", null] },
+        "db": { "type": "boolean" },
+        "services": { "type": "array", "items": { "type": "string" } },
+        "allowed_repairs": { "type": "integer", "minimum": 0 },
+        "surfaces": { "type": "array", "items": { "type": "string" } },
+        "flows": { "type": "array", "items": { "type": "string" } },
+        "readback": { "type": "array", "items": { "type": "string" } },
+        "consent": { "type": "boolean" }
+      }
+    },
+    "services": {
+      "type": "array",
+      "description": "live up: name, up, ready, result, reason. live down: name, down, result, reason.",
+      "items": {
+        "type": "object",
+        "required": ["name", "result", "reason"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string" },
+          "up": {
+            "type": ["object", "null"],
+            "required": ["exit", "evidence"],
+            "additionalProperties": false,
+            "properties": {
+              "exit": { "type": "integer" },
+              "evidence": {
+                "type": "object",
+                "required": ["log", "log_sha256", "head", "tail"],
+                "additionalProperties": false,
+                "properties": {
+                  "log": { "type": "string" },
+                  "log_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+                  "head": { "type": "array", "items": { "type": "string" } },
+                  "tail": { "type": "array", "items": { "type": "string" } }
+                }
+              }
+            }
+          },
+          "ready": {
+            "type": ["object", "null"],
+            "required": ["ok", "probe"],
+            "additionalProperties": false,
+            "properties": { "ok": { "type": "boolean" }, "probe": { "type": "string" } }
+          },
+          "down": {
+            "type": ["object", "null"],
+            "required": ["exit", "evidence"],
+            "additionalProperties": false,
+            "properties": {
+              "exit": { "type": "integer" },
+              "evidence": {
+                "type": "object",
+                "required": ["log", "log_sha256", "head", "tail"],
+                "additionalProperties": false,
+                "properties": {
+                  "log": { "type": "string" },
+                  "log_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+                  "head": { "type": "array", "items": { "type": "string" } },
+                  "tail": { "type": "array", "items": { "type": "string" } }
+                }
+              }
+            }
+          },
+          "result": { "type": "string", "enum": ["pass", "fail", "not-run"] },
+          "reason": { "type": ["string", "null"], "enum": ["blocked-env", "repo-defect", null] }
+        }
+      }
+    },
+    "db": {
+      "type": ["object", "null"],
+      "required": ["build", "exit", "evidence", "result", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "build": { "type": "string" },
+        "exit": { "type": ["integer", "null"] },
+        "evidence": {
+          "type": ["object", "null"],
+          "required": ["log", "log_sha256", "head", "tail"],
+          "additionalProperties": false,
+          "properties": {
+            "log": { "type": "string" },
+            "log_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+            "head": { "type": "array", "items": { "type": "string" } },
+            "tail": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "result": { "type": "string", "enum": ["pass", "fail", "not-run"] },
+        "reason": { "type": ["string", "null"], "enum": ["blocked-env", "repo-defect", null] }
+      }
+    },
+    "repairs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["command", "exit"],
+        "additionalProperties": false,
+        "properties": { "command": { "type": "string" }, "exit": { "type": ["integer", "null"] } }
+      }
+    },
+    "refused": { "type": "array", "items": { "type": "string" } },
+    "readback": {
+      "type": "object",
+      "required": ["store", "sql", "exit", "rows", "truncated", "evidence"],
+      "additionalProperties": false,
+      "properties": {
+        "store": { "type": "string" },
+        "sql": { "type": "string" },
+        "exit": { "type": ["integer", "null"] },
+        "rows": { "type": "array", "items": { "type": "string" } },
+        "truncated": { "type": "boolean" },
+        "evidence": {
+          "type": ["object", "null"],
+          "required": ["log", "log_sha256", "head", "tail"],
+          "additionalProperties": false,
+          "properties": {
+            "log": { "type": "string" },
+            "log_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+            "head": { "type": "array", "items": { "type": "string" } },
+            "tail": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    }
+  }
+}

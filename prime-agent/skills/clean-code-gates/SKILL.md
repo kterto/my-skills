@@ -23,7 +23,7 @@ Run the CLI from the **target project's root**:
 node <skill-dir>/bin/gates.cjs [flags]
 ```
 
-(If `npm link` / on PATH, `clean-code-gates [flags]` also works — but the absolute `node …/bin/gates.cjs` form always works.)
+(Linked on PATH, `clean-code-gates [flags]` works too; the absolute form always does.)
 
 ### Flags
 - `--scope <form>` (default `project`):
@@ -41,6 +41,23 @@ node <skill-dir>/bin/gates.cjs [flags]
 
 ### Exit codes
 `0` pass · `1` blockers found · `2` missing tools (with `--require-tools`) · `3` usage/config error, including a scope that resolved to zero gateable files (nothing measured, so no verdict) · `4` a gate errored and produced no verdict (independent of `--require-tools`)
+
+### Instruments
+
+`gates.cjs <kind>` measures the working tree against a base:
+
+- `barrier` — is any suite newly red against the same tier at the base? Each tier runs under its own bound; pre-existing and flaky reds are listed apart.
+- `select` — which tests and live flows can this change reach? By imports or routes, each pick with a reason.
+- `sweep` — where does a known defect class live, repo-wide? Registered guards or an ad hoc `--shape`; `--prove <id>` proves a guard on planted offenders.
+- `live` — does the stack come up? `check`, `up`, `readback`, `down` over the `live` block, failures typed.
+
+Common flags: `--base <ref>` (default the merge-base with `origin/main`, else `main`, else exit 3), `--instruments-from <ref|file:path>`, `--out <dir>` (default `.cleancode`), `--now <ISO 8601>`.
+
+Instruments live in the repo-root `.cleancode-gates.json` (top-level `barrier`, `guards`) and the fenced `live` block under `## Test tooling` in `.orchestrator/PROJECT-CONTEXT.md`. They are **merge-base anchored**: a base entry runs as the base defines it, and any difference prints `INSTRUMENT MOVED` (time bounds take the larger value; an invalid working-tree config is ignored, with a move). `--instruments-from` reads them from another ref or a file, for replays.
+
+Writing one: a change-selected tier's report names each test file, and jest takes `--runTestsByPath $SELECT`; a live `up` starts its daemons and returns; a consented reset reads `DATABASE_URL`; a read-back store runs as a read-only role; a container bounds its own payload.
+
+Each writes `<out>/<kind>.json` and ≤ 2 KB of summary to stdout. Exit `0` pass · `1` red · `3` usage or config error (`barrier`: `no barrier tiers declared` means the project has none) · `4` not-run: no verdict, **never a pass**. Formats and rules: `references/instruments.md`.
 
 ## Capability
 
@@ -170,8 +187,9 @@ node <skill-dir>/bin/gates.cjs --scope diff --gates G5 --out -
 
   **What each stack enforces, stated rather than assumed.** `perMutantSeconds` and
   `totalSeconds` are enforced on both stacks: the per-mutant cap is written into the generated
-  tool config (Stryker's `timeoutMS`) and the child is spawned with a hard `timeout` and
-  `SIGKILL`. `maxMutants` is enforced on dart-flutter only — Stryker exposes no count without
+  tool config (Stryker's `timeoutMS`), and at `totalSeconds` the runner's whole process group
+  gets `SIGTERM`, then `SIGKILL`, so its test workers die with it — `dart_mutant`'s included.
+  `maxMutants` is enforced on dart-flutter only — Stryker exposes no count without
   running the mutants, so there is nothing to refuse *before* the spend, and a node-ts run is
   bounded by the clock instead of by the count. Stryker also classifies differently and
   correctly so: it counts a `Timeout` as **detected** (the suite caught a mutant that hangs),
