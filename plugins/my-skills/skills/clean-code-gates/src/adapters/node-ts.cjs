@@ -4,6 +4,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { g6Budget, g6OnBound } = require('./g6-budget.cjs');
+const { leaderSync } = require('../instruments/proc.cjs');
 const { G1_EXEMPTIONS } = require('../../defaults.cjs');
 const { toPosix } = require('../scope.cjs');
 
@@ -754,48 +755,11 @@ function runG6(files, stackCfg, io, deps = {}) {
   const cfgPath = writeStrykerConfig(targets, reportPath, excludedMutations, runner, budget);
 
   try {
-    let stopped = null;
-    try {
-      exec(strykerBin, ['run', cfgPath], {
-        cwd: io.root,
-        stdio: ['ignore', 'ignore', 'ignore'],
-        maxBuffer: 64 * 1024 * 1024,
-        // Without this the 43-minute-hang class stays unmitigated on this stack:
-        // the dart adapter has carried both since the run that motivated them,
-        // and node-ts spawned Stryker with no clock at all. SIGKILL because a
-        // wedged runner is exactly what SIGTERM is already failing to stop.
-        timeout: budget.totalSeconds * 1000,
-        killSignal: 'SIGKILL',
-      });
-    } catch (err) {
-      // Stryker exits non-zero when a break threshold is hit and still writes the
-      // report, so a failure here is not itself the signal. Being stopped is:
-      // whatever is on disk then is a partial run nobody asked for. Only the
-      // timeout is the engine's own bound, as in the dart adapter. A runner killed
-      // by anything else — the OOM killer, a crash, an operator — says so, and
-      // never reads as a budget it did not reach.
-      if (err && err.code === 'ETIMEDOUT') stopped = { reason: 'bounded' };
-      else if (err && err.signal) stopped = { reason: 'killed', signal: err.signal };
-    }
-
-    // The engine's own bound. `bounded` under either policy: `onBound` records the
-    // policy in force, and the verdict stays the same non-pass.
-    if (stopped && stopped.reason === 'bounded') {
-      return g6Verdict(null, {
-        ...opts,
-        unmeasured: {
-          reason: 'bounded',
-          detail: `exceeded the ${budget.totalSeconds}s budget`,
-          onBound: g6OnBound(g6Cfg),
-        },
-      });
-    }
-    if (stopped) {
-      return g6Verdict(null, {
-        ...opts,
-        unmeasured: { reason: 'killed', detail: `the runner was killed by ${stopped.signal}, inside the ${budget.totalSeconds}s budget` },
-      });
-    }
+    // The leader bounds Stryker's whole process group, so its test workers die with it (D9). Stryker exits
+    // non-zero on a break threshold and still writes the report, so only being stopped counts: the report is
+    // then partial. Our own bound is `bounded` (with the policy in force), anyone else's signal `killed`.
+    const { stop } = leaderSync(exec, [strykerBin, 'run', cfgPath], { boundSeconds: budget.totalSeconds, cwd: io.root });
+    if (stop) return g6Verdict(null, { ...opts, unmeasured: stop.reason === 'bounded' ? { ...stop, onBound: g6OnBound(g6Cfg) } : stop });
     if (!fs.existsSync(reportPath)) return g6Verdict(null, opts);
     let report;
     try {

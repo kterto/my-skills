@@ -1,0 +1,182 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://clean-code-gates/schema/sweep.schema.json",
+  "title": "CleanCodeGatesSweep",
+  "description": "`gates.cjs sweep` output (contract §7). After timing: guards, sorted by id; then proof in prove mode, or shape_result in shape mode.",
+  "type": "object",
+  "required": ["schemaVersion", "kind", "mode", "generatedAt", "tool", "tree", "instruments", "isolation", "status", "timing", "guards"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "type": "string", "const": "1.0" },
+    "kind": { "type": "string", "const": "sweep" },
+    "mode": { "type": "string", "enum": ["guard", "all", "changed", "shape", "prove"] },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "tool": {
+      "type": "object",
+      "required": ["name", "version"],
+      "additionalProperties": false,
+      "properties": { "name": { "type": "string", "const": "clean-code-gates" }, "version": { "type": "string" } }
+    },
+    "tree": {
+      "type": "object",
+      "required": ["base", "baseTree", "candidateTree"],
+      "additionalProperties": false,
+      "properties": {
+        "base": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" },
+        "baseTree": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" },
+        "candidateTree": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" }
+      }
+    },
+    "instruments": {
+      "type": "object",
+      "required": ["source", "from", "digest", "moves"],
+      "additionalProperties": false,
+      "properties": {
+        "source": { "type": "string", "enum": ["merge-base", "defaults", "instruments-from"] },
+        "from": { "type": ["string", "null"] },
+        "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "moves": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["key", "change", "direction"],
+            "additionalProperties": false,
+            "properties": {
+              "key": { "type": "string" },
+              "change": { "type": "string", "enum": ["added", "removed", "changed", "invalid"], "description": "invalid: the working tree's config is broken (key `config`), so its additions are ignored and the base's instruments run." },
+              "direction": { "type": "string", "enum": ["tightening", "loosening", "changed"] }
+            }
+          }
+        }
+      }
+    },
+    "isolation": { "type": "null" },
+    "status": { "type": "string", "enum": ["pass", "red", "not-run"] },
+    "timing": { "type": "object", "description": "Every duration, in ms: guards.<id>_ms (under prove also guards.<id>.plant<n>_ms), or shape_ms in shape mode." },
+    "guards": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "kind", "class", "status", "reason", "visited", "hits", "consumers"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,62}$" },
+          "kind": { "type": "string", "enum": ["shape", "command", "consumers"] },
+          "class": {
+            "type": "object",
+            "required": ["shape", "pattern", "confirm"],
+            "additionalProperties": false,
+            "properties": { "shape": { "type": "string" }, "pattern": { "type": "string" }, "confirm": { "type": "string" } }
+          },
+          "status": { "type": "string", "enum": ["green", "red", "not-run", "quiet", "listed"] },
+          "reason": { "type": ["string", "null"], "enum": ["timeout", "vacuous", null], "description": "Non-null only for not-run." },
+          "visited": { "type": ["integer", "null"], "minimum": 0, "description": "Files scanned: shape and listed consumers guards; null otherwise." },
+          "hits": {
+            "type": "array",
+            "description": "At most 200, sorted by file, line, check.",
+            "items": {
+              "type": "object",
+              "required": ["file", "line", "text", "check"],
+              "additionalProperties": false,
+              "properties": {
+                "file": { "type": "string" },
+                "line": { "type": "integer", "minimum": 1 },
+                "text": { "type": "string", "description": "<Class>.<prop> for decorated-fields; the match's first line (at most 200 chars) for regex." },
+                "check": { "type": "string", "enum": ["undecorated", "nullable-without-optional", "regex"] }
+              }
+            }
+          },
+          "truncated": { "type": "integer", "minimum": 1, "description": "Hits dropped past the cap of 200; present only when capped." },
+          "consumers": {
+            "type": ["array", "null"],
+            "description": "Consumers guards only, sorted by file; [] when quiet.",
+            "items": {
+              "type": "object",
+              "required": ["file", "via", "changed_in_diff", "hits"],
+              "additionalProperties": false,
+              "properties": {
+                "file": { "type": "string" },
+                "via": { "type": "string", "pattern": "^(pattern|imports .+)$" },
+                "changed_in_diff": { "type": "boolean" },
+                "hits": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["line", "text"],
+                    "additionalProperties": false,
+                    "properties": { "line": { "type": "integer", "minimum": 1 }, "text": { "type": "string" } }
+                  }
+                }
+              }
+            }
+          },
+          "evidence": {
+            "type": "object",
+            "description": "Command guards only: the bounded run.",
+            "required": ["exit", "bound_minutes", "timed_out", "survivors", "log", "log_sha256", "head", "tail"],
+            "additionalProperties": false,
+            "properties": {
+              "exit": { "type": "integer" },
+              "bound_minutes": { "type": "number" },
+              "timed_out": { "type": "boolean" },
+              "survivors": { "type": ["integer", "null"], "minimum": 0 },
+              "log": { "type": "string" },
+              "log_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+              "head": { "type": "array", "items": { "type": "string" } },
+              "tail": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
+      }
+    },
+    "proof": {
+      "type": "object",
+      "description": "Prove mode: plants sorted by name. A plant is ok when got equals expect and differs from unplanted.",
+      "required": ["guard", "unplanted", "plants", "proven"],
+      "additionalProperties": false,
+      "properties": {
+        "guard": { "type": "string" },
+        "unplanted": { "type": "string", "enum": ["green", "red", "not-run", "quiet", "listed"] },
+        "plants": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "expect", "got", "ok"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string" },
+              "expect": { "type": "string", "enum": ["red", "green"] },
+              "got": { "type": "string", "enum": ["green", "red", "not-run", "quiet", "listed"] },
+              "ok": { "type": "boolean" }
+            }
+          }
+        },
+        "proven": { "type": "boolean" }
+      }
+    },
+    "shape_result": {
+      "type": "object",
+      "description": "Shape mode: the ad hoc shape's result, hits as in a guard.",
+      "required": ["visited", "hits"],
+      "additionalProperties": false,
+      "properties": {
+        "visited": { "type": "integer", "minimum": 0 },
+        "hits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["file", "line", "text", "check"],
+            "additionalProperties": false,
+            "properties": {
+              "file": { "type": "string" },
+              "line": { "type": "integer", "minimum": 1 },
+              "text": { "type": "string" },
+              "check": { "type": "string", "enum": ["undecorated", "nullable-without-optional", "regex"] }
+            }
+          }
+        },
+        "truncated": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}

@@ -143,14 +143,55 @@ test('writeStrykerConfig: the per-mutant cap reaches the generated config', () =
   assert.equal(written.timeoutMS, 30000);
 });
 
-test('runG6: the Stryker child is bounded by the total budget and killed with SIGKILL', () => {
+test('runG6: Stryker runs under the group leader, bounded by the total budget, with SIGKILL as the last resort', () => {
   const root = tmpProject();
   let seen = null;
-  const execFileSync = (bin, args, o) => { seen = o; throw new Error('no report'); };
+  const execFileSync = (bin, args, o) => { seen = { bin, args, o }; throw new Error('no report'); };
   const stackCfg = { ...cfg, gates: { ...cfg.gates, G6: { ...cfg.gates.G6, budget: { totalSeconds: 90 } } } };
   runG6(['src/a.ts'], stackCfg, { root }, { execFileSync });
-  assert.equal(seen.timeout, 90000);
-  assert.equal(seen.killSignal, 'SIGKILL');
+  assert.equal(seen.bin, process.execPath);
+  const [flags, argv] = [seen.args.slice(1, seen.args.indexOf('--')), seen.args.slice(seen.args.indexOf('--') + 1)];
+  assert.deepEqual(flags.slice(0, 5), ['--leader', '--bound', '90', '--grace', '5']);
+  assert.match(flags[flags.indexOf('--nonce') + 1], /^[0-9a-f]{16}$/, 'the markers carry a per-run nonce');
+  assert.ok(flags.includes('--reap') && flags.includes('--tail'), flags.join(' '));
+  assert.equal(argv[0], path.join(root, 'node_modules', '.bin', 'stryker'));
+  assert.equal(seen.o.timeout, (90 + 15) * 1000, 'the outer timeout only backs the leader\'s own bound');
+  assert.equal(seen.o.killSignal, 'SIGKILL');
+  assert.equal(seen.o.maxBuffer, 16 * 1024 * 1024, 'the leader relays at most a tail of each stream, far below it');
+  assert.equal(seen.o.stdio[2], 'pipe', 'the leader\'s markers arrive on stderr');
+});
+
+/** A leader that exited `status`, its markers written with the nonce it was handed unless `nonce` forges one. */
+const leaderExit = (status, markers, nonce) => (bin, args) => {
+  const e = new Error('Command failed');
+  const own = nonce || args[args.indexOf('--nonce') + 1];
+  Object.assign(e, { status, signal: null, stderr: markers.map((m) => (m.startsWith('ccg-proc') ? m : `ccg-proc[${own}]: ${m}`)).join('\n') });
+  throw e;
+};
+
+test('runG6: status 124 with the leader\'s timeout marker is the engine\'s own bound', () => {
+  const root = tmpProject();
+  const r = runG6(['src/a.ts'], cfg, { root }, { execFileSync: leaderExit(124, ['timeout after 1800s', 'survivors=0']) });
+  assert.equal(r.measurement.reason, 'bounded');
+  assert.equal(r.measurement.onBound, 'disclose');
+  const own = runG6(['src/a.ts'], cfg, { root }, { execFileSync: leaderExit(124, ['survivors=0']) });
+  assert.notEqual(own.measurement.reason, 'bounded', 'a runner exiting 124 by itself did not hit our bound');
+});
+
+test('runG6: status 137 with the leader\'s signal marker is killed (SIGKILL), never bounded', () => {
+  const root = tmpProject();
+  const r = runG6(['src/a.ts'], cfg, { root }, { execFileSync: leaderExit(137, ['survivors=0', 'signal=SIGKILL']) });
+  assert.equal(r.measurement.reason, 'killed');
+  assert.match(r.findings[0].message, /killed by SIGKILL/);
+});
+
+test('runG6: markers the runner forged, without this run\'s nonce, are neither a bound nor a kill', () => {
+  const root = tmpProject();
+  for (const exec of [leaderExit(124, ['ccg-proc: timeout after 1800s', 'survivors=0']),
+    leaderExit(137, ['timeout after 1800s', 'signal=SIGKILL'], 'f'.repeat(16))]) {
+    const r = runG6(['src/a.ts'], cfg, { root }, { execFileSync: exec });
+    assert.ok(!['bounded', 'killed'].includes(r.measurement.reason), r.measurement.reason);
+  }
 });
 
 test('runG6: a child killed on the clock reports unmeasured, not pass', () => {
@@ -187,7 +228,7 @@ test('runG6: a runner killed by a signal inside the budget reports killed, never
 test('runG6: both temp dirs are removed on every path', () => {
   const root = tmpProject();
   const paths = (args) => {
-    const cfgPath = args[1];
+    const cfgPath = args[args.length - 1];
     return { cfgDir: path.dirname(cfgPath), reportPath: JSON.parse(fs.readFileSync(cfgPath, 'utf8')).jsonReporter.fileName };
   };
   const outcomes = {

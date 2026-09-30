@@ -410,7 +410,7 @@ test('runMutationTest bounds the child process and asks for a dry run first', ()
       ['a.dart'],
       {},
       {
-        execFileSync: (cmd, args, o) => { calls.push({ args, o }); return ''; },
+        execFileSync: (cmd, args, o) => { calls.push({ cmd, args, o }); return ''; },
         readReport: () => EMPTY_SCOPE,
       },
     );
@@ -421,8 +421,67 @@ test('runMutationTest bounds the child process and asks for a dry run first', ()
   assert.ok(calls.length >= 1, 'mutation_test was never invoked');
   assert.ok(calls[0].args.includes('-d'), 'the first invocation must be the dry run');
   for (const c of calls) {
-    assert.ok(Number.isFinite(c.o.timeout) && c.o.timeout > 0, 'every invocation must carry a timeout');
+    // The leader bounds the whole process group; the outer timeout is its last resort.
+    assert.strictEqual(c.cmd, process.execPath);
+    assert.deepStrictEqual(c.args.slice(1, 5), ['--leader', '--bound', '1800', '--grace']);
+    assert.ok(c.args.includes('--reap'));
+    assert.strictEqual(c.args[c.args.indexOf('--') + 1], 'dart');
+    assert.strictEqual(c.o.timeout, (1800 + 15) * 1000);
     assert.strictEqual(c.o.killSignal, 'SIGKILL');
+    assert.strictEqual(c.o.maxBuffer, 16 * 1024 * 1024);
+    assert.ok(c.args.includes('--tail'), 'the leader relays only a tail of each stream');
+    assert.strictEqual(c.o.stdio[2], 'pipe');
+  }
+});
+
+/** The markers a leader writes, with the nonce `args` handed it (or a forged one). */
+const marks = (args, lines, nonce) => lines.map((l) => `ccg-proc[${nonce || args[args.indexOf('--nonce') + 1]}]: ${l}\n`).join('');
+
+test('runMutationTest reads the leader\'s markers: 124 with the timeout marker is bounded, 137 with a signal is killed', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccg-g6-test-'));
+  fs.writeFileSync(path.join(dir, 'a.dart'), 'int f() => 1;\n');
+  const leaderExit = (status, lines, nonce) => (cmd, args) => {
+    throw Object.assign(new Error('Command failed'), { status, stderr: marks(args, lines, nonce) });
+  };
+  const run = (exec) => runMutationTest({ cmd: 'flutter', pre: [] }, dartCfg, { root: dir }, ['a.dart'], {},
+    { execFileSync: exec, readReport: () => null });
+  try {
+    const bounded = run(leaderExit(124, ['timeout after 1800s', 'survivors=0']));
+    assert.strictEqual(bounded.reason, 'bounded');
+    assert.strictEqual(bounded.onBound, 'disclose');
+    const killed = run(leaderExit(137, ['survivors=0', 'signal=SIGKILL']));
+    assert.ok(killed.unmeasured);
+    assert.strictEqual(killed.reason, 'killed');
+    assert.match(killed.detail, /killed by SIGKILL/);
+    // The runner shares the stream, so it can print the marker text, but never with this run's nonce.
+    const forged = run(leaderExit(124, ['timeout after 1800s', 'signal=SIGKILL'], '0'.repeat(16)));
+    assert.ok(!forged || !['bounded', 'killed'].includes(forged.reason), JSON.stringify(forged));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a red baseline keeps the tool\'s own last two lines, never the leader\'s markers that share its stderr', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccg-g6-test-'));
+  fs.writeFileSync(path.join(dir, 'a.dart'), 'int f() => 1;\n');
+  let call = 0;
+  const exec = (cmd, args) => {
+    call += 1;
+    if (call === 1) return '';
+    const err = new Error('Command failed');
+    err.status = 1;
+    err.stdout = 'Error while processing:\n  Error: Running the test commands failed with unmodified code! Aborting.';
+    err.stderr = marks(args, ['survivors=0']); // after an unterminated last line, as a killed tool leaves it
+    throw err;
+  };
+  try {
+    const run = runMutationTest({ cmd: 'flutter', pre: [] }, dartCfg, { root: dir }, ['a.dart'], {},
+      { execFileSync: exec, readReport: () => (call === 1 ? FOUR_OUTCOMES : null), dropReport: () => {} });
+    assert.strictEqual(run.reason, 'baseline-suite-red');
+    assert.strictEqual(run.detail,
+      'Error while processing:   Error: Running the test commands failed with unmodified code! Aborting.');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
   }
 });
 
