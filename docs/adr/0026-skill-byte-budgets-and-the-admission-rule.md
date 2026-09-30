@@ -1,7 +1,8 @@
 # ADR-0026 — Skill bytes are a tested budget; a new mechanism enters only with a replay
 
-- **Status:** Accepted
+- **Status:** Accepted. Decision 4 is enforced from [ADR-0030](0030-the-engine-measures-at-the-tree.md).
 - **Date:** 2026-09-29
+- **Amended by:** [ADR-0030](0030-the-engine-measures-at-the-tree.md) — decision 4 is enforced there, by `scripts/__tests__/admission.test.mjs` over `fixtures/admission.json` and `fixtures/replays/`; decision 2's check also holds code to line ceilings and one reference to a byte budget, and a deleted entry is a move; and three items of *Consequences*' "Not enforced here" are enforced there: the admission registry, line ceilings for code, and a pre-commit hook with CI.
 - **Skills affected:** every skill under `plugins/my-skills/skills/` — `budgets.json` (new) holds a byte ceiling for each `*/SKILL.md`, and `scripts/check-skill-budgets.mjs` (new, run by `scripts/check-host-parity.mjs`) fails on a breach; `orchestrator` (`SKILL.md` frozen at 179,160 bytes, net-zero patches only).
 - **Source finding:** the 2026-09-29 harness re-evaluation — `DESIGN-v2.md` §4.1 (rule zero and the admission rule), §5.14 (the regrowth guard) and decision D2 in §8, and its growth history of this repository (`principles-history.md` §2.1, §2.5, §2.7). Neither file is in this repository. Every byte count below was re-measured here with `git cat-file -s`. The re-evaluation plans four increments; this ADR lands with Increment 1, and the replay corpus arrives with Increment 3, the engine.
 - **Precedent:** ADR-0024 decision 1, a set that changes only through a named record; the `INSTRUMENT MOVED` line (`orchestrator/SKILL.md` → Step 0b, and the `clean-code-gates` runner), a number a branch cannot move for itself because it is read from the merge base.
