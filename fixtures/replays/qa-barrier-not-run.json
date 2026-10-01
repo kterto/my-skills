@@ -1,0 +1,14 @@
+{
+  "id": "qa-barrier-not-run",
+  "kind": "synthetic",
+  "class": "a test tier that produced no verdict, read as a pass or sent to remediation as a failure",
+  "caught_by": "QA Step 3 writes a barrier tier not-run for any reason but empty-scope, and a barrier run that gave no verdict, to stale_gates: with its reason; the orchestrator synthesizes BLOCKED_STALE and stops for an operator decision, outside the remediation loop and never as a pass",
+  "missed_by": "the kept core's suite run, unbounded and chosen by the role: a hung run held the pipeline for hours behind dozens of leaked processes, and a suite narrowed by name passed a regression the whole tier caught",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/orchestrator/scripts/qa-barrier-prose.test.cjs",
+  "evidence": "docs/adr/0030-the-engine-measures-at-the-tree.md#13-qas-step-3-runs-the-barrier"
+}

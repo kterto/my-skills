@@ -299,6 +299,22 @@ test('runG6 errors when the report is missing (null from the runner)', () => {
   assert.strictEqual(r.status, 'error');
 });
 
+test('runG6 routes a dart_mutant run stopped on its bound to unmeasured and never scores it', () => {
+  const r = runG6(['lib/calc.dart'], dartCfgMutant, g6Io, {
+    resolveFlutter: () => ({ cmd: 'flutter', pre: [] }),
+    commandExists: () => true,
+    runMutant: () => ({
+      unmeasured: true, reason: 'bounded', detail: 'exceeded the 1800s budget', onBound: 'disclose', budget: { totalSeconds: 1800 },
+    }),
+  });
+  assert.strictEqual(r.status, 'error');
+  assert.strictEqual(r.tool, 'dart_mutant');
+  assert.strictEqual(r.measurement.state, 'unmeasured');
+  assert.strictEqual(r.measurement.reason, 'bounded');
+  assert.strictEqual(r.measurement.onBound, 'disclose');
+  assert.ok(!r.findings.some((f) => f.rule === 'mutation/score'), 'a bounded run is never scored');
+});
+
 // ---- G6 via mutation_test (the dart-flutter default) --------------------
 
 test('parseMutationTestJunit derives score, total and survivor lines from junit', () => {

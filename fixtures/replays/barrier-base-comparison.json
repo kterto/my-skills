@@ -1,0 +1,15 @@
+{
+  "id": "barrier-base-comparison",
+  "kind": "synthetic",
+  "class": "a regression in a suite of the changed code's tier that the change's own name or path pattern never selected",
+  "caught_by": "gates.cjs barrier runs the whole tier at the candidate tree and compares every suite with the same tier at base: a suite red at the candidate and not red by the same assertions at base is newly_red, the tier fails (assertion) and the barrier is red, exit 1. A suite red by the same assertions at base is carried, and one that passes its single rerun is flaky; both are listed, never hidden",
+  "missed_by": "QA chose its suites by name pattern, and the narrowed run was green while the whole tier was red",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/clean-code-gates/__tests__/instruments-barrier.test.cjs",
+  "evidence": "docs/adr/0030-the-engine-measures-at-the-tree.md#4-the-barrier-compares-each-tier-with-the-same-tier-at-base",
+  "private_ref": "inc3-15.1"
+}

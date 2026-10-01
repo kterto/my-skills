@@ -6,6 +6,7 @@ const { execFileSync } = require('node:child_process');
 const { G1_EXEMPTIONS } = require('../../defaults.cjs');
 const { toPosix } = require('../scope.cjs');
 const { g6Budget, g6OnBound } = require('./g6-budget.cjs');
+const { leaderSync } = require('../instruments/proc.cjs');
 
 /**
  * dart-flutter adapter.
@@ -840,44 +841,17 @@ ${fileEls}
   // is the symptom rather than the cause.
   const BASELINE_RED = /failed with unmodified code/i;
   const invoke = (extra) => {
-    try {
-      exec(dart.cmd, extra ? [...args.slice(0, -1), extra, args[args.length - 1]] : args, {
-        cwd: io.root,
-        stdio: ['ignore', 'pipe', 'pipe'],
-        encoding: 'utf8',
-        maxBuffer: 64 * 1024 * 1024,
-        // Without this the 43-minute-hang class that motivated this gate is
-        // unmitigated. SIGKILL rather than the default SIGTERM because a wedged
-        // Dart VM is exactly what SIGTERM is already failing to stop.
-        timeout: budget.totalSeconds * 1000,
-        killSignal: 'SIGKILL',
-      });
-      return null;
-    } catch (err) {
-      // Three different failures arrive here. ETIMEDOUT means we killed it
-      // mid-run, so whatever is on disk covers an arbitrary prefix of the scope
-      // — a partial measurement, never a score; it is the engine's own bound,
-      // reported `bounded` with the policy that says whether the consumer waits.
-      // An abort on the unmodified baseline means the project's own suite is red
-      // before any mutation, which is a precondition failure and not a mutation
-      // result. Anything else is mutation_test's own quality gate firing: the
-      // report is complete and our threshold comparison is the one that counts.
-      if (err && err.code === 'ETIMEDOUT') {
-        return {
-          reason: 'bounded',
-          detail: `exceeded the ${budget.totalSeconds}s budget`,
-          onBound: g6OnBound(g6cfg),
-        };
-      }
-      const out = `${(err && err.stdout) || ''}${(err && err.stderr) || ''}`.trim();
-      if (BASELINE_RED.test(out)) {
-        return {
-          reason: 'baseline-suite-red',
-          detail: out.split('\n').filter(Boolean).slice(-2).join(' ').slice(0, 300),
-        };
-      }
-      return null;
-    }
+    // Without a bound the 43-minute-hang class that motivated this gate is unmitigated. The leader bounds the whole
+    // process group, so `flutter test` and its workers die with the VM (D9). Being stopped leaves a partial report:
+    // our own bound is `bounded` (with the policy that says whether the consumer waits), anyone else's signal
+    // `killed`. An abort on the unmodified baseline means the project's own suite is red before any mutation, a
+    // precondition failure and not a mutation result. Any other failure is mutation_test's own quality gate: the
+    // report is complete and our threshold comparison is the one that counts.
+    const argv = [dart.cmd, ...(extra ? [...args.slice(0, -1), extra, args[args.length - 1]] : args)];
+    const { stop, output } = leaderSync(exec, argv, { boundSeconds: budget.totalSeconds, cwd: io.root, stdout: 'pipe' });
+    if (stop) return g6Stopped(stop, g6cfg);
+    if (!BASELINE_RED.test(output)) return null;
+    return { reason: 'baseline-suite-red', detail: output.split('\n').filter(Boolean).slice(-2).join(' ').slice(0, 300) };
   };
 
   try {
@@ -1165,11 +1139,14 @@ function g6Verdict(parsed, opts) {
  * mutations (no in-place edits) and writes to a temp --output dir that is removed
  * afterwards, so a run leaves no mutation-reports/, worktree, or pub-get litter
  * on the target tree. A non-zero exit (dart_mutant exits non-zero when the score
- * is below --threshold) is tolerated; the verdict keys off the report file.
+ * is below --threshold) is tolerated; the verdict keys off the report file. A run
+ * the leader stopped returns the unmeasured record instead: its report is partial.
  */
 function runMutant(flutter, stackCfg, io, threshold) {
   const testCommand = [flutter.cmd, ...flutter.pre, 'test'].join(' ');
   const excludeGlobs = stackCfg.exclude || [];
+  const g6 = stackCfg.gates.G6 || {};
+  const budget = g6Budget(g6);
   const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccg-g6-'));
   const args = [
     '--path', io.root,
@@ -1182,26 +1159,16 @@ function runMutant(flutter, stackCfg, io, threshold) {
   ];
   for (const ex of excludeGlobs) args.push('--exclude', ex);
 
-  try {
-    execFileSync('dart_mutant', args, {
-      cwd: io.root,
-      stdio: ['ignore', 'ignore', 'ignore'],
-      maxBuffer: 64 * 1024 * 1024,
-    });
-  } catch {
-    // Non-zero exit means the quality gate failed; the report is still written.
-  }
-
+  // A non-zero exit means the quality gate failed, and the report is still written.
+  const { stop } = leaderSync(execFileSync, ['dart_mutant', ...args], { boundSeconds: budget.totalSeconds, cwd: io.root });
   const reportPath = path.join(outDir, 'mutation-report.json');
-  let json = null;
-  if (fs.existsSync(reportPath)) json = fs.readFileSync(reportPath, 'utf8');
-  try {
-    fs.rmSync(outDir, { recursive: true, force: true });
-  } catch {
-    /* ignore */
-  }
-  return json;
+  const json = !stop && fs.existsSync(reportPath) ? fs.readFileSync(reportPath, 'utf8') : null;
+  try { fs.rmSync(outDir, { recursive: true, force: true }); } catch { /* ignore */ }
+  return stop ? { unmeasured: true, ...g6Stopped(stop, g6), budget } : json;
 }
+
+/** A run the leader stopped: our own bound (`bounded`, with its policy) or anyone else's signal (`killed`). */
+const g6Stopped = (stop, g6cfg) => (stop.reason === 'bounded' ? { ...stop, onBound: g6OnBound(g6cfg) } : stop);
 
 /**
  * G6 runs mutation_test by default and dart_mutant only when the config asks
@@ -1230,6 +1197,7 @@ function runG6(files, stackCfg, io, deps = {}) {
     const opts = { targets, threshold, command, stackCfg, io, tool: 'dart_mutant' };
     if (!targets.length) return g6Verdict(null, opts);
     const json = runMutantFn(flutter, stackCfg, io, threshold);
+    if (json && json.unmeasured) return g6Unmeasured(json, opts);
     return g6Verdict(json == null ? null : parseDartMutantReport(json), opts);
   };
 

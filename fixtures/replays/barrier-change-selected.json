@@ -1,0 +1,15 @@
+{
+  "id": "barrier-change-selected",
+  "kind": "synthetic",
+  "class": "a whole suite too slow to run inside a run, stopped with no verdict, or narrowed by hand with nothing recorded",
+  "caught_by": "a change-selected tier runs only the tests the import graph relates to the change, and names where its whole run happens (whole_run). With nothing selected it is not-run (empty-scope): it runs nothing and does not block",
+  "missed_by": "the whole suite on every task, killed before it finished, or a hand-picked subset nobody could audit",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/clean-code-gates/__tests__/instruments-barrier.test.cjs",
+  "evidence": "docs/adr/0030-the-engine-measures-at-the-tree.md#the-users-decisions",
+  "private_ref": "inc3-15.7"
+}

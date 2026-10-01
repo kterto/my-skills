@@ -1,0 +1,14 @@
+{
+  "id": "barrier-reports",
+  "kind": "synthetic",
+  "class": "a suite that failed to load, or skipped its tests, read as a pass",
+  "caught_by": "the barrier's report parsers (jest-json, junit, flutter-json, exit-code) give each suite one result: pass, fail, error or skipped. A suite that failed to run is error, which is red, so a change that breaks a suite's boot is newly red even where the base had that suite red",
+  "missed_by": "a runner's exit code, which cannot say which suite broke or that a suite never ran",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/clean-code-gates/__tests__/instruments-reports.test.cjs",
+  "evidence": "docs/adr/0030-the-engine-measures-at-the-tree.md#4-the-barrier-compares-each-tier-with-the-same-tier-at-base"
+}

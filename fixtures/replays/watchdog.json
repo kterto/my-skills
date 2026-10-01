@@ -1,0 +1,14 @@
+{
+  "id": "watchdog",
+  "kind": "history",
+  "class": "a run that sits idle between steps until someone happens to look",
+  "caught_by": "the watchdog: on Claude Code a plugin Stop hook blocks a conductor's stop mid-run unless pending_decision marks it deliberate; on opencode a plugin re-prompts the conductor's idle session under the same rules; run-state.cjs watch notifies the operator after 30 idle minutes",
+  "missed_by": "nothing: each stall ended when a human noticed it",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/hooks/__tests__/orchestrator-stop.test.cjs",
+  "evidence": "docs/adr/0026-skill-byte-budgets-and-the-admission-rule.md#4-the-admission-rule-a-mechanism-enters-with-a-replay-or-as-an-issue"
+}

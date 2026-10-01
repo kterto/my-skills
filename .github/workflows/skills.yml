@@ -1,0 +1,45 @@
+# The repository's checks, on every push and pull request (ADR-0030). The byte and
+# line budgets are read from the merge-base with main, so the checkout needs the
+# history: a shallow clone has no base, and a raised ceiling would pass unseen.
+name: skills
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch main, the base the budgets are read from
+        run: git fetch origin main || true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # The suite builds throwaway git repositories and commits in them.
+      - name: Give git a CI identity
+        run: |
+          git config --global user.name "skills-ci"
+          git config --global user.email "skills-ci@example.invalid"
+          git config --global init.defaultBranch main
+
+      - name: Test suite
+        run: find plugins/my-skills scripts/__tests__ \( -name "*.test.cjs" -o -name "*.test.mjs" \) -not -path "*/node_modules/*" -print0 | xargs -0 node --test
+
+      - name: Skill byte and line budgets
+        run: node scripts/check-skill-budgets.mjs
+
+      - name: Host parity
+        run: node scripts/check-host-parity.mjs
+
+      - name: Orchestrator section pointers
+        run: python3 scripts/check-section-pointers.py

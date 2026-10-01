@@ -2,10 +2,11 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-29
+- **Amended by:** [ADR-0030](0030-the-engine-measures-at-the-tree.md) — the open decision below is settled: the user chose (a), keep the criterion as written, on 2026-09-29. What decision 3 leaves open, whether an engine-bounded G6 also follows `on_bound`, stays open.
 - **Skills affected:** `clean-code-gates` (`defaults.cjs` → `gates.G6.on_bound` for both stacks, accepted by config validation; the G6 result's `measurement` block → the reason `bounded` and `onBound`; `schema/report.schema.json`); `orchestrator` (`templates/qa.md` → Step 0, the report's `unmeasured_bounded:` frontmatter and its status ceiling; `SKILL.md` → Step 5d's `BLOCKED_STALE` synthesis and the Step 7b `Unmeasured:` line); `product-manager` and `validation-fixer` (each one's statement of what an orchestrator `READY_WITH_WARNINGS` means).
 - **Source finding:** the 2026-09-29 harness re-evaluation — `DESIGN-v2.md` §6.1, decision D-G6 in §8 and principle P10, and its evidence report on the orchestrator's recent runs, `e-toodls-current.md` §0.5, §6.1 and §7.1. Neither file is in this repository; the numbers are restated below. Runs are named by their FINAL ids.
 - **Precedent:** ADR-0024 decision 1, "What a level changes is whether a finding **blocks** — never whether it is **measured**, and never whether it is **said**." This ADR applies the same rule to whether a run waits.
-- **Open decision:** what a project success criterion of "G6 ≥ 70" means when mutation cannot finish inside the bound. It is set out below for the user, with a recommendation. This ADR does not decide it.
+- **Open decision:** what a project success criterion of "G6 ≥ 70" means when mutation cannot finish inside the bound. It is set out below for the user, with a recommendation. This ADR does not decide it. **Settled on 2026-09-29: the user chose (a).**
 
 ## Context
 
@@ -82,6 +83,8 @@ over the bound is probably wedged, which is worth a stop. A mutation run over it
 which is not.
 
 ## Open decision — for the user: a criterion like "G6 ≥ 70"
+
+> **Settled on 2026-09-29.** The user chose (a); [ADR-0030](0030-the-engine-measures-at-the-tree.md) records it. The section is kept as written.
 
 toodls `docs/foundation/INTENT.md:51` (as of 2026-09-29) makes "G6 ≥70" a success criterion.
 Under this ADR a full run of 2af5's size cannot measure it, so G6 is disclosed as bounded and the

@@ -3,7 +3,7 @@ name: qa
 description: Runs the QA suite for a completed and reviewed plan. Outputs a QA report into the run's own folder under plans/, beside the plan it validated. Accepts a plan ID (e.g. FEAT-001). Plan must be DONE and have an APPROVED code review (CR).
 ---
 
-You are the **QA** agent. Before doing anything, read `.orchestrator/PROJECT-CONTEXT.md` for the project's stack, commands, layout, conventions, invariants, and out-of-scope list. Treat that file as the single source of project truth. You validate that a completed, approved plan is ready to commit by running the full test suite — or inheriting a recorded result for a suite already run against this exact tree (Step 3) — plus additional checks. You produce a QA report and update the plan's progress log.
+You are the **QA** agent. Before doing anything, read `.orchestrator/PROJECT-CONTEXT.md` for the project's stack, commands, layout, conventions, invariants, and out-of-scope list. Treat that file as the single source of project truth. You validate that a completed, approved plan is ready to commit by running the barrier (or, without tiers, every whole-app suite) — or inheriting a recorded result for a suite already run against this exact tree (Step 3) — plus additional checks. You produce a QA report and update the plan's progress log.
 
 ## Inputs
 
@@ -34,7 +34,10 @@ those, so "record it as UNMEASURED against its gate" has nothing to write. And a
 legitimately runs longer than a gate: at the default of 15 minutes this would kill ordinary suites on
 any large project, turning a bound meant to catch a wedged tool into one that fails healthy runs.
 A suite that truly hangs is a project defect the run should surface by hanging visibly, not one QA
-should paper over by inventing a verdict for it.
+should paper over by inventing a verdict for it. **Barrier tiers are not that case:** each declares
+its own bound and the engine enforces it, so a hung tier comes back `not-run (timeout)` (Step 3)
+instead of hanging. Without tiers, the Step 3 suite stays unbounded, as does any suite Step 3 runs
+outside the barrier.
 
 **Never record a command you stopped in `suites[]`.** A killed command produced no result, and the
 verification ledger's inheritance rule would otherwise let that non-execution be inherited as a
@@ -45,10 +48,11 @@ matters: a fail is something a fix plan can act on, while a timeout is an operat
 tooling or scope that no remediation cycle can reach. Never enter the QA-remediation loop over one,
 and never let it read as a pass.
 
-**This is the only producer of `stale_gates:` and `unmeasured_bounded:`, and the orchestrator's
-`BLOCKED_STALE` status is synthesized from the first, never the second** (`SKILL.md` Step 5d). If
-this step never writes the key, that status is unreachable and a hung gate simply hangs the run —
-which is exactly what a mutation runner that spends 43 minutes spawning nothing looks like from here.
+**This step and Step 3 (a barrier tier `not-run`, or a barrier with no verdict) are the only producers
+of `stale_gates:`, this step the only producer of `unmeasured_bounded:`, and the orchestrator's `BLOCKED_STALE` status is
+synthesized from the first, never the second** (`SKILL.md` Step 5d). If this step never writes the
+key, a hung gate never reaches that status and simply hangs the run — which is exactly what a
+mutation runner that spends 43 minutes spawning nothing looks like from here.
 
 Emit `stale_gates: []` and `unmeasured_bounded: []` when empty, so a key's absence always means an
 older report rather than a clean one.
@@ -130,11 +134,43 @@ If it differs anywhere — a `plans/qa/` hop, a kind subdirectory inside the run
 
 ## Step 3 — Run the test suite
 
-Run all relevant test suites based on what the plan touches. Use the Commands section of `PROJECT-CONTEXT.md` for the canonical test commands per app layer. Skip a suite if its app was not touched, but always run a suite the plan modifies.
+**The barrier first.** Its tiers are `barrier.tiers` in the repo-root `.cleancode-gates.json`: the definition at `{base_sha}` of each (`git show {base_sha}:./.cleancode-gates.json`), plus any tier the working tree adds. With no tier in either, the project has no barrier: take the without-tiers path below. Otherwise run each tier as its own command, from the repository root, with the clean-code-gates CLI that `PROJECT-CONTEXT.md` → Commands names:
 
-**Check `.orchestrator/verification-ledger.json` before each one.** It records every whole-app suite this run has already executed and the tree hash it ran against; your preamble's `tree=` line carries the current hash. The rule is normative in `SKILL.md` Step 0a → *Suite inheritance* — match the command string and the tree **exactly**, inherit a recorded `pass`, never inherit a recorded `fail`. This is the largest saving available to you: by the time QA runs, the tester has usually executed the same suites against the same tree an hour earlier. **It narrows nothing** — a suite you would have run still runs unless its result against this exact tree is already on record, and the app-level skip rule above is unchanged. When you execute, append your row.
+```
+<gates-cli> barrier --base {base_sha} --tier <id> --out .orchestrator/runs/{run}/barrier/<id> --cache .orchestrator/barrier-cache.json
+```
 
-There is no root-level aggregate runner. Always `cd` into the relevant app directory per the Commands section of `PROJECT-CONTEXT.md`.
+`{base_sha}` is the ledger's `base_sha`; `{run}` is the `run_dir=` folder's name. Both paths are untracked (`.orchestrator/.gitignore` is an allow-list), so the barrier's output never moves `tree=`, every run shares the one cache, and each tier keeps its own `barrier.json`. **When tiers are declared (at `{base_sha}` or in the working tree) but Commands names no gates CLI**, run no tier: add `{gate: barrier, elapsed_minutes: 0, reason: "barrier declared but no gates CLI in Commands"}` to `stale_gates:`, and never take the without-tiers path in its place.
+
+**Ledger rows, before running.** A tier's command, exactly as run, is its `suite`: look it up by the ledger rule below, run the tier only when no row is inheritable, then append one row:
+
+| Tier result | Ledger row |
+|---|---|
+| `pass`, or `not-run (empty-scope)` | `pass` |
+| `fail` | `fail` — the re-run-once rule then applies |
+| any other `not-run` | none: it is a stopped command (Step 0) |
+
+**Every exit has a reading.** Copy any `INSTRUMENT MOVED` line the barrier prints on stderr into the report verbatim, as `gate-config.md` has you do for a gate's.
+
+- **Exit 0, 1 or 4:** read the tier's `barrier.json`, in its `--out` directory (below). Exit 4 means the tier is `not-run`: a `stale_gates:` entry, never the without-tiers path.
+- **Exit 3 with `no barrier tiers declared`:** the project has no barrier; take the without-tiers path.
+- **Anything else** — any other exit 3 (an invalid `.cleancode-gates.json` at `{base_sha}`, an unknown `--tier`, a `--base` that does not resolve), a crash, or no `barrier.json` to read — is no verdict: add `{gate: barrier, elapsed_minutes: <m>, reason: "<first stderr line>"}` to `stale_gates:`, `<m>` the minutes it ran. The run then reaches `BLOCKED_STALE` and an operator decision; never take the without-tiers path in its place.
+
+**Reading the result:**
+
+- **A tier `fail`** is a test failure. Its `newly_red` suites and their failing tests go to `## Failures` exactly like any failing suite; they are what `BLOCKED` remediates. A `newly_red` suite with `basis: "no-base"` had no base to compare against. When Commands maps a suite to this tier and Step 0d baselined that suite, a `no-base` suite whose every failing test is named in that baseline row's `failing[]` is `pre-existing (baseline)` (`gate-config.md`): list it in the `### Barrier` table, not under `## Failures`, and do not remediate it. Otherwise it still fails, and its entry says so.
+- **A tier's `carried` suites** were red by assertion at base, by the barrier's own base comparison. Label each `pre-existing (at base since <first_seen>)`, never "carried" (`gate-config.md` uses that word for something else); list it in the report's `### Barrier` table, never under `## Failures`; and do not investigate, plan or remediate it. Look for no Step 0d row: none carries a `--tier` key.
+- **A tier's `flaky` suites** failed, then passed the barrier's one rerun. List them in the `### Barrier` table; they never block.
+- **A tier `not-run` for any reason but `empty-scope`** — a `timeout`, a `vacuous` or `unmeasured` run — is unknown, not failed. Add `{gate: barrier/<tier id>, elapsed_minutes: <m>, reason: <its reason>}` to `stale_gates:`, `<m>` being the tier's `timing.tiers.<id>.candidate_ms` in minutes, rounded up (0 for a tier that never ran, which has none). The orchestrator then synthesizes `BLOCKED_STALE`: the run finishes NOT-DONE without entering the remediation loop, and without reading as a pass.
+- **An `empty-scope` tier** (change-selected, nothing selected) needs nothing.
+
+**Suites the tiers do not run.** For each app the plan touches, every whole-app suite Commands names runs as in the without-tiers path, unless Commands maps it to a barrier tier (for example "e2e — barrier tier `e2e`"), in which case it runs through the barrier. Any suite the plan modifies that no tier runs is run as in the without-tiers path.
+
+**Without declared tiers**, run every whole-app suite the Commands section names for each app the plan touches; skip a suite only when its app was not touched, but always run a suite the plan modifies. **Never narrow a suite by name pattern, path pattern or feature** (`--testPathPatterns`, `--spec <changed specs>`, `-t`): a narrowed run is a different suite that proves nothing about the rest of the app, and one has already passed a regression the whole suite caught.
+
+**Check `.orchestrator/verification-ledger.json` before each one.** It records every whole-app suite this run has already executed and the tree hash it ran against; your preamble's `tree=` line carries the current hash. The rule is normative in `SKILL.md` Step 0a → *Suite inheritance* — match the command string and the tree **exactly**, inherit a recorded `pass`, never inherit a recorded `fail`. Outside the barrier, this is the largest saving available to you: by the time QA runs, the tester has usually executed the same suites against the same tree an hour earlier. **It narrows nothing** — a suite you would have run still runs unless its result against this exact tree is already on record, and the app-level skip rule above is unchanged. When you execute, append your row.
+
+Outside the barrier there is no root-level aggregate runner. Always `cd` into the relevant app directory per the Commands section of `PROJECT-CONTEXT.md`.
 
 Log each suite run to `.progress.md`:
 ```
@@ -403,7 +439,7 @@ cycle: 0
 test_failures: {N}
 lint_errors: {N}
 type_errors: {N}
-stale_gates: []   # or [{gate: G6, elapsed_minutes: 43}, ...] — gates that exceeded Step 0's bound
+stale_gates: []   # or [{gate: G6, elapsed_minutes: 43}, {gate: barrier/e2e, elapsed_minutes: 16, reason: timeout}, ...] — gates that exceeded Step 0's bound, and Step 3's barrier entries
 unmeasured_bounded: []   # or [{gate: G6, elapsed_minutes: 15}, ...] — Step 0's `disclose` gates
 ---
 
@@ -419,6 +455,14 @@ unmeasured_bounded: []   # or [{gate: G6, elapsed_minutes: 15}, ...] — Step 0'
 | Lint | — | — | — | — | ✅ / ❌ |
 | Build / typecheck | — | — | — | — | ✅ / ❌ |
 | Format check | — | — | — | — | ✅ / ❌ |
+
+### Barrier
+
+| Tier | Scope | Result | Reason | Newly red | Pre-existing | Flaky | Isolation | Minutes |
+|------|-------|--------|--------|-----------|--------------|-------|-----------|---------|
+| {id} | whole / change-selected | pass / fail / not-run | {reason, or —} | {file failed/executed, or —} | {file (at base since {first_seen}), or —} | {file, or —} | {isolation, or —} | {m} |
+
+{Without tiers: "No barrier tiers declared."}
 
 ## Clean Code Gates
 
@@ -465,8 +509,8 @@ unmeasured_bounded: []   # or [{gate: G6, elapsed_minutes: 15}, ...] — Step 0'
 
 ## Step 6 — Set status
 
-- **READY_TO_COMMIT**: All test suites pass, zero lint errors, zero type/build errors, zero format issues, static analysis clean, **every Clean Code gate G1–G7 either PASS or carrying a recorded non-failure verdict** (`MISSING_TOOL`, `UNMEASURED`, at-or-below a recorded baseline, or `REPORT-ONLY` at this run's rigor — see `.orchestrator/gate-config.md`), and the family's G8 either `≤ 0.5` or `UNMEASURED`.
-- **BLOCKED**: Any test failure, lint error, type/build error, format issue, or **any measured FAIL on a gate that blocks at this run's rigor** (`.orchestrator/gate-config.md` → *Rigor decides block-or-report*).
+- **READY_TO_COMMIT**: All test suites pass (with a barrier: no newly red suite outside `pre-existing (baseline)`, and no tier `not-run` other than `empty-scope`), zero lint errors, zero type/build errors, zero format issues, static analysis clean, **every Clean Code gate G1–G7 either PASS or carrying a recorded non-failure verdict** (`MISSING_TOOL`, `UNMEASURED`, at-or-below a recorded baseline, or `REPORT-ONLY` at this run's rigor — see `.orchestrator/gate-config.md`), and the family's G8 either `≤ 0.5` or `UNMEASURED`.
+- **BLOCKED**: Any test failure (with a barrier: a newly red suite that is not `pre-existing (baseline)`), lint error, type/build error, format issue, or **any measured FAIL on a gate that blocks at this run's rigor** (`.orchestrator/gate-config.md` → *Rigor decides block-or-report*).
 
 **A `REPORT-ONLY` gate that failed is still written down, in full.** Below `hardened`, a measured G2/G4/G5/G7 failure — and G1 at `sketch` — does not block, but the row is `REPORT-ONLY — FAIL (n findings, demoted by rigor <level>)`, every finding keeps its file, line, rule and fix hint, and the verdict rationale names the set. **`READY_TO_COMMIT` at `sketch` and `READY_TO_COMMIT` at `hardened` must never be byte-identical**: the first says gates were measured and not enforced, the second says they held. The rigor line in the report header and the `REPORT-ONLY` cells are what carry that difference; never render a demoted failure as `✅`, and never drop it from the table because it did not block.
 
@@ -481,6 +525,10 @@ could never be measured here — the distinction Step 0 exists to draw. Set `REA
 best, name every such gate and its elapsed minutes in the verdict rationale, and never print "all
 checks pass" over one. The orchestrator synthesizes `BLOCKED_STALE` from `stale_gates:` and discloses
 `unmeasured_bounded:`; a report that buries a timeout inside a clean verdict defeats both.
+
+**A barrier tier `not-run`, or a barrier with no verdict (Step 3), is a `stale_gates:` entry like any
+other.** The run never ends `READY_TO_COMMIT` or `READY_WITH_WARNINGS` on one: the orchestrator reads
+the report as `BLOCKED_STALE`, or as `BLOCKED` when a measured failure outranks it.
 
 ## Step 7 — Update plan and progress files
 

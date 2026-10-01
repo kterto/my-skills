@@ -1608,7 +1608,7 @@ Every measured blocking gate passed; the plan is safe to commit. This status ind
 
 #### If BLOCKED_STALE:
 
-A `BLOCKED_STALE` status means one or more gates exceeded their wall-clock budget — `gate_wall_clock_minutes`, enforced by `templates/qa.md` → Step 0, which is the sole producer of the `stale_gates:` frontmatter this status is read from. The result is unknown, not failed. Do NOT enter the QA-remediation loop — gate timeouts are an operator decision, not an architect remediation target. Stop and report to the user:
+A `BLOCKED_STALE` status means a result is unknown, not failed: a `stop` gate over `gate_wall_clock_minutes` or a barrier tier `not-run`, the two producers (`templates/qa.md` → Steps 0 and 3) of the `stale_gates:` frontmatter this status is read from. Do NOT enter the QA-remediation loop — either is an operator decision, not an architect remediation target. Stop and report to the user:
 
 ```
 ORCHESTRATOR — QA stale
@@ -1739,7 +1739,7 @@ If an agent output is ambiguous or missing the expected pattern, re-read the rel
 
 > **The `Plan:` line the orchestrator *sends* is not the `Plan:` line it *reads*.** Every spawn that names a plan by ID also names its path (*Mandatory role-prompt preamble* above), so a coder, tester, reviewer or QA prompt now carries a `Plan:` **input** line — while the table's `Plan: {path}` pattern is the **architect's output**, parsed from the architect's summary and from nowhere else. Never read a role's own prompt back as its output, and **never add a `Plan:` line to an architect prompt**, where it would be indistinguishable from the line that step exists to extract. The architect is handed its input as `Source spec:`, `Source CR file:`, `Source QA report:` or `Source eval report:` for exactly this reason.
 
-> **Note — BLOCKED_STALE is orchestrator-synthesized:** the qa agent never emits the literal string `BLOCKED_STALE`. The orchestrator infers it from the QA report's `stale_gates:` frontmatter, written by `templates/qa.md` → Step 0 when a `stop` gate exceeds `gate_wall_clock_minutes`. **An absent key means a report from before that step existed, not a clean run** — Step 0 emits `stale_gates: []` when nothing timed out. Do not expect this value in the qa agent's `Status:` output line.
+> **Note — BLOCKED_STALE is orchestrator-synthesized:** the qa agent never emits the literal string `BLOCKED_STALE`. The orchestrator infers it from the QA report's `stale_gates:` frontmatter, written by `templates/qa.md` → Step 0 (a `stop` gate over `gate_wall_clock_minutes`) or Step 3 (a barrier tier `not-run`). **An absent key means a report from before Step 0 existed, not a clean run** — Step 0 emits `stale_gates: []` when nothing timed out. Do not expect this value in the qa agent's `Status:` output line.
 
 ### Rules
 
@@ -1964,11 +1964,11 @@ what the run has to show for it, and both come from evidence already on disk:
 
 - **`Instrument moved:`** — every anchored key whose working-tree value disagreed with the merge-base:
   the nine config keys resolved at Step 0b (`references/config.md` → *The anchored set*) and the
-  `.cleancode-gates.json` fields the gate runner reports in `report.instrument.moves`
-  (`references/gate-config.md`). Copy the values and directions; do not re-derive them and do not
-  summarise the list. The run already executed on the merge-base values, so this line changes no
-  verdict — it exists because a branch that moved its own instrument, in either direction, is
-  something a reviewer must see before reading anything else on this banner. `none` when nothing
+  `.cleancode-gates.json` fields the gate runner reports in `report.instrument.moves` or the
+  barrier's `instruments.moves` (`references/gate-config.md`). Copy the values and directions; never
+  re-derive or summarise them. The run already executed on the merge-base values, so this line
+  changes no verdict — it exists because a reviewer must see a branch that moved its own instrument,
+  in either direction, before anything else on this banner. `none` when nothing
   moved; `not anchored — no merge-base` when the run had none to read.
 
 **Three lines are required on every terminal banner the run can end on** — this one, `STALLED` in all

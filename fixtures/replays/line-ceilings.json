@@ -1,0 +1,14 @@
+{
+  "id": "line-ceilings",
+  "kind": "synthetic",
+  "class": "code that outgrows the size its design was sized at, one reasonable addition at a time",
+  "caught_by": "budgets.json code.<skill>: check-skill-budgets.mjs counts the physical lines its globs match and fails over maxLines, read from the merge base. A raise prints BUDGET MOVED code/<skill> and fails without --accept-moved, and a branch that narrows the globs is still counted with the base's",
+  "missed_by": "a cap written in a design document, which nothing could fail on",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "scripts/__tests__/check-skill-budgets.test.mjs",
+  "evidence": "docs/adr/0026-skill-byte-budgets-and-the-admission-rule.md#context"
+}

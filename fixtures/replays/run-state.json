@@ -1,0 +1,14 @@
+{
+  "id": "run-state",
+  "kind": "history",
+  "class": "a conductor that ends its turn between steps, or loses its place to a compaction or a new session",
+  "caught_by": "the orchestrator's run state under .orchestrator/runs/<run>/, written by run-state.cjs at every step boundary: NEXT names the step, pending_decision marks a stop that waits for the operator on purpose, decisions.jsonl keeps each answer keyed by requirement id, and status reads it all back",
+  "missed_by": "the conductor's own context: a turn that ended between steps sat until a human looked, and a lost place was rebuilt from the transcript",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/orchestrator/scripts/run-state.test.cjs",
+  "evidence": "docs/adr/0026-skill-byte-budgets-and-the-admission-rule.md#4-the-admission-rule-a-mechanism-enters-with-a-replay-or-as-an-issue"
+}

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="synthetic" tests="7" failures="2" errors="2">
+  <testsuite name="widget suite" file="/work/proj/pkg/test/widget_spec.js" tests="3">
+    <testcase name="widget renders" classname="widget" time="0.01"/>
+    <testcase name="widget saves" classname="widget" time="0.02">
+      <failure message="expected saved to be true" type="AssertionError"><![CDATA[AssertionError: expected saved to be true
+    at <testcase> (widget_spec.js:10:3)]]></failure>
+    </testcase>
+    <testcase name="widget exports" classname="widget" time="0">
+      <skipped/>
+    </testcase>
+  </testsuite>
+  <testsuite name="order suite" tests="2">
+    <testcase name="order boots" classname="order" file="/work/proj/pkg/test/order_spec.js" time="0.01">
+      <error message="Cannot find module &apos;./order&apos;" type="Error"/>
+    </testcase>
+    <testcase name="order totals" classname="order" file="/work/proj/pkg/test/order_spec.js" time="0.01">
+      <error type="Error">
+TypeError: total is not a function (token=synthetic-secret-2)
+  at order_spec.js:4:1</error>
+    </testcase>
+  </testsuite>
+  <testcase name="note top-level passes" time="0.001" classname="test"/>
+  <testcase name="note top-level fails &amp; &lt;breaks>" time="0.002" classname="test" failure="1 == 2">
+    <failure type="testCodeFailure" message="1 == 2">
+[Error [ERR_TEST_FAILURE]: 1 == 2]
+    </failure>
+  </testcase>
+  <!-- tests 7 -->
+</testsuites>

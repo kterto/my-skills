@@ -1,0 +1,42 @@
+{
+  "numFailedTestSuites": 2,
+  "numFailedTests": 1,
+  "numPassedTests": 3,
+  "numPendingTests": 1,
+  "numTodoTests": 1,
+  "numTotalTests": 6,
+  "success": false,
+  "testResults": [
+    {
+      "name": "/app/test/widgets.e2e-spec.ts",
+      "status": "failed",
+      "message": "",
+      "assertionResults": [
+        { "fullName": "widgets GET /widgets lists them", "title": "lists them", "status": "passed", "failureMessages": [] },
+        {
+          "fullName": "widgets PATCH /widgets/:id updates one",
+          "title": "updates one",
+          "status": "failed",
+          "failureMessages": ["\n\u001b[1mError: expected 200, got 500\u001b[22m api_key=synthetic-secret-1\n    at Object.<anonymous> (/app/test/widgets.e2e-spec.ts:40:5)"]
+        }
+      ]
+    },
+    {
+      "name": "/app/test/orders.e2e-spec.ts",
+      "status": "failed",
+      "message": "  \u001b[1m● \u001b[22mTest suite failed to run\n\n    Cannot find module '../src/orders' from 'test/orders.e2e-spec.ts'",
+      "assertionResults": []
+    },
+    {
+      "name": "/app/test/notes.e2e-spec.ts",
+      "status": "passed",
+      "message": "",
+      "assertionResults": [
+        { "fullName": "notes creates one", "status": "passed", "failureMessages": [] },
+        { "fullName": "notes deletes one", "status": "passed", "failureMessages": [] },
+        { "fullName": "notes archives one", "status": "pending", "failureMessages": [] },
+        { "fullName": "notes restores one", "status": "todo", "failureMessages": [] }
+      ]
+    }
+  ]
+}

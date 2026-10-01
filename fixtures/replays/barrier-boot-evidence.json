@@ -1,0 +1,14 @@
+{
+  "id": "barrier-boot-evidence",
+  "kind": "synthetic",
+  "class": "a runner that exits without running a test, read as a verdict",
+  "caught_by": "a tier side with no report, an unparseable report, or 0 tests executed is not-run (vacuous), and keeps the head and tail of its log as the boot evidence",
+  "missed_by": "a run judged by its exit code, which a runner that never started a test can return",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/clean-code-gates/__tests__/instruments-barrier.test.cjs",
+  "evidence": "docs/adr/0030-the-engine-measures-at-the-tree.md#2-every-command-runs-in-its-own-process-group-under-a-bound"
+}

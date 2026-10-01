@@ -20,14 +20,58 @@
  *   node .orchestrator/gate-scope.test.cjs                # both layers
  *   node .orchestrator/gate-scope.test.cjs --module-only  # module layer only
  *   node .orchestrator/gate-scope.test.cjs --gates-only   # gates layer only
+ *
+ * It tests the gates as a consumer project holds them. In this repository, the
+ * marketplace, that layout never exists, so consumerProject() builds it (below).
  */
 'use strict';
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { spawnSync } = require('child_process');
+const { execFileSync, spawnSync } = require('child_process');
 
-const ROOT = path.resolve(__dirname, '..');
+const scratch = [];
+process.on('exit', () => { for (const dir of scratch) fs.rmSync(dir, { recursive: true, force: true }); });
+function tempDir(prefix) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  scratch.push(dir);
+  return dir;
+}
+
+/**
+ * The project root the gates run in. In a consumer project that is the directory
+ * whose `.orchestrator/` holds gate-scope.cjs, as it does once bootstrap copies it
+ * there. Here gate-scope.cjs sits in the skill's `scripts/` beside this file, so the
+ * layout is built in a temp project instead: a git repository with one commit (the
+ * real-git cases need one) and a `plans/` directory (without one the pairing gate
+ * exits 0 before it checks anything), the orchestrator's three scripts copied into
+ * `.orchestrator/`, and the roadmap skill's parity gate into `roadmap/`, where that
+ * skill materializes it and whence it requires `../.orchestrator/gate-scope.cjs`.
+ */
+function consumerProject() {
+  const root = path.resolve(__dirname, '..');
+  const here = path.join(__dirname, 'gate-scope.cjs');
+  if (fs.existsSync(path.join(root, '.orchestrator', 'gate-scope.cjs')) || !fs.existsSync(here)) return root;
+  const project = tempDir('gate-scope-project-');
+  const env = {
+    ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_'))),
+    GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1',
+    GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@example.test', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@example.test',
+  };
+  execFileSync('git', ['-C', project, 'init', '-q', '--template='], { env, stdio: 'ignore' });
+  execFileSync('git', ['-C', project, '-c', 'commit.gpgsign=false', 'commit', '-q', '--allow-empty', '-m', 'consumer project'], { env, stdio: 'ignore' });
+  fs.mkdirSync(path.join(project, 'plans'));
+  fs.mkdirSync(path.join(project, '.orchestrator'));
+  for (const script of ['gate-scope.cjs', 'check-artifact-pairing.cjs', 'check-artifact-links.cjs']) {
+    fs.copyFileSync(path.join(__dirname, script), path.join(project, '.orchestrator', script));
+  }
+  fs.mkdirSync(path.join(project, 'roadmap'));
+  fs.copyFileSync(path.join(__dirname, '..', '..', 'roadmap', 'scripts', 'check-timestamp-parity.cjs'),
+    path.join(project, 'roadmap', 'check-timestamp-parity.cjs'));
+  return project;
+}
+
+const ROOT = consumerProject();
 const NODE = process.execPath;
 const MODULE = path.join(ROOT, '.orchestrator', 'gate-scope.cjs');
 
@@ -199,7 +243,7 @@ function gatesLayer(tmp) {
 
     // Explicit `-- file` bypasses the base guard: audits exactly the given file even
     // when git is wholly unusable (fail shim), producing the benign OK verdict.
-    const btmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-scope-benign-'));
+    const btmp = tempDir('gate-scope-benign-');
     okPass(`gate/${g.name}: explicit -- file (bypasses guard under failing-git)`, runGate(g.script, ['--', g.benign(btmp)], shimEnv('fail', tmp)), g.ok);
 
     // `--all` bypasses the base guard too: its verdict over the real corpus is
@@ -219,7 +263,7 @@ function gatesLayer(tmp) {
 }
 
 const mode = process.argv[2];
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-scope-'));
+const tmp = tempDir('gate-scope-');
 if (mode !== '--gates-only') moduleLayer(tmp);
 if (mode !== '--module-only') gatesLayer(tmp);
 

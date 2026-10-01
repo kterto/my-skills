@@ -1,0 +1,244 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://clean-code-gates/schema/barrier.schema.json",
+  "title": "CleanCodeGatesBarrier",
+  "description": "What `gates.cjs barrier` writes to <out>/barrier.json (contract §5): every selected tier, run at the candidate tree under its bound, with each red suite classified against the same tier at base. Every array is sorted by code unit (tiers by id, suites and lists by file), except cleanup, which is in the order the cleanups ran.",
+  "type": "object",
+  "required": ["schemaVersion", "kind", "mode", "generatedAt", "tool", "tree", "instruments", "isolation", "status", "timing", "tiers"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "type": "string", "const": "1.0" },
+    "kind": { "type": "string", "const": "barrier" },
+    "mode": { "type": "null" },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "tool": {
+      "type": "object",
+      "required": ["name", "version"],
+      "additionalProperties": false,
+      "properties": { "name": { "type": "string", "const": "clean-code-gates" }, "version": { "type": "string" } }
+    },
+    "tree": {
+      "type": "object",
+      "required": ["base", "baseTree", "candidateTree"],
+      "additionalProperties": false,
+      "properties": {
+        "base": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" },
+        "baseTree": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" },
+        "candidateTree": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" }
+      }
+    },
+    "instruments": {
+      "type": "object",
+      "required": ["source", "from", "digest", "moves"],
+      "additionalProperties": false,
+      "properties": {
+        "source": { "type": "string", "enum": ["merge-base", "defaults", "instruments-from"] },
+        "from": { "type": ["string", "null"] },
+        "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "moves": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["key", "change", "direction"],
+            "additionalProperties": false,
+            "properties": {
+              "key": { "type": "string" },
+              "change": { "type": "string", "enum": ["added", "removed", "changed", "invalid"], "description": "invalid: the working tree's config is broken (key `config`), so its additions are ignored and the base's instruments run." },
+              "direction": { "type": "string", "enum": ["tightening", "loosening", "changed"] }
+            }
+          }
+        }
+      }
+    },
+    "isolation": {
+      "type": ["string", "null"],
+      "enum": ["shared-dev", "ephemeral", null],
+      "description": "shared-dev when any tier that ran declares it, else ephemeral when any does, else null."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pass", "red", "not-run"],
+      "description": "red when any tier failed; else not-run when any tier is not-run for a reason other than empty-scope; else pass. No tiers declared exits 3 and writes no report."
+    },
+    "timing": {
+      "type": "object",
+      "required": ["tiers"],
+      "additionalProperties": false,
+      "properties": {
+        "tiers": { "type": "object", "description": "<tier id> → { candidate_ms, base_ms, rerun_ms, cleanup_ms }, absent sides omitted. The only durations in the report." }
+      }
+    },
+    "tiers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "scope", "isolation", "whole_run", "whole", "inherited", "command", "result", "reason", "detail", "selection", "unresolved", "unmapped", "candidate", "base", "newly_red", "carried", "flaky", "cleanup"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,62}$" },
+          "scope": { "type": "string", "enum": ["whole", "change-selected"] },
+          "isolation": { "type": ["string", "null"], "enum": ["shared-dev", "ephemeral", null] },
+          "whole_run": { "type": ["string", "null"], "description": "Where a change-selected tier's whole suite runs, as declared; null for a whole tier." },
+          "whole": { "type": "boolean", "description": "True under --whole, whether the tier ran in full ($SELECT empty, no base comparison: every red suite is newly red unless its rerun excused it as flaky) or its verdict was inherited." },
+          "inherited": { "type": ["string", "null"], "description": "With --whole --if-changed: the cache key (tree, or the cwd folder's tree) whose --whole run's verdict this tier reports again without running; null when the tier ran." },
+          "command": { "type": ["string", "null"], "description": "The candidate's run with $REPORT and $SELECT resolved; null when nothing ran." },
+          "result": { "type": "string", "enum": ["pass", "fail", "not-run"] },
+          "reason": {
+            "type": ["string", "null"],
+            "enum": ["assertion", "timeout", "vacuous", "empty-scope", "unmeasured", null],
+            "description": "fail is always assertion. A not-run carries the candidate's reason; or vacuous when nothing could run (the cwd is missing, the tests glob matches no file); or empty-scope when nothing was selected and every import resolved, else unmeasured."
+          },
+          "detail": { "type": ["string", "null"], "description": "Why a not-run tier measured nothing, when its reason alone does not say (cwd missing, a runner that died, selected files that never ran, unresolved imports)." },
+          "selection": {
+            "type": ["array", "null"],
+            "description": "The selected test files of a change-selected tier; null for a whole tier, a --whole run or an inherited verdict.",
+            "items": { "type": "string" }
+          },
+          "unresolved": { "type": ["integer", "null"], "minimum": 0, "description": "The selection's unresolved imports; null for a whole tier, a --whole run or an inherited verdict." },
+          "unmapped": {
+            "type": ["array", "null"],
+            "description": "Changed files under the tier's cwd that the selection could map to no test; null for a whole tier, a --whole run, an inherited verdict, or when the selection does not report them.",
+            "items": { "type": "string" }
+          },
+          "candidate": {
+            "type": ["object", "null"],
+            "description": "null when nothing ran (empty-scope, unmeasured, a tier that could not start, or an inherited verdict).",
+            "required": ["result", "reason", "tests", "suites", "bounded", "evidence"],
+            "additionalProperties": false,
+            "properties": {
+              "result": { "type": "string", "enum": ["pass", "fail", "not-run"] },
+              "reason": { "type": ["string", "null"], "enum": ["assertion", "timeout", "vacuous", null] },
+              "tests": {
+                "type": ["object", "null"],
+                "description": "Counts over every suite; null without a parsable report. An exit-code tier's counts are null (unknown).",
+                "required": ["executed", "passed", "failed", "skipped"],
+                "additionalProperties": false,
+                "properties": {
+                  "executed": { "type": ["integer", "null"], "minimum": 0 },
+                  "passed": { "type": ["integer", "null"], "minimum": 0 },
+                  "failed": { "type": ["integer", "null"], "minimum": 0 },
+                  "skipped": { "type": ["integer", "null"], "minimum": 0 }
+                }
+              },
+              "suites": {
+                "type": "array",
+                "description": "Only the red suites (fail or error).",
+                "items": {
+                  "type": "object",
+                  "required": ["file", "result", "executed", "failed", "failures"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "file": { "type": "string" },
+                    "result": { "type": "string", "enum": ["fail", "error"] },
+                    "executed": { "type": ["integer", "null"], "minimum": 0 },
+                    "failed": { "type": ["integer", "null"], "minimum": 0 },
+                    "failures": {
+                      "type": "array",
+                      "description": "At most 50.",
+                      "items": {
+                        "type": "object",
+                        "required": ["name", "message"],
+                        "additionalProperties": false,
+                        "properties": { "name": { "type": "string" }, "message": { "type": "string" } }
+                      }
+                    },
+                    "truncated": { "type": "integer", "minimum": 1, "description": "Failures left out past the cap." },
+                    "message": { "type": "string", "description": "Why a suite that never ran its tests is error." }
+                  }
+                }
+              },
+              "bounded": {
+                "type": "object",
+                "required": ["bound_minutes", "timed_out", "survivors"],
+                "additionalProperties": false,
+                "properties": {
+                  "bound_minutes": { "type": "number", "minimum": 0, "description": "The last attempt's bound: twice the declared one after a retry-2x." },
+                  "timed_out": { "type": "boolean" },
+                  "survivors": { "type": ["integer", "null"], "minimum": 0, "description": "Processes left in the tier's group, as the leader counted them." }
+                }
+              },
+              "evidence": {
+                "type": "object",
+                "required": ["exit", "log", "log_sha256", "head", "tail"],
+                "additionalProperties": false,
+                "properties": {
+                  "exit": { "type": "integer" },
+                  "log": { "type": "string" },
+                  "log_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+                  "head": { "type": "array", "items": { "type": "string" } },
+                  "tail": { "type": "array", "items": { "type": "string" } }
+                }
+              },
+              "missing": { "type": "array", "items": { "type": "string" }, "description": "Selected files absent from the report, which make the side vacuous." }
+            }
+          },
+          "base": {
+            "type": ["object", "null"],
+            "description": "null when nothing was compared: the candidate had no red suite, or the verdict was inherited. A --whole run with a red suite has source none.",
+            "required": ["source", "tree", "result", "reason", "tests"],
+            "additionalProperties": false,
+            "properties": {
+              "source": { "type": "string", "enum": ["inherited", "worktree", "none"] },
+              "tree": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" },
+              "result": { "type": "string", "enum": ["pass", "fail", "not-run"] },
+              "reason": { "type": ["string", "null"], "enum": ["assertion", "timeout", "vacuous", "unmeasured", null] },
+              "detail": { "type": "string", "description": "Why the base measured nothing: the failed worktree add, the prepare's exit, or, under --whole, that a whole run compares nothing." },
+              "tests": {
+                "type": ["object", "null"],
+                "required": ["executed", "passed", "failed", "skipped"],
+                "additionalProperties": false,
+                "properties": {
+                  "executed": { "type": ["integer", "null"], "minimum": 0 },
+                  "passed": { "type": ["integer", "null"], "minimum": 0 },
+                  "failed": { "type": ["integer", "null"], "minimum": 0 },
+                  "skipped": { "type": ["integer", "null"], "minimum": 0 }
+                }
+              }
+            }
+          },
+          "newly_red": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["file", "basis", "failing", "reproduced"],
+              "additionalProperties": false,
+              "properties": {
+                "file": { "type": "string" },
+                "basis": { "type": "string", "enum": ["base", "no-base"], "description": "no-base when the base side is not-run." },
+                "failing": { "type": "array", "items": { "type": "string" } },
+                "reproduced": { "type": "boolean", "description": "True when the flake rerun failed it again." }
+              }
+            }
+          },
+          "carried": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["file", "failing", "first_seen", "owner"],
+              "additionalProperties": false,
+              "properties": {
+                "file": { "type": "string" },
+                "failing": { "type": "array", "items": { "type": "string" } },
+                "first_seen": { "type": "string", "pattern": "^[0-9a-f]{40,64}$", "description": "The tree of the oldest cached record where this suite was red." },
+                "owner": { "type": ["string", "null"] }
+              }
+            }
+          },
+          "flaky": { "type": "array", "items": { "type": "string" } },
+          "cleanup": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["side", "exit"],
+              "additionalProperties": false,
+              "properties": {
+                "side": { "type": "string", "enum": ["candidate", "base", "rerun"] },
+                "exit": { "type": "integer" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

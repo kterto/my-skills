@@ -43,4 +43,7 @@ function main() {
   }
   process.exit(exitCode);
 }
-main();
+// Instruments set exitCode rather than exit: exiting right after a large write can cut a darwin pipe.
+const argv = process.argv.slice(2);
+if (!require('../src/instruments/vocab.cjs').KINDS.includes(argv[0])) main();
+else require('../src/instruments/cli.cjs').main(argv[0], argv.slice(1)).then((code) => { process.exitCode = code; });

@@ -1,0 +1,112 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://clean-code-gates/schema/select.schema.json",
+  "title": "CleanCodeGatesSelect",
+  "description": "What `gates.cjs select` writes to <out>/select.json: the tests (and live flows) a change selects, each with the reasons it was selected. Every array is sorted by code unit.",
+  "type": "object",
+  "required": ["schemaVersion", "kind", "mode", "generatedAt", "tool", "tree", "instruments", "isolation", "status", "timing", "changed", "selection", "flows"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "type": "string", "const": "1.0" },
+    "kind": { "type": "string", "const": "select" },
+    "mode": { "type": "string", "enum": ["tier", "adhoc"], "description": "tier: the selection block of a change-selected barrier tier (--tier). adhoc: --tests/--sources/--by/--max." },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "tool": {
+      "type": "object",
+      "required": ["name", "version"],
+      "additionalProperties": false,
+      "properties": { "name": { "type": "string", "const": "clean-code-gates" }, "version": { "type": "string" } }
+    },
+    "tree": {
+      "type": "object",
+      "required": ["base", "baseTree", "candidateTree"],
+      "additionalProperties": false,
+      "properties": {
+        "base": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" },
+        "baseTree": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" },
+        "candidateTree": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" }
+      }
+    },
+    "instruments": {
+      "type": "object",
+      "required": ["source", "from", "digest", "moves"],
+      "additionalProperties": false,
+      "properties": {
+        "source": { "type": "string", "enum": ["merge-base", "defaults", "instruments-from"] },
+        "from": { "type": ["string", "null"] },
+        "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "moves": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["key", "change", "direction"],
+            "additionalProperties": false,
+            "properties": {
+              "key": { "type": "string" },
+              "change": { "type": "string", "enum": ["added", "removed", "changed", "invalid"], "description": "invalid: the working tree's config is broken (key `config`), so its additions are ignored and the base's instruments run." },
+              "direction": { "type": "string", "enum": ["tightening", "loosening", "changed"] }
+            }
+          }
+        }
+      }
+    },
+    "isolation": { "type": "null" },
+    "status": { "type": "string", "enum": ["pass", "red"], "description": "red when the selection exceeds max, else pass. A usage or config error exits 3 and writes no report." },
+    "timing": {
+      "type": "object",
+      "required": ["select_ms"],
+      "additionalProperties": false,
+      "properties": { "select_ms": { "type": "integer", "minimum": 0 } }
+    },
+    "changed": {
+      "type": "array",
+      "description": "Every file that differs between the base and the working tree, deleted and untracked files included.",
+      "items": { "type": "string" }
+    },
+    "selection": {
+      "type": "object",
+      "required": ["tier", "by", "tests_total", "size", "max", "within_max", "whole", "selected", "unresolved", "unmapped"],
+      "additionalProperties": false,
+      "properties": {
+        "tier": { "type": ["string", "null"] },
+        "by": { "type": "array", "items": { "type": "string", "enum": ["imports", "routes"] } },
+        "tests_total": { "type": "integer", "minimum": 0, "description": "Files matching the tests globs." },
+        "size": { "type": "integer", "minimum": 0 },
+        "max": { "type": ["integer", "null"], "minimum": 0 },
+        "within_max": { "type": ["boolean", "null"], "description": "null when no max is declared." },
+        "whole": { "type": "boolean", "description": "true when a changed file matches the tier's select.whole_on: every test is selected, reason `whole_on <glob>`." },
+        "selected": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["file", "reasons"],
+            "additionalProperties": false,
+            "properties": {
+              "file": { "type": "string" },
+              "reasons": {
+                "type": "array",
+                "description": "At most eight, route reasons first (by method, then path), then the rest by code unit: `route <METHOD> <path> (<controller>:<line>[ at base]) → … (changed|deleted) · called at <test>:<line>`, `changed <test>`, `imports <test>:<line> → … → <file> (changed|deleted)`, `whole_on <glob>`, or `wired by <module> → … → <file> (changed|deleted)`.",
+                "items": { "type": "string" }
+              }
+            }
+          }
+        },
+        "unresolved": { "type": "integer", "minimum": 0, "description": "Import specifiers that resolve nowhere in the tests' dependency closure (a workspace package's name included), plus path templates whose leading ${NAME} names no same-file constant." },
+        "unmapped": { "type": "array", "items": { "type": "string" }, "description": "Changed files under the tier's cwd that are no import-graph node and match no tests, sources or whole_on glob: nothing proves them inert. Sorted." }
+      }
+    },
+    "flows": {
+      "type": "array",
+      "description": "With --flows: the live-block flows whose paths match a changed file. Empty otherwise.",
+      "items": {
+        "type": "object",
+        "required": ["name", "reasons"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string" },
+          "reasons": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  }
+}

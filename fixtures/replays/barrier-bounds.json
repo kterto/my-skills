@@ -1,0 +1,15 @@
+{
+  "id": "barrier-bounds",
+  "kind": "synthetic",
+  "class": "a hung test run that holds the pipeline and leaves its processes behind",
+  "caught_by": "every tier runs in its own process group under bound_minutes. At the bound the group is killed and its survivors counted, and the tier is not-run (timeout), never a pass: on_timeout not-done finishes without it, and retry-2x retries once at twice the bound, after the tier's cleanup",
+  "missed_by": "a timeout that killed only the direct child, so the test workers kept running: dozens of leaked processes sat behind a many-hour stall",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/clean-code-gates/__tests__/instruments-barrier.test.cjs",
+  "evidence": "docs/adr/0030-the-engine-measures-at-the-tree.md#2-every-command-runs-in-its-own-process-group-under-a-bound",
+  "private_ref": "inc3-15.1-hung"
+}

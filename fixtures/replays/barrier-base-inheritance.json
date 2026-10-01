@@ -1,0 +1,15 @@
+{
+  "id": "barrier-base-inheritance",
+  "kind": "synthetic",
+  "class": "a red that was already on main read as the change's, or the base re-run on every run",
+  "caught_by": "the base side is inherited from a cached pass of the same tier at the base tree (a fail is never inherited), run in a worktree at the base, or absent. Absent, it is not-run (unmeasured), and every red over it is newly red with basis no-base",
+  "missed_by": "no base result at all, so a pre-existing red and a new one looked the same",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/clean-code-gates/__tests__/instruments-barrier.test.cjs",
+  "evidence": "docs/adr/0030-the-engine-measures-at-the-tree.md#9-replays-pin-their-instruments-a-base-pass-is-inherited-from-a-cache",
+  "private_ref": "inc3-15.1"
+}
