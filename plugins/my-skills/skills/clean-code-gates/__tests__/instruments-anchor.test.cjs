@@ -144,11 +144,49 @@ test('whole_minutes is a time bound too: a branch may lengthen it, never shorten
     'barrier.tiers.up.bound_minutes']);
 });
 
+test('cleanup_minutes is a time bound too: absent it is 1, and a branch may lengthen it, never shorten it', (t) => {
+  const { inst } = anchored(t,
+    { [CONFIG]: json({ barrier: { tiers: [tier('down', { cleanup_minutes: 4 }), tier('same'), tier('up')] } }) },
+    { [CONFIG]: json({ barrier: { tiers: [tier('down', { cleanup_minutes: 2 }), tier('same', { cleanup_minutes: 1 }),
+      tier('up', { cleanup_minutes: 6 })] } }) });
+  assert.deepEqual(inst.barrier.tiers.map((x) => [x.id, x.cleanup_minutes]), [['down', 4], ['same', 1], ['up', 6]]);
+  assert.deepEqual(inst.moves.map((m) => m.key), ['barrier.tiers.down.bound_minutes', 'barrier.tiers.same.bound_minutes',
+    'barrier.tiers.up.bound_minutes'], 'a bound move, never a changed tier');
+});
+
 test('barrier.on_timeout: the base wins, and a difference is a move', (t) => {
   const { inst } = anchored(t, { [CONFIG]: json({ barrier: { tiers: [tier('unit')] } }) },
     { [CONFIG]: json({ barrier: { on_timeout: 'retry-2x', tiers: [tier('unit')] } }) });
   assert.equal(inst.barrier.on_timeout, 'not-done');
   assert.deepEqual(inst.moves, [move('barrier.on_timeout', 'changed', 'changed')]);
+});
+
+// barrier.frozen: paths that are not the product (a run's plans, an orchestrator's state), held at HEAD in every measured tree.
+const FROZEN = ['plans/**', '.orchestrator/**'];
+
+test('barrier.frozen: the base wins, a branch edit is the move barrier.frozen changed, and a branch-only addition is ignored', (t) => {
+  const edited = anchored(t, { [CONFIG]: json({ barrier: { frozen: FROZEN, tiers: [tier('unit')] } }) },
+    { [CONFIG]: json({ barrier: { frozen: ['plans/**', 'src/**'], tiers: [tier('unit')] } }) });
+  assert.deepEqual(edited.inst.barrier, { on_timeout: 'not-done', tiers: [tier('unit')], frozen: FROZEN });
+  assert.deepEqual(edited.inst.moves, [move('barrier.frozen', 'changed', 'changed')]);
+  const added = anchored(t, { [CONFIG]: json({ barrier: { tiers: [tier('unit')] } }) },
+    { [CONFIG]: json({ barrier: { frozen: FROZEN, tiers: [tier('unit')] } }) });
+  assert.deepEqual(added.inst.barrier, { on_timeout: 'not-done', tiers: [tier('unit')] }, 'the branch cannot freeze what the base measures');
+  assert.deepEqual(added.inst.moves, [move('barrier.frozen', 'changed', 'changed')]);
+});
+
+test('barrier.frozen is read with no tier declared, rides along only when non-empty, and moves the digest only then', (t) => {
+  const only = anchored(t, { [CONFIG]: json({ barrier: { frozen: FROZEN } }) }, {});
+  assert.deepEqual(only.inst.barrier, { on_timeout: 'not-done', tiers: [], frozen: FROZEN });
+  assert.deepEqual(only.inst.moves, []);
+  const [none, empty] = [anchored(t, { [CONFIG]: json({ barrier: { tiers: [tier('unit')] } }) }, {}),
+    anchored(t, { [CONFIG]: json({ barrier: { frozen: [], tiers: [tier('unit')] } }) }, {})];
+  assert.deepEqual(empty.inst.barrier, { on_timeout: 'not-done', tiers: [tier('unit')] });
+  assert.equal(empty.inst.digest, none.inst.digest, 'an empty frozen list is no list at all');
+  assert.equal(anchored(t, { [CONFIG]: json({ barrier: { frozen: [] } }) }, {}).inst.barrier, null);
+  const { dir, sha } = repo(t, {});
+  write(dir, { 'i.json': json({ barrier: { frozen: FROZEN, tiers: [tier('e2e')] } }) });
+  assert.deepEqual(A.loadInstruments(dir, { baseSha: sha, from: 'file:i.json', liveblock: stub }).barrier.frozen, FROZEN);
 });
 
 test('with neither file at base the source is defaults, and every working entry is added', (t) => {
@@ -297,6 +335,27 @@ test('an invalid edit to an anchored entry is only a changed move: the base defi
   assert.deepEqual(warnings, []);
 });
 
+test('barrier.frozen refuses a glob without a slash (it would match at any depth), an absolute one and a non-string', (t) => {
+  for (const [frozen, why] of [[['*.md'], /\*\.md/], [['/plans/**'], /\/plans/], [[3], /3/], ['plans/**', /plans/]]) {
+    const load = () => anchored(t, { [CONFIG]: json({ barrier: { frozen, tiers: [tier('unit')] } }) }, {});
+    assert.throws(load, new RegExp(`at base [0-9a-f]{12}: barrier\\.frozen: invalid value .*${why.source}`), JSON.stringify(frozen));
+  }
+  const { inst, warnings } = degraded(t, json({ ...BASE_CONFIG, barrier: { frozen: ['*.md'], tiers: [tier('unit')] } }));
+  assert.deepEqual([inst.barrier.frozen, inst.moves], [undefined, [INVALID]]);
+  assert.match(warnings[0], /barrier\.frozen: invalid value/);
+});
+
+test('barrier.frozen takes only what git\'s pathspec and the changed-file matcher read alike: no empty, . or .. segment, '
+  + 'no bracket or backslash, and ** only as a whole segment', (t) => {
+  for (const glob of ['plans/', 'plans//x', './plans/**', 'plans/./x', '../outside/**', 'plans/../x', 'plans/[ab]*.md', 'plans\\x/y',
+    'plans/a**', 'plans/***/x']) {
+    const load = () => anchored(t, { [CONFIG]: json({ barrier: { frozen: [glob], tiers: [tier('unit')] } }) }, {});
+    assert.throws(load, /barrier\.frozen: invalid value/, glob);
+  }
+  const alike = ['plans/**', '.orchestrator/**', '**/fixtures/*.snap', 'docs/a?/b*.md', 'notes/{x}/y'];
+  assert.deepEqual(anchored(t, { [CONFIG]: json({ barrier: { frozen: alike, tiers: [tier('unit')] } }) }, {}).inst.barrier.frozen, alike);
+});
+
 test("a tier whose cwd the working tree lacks still loads: every kind keeps its verdict, and the barrier types that tier at run time", (t) => {
   const { inst } = anchored(t, { [CONFIG]: json({ barrier: { tiers: [tier('unit', { cwd: 'apps/missing' })] } }) }, {});
   assert.deepEqual(inst.barrier.tiers.map((x) => x.cwd), ['apps/missing']);
@@ -355,12 +414,24 @@ const TIER_BAD = [
   ['no select sources', { ...SELECTED, select: without(SELECTED.select, 'sources') }, /^t\.select\.sources: required$/],
   ['an unknown select by', { ...SELECTED, select: { ...SELECTED.select, by: ['calls'] } }, /^t\.select\.by: invalid/],
   ['a fractional select max', { ...SELECTED, select: { ...SELECTED.select, max: 1.5 } }, /^t\.select\.max: invalid/],
+  ['a zero batch_files', { ...SELECTED, select: { ...SELECTED.select, batch_files: 0 } }, /^t\.select\.batch_files: invalid/],
+  ['a fractional batch_files', { ...SELECTED, select: { ...SELECTED.select, batch_files: 2.5 } }, /^t\.select\.batch_files: invalid/],
+  ['a zero cleanup bound', { ...TIER_OK, cleanup_minutes: 0 }, /^t\.cleanup_minutes: invalid/],
+  ['a cleanup bound over a week', { ...TIER_OK, cleanup_minutes: 10081 }, /^t\.cleanup_minutes: invalid/],
   ['runner_cwd with a worktree base', { ...TIER_OK, runner_cwd: '/app', base: { mode: 'worktree' } }, /^t\.runner_cwd: /],
+  ['base.copy on an inherit-only base', { ...TIER_OK, base: { mode: 'inherit-only', copy: ['apps/api/.env'] } },
+    /^t\.base\.copy: only allowed when base\.mode is worktree$/],
+  ['base.copy with no base mode', { ...TIER_OK, base: { copy: ['apps/api/.env'] } }, /^t\.base\.copy: only allowed when/],
+  ['an absolute base.copy path', { ...TIER_OK, base: { mode: 'worktree', copy: ['/etc/hosts'] } }, /^t\.base\.copy: invalid/],
+  ['a base.copy path through ..', { ...TIER_OK, base: { mode: 'worktree', copy: ['apps/../../.env'] } }, /^t\.base\.copy: invalid/],
+  ['a base.copy that is not a list', { ...TIER_OK, base: { mode: 'worktree', copy: 'apps/api/.env' } }, /^t\.base\.copy: invalid/],
 ];
 
 test('validateTier accepts every documented key, and a bound of exactly a week', () => {
   for (const ok of [TIER_OK, TIER_FULL, SELECTED, { ...SELECTED, cache_scope: 'cwd', whole_minutes: 10080 },
-    { ...TIER_OK, bound_minutes: 10080, base: { prepare_minutes: 10080 } }]) {
+    { ...SELECTED, cleanup: 'z', cleanup_minutes: 10080, select: { ...SELECTED.select, batch_files: 15 } },
+    { ...TIER_OK, bound_minutes: 10080, base: { prepare_minutes: 10080 } },
+    { ...TIER_OK, base: { mode: 'worktree', copy: ['apps/api/.env', 'apps/api/certs'], prepare: 'p' } }]) {
     assert.equal(A.validateTier(ok, 't'), null);
   }
 });

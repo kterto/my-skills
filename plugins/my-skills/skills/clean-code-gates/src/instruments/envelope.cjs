@@ -62,4 +62,19 @@ function writeReport(outDir, kind, obj) {
   return file;
 }
 
-module.exports = { envelope, stableJson, byCodeUnit, summarize, fmtDuration, redact, writeReport };
+// Before a kind runs, its last report (one that parses with a generatedAt) moves with the kind's logs to
+// history/<generatedAt, ':' as '-'>/; the five newest such folders per kind stay, and older ones lose only that kind's files.
+function archive(outDir, kind) {
+  const [ls, history] = [(d) => { try { return fs.readdirSync(d); } catch { return []; } }, path.join(outDir, 'history')];
+  const own = (d) => [`${kind}.json`, ...ls(path.join(d, 'logs')).filter((f) => f.startsWith(`${kind}-`)).map((f) => `logs/${f}`)];
+  let at = '';
+  try { at = String(JSON.parse(fs.readFileSync(path.join(outDir, `${kind}.json`), 'utf8')).generatedAt || '').replace(/:/g, '-'); } catch { /* none */ }
+  const to = (f) => { fs.mkdirSync(path.dirname(path.join(history, at, f)), { recursive: true }); return path.join(history, at, f); };
+  if (/^\w[\w.+-]*$/.test(at)) for (const f of own(outDir)) fs.renameSync(path.join(outDir, f), to(f));
+  for (const d of ls(history).filter((x) => fs.existsSync(path.join(history, x, `${kind}.json`))).sort(byCodeUnit).reverse().slice(5)) {
+    for (const f of own(path.join(history, d))) fs.rmSync(path.join(history, d, f));
+    for (const sub of ['logs', '']) try { fs.rmdirSync(path.join(history, d, sub)); } catch { /* another kind's files stay */ }
+  }
+}
+
+module.exports = { envelope, stableJson, byCodeUnit, summarize, fmtDuration, redact, writeReport, archive };

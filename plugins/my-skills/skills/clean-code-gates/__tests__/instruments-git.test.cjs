@@ -225,5 +225,50 @@ test('worktreeAdd checks out a detached tree, and worktreeRemove leaves nothing 
   G.worktreeAdd(dir, sha, wt);
   fs.rmSync(wt, { recursive: true, force: true });
   G.worktreeRemove(dir, wt);
-  assert.equal(listed().length, 1, 'a worktree whose directory is already gone is pruned');
+  assert.equal(listed().length, 1, 'a worktree whose directory is already gone is unregistered by its path');
+});
+
+const registered = (git) => git('worktree', 'list', '--porcelain').split('\n').filter((l) => l.startsWith('worktree ')).map((l) => l.slice(9));
+
+test('worktreeRemove unregisters only its own worktree: a foreign one whose directory is gone stays registered', (t) => {
+  const { dir, git } = repo(t, { 'a.txt': 'one\n' });
+  const sha = git('rev-parse', 'HEAD');
+  const holder = tmp(t, 'ccg-wt-');
+  const [foreign, ours] = [path.join(holder, 'foreign'), path.join(holder, 'ours')];
+  git('worktree', 'add', '-q', '--detach', foreign, sha);
+  fs.rmSync(foreign, { recursive: true, force: true });
+  assert.match(git('worktree', 'list', '--porcelain'), /\nprunable /, 'the foreign registration is stale before ours is touched');
+  G.worktreeAdd(dir, sha, ours);
+  G.worktreeRemove(dir, ours);
+  assert.deepEqual(registered(git), [dir, foreign], 'only our registration may go');
+  assert.deepEqual(fs.readdirSync(path.join(dir, '.git', 'worktrees')), ['foreign']);
+});
+
+test('worktreeRemove also removes a registration an interrupted add left locked', (t) => {
+  const { dir, git } = repo(t, { 'a.txt': 'one\n' });
+  const wt = path.join(tmp(t, 'ccg-wt-'), 'base');
+  G.worktreeAdd(dir, git('rev-parse', 'HEAD'), wt);
+  git('worktree', 'lock', '--reason', 'initializing', wt);
+  G.worktreeRemove(dir, wt);
+  assert.deepEqual([registered(git), fs.existsSync(wt)], [[dir], false]);
+});
+
+test('filesAt keeps, in list order, the files git holds at a commit, reading each path literally', (t) => {
+  const { dir, git } = repo(t, { 'app/a[1].spec.js': 'a\n', 'app/b.spec.js': 'b\n', 'app/dir/c.spec.js': 'c\n' });
+  const sha = git('rev-parse', 'HEAD');
+  write(dir, { 'app/new.spec.js': 'n\n' });
+  assert.deepEqual(G.filesAt(dir, sha, ['app/new.spec.js', 'app/b.spec.js', 'app/a[1].spec.js', 'app/dir', 'app/*.js']),
+    ['app/b.spec.js', 'app/a[1].spec.js'], 'a new file, a folder and a glob are not files git holds');
+  assert.throws(() => G.filesAt(dir, '-x', ['app/b.spec.js']), /invalid base ref/);
+});
+
+test('isTracked: a file or a folder git holds at the commit, or one only staged, is tracked; an ignored or untracked one is not', (t) => {
+  const { dir, git } = repo(t, { '.gitignore': '.env\n', 'app/results.json': '{}\n', 'app/certs/c.pem': 'c\n' });
+  const sha = git('rev-parse', 'HEAD');
+  write(dir, { 'app/.env': 'A=1\n', 'app/new.json': '{}\n', 'app/staged.json': '{}\n', 'app/keys/k.pem': 'k\n' });
+  git('add', 'app/staged.json');
+  for (const [rel, expected] of [['app/results.json', true], ['app/certs', true], ['app/staged.json', true], ['app/.env', false],
+    ['app/new.json', false], ['app/keys', false], ['app/none', false]]) {
+    assert.equal(G.isTracked(dir, sha, rel), expected, rel);
+  }
 });

@@ -71,6 +71,14 @@ function showFile(root, ref, rel) {
   const spec = `${assertBaseRefShape(ref)}:${rel}`;
   try { return git(root, ['show', spec]); } catch { return null; }
 }
+// The files of a list that git holds at a commit, in list order: ls-tree reads each path literally, never as a glob.
+function filesAt(root, sha, files) {
+  const held = new Set(git(root, ['ls-tree', '-r', '-z', '--name-only', assertBaseRefShape(sha), '--', ...files]).split('\0'));
+  return files.filter((f) => held.has(f));
+}
+// Whether git holds a path (a file, or a folder with one) at a commit, or in the index by any letter case.
+const isTracked = (root, sha, rel) => probe(root, ['ls-tree', assertBaseRefShape(sha), '--', rel]) !== ''
+  || probe(root, ['ls-files', '--error-unmatch', '--', `:(icase,literal)${rel}`]) !== '';
 
 // Unlike scope.cjs: `**/` is zero or more whole directories, a trailing `/**` all below,
 // `*` stays within one segment, and a glob with no `/` matches the basename at any depth.
@@ -84,11 +92,11 @@ const matchesAny = (file, globs) => globs.some((g) => (compiled.get(g) || compil
 
 // No hooks: a post-checkout hook would run at base outside every bound; `base.prepare` is the bounded setup step.
 const worktreeAdd = (root, sha, dir) => { git(root, ['-c', 'core.hooksPath=/dev/null', 'worktree', 'add', '--detach', dir, assertBaseRefShape(sha)]); };
+// Ours only, by its path (a prune would drop every stale registration, others' too); the second --force takes a locked one.
 function worktreeRemove(root, dir) {
-  probe(root, ['worktree', 'remove', '--force', dir]);
+  probe(root, ['worktree', 'remove', '--force', '--force', dir]);
   fs.rmSync(dir, { recursive: true, force: true });
-  probe(root, ['worktree', 'prune']);
 }
 
-module.exports = { repoRoot, resolveBase, treeOf, subtreeOf, candidateTree, changedFiles, listFiles, showFile,
+module.exports = { repoRoot, resolveBase, treeOf, subtreeOf, candidateTree, changedFiles, listFiles, showFile, filesAt, isTracked,
   globToRe, matchesAny, worktreeAdd, worktreeRemove, excludeOutputs };
