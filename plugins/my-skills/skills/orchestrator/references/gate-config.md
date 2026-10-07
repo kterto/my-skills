@@ -56,6 +56,32 @@ Resolve it like this, per gate:
    Note it is consumed by **the project's own lint command**, not by the gate runner — a plausible
    path in that key is not evidence the mechanism is wired. Confirm against `PROJECT-CONTEXT.md`.
 
+### The pinned engine
+
+**Every clean-code-gates command in a run uses one CLI, written `<gates-cli>`, which is exactly:**
+
+```
+node "$(git rev-parse --show-toplevel)/.orchestrator/engine/bin/gates.cjs"
+```
+
+It runs the copy of the engine that bootstrap pinned into `.orchestrator/engine/` (its `PINNED` file
+names the source and the stamp), and it is written and recorded **unexpanded**, by every role and by
+the conductor: QA's barrier tiers and gates, the coder's phase gates, the tester's coverage floor,
+and Step 0d's sweep and barrier baseline. `$(git rev-parse --show-toplevel)` finds the copy from any
+directory a gate runs in, so a per-package gate keeps its working directory.
+
+**A Commands or plan gate command that runs clean-code-gates from any other path runs with that
+prefix substituted, and the substituted string is the ledger `suite`.** Suite inheritance matches
+command strings exactly, so one string everywhere is what lets one role's result serve another.
+Never run a user-level skills link (`~/.claude/skills/…`, `$HOME/.claude/skills/…`) or a
+plugin-cache directory instead: each names whatever build is installed or checked out at that
+moment, which is not the build the run's stamp vouches for.
+
+**When `.orchestrator/engine/bin/gates.cjs` does not exist, run no gate through another path.**
+Record the gate `MISSING_TOOL` with the reason `no pinned engine at .orchestrator/engine — re-run
+the orchestrator's setup`; QA's barrier records a `stale_gates:` entry instead
+(`templates/qa.md` → Step 3).
+
 ### Rigor decides block-or-report — never measure-or-not
 
 The run's `rigor` (preamble line `rigor=`, resolved once at Step 0b) sets **which gates stop the work**. It never sets which gates run, and it never sets what gets written down.
@@ -202,3 +228,76 @@ or the wrong role gets blamed and the wrong fix gets planned.
   command is not in it — fall through to the three values below and **say which**, so a reader can
   tell an unbaselined finding from a baselined one.
 - **regression** — the gate was green at phase exit and is red now. This is the ordinary QA signal.
+
+### Baselining the barrier (Step 0d)
+
+Step 0d's Commands sweep cannot baseline a barrier tier: only the barrier's own record at the base
+tree lets QA's barrier inherit that base instead of re-measuring it, and only its names let QA tell a
+pre-existing red from a new one. So Step 0d measures each such tier at the base through the barrier,
+**whenever tiers are declared, whatever `baseline_sweep` says.** Nothing here stops the run.
+
+1. **Which tiers.** The `scope: whole` tiers declared at `{base_sha}`, plus any the working tree
+   adds. When neither declares a tier, read `git show <ref>:./.cleancode-gates.json` for the first of
+   `origin/HEAD`, `origin/main` or `main` that resolves; if it declares tiers, take its `scope: whole`
+   ones, print `INSTRUMENTS ABSENT AT BASE — declared on <ref>`, and append
+   `--instruments-from <ref>` to every command below, as QA will. **Never a change-selected tier**:
+   its whole run belongs to a scheduled run, and its base to QA's own comparison.
+2. **The command**, per tier, one tier at a time:
+
+   ```
+   <gates-cli> barrier --base {base_sha} --tier <id> --whole --out .orchestrator/runs/{run}/baseline/<id> --cache .orchestrator/barrier-cache.json
+   ```
+
+   There is no `--if-changed`: every run measures its own base, so an earlier run's record never
+   stands in for it. `--whole` records the tier's failing tests by name in the shared cache, where
+   QA's barrier inherits them as its base at the same tree.
+3. **In the background, or not.** Run the tiers as one chain, from the repository root whatever
+   folder the shell is in: the middle line once per baselined tier, in sequence.
+
+   ```
+   cd "$(git rev-parse --show-toplevel)" && mkdir -p .orchestrator/runs/{run}/baseline && {
+     <gates-cli> barrier --base {base_sha} --tier <id> --whole --out .orchestrator/runs/{run}/baseline/<id> --cache .orchestrator/barrier-cache.json; echo "<id> $?" >> .orchestrator/runs/{run}/baseline/exits.part
+     mv .orchestrator/runs/{run}/baseline/exits.part .orchestrator/runs/{run}/baseline/exits; }
+   ```
+
+   Each tier's line ends in `;`, never `&&`, so a red tier never stops the chain, and only the last
+   line writes `baseline/exits`: the file exists once every tier has run, never sooner. A coder
+   dispatched after the first tier would edit files a later tier's in-place `--whole` run measures,
+   and that tier would record the coder's red as the base's. Run from an app folder, the chain's
+   own files would land inside that folder, in the next tier's measured tree. Every path below is
+   from the root. Run that chain in the background only where the host can run a shell command in
+   the background, **and** only when every baselined tier is `cache_scope: cwd` or
+   `barrier.frozen` covers `plans/**`: Steps 1 and 2 write `plans/` while it runs, which would
+   otherwise move the tree its record is keyed by. Otherwise run it in the foreground. In the
+   background:
+   - record `dispatch <run> 'Step 0d barrier baseline'`, and re-record it before ending a turn to
+     wait for the join;
+   - carry `baseline running` in every `next --note` until the join;
+   - **the join:** before the first coder dispatch (Step 3, 3L or 3s),
+     `.orchestrator/runs/{run}/baseline/exits` exists and lists every baselined tier. Wait until it
+     does, then write the ledger rows below.
+
+   Either way, when the chain is done, leave the tree as you found it (`SKILL.md` Step 0d): a runner
+   that wrote into the checkout, outside `.orchestrator/` and git-ignored output, moved it off
+   `tree_base`, so delete what the tiers wrote, or re-mint `tree_base` and update the ledger.
+4. **Exits**, per tier, each read beside the tier's `barrier.json`:
+   - 0 or 1 with its `barrier.json`: write the row; 1 is a recorded baseline red, not a failure of
+     the run;
+   - 4: an `UNMEASURED` row, with the tier's reason;
+   - 3 with `no barrier tiers declared`: skip, with one line;
+   - any exit with no `barrier.json` (a pinned engine that is missing, or that cannot load, exits 1
+     with none), any other 3, or a crash: print `BARRIER BASELINE ERROR <id>: <first stderr line>`,
+     write a `MISSING_TOOL` row with that error, as Step 0d records any command that cannot run,
+     and continue.
+5. **Rows.** One `role: "baseline"` row per tier a Commands suite maps to (for example "e2e —
+   barrier tier `e2e`"): `suite` is that Commands suite, with the `<gates-cli>` substitution above;
+   `tree` is `tree_base`; and `failing[]` holds one entry per failing test of each `newly_red`
+   suite, exactly `<file>::<name>`. A tier no Commands suite maps to gets no row; print
+   `baseline: <id> in the barrier cache only (no Commands suite maps to it)`. A Commands suite
+   mapped to a change-selected tier is baselined by neither path; print
+   `baseline: <suite> skipped (change-selected tier <id>)`, so its absent row never reads as clean.
+6. **The identity check.** The record serves QA only under the key QA's barrier looks up. For a
+   `cache_scope: cwd` tier, compare `git rev-parse <tree.candidateTree>:<cwd>` with
+   `git rev-parse {base_sha}:<cwd>`; otherwise compare the tier's `barrier.json` `tree.candidateTree`
+   with `tree.baseTree`. On a mismatch, print that the record cannot serve QA: the tree it measured
+   held something `{base_sha}` does not.

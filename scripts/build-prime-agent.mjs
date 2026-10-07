@@ -25,7 +25,7 @@ import { readdirSync, readFileSync, writeFileSync, mkdirSync, rmSync, statSync, 
 import { dirname, join, relative, sep } from "node:path"
 import { fileURLToPath } from "node:url"
 import { lint, coverageFailure, formatFinding } from "./lint-prime-fences.mjs"
-import { materializedRelPaths, stampFromEntries } from "./stamp-orchestrator-version.mjs"
+import { engineKeys, loadPinEngine, materializedRelPaths, stampFromEntries } from "./stamp-orchestrator-version.mjs"
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)))
 const srcRoot = join(repoRoot, "plugins", "my-skills", "skills")
@@ -210,6 +210,7 @@ if (errors.length) {
 // it would read "in sync" about files it never received. Recompute it here, over
 // the buffers just assembled, because this is the only place those bytes exist.
 const ORCHESTRATOR = "orchestrator"
+const ENGINE_SKILL = "clean-code-gates"
 const STAMP_FILE = "MATERIALIZED-VERSION"
 // Drop the shared stamp, which walk() copied through as an ordinary file, BEFORE
 // recomputing. If the recompute then fails, the distribution is missing a stamp
@@ -225,9 +226,21 @@ for (const [rel, { content }] of generated) {
 if (orchestratorFiles.size) {
   const stampRel = join(ORCHESTRATOR, STAMP_FILE)
   try {
-    const stamp = stampFromEntries(
-      materializedRelPaths([...orchestratorFiles.keys()]).map((key) => ({ key, bytes: orchestratorFiles.get(key) })),
-    )
+    const entries = materializedRelPaths([...orchestratorFiles.keys()]).map((key) => ({ key, bytes: orchestratorFiles.get(key) }))
+    // The engine B3 pins beside the orchestrator is materialized too, so the Prime stamp
+    // covers the clean-code-gates files Prime ships, filtered by pin-engine.cjs's own
+    // rule. It loads here, inside the stamping path: a tree with no orchestrator never
+    // needs it, and parity.sh builds exactly such a tree.
+    const { isEngineFile } = loadPinEngine(join(srcRoot, ORCHESTRATOR))
+    const engine = new Map()
+    for (const [rel, { content }] of generated) {
+      const parts = rel.split(sep)
+      const inSkill = parts.slice(1).join("/")
+      if (parts[0] === ENGINE_SKILL && isEngineFile(inSkill)) engine.set(inSkill, content)
+    }
+    const engineRels = [...engine.keys()]
+    entries.push(...engineKeys(engineRels).map((key, index) => ({ key, bytes: engine.get(engineRels[index]) })))
+    const stamp = stampFromEntries(entries)
     generated.set(stampRel, { content: Buffer.from(stamp), mode: generated.get(stampRel)?.mode ?? 0o644 })
   } catch (error) {
     // Not `fail()`: the errors array is read once, above, and nothing reads it
