@@ -5,23 +5,42 @@
  * "Now Step 5 — QA" otherwise sits idle until someone happens to look.
  *
  * It blocks the stop only when every one of these holds:
- *   1. `.orchestrator/runs/ACTIVE` names a run whose `lease.json` is `active`;
+ *   1. `.orchestrator/runs/ACTIVE` names a run whose `lease.json` is `active`, or
+ *      `dispatched` — work the conductor recorded with `run-state.cjs dispatch`;
  *   2. the lease was heartbeated less than 12 h ago;
  *   3. there is no `plans/<run>/FINAL-*.md`;
  *   4. there is no `pending_decision`, the file a deliberate operator stop writes;
- *   5. `stop_hook_active` is not set, or NEXT has moved on since the last block: a turn
- *      that already continued once on a block and made no progress is let stop;
- *   6. this session's own tool calls ran `run-state.cjs start <run>` or `next <run>`;
- *   7. fewer than three blocks have landed on the same NEXT step.
+ *   5. this session conducts the run (below);
+ *   6. nothing will resume the session on its own (`willResume`);
+ *   7. `stop_hook_active` is not set, or the run has progressed since the last block:
+ *      NEXT moved on, or work was dispatched after it;
+ *   8. fewer than three blocks have landed on the same NEXT step.
  *
- * Ownership (6) is proved by evidence, never read from the lease: an unrelated
- * session in the same project is never blocked, and a session that resumed the run
- * with `next` owns it. Only commands count, never their output or anyone's prose, so
- * a `status` that printed a note naming the command hands the run to nobody. The
- * lease's `session_id` records who proved it last, and moves ownership rather than
- * sharing it: once it names another session, this one must hold the command that
- * wrote the current NEXT — `next <run> "<that label>"`, or `start <run>` at Step 0 —
- * so a session the run has moved on from is never pushed back into conducting it.
+ * The reason the conductor reads comes in two variants. An `active` run stalled
+ * between steps, and is told to dispatch the next one and record it. A `dispatched`
+ * run had its work report back with nothing left in flight, and is told to act on the
+ * hand-back.
+ *
+ * Ownership (5): lease v2 names the run's conductor, `conductor_session` — the session
+ * id the host gives every command, recorded by the session's own `run-state.cjs start`
+ * or `next` — and when it does, the session owns the run exactly when its `session_id`
+ * is that one. A lease that names none, written before v2 or from a shell with no
+ * session id, falls back to evidence: this session's own tool calls ran
+ * `run-state.cjs start <run>` or `next <run>`. Only commands count there, never their
+ * output or anyone's prose, so a `status` that printed a note naming the command hands
+ * the run to nobody. The lease's `session_id` records who was blocked last, and moves
+ * ownership rather than sharing it: once it names another session, this one must hold
+ * the command that wrote the current NEXT — `next <run> "<that label>"`, or
+ * `start <run>` at Step 0 — so a session the run has moved on from is never pushed
+ * back into conducting it.
+ *
+ * The same script takes StopFailure, the turn that ended on an API error — a rate
+ * limit, an overload — for which the host runs no Stop hook. For a live run this
+ * session owns it records `stop_failure` in the lease, then notifies the operator:
+ * ORCHESTRATOR_NOTIFY=0 sends nothing, any other value names the notifier command, and
+ * unset is a macOS notification on darwin and nothing elsewhere. With
+ * ORCHESTRATOR_HOOK_DEBUG set to an absolute path, every input is appended to that
+ * file, one line each.
  *
  * Every error path exits 0 with no output. A watchdog that blocks a stop on its own
  * bug is worse than no watchdog.
@@ -32,6 +51,7 @@
  *   node hooks/orchestrator-stop.cjs < stop-hook-input.json
  */
 'use strict';
+const { spawn } = require('node:child_process');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -47,7 +67,20 @@ const RUN_NAME = /^\w[\w.-]{0,63}$/;
 // The label `run-state.cjs start` writes to NEXT, so the one a `start` proves.
 const FIRST_STEP = 'Step 0 — preflight';
 // run-state.cjs's flags that take no value; every other `--flag` consumes the next word.
-const BOOLEAN_FLAGS = new Set(['--force', '--json', '--all', '--once']);
+const BOOLEAN_FLAGS = new Set(['--force', '--json', '--all', '--once', '--take-over']);
+// Background work that reports back into the session, by the host's label and by its internal type.
+const RESUMES = new Set(['subagent', 'local_agent', 'workflow', 'local_workflow', 'cloud session', 'remote_agent', 'mcp task', 'mcp_task']);
+// The host's own housekeeping, which never wakes a conductor.
+const HOUSEKEEPING = new Set(['dream', 'auto-mode scan', 'auto_mode_scan', 'memory import', 'local_memory_import']);
+// The states of a run still under way, for StopFailure: a waiting run still has a conductor to fail.
+const LIVE_STATES = new Set(['active', 'dispatched', 'waiting']);
+// The default notifier on darwin, as run-state.cjs `watch` has it: the message is `item 1 of argv`, never source.
+const OSASCRIPT = [
+  'osascript',
+  '-e', 'on run argv',
+  '-e', 'display notification (item 1 of argv) with title "orchestrator"',
+  '-e', 'end run',
+];
 
 function readIfExists(file) {
   try {
@@ -166,12 +199,19 @@ function hasFinal(runDir) {
   return names.some((name) => name.startsWith('FINAL-') && name.endsWith('.md'));
 }
 
+const fresh = (lease, now) => now - Date.parse(lease.heartbeat_at) < STALE_MS;
+
 /** Conditions 1-4: the run is live, unfinished, and not waiting for the operator on purpose. */
 function blockable({ root, run, dir, lease }, now = Date.now()) {
-  if (lease.state !== 'active') return false;
-  if (!(now - Date.parse(lease.heartbeat_at) < STALE_MS)) return false;
+  if (lease.state !== 'active' && lease.state !== 'dispatched') return false;
+  if (!fresh(lease, now)) return false;
   if (hasFinal(path.join(root, 'plans', run))) return false;
   return fs.statSync(path.join(dir, 'pending_decision'), { throwIfNoEntry: false }) === undefined;
+}
+
+/** StopFailure's test: a run still under way — active, dispatched or waiting, heartbeated within 12 h, with no FINAL. */
+function live({ root, run, lease }, now = Date.now()) {
+  return LIVE_STATES.has(lease.state) && fresh(lease, now) && !hasFinal(path.join(root, 'plans', run));
 }
 
 /** NEXT's first line, the step the run is at; empty when NEXT is missing. */
@@ -179,17 +219,62 @@ function nextStep(dir) {
   return (readIfExists(path.join(dir, 'NEXT')) || '').split(/\r?\n/)[0].trim();
 }
 
+/** The session lease v2 names as the run's conductor, or null for a lease that names none. */
+function conductorOf(lease) {
+  return typeof lease?.conductor_session === 'string' && lease.conductor_session ? lease.conductor_session : null;
+}
+
 /**
- * Condition 5's test: has the run moved since the last block? Claude Code keeps
+ * Condition 6: will something wake this session without the operator? The host lists
+ * the session's background work in `background_tasks`, and its scheduled wakeups in
+ * `session_crons`. A subagent, a workflow, a cloud session or an MCP task reports back
+ * into the session, and so does a one-shot wakeup: either lets the turn end. A
+ * background shell, a monitor, a teammate, a type this list does not know and a
+ * recurring wakeup count only while the run is `dispatched` — one leaked shell, one
+ * idle teammate or one `/loop` would otherwise let every later stall through. The
+ * host's own housekeeping never counts. A host that sends no task list, an older
+ * build, is trusted only on what the conductor declared: a `dispatched` run will
+ * resume, an `active` one will not.
+ */
+function willResume({ lease }, input) {
+  const dispatched = lease.state === 'dispatched';
+  const crons = Array.isArray(input?.session_crons) ? input.session_crons : [];
+  if (crons.some((cron) => cron && typeof cron === 'object' && (cron.recurring === false || dispatched))) return true;
+  if (!Array.isArray(input?.background_tasks)) return dispatched;
+  return input.background_tasks.some((task) => {
+    if (!task || (task.status !== 'running' && task.status !== 'pending')) return false;
+    const type = String(task.type ?? '').toLowerCase();
+    if (HOUSEKEEPING.has(type)) return false;
+    return RESUMES.has(type) || dispatched;
+  });
+}
+
+/** The newest time `in_flight` records, in ms, or NaN when nothing was dispatched since the step began. */
+function lastDispatch(dir) {
+  let newest = NaN;
+  for (const line of (readIfExists(path.join(dir, 'in_flight')) || '').split('\n')) {
+    const at = Date.parse(line.trim().split(/\s/)[0]);
+    if (Number.isFinite(at) && !(at <= newest)) newest = at;
+  }
+  return newest;
+}
+
+/**
+ * Condition 7's test: has the run moved since the last block? Claude Code keeps
  * `stop_hook_active` set for the rest of the operator's turn, so on its own it would
  * rescue one stall per turn and leave every later one in an unattended run idle. A
  * block leaves `blocks` at 1 or more on `last_block_next`, and `run-state.cjs next`
  * resets `blocks` whenever the step changes — so a step that moved away and back
- * reads as progress, and only a stop on the very step just blocked, with no `next`
- * to a new step in between, reads as none.
+ * reads as progress. So does work dispatched after the block, an `in_flight` line
+ * newer than `last_block_at`: the conductor acted on the block, and when that work
+ * reports back at the same step, the hand-back is blocked rather than let through.
+ * That is progress for this condition only. A dispatch never resets `blocks`, so a
+ * step still gets three rescues in all.
  */
-function progressed(lease, step) {
-  return step !== lease.last_block_next || !(Number(lease.blocks) > 0);
+function progressed(lease, step, dir) {
+  if (step !== lease.last_block_next || !(Number(lease.blocks) > 0)) return true;
+  const blockedAt = Date.parse(lease.last_block_at);
+  return Number.isFinite(blockedAt) && lastDispatch(dir) > blockedAt;
 }
 
 /**
@@ -264,9 +349,10 @@ function runStateCalls(command, run) {
 }
 
 /**
- * Condition 6 as a test over one proved call. With no conductor on record, or with
- * this session on record, any `start` or `next` of the run proves it. Once the lease
- * names another session, only the call that wrote the current NEXT does.
+ * The evidence test over one proved call, for a lease that names no conductor. With
+ * nobody on record, or with this session on record, any `start` or `next` of the run
+ * proves it. Once the lease names another session, only the call that wrote the
+ * current NEXT does.
  */
 function provesOwnership({ lease }, step, sessionId) {
   const owner = typeof lease.session_id === 'string' && lease.session_id ? lease.session_id : null;
@@ -320,7 +406,7 @@ function* linesNewestFirst(transcriptPath) {
 }
 
 /**
- * Condition 6 for Claude Code. Only this session's own Bash calls count — an
+ * The evidence path for Claude Code. Only this session's own Bash calls count — an
  * assistant `tool_use` input — never a tool result, a hook's feedback, or text.
  * Stops at the first call `accepts` takes.
  */
@@ -344,21 +430,37 @@ function transcriptHasEvidence(transcriptPath, run, accepts = () => true) {
 }
 
 /**
- * Condition 7, and the lease write that goes with every proved stop. `blocks` counts
- * consecutive blocks on an unchanged NEXT first line; `run-state.cjs next` resets it
- * when the step changes. Returns true to block. A fourth stop on the same step trips
- * the guard instead: the run is parked `waiting` with a `pending_decision`, and the
- * operator's `run-state.cjs watch` notifies.
- *
- * It re-reads the lease and re-checks conditions 1-4 right before writing: a `wait`,
- * `done` or `next` that landed while this stop was being proved — the plugin awaits
- * two client calls in between — must neither be reverted nor pushed past.
+ * Condition 5 for Claude Code: the conductor the lease names, by id, and only for a
+ * lease that names none, the session's own `start` or `next` in its transcript.
  */
-function recordBlock({ root, run, dir }, sessionId) {
+function owned(found, input, step) {
+  const conductor = conductorOf(found.lease);
+  if (conductor) return conductor === input.session_id;
+  if (typeof input.transcript_path !== 'string') return false;
+  return transcriptHasEvidence(input.transcript_path, found.run, provesOwnership(found, step, input.session_id));
+}
+
+/**
+ * Condition 8, and the lease write that goes with every proved stop. `blocks` counts
+ * consecutive blocks on an unchanged NEXT first line; `run-state.cjs next` resets it
+ * when the step changes. A fourth stop on the same step trips the guard instead: the
+ * run is parked `waiting` with a `pending_decision`, and the operator's
+ * `run-state.cjs watch` notifies.
+ *
+ * It re-reads the lease and re-checks conditions 1-4 right before writing, and asks
+ * `resumes` whether the run as it now stands will resume on its own: a `wait`, `done`,
+ * `next` or `dispatch` that landed while this stop was being proved — the plugin awaits
+ * two client calls in between — must neither be reverted nor pushed past. Returns the
+ * reason's variant, `returned` for a `dispatched` run and `stall` otherwise, or false
+ * to let the stop through.
+ */
+function recordBlock({ root, run, dir }, sessionId, resumes = () => false) {
   const lease = readLease(dir);
-  if (!blockable({ root, run, dir, lease })) return false;
+  const found = { root, run, dir, lease };
+  if (!blockable(found) || resumes(found)) return false;
   const step = nextStep(dir);
   const prior = lease.last_block_next === step ? Number(lease.blocks) || 0 : 0;
+  const kind = lease.state === 'dispatched' ? 'returned' : 'stall';
   if (sessionId) lease.session_id = sessionId;
   if (prior >= MAX_BLOCKS) {
     writeAtomic(path.join(dir, 'pending_decision'), `${isoNow()} watchdog: ${MAX_BLOCKS} blocks without progress\n`);
@@ -366,33 +468,156 @@ function recordBlock({ root, run, dir }, sessionId) {
   } else {
     lease.blocks = prior + 1;
     lease.last_block_next = step;
+    // To the millisecond: a dispatch that answers this block lands seconds later, and must read as later.
+    lease.last_block_at = new Date().toISOString();
   }
   writeAtomic(path.join(dir, 'lease.json'), `${JSON.stringify(lease, null, 2)}\n`);
-  return prior < MAX_BLOCKS;
+  return prior < MAX_BLOCKS ? kind : false;
 }
 
-/** What the conductor reads instead of stopping. Both hosts send the same text. */
-function blockReason(run) {
+/**
+ * What the conductor reads instead of stopping. Both hosts send the same text. Neither
+ * variant names `run-state.cjs` before `start` or `next`, the evidence shape: the host
+ * writes the reason into the transcript, and it must hand the run to nobody.
+ */
+function blockReason(run, kind = 'stall') {
+  if (kind === 'returned') {
+    return 'Orchestrator watchdog: the work recorded with dispatch has reported back and nothing is in flight, '
+      + 'so nothing will resume the run. Act on the hand-back now: record the step you move to with `next` and '
+      + `dispatch it, run \`wait ${run} '<question>'\` if the operator must answer, or \`done ${run}\` if the run is over.`;
+  }
   const runState = 'node .orchestrator/run-state.cjs';
-  return 'Orchestrator watchdog: the run is still active, with no FINAL and no pending decision. '
-    + `Read .orchestrator/runs/${run}/NEXT and dispatch that step now. `
-    + `If the operator really must decide, ask with AskUserQuestion / question, then run \`${runState} wait ${run} '<reason>'\` before ending the turn. `
-    + `If the run is truly over, run \`${runState} done ${run}\`.`;
+  return 'Orchestrator watchdog: the run is active with no FINAL, no pending decision and nothing in flight; '
+    + `nothing will resume it. Dispatch the NEXT step \`${runState} status\` prints, then record it: `
+    + `\`${runState} dispatch ${run} '<what>'\`. Use \`wait ${run} '<Status line or question>'\` for a STALLED stop `
+    + `or an operator question (AskUserQuestion / question first), \`done ${run}\` when over.`;
+}
+
+/**
+ * `--notify` and ORCHESTRATOR_NOTIFY split into words the way a shell splits them —
+ * whitespace separates, single quotes are literal, double quotes and a backslash escape
+ * — and nothing else is done. A copy of run-state.cjs's `splitCommand`, which the
+ * integration suite holds it to. Returns null for an unterminated quote.
+ */
+function splitCommand(line) {
+  const words = [];
+  let word = null;
+  let quote = null;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (quote === "'") {
+      if (c === "'") quote = null;
+      else word += c;
+    } else if (quote === '"') {
+      if (c === '"') quote = null;
+      else if (c === '\\' && (line[i + 1] === '"' || line[i + 1] === '\\')) word += line[++i];
+      else word += c;
+    } else if (/\s/.test(c)) {
+      if (word !== null) words.push(word);
+      word = null;
+    } else {
+      if (word === null) word = '';
+      if (c === "'" || c === '"') quote = c;
+      else if (c === '\\' && i + 1 < line.length) word += line[++i];
+      else word += c;
+    }
+  }
+  if (quote) return null;
+  if (word !== null) words.push(word);
+  return words;
+}
+
+const clock = (ms) => (Number.isFinite(ms) ? `${new Date(ms).toISOString().slice(11, 16)}Z` : 'an unknown time');
+
+/** The words run-state.cjs `watch` uses for the same failure, which the integration suite holds equal. */
+function stopFailureMessage(run, failure) {
+  const details = failure.details ? `: ${failure.details}` : '';
+  return `orchestrator run ${run}: the conductor's turn failed at ${clock(Date.parse(failure.at))} ` +
+    `(${failure.error}${details}); continue the session once it clears`;
+}
+
+/**
+ * Tell the operator, without waiting for it. ORCHESTRATOR_NOTIFY=0 sends nothing; any
+ * other value is a command, split like `watch --notify`, and the message is appended
+ * as one argv element, never shell text; unset is a macOS notification on darwin and
+ * nothing elsewhere. The notifier is detached and left to run: the hook has 10 s, and a
+ * notification is not worth any of them.
+ */
+function notify(message, env = process.env) {
+  const setting = env.ORCHESTRATOR_NOTIFY;
+  if (setting === '0') return;
+  let argv = null;
+  if (setting) {
+    const words = splitCommand(setting);
+    if (words && words.length) argv = [...words, message];
+  } else if (process.platform === 'darwin') {
+    argv = [...OSASCRIPT, message];
+  }
+  if (!argv) return;
+  const child = spawn(argv[0], argv.slice(1), { detached: true, stdio: 'ignore', env });
+  child.on('error', () => {
+    // A notifier that cannot start changes nothing: the lease already holds the failure.
+  });
+  child.unref();
+}
+
+/**
+ * StopFailure: for the first live run this session owns, record the failure in the
+ * lease — where `watch` and `status` find it, and where the conductor's next write
+ * clears it — and only then notify.
+ */
+function recordStopFailure(input, roots) {
+  for (const found of activeRuns(roots)) {
+    if (!live(found) || !owned(found, input, nextStep(found.dir))) continue;
+    const lease = readLease(found.dir);
+    if (!live({ ...found, lease })) return;
+    const failure = {
+      at: new Date().toISOString(),
+      error: String(input.error ?? 'unknown'),
+      details: oneLine(input.error_details ?? '').slice(0, 200) || null,
+    };
+    lease.stop_failure = failure;
+    writeAtomic(path.join(found.dir, 'lease.json'), `${JSON.stringify(lease, null, 2)}\n`);
+    notify(stopFailureMessage(found.run, failure));
+    return;
+  }
+}
+
+/**
+ * ORCHESTRATOR_HOOK_DEBUG: append the raw input, its newlines folded into spaces so it
+ * stays one line, to the file the variable names — an absolute path only. A sink that
+ * cannot be written changes nothing.
+ */
+function debugDump(raw, env = process.env) {
+  const file = env.ORCHESTRATOR_HOOK_DEBUG;
+  if (!file || !path.isAbsolute(file)) return;
+  try {
+    fs.appendFileSync(file, `${raw.replace(/[\r\n]+/g, ' ').trim()}\n`);
+  } catch {
+    // Fail open.
+  }
 }
 
 function main() {
-  const input = JSON.parse(fs.readFileSync(0, 'utf8'));
-  if (input.hook_event_name && input.hook_event_name !== 'Stop') return;
-  if (typeof input.transcript_path !== 'string') return;
+  const raw = fs.readFileSync(0, 'utf8');
+  debugDump(raw);
+  const input = JSON.parse(raw);
+  if (!input || typeof input !== 'object') return;
   const project = process.env.CLAUDE_PROJECT_DIR || input.cwd;
-  for (const found of activeRuns([...searchRoots(process.env.CLAUDE_PROJECT_DIR, input.cwd), ...linkedWorktrees(project)])) {
+  const roots = [...searchRoots(process.env.CLAUDE_PROJECT_DIR, input.cwd), ...linkedWorktrees(project)];
+  if (input.hook_event_name === 'StopFailure') {
+    recordStopFailure(input, roots);
+    return;
+  }
+  if (input.hook_event_name && input.hook_event_name !== 'Stop') return;
+  for (const found of activeRuns(roots)) {
     if (!blockable(found)) continue;
     const step = nextStep(found.dir);
-    if (!transcriptHasEvidence(input.transcript_path, found.run, provesOwnership(found, step, input.session_id))) continue;
-    if (input.stop_hook_active === true && !progressed(found.lease, step)) return;
-    if (recordBlock(found, input.session_id)) {
-      process.stdout.write(`${JSON.stringify({ decision: 'block', reason: blockReason(found.run) })}\n`);
-    }
+    if (!owned(found, input, step)) continue;
+    if (willResume(found, input)) return;
+    if (input.stop_hook_active === true && !progressed(found.lease, step, found.dir)) return;
+    const kind = recordBlock(found, input.session_id, (now) => willResume(now, input));
+    if (kind) process.stdout.write(`${JSON.stringify({ decision: 'block', reason: blockReason(found.run, kind) })}\n`);
     return;
   }
 }
@@ -406,6 +631,6 @@ if (require.main === module) {
 }
 
 module.exports = {
-  activeRuns, blockable, nextStep, runStateCalls, provesOwnership, recordBlock, blockReason, searchRoots,
-  linkedWorktrees, CHUNK_BYTES, SCAN_CAP_BYTES,
+  activeRuns, blockable, live, nextStep, conductorOf, willResume, progressed, runStateCalls, provesOwnership, recordBlock,
+  blockReason, splitCommand, stopFailureMessage, searchRoots, linkedWorktrees, CHUNK_BYTES, SCAN_CAP_BYTES,
 };

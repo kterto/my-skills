@@ -134,13 +134,15 @@ If it differs anywhere — a `plans/qa/` hop, a kind subdirectory inside the run
 
 ## Step 3 — Run the test suite
 
-**The barrier first.** Its tiers are `barrier.tiers` in the repo-root `.cleancode-gates.json`: the definition at `{base_sha}` of each (`git show {base_sha}:./.cleancode-gates.json`), plus any tier the working tree adds. With no tier in either, the project has no barrier: take the without-tiers path below. Otherwise run each tier as its own command, from the repository root, with the clean-code-gates CLI that `PROJECT-CONTEXT.md` → Commands names:
+**The barrier first.** Its tiers are `barrier.tiers` in the repo-root `.cleancode-gates.json`: the definition at `{base_sha}` of each (`git show {base_sha}:./.cleancode-gates.json`), plus any tier the working tree adds. With no tier in either, look for the default branch's tiers (below) before taking the without-tiers path. Otherwise run each tier as its own command, from the repository root, with `<gates-cli>`, the pinned engine: exactly `node "$(git rev-parse --show-toplevel)/.orchestrator/engine/bin/gates.cjs"`, never a path `PROJECT-CONTEXT.md` → Commands or a plan names instead (`.orchestrator/gate-config.md` → *The pinned engine*):
 
 ```
 <gates-cli> barrier --base {base_sha} --tier <id> --out .orchestrator/runs/{run}/barrier/<id> --cache .orchestrator/barrier-cache.json
 ```
 
-`{base_sha}` is the ledger's `base_sha`; `{run}` is the `run_dir=` folder's name. Both paths are untracked (`.orchestrator/.gitignore` is an allow-list), so the barrier's output never moves `tree=`, every run shares the one cache, and each tier keeps its own `barrier.json`. **When tiers are declared (at `{base_sha}` or in the working tree) but Commands names no gates CLI**, run no tier: add `{gate: barrier, elapsed_minutes: 0, reason: "barrier declared but no gates CLI in Commands"}` to `stale_gates:`, and never take the without-tiers path in its place.
+`{base_sha}` is the ledger's `base_sha`; `{run}` is the `run_dir=` folder's name. Both paths are untracked (`.orchestrator/.gitignore` is an allow-list), so the barrier's output never moves `tree=`, every run shares the one cache, and each tier keeps its own `barrier.json`. **When tiers are declared (at `{base_sha}`, in the working tree or on the default branch) but `.orchestrator/engine/bin/gates.cjs` does not exist**, run no tier: add `{gate: barrier, elapsed_minutes: 0, reason: "barrier declared but no pinned engine at .orchestrator/engine"}` to `stale_gates:`, and never take the without-tiers path in its place.
+
+**When neither `{base_sha}` nor the working tree declares tiers** (the barrier exits 3 with `no barrier tiers declared`), read `git show <ref>:./.cleancode-gates.json` for the first of `origin/HEAD`, `origin/main` or `main` that resolves. If it declares tiers, `{base_sha}` predates them: run each per the block above plus `--instruments-from <ref>`, write `instruments_from: <ref>` in the report's frontmatter, and label the `### Barrier` section `tiers from <ref> (absent at base {base_sha12})`; a tier that cannot run that way is a `stale_gates:` entry like any other. If it declares none either, the project has no barrier: take the without-tiers path below.
 
 **Ledger rows, before running.** A tier's command, exactly as run, is its `suite`: look it up by the ledger rule below, run the tier only when no row is inheritable, then append one row:
 
@@ -153,16 +155,18 @@ If it differs anywhere — a `plans/qa/` hop, a kind subdirectory inside the run
 **Every exit has a reading.** Copy any `INSTRUMENT MOVED` line the barrier prints on stderr into the report verbatim, as `gate-config.md` has you do for a gate's.
 
 - **Exit 0, 1 or 4:** read the tier's `barrier.json`, in its `--out` directory (below). Exit 4 means the tier is `not-run`: a `stale_gates:` entry, never the without-tiers path.
-- **Exit 3 with `no barrier tiers declared`:** the project has no barrier; take the without-tiers path.
+- **Exit 3 with `no barrier tiers declared`:** neither `{base_sha}` nor the working tree declares a tier; read the default branch's (above), and take the without-tiers path only when it declares none either.
 - **Anything else** — any other exit 3 (an invalid `.cleancode-gates.json` at `{base_sha}`, an unknown `--tier`, a `--base` that does not resolve), a crash, or no `barrier.json` to read — is no verdict: add `{gate: barrier, elapsed_minutes: <m>, reason: "<first stderr line>"}` to `stale_gates:`, `<m>` the minutes it ran. The run then reaches `BLOCKED_STALE` and an operator decision; never take the without-tiers path in its place.
 
 **Reading the result:**
 
-- **A tier `fail`** is a test failure. Its `newly_red` suites and their failing tests go to `## Failures` exactly like any failing suite; they are what `BLOCKED` remediates. A `newly_red` suite with `basis: "no-base"` had no base to compare against. When Commands maps a suite to this tier and Step 0d baselined that suite, a `no-base` suite whose every failing test is named in that baseline row's `failing[]` is `pre-existing (baseline)` (`gate-config.md`): list it in the `### Barrier` table, not under `## Failures`, and do not remediate it. Otherwise it still fails, and its entry says so.
+- **A tier `fail`** is a test failure. Its `newly_red` suites and their failing tests go to `## Failures` exactly like any failing suite; they are what `BLOCKED` remediates. A `newly_red` suite with `basis: "no-base"` had no base to compare against. When Commands maps a suite to this tier and Step 0d baselined that suite, by its Commands sweep or by its barrier baseline (`gate-config.md` → *Baselining the barrier*), a `no-base` suite that names at least one failing test, every one of them, written `<file>::<name>`, in that baseline row's `failing[]`, is `pre-existing (baseline)` (`gate-config.md`): list it in the `### Barrier` table, not under `## Failures`, and do not remediate it. Otherwise it still fails, and its entry says so; so does an `error` suite or an `exit-code` tier, which names no failing test to compare. The other path needs no row: when the engine inherited this tier's base from Step 0d's whole record (`base.source: inherited`), a suite already red there by assertion comes back `carried` (below); an `error` suite or an `exit-code` tier red there never does.
 - **A tier's `carried` suites** were red by assertion at base, by the barrier's own base comparison. Label each `pre-existing (at base since <first_seen>)`, never "carried" (`gate-config.md` uses that word for something else); list it in the report's `### Barrier` table, never under `## Failures`; and do not investigate, plan or remediate it. Look for no Step 0d row: none carries a `--tier` key.
 - **A tier's `flaky` suites** failed, then passed the barrier's one rerun. List them in the `### Barrier` table; they never block.
 - **A tier `not-run` for any reason but `empty-scope`** — a `timeout`, a `vacuous` or `unmeasured` run — is unknown, not failed. Add `{gate: barrier/<tier id>, elapsed_minutes: <m>, reason: <its reason>}` to `stale_gates:`, `<m>` being the tier's `timing.tiers.<id>.candidate_ms` in minutes, rounded up (0 for a tier that never ran, which has none). The orchestrator then synthesizes `BLOCKED_STALE`: the run finishes NOT-DONE without entering the remediation loop, and without reading as a pass.
 - **An `empty-scope` tier** (change-selected, nothing selected) needs nothing.
+
+**A change-selected tier's scope belongs to the engine, so run it as declared.** Never hand-batch it, replace it with directory runs, or run `select` separately: `barrier.json` carries the selection. A selection past the tier's `select.batch_files` runs in batches, each within the tier's per-invocation bound, and the table's Minutes is their sum; a project's per-invocation minutes rule is honoured by that bound, not by QA. **A tier `fail` with reason `timeout` is a test failure, remediated like any fail; only `not-run (timeout)` is a stale gate.**
 
 **Suites the tiers do not run.** For each app the plan touches, every whole-app suite Commands names runs as in the without-tiers path, unless Commands maps it to a barrier tier (for example "e2e — barrier tier `e2e`"), in which case it runs through the barrier. Any suite the plan modifies that no tier runs is run as in the without-tiers path.
 
@@ -409,6 +413,8 @@ Emit the artifact per `.orchestrator/artifact-format.md`. **Always write the `.m
 
 **Stamp the run's rigor in the report header** — `Rigor: {level} (from {source})` — at every level, `hardened` included. A reader must never infer it from a missing line.
 
+**Stamp the engine beside it** — `Engine: {PINNED stamp}`, the `stamp` in `.orchestrator/engine/PINNED`, or `Engine: missing` when there is no pinned engine — so a reader knows which build measured every gate and tier in the report.
+
 **Filling the gate table.** The `Threshold` column renders from `.cleancode-gates.json`, per stack —
 print the configured values, never remembered ones, and name the stack in the row when a plan spans
 two. A `Metric` cell must paste back into the config unchanged: write the config's own key names,
@@ -441,6 +447,7 @@ lint_errors: {N}
 type_errors: {N}
 stale_gates: []   # or [{gate: G6, elapsed_minutes: 43}, {gate: barrier/e2e, elapsed_minutes: 16, reason: timeout}, ...] — gates that exceeded Step 0's bound, and Step 3's barrier entries
 unmeasured_bounded: []   # or [{gate: G6, elapsed_minutes: 15}, ...] — Step 0's `disclose` gates
+instruments_from: null   # or <ref> — the default branch whose barrier tiers ran because {base_sha} declares none (Step 3); always emitted
 ---
 
 ## Summary
@@ -463,6 +470,7 @@ unmeasured_bounded: []   # or [{gate: G6, elapsed_minutes: 15}, ...] — Step 0'
 | {id} | whole / change-selected | pass / fail / not-run | {reason, or —} | {file failed/executed, or —} | {file (at base since {first_seen}), or —} | {file, or —} | {isolation, or —} | {m} |
 
 {Without tiers: "No barrier tiers declared."}
+{With the default branch's tiers (Step 3): "tiers from <ref> (absent at base {base_sha12})", above the table.}
 
 ## Clean Code Gates
 

@@ -1,0 +1,15 @@
+{
+  "id": "stacked-base-instruments",
+  "kind": "synthetic",
+  "class": "a branch stacked on an unmerged branch, whose base declares no tiers, measured without the tiers the default branch declares",
+  "caught_by": "when neither the base nor the working tree declares tiers, QA and Step 0d read the gates config on the default branch (origin/HEAD, origin/main or main, the first that resolves) and run its tiers with --instruments-from that ref. QA writes instruments_from and labels its barrier section, the FINAL's Instrument moved line carries it, and a tier that cannot run that way is a stale gate",
+  "missed_by": "QA read the base's config, found no tiers and took the without-tiers path, and the FINAL never said the tiers were absent",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/orchestrator/scripts/qa-barrier-prose.test.cjs",
+  "evidence": "docs/adr/0031-the-engine-runs-from-a-pinned-copy-and-measures-its-base-in-place.md#12-a-stacked-base-runs-the-default-branchs-tiers",
+  "private_ref": "inc31-h7-stacked"
+}

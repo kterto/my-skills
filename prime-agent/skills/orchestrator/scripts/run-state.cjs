@@ -7,14 +7,18 @@
  * from stalling between steps, and the operator's heartbeat notifier (`watch`).
  *
  * The stall it exists for is a turn that ends between steps: the conductor announces
- * the next step, the turn ends, and the run sits until a human looks — 3.9 h on one
- * run. A watchdog may push past that stop only if it can tell it from a stop that
- * waits for the operator on purpose, and `pending_decision` is how it tells.
+ * the next step, the turn ends, and the run sits for hours, until a human looks. A
+ * watchdog may push past that stop only if it can tell it from the two stops that are
+ * not stalls. One waits for the operator on purpose, and `wait` marks it with
+ * `pending_decision`. The other waits for work the conductor handed to a background
+ * subagent or shell, which reports back into the session on its own; `dispatch`
+ * records it in `in_flight` and sets the lease state `dispatched` (ADR-0032).
  *
  *   .orchestrator/runs/ACTIVE                     one line, the active run; absent means none
- *   .orchestrator/runs/<run>/lease.json           state, heartbeat, and the hooks' block counter
+ *   .orchestrator/runs/<run>/lease.json           state, heartbeat, conductor, and the hooks' block counter
  *   .orchestrator/runs/<run>/NEXT                 the step label, then optional free text
  *   .orchestrator/runs/<run>/pending_decision     `<ISO-8601 UTC> <reason>`: waiting on purpose
+ *   .orchestrator/runs/<run>/in_flight            `<ISO-8601 UTC> <what>`, one line per dispatch since the step began
  *   .orchestrator/runs/<run>/decisions.jsonl      operator answers keyed by FR, gap, AC or requirement id
  *   .orchestrator/runs/<run>/budget-raises.jsonl  approved in-session raises of the six execution budgets
  *
@@ -29,18 +33,29 @@
  * theirs; run from anywhere else, it is `git rev-parse --show-toplevel`, else the cwd.
  * `--root` overrides all three.
  *
- * One rule about output backs up the watchdog: nothing here prints this script's name
- * followed by `start <run>` or `next <run>` with a real run name. The Stop hook takes
- * that command, run by a session itself, as evidence that the session conducts the
- * run. It reads only the session's own tool calls, never their output, but a refusal
- * or a status line that printed the command would still be one host format change
- * away from handing the run to whichever session read it. Free text a conductor
- * wrote — a NEXT note, a label — is its own and is printed as written.
+ * The lease names its conductor. `start` and `next` record the session they run in as
+ * `conductor_session`: ORCHESTRATOR_SESSION_ID, which the opencode plugin sets, else
+ * CLAUDE_CODE_SESSION_ID, which Claude Code sets for every command. While the run is
+ * live, a write from another known session exits 5 and changes nothing, unless a
+ * `start` or `next` moves the run with `--take-over`; a second session resumed beside
+ * the first no longer writes over it. A subagent's commands carry its session's id, so
+ * this separates sessions, not a conductor from its own subagents. With no id on either
+ * side — a plain terminal, an older host — nothing is checked.
+ *
+ * The Stop hook takes ownership from `conductor_session` when the lease names one. For
+ * a lease that names none, it falls back to evidence: this script's name followed by
+ * `start <run>` or `next <run>`, run by a session itself. So one rule about output
+ * stands: nothing here prints that command with a real run name. The hook reads only
+ * the session's own tool calls, never their output, but a refusal or a status line that
+ * printed the command would still be one host format change away from handing the run
+ * to whichever session read it. Free text a conductor wrote — a NEXT note, a label — is
+ * its own and is printed as written.
  *
  * The commands, their arguments and the exit codes are in USAGE below.
  */
 'use strict';
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 const { execFileSync, spawnSync } = require('child_process');
@@ -71,7 +86,21 @@ const RAISABLE = [
 /** A lease heartbeated within this window belongs to a live run; an older one was abandoned. */
 const LIVE_MS = 12 * 60 * 60 * 1000;
 
+/** The states of a run still under way. Only these hold the project, or fence a write by another session. */
+const LIVE_STATES = ['active', 'dispatched', 'waiting'];
+
+/**
+ * Lease v2: the v1 keys, then the four v2 adds. A v1 lease — written before v2, or by a
+ * project copy of this script bootstrap has not refreshed yet — reads with these
+ * defaults, and every write leaves the v2 shape.
+ */
+const V1_KEYS = ['run', 'run_dir', 'host', 'session_id', 'state', 'started_at', 'heartbeat_at', 'blocks', 'last_block_next', 'version'];
+
 const POLL_MS = 60 * 1000;
+
+/** `watch`'s defaults, in minutes: no activity at all, and in-flight work whose session has no transcript to read. */
+const IDLE_MINUTES = 30;
+const INFLIGHT_MINUTES = 180;
 
 /** How long `watch` lets a notifier run before it gives up on it and carries on. */
 const NOTIFY_TIMEOUT_MS = 10 * 1000;
@@ -88,23 +117,30 @@ const OSASCRIPT = [
   '-e', 'end run',
 ];
 
+const EXIT_NOT_CONDUCTOR = 5;
 const EXIT_USAGE = 64;
 
 const USAGE = `usage: node .orchestrator/run-state.cjs <command> [arguments] [--root <dir>]
 
-  start <run> [--host ${HOSTS.join('|')}] [--force]
+  start <run> [--host ${HOSTS.join('|')}] [--force] [--take-over]
       Create the run, point ACTIVE at it and set NEXT to "${FIRST_STEP}". Exit 3,
-      naming the holder, when ACTIVE names another run that is active or waiting and
-      was heartbeated within 12 h; --force starts anyway.
-  next <run> "<label>" [--note "<text>"]
-      Overwrite NEXT, set the run active and remove pending_decision. Reset blocks
-      unless the run was already active at this same step.
+      naming the holder, when ACTIVE names another run that is active, dispatched or
+      waiting and was heartbeated within 12 h; --force starts anyway.
+  next <run> "<label>" [--note "<text>"] [--take-over]
+      Overwrite NEXT, set the run active, and remove pending_decision and in_flight.
+      Reset blocks when the step changes or the run resumes from waiting or done.
+  dispatch <run> "<what>"
+      Record work handed to a background subagent or shell: append it to in_flight and
+      set the run dispatched (a run waiting for the operator stays waiting). The block
+      count is left as it is.
   wait <run> "<reason>"
-      Write pending_decision and set the run waiting: this stop is on purpose.
+      Write pending_decision and set the run waiting: this stop waits for the operator.
   done <run>
-      Set the run done, and remove ACTIVE if it names this run.
+      Set the run done, remove NEXT, pending_decision and in_flight, and remove ACTIVE
+      if it names this run. From another session, only once the run has a FINAL.
   status [--json]
-      The active run: state, NEXT, pending_decision, idle minutes, FINAL. Exit 1 when none.
+      The active run: state, conductor, NEXT, pending_decision, in_flight, idle minutes,
+      FINAL. Exit 1 when none.
   decide <run> <id> [--spec <spec-id>] --question "<q>" --answer "<a>" [--by human|default] [--host <h>]
       Record an answer, or an applied default, against an FR, gap, AC or requirement id.
   lookup <run> <id> [--spec <spec-id>] [--all]
@@ -119,14 +155,21 @@ const USAGE = `usage: node .orchestrator/run-state.cjs <command> [arguments] [--
       The highest raise recorded for <key>. Exit 1 when none.
   raises <run>
       One line per raise, for the FINAL.
-  watch [--idle-minutes 30] [--once] [--notify "<command>"]
-      Poll every 60 s. Notify once per idle episode of an active run with no FINAL and no
-      pending decision, and once per pending decision. The message is the notifier's last
+  watch [--idle-minutes ${IDLE_MINUTES}] [--inflight-minutes ${INFLIGHT_MINUTES}] [--once] [--notify "<command>"]
+      Poll every 60 s and notify once per episode: a conductor turn that ended on an API
+      error; a pending decision; dispatched work with no activity for --idle-minutes
+      (its session's transcripts and the heartbeat; with no transcript to read, the
+      heartbeat alone, after --inflight-minutes); an active run with no FINAL and no
+      pending decision idle for --idle-minutes. The message is the notifier's last
       argument; the default is a macOS notification, elsewhere a terminal bell. --once
       checks once: exit 4 if it notified, else 0.
 
+  start and next record this session as the run's conductor (ORCHESTRATOR_SESSION_ID,
+  else CLAUDE_CODE_SESSION_ID). On a live run, a write from another known session exits
+  5 and writes nothing; --take-over lets start or next move the run to this session.
+
 exit: 0 ok, 1 nothing found or a failure, 2 raise refused, 3 another run active,
-      4 watch notified, 64 usage`;
+      4 watch notified, 5 not the run's conductor, 64 usage`;
 
 /**
  * Each command's positionals, all required, and the flags it accepts beyond `--root`.
@@ -135,8 +178,9 @@ exit: 0 ok, 1 nothing found or a failure, 2 raise refused, 3 another run active,
  * as the step would be worse than refusing.
  */
 const COMMANDS = {
-  start: { args: ['run'], flags: ['--host', '--force'], fn: cmdStart },
-  next: { args: ['run', 'label'], flags: ['--note'], fn: cmdNext },
+  start: { args: ['run'], flags: ['--host', '--force', '--take-over'], fn: cmdStart },
+  next: { args: ['run', 'label'], flags: ['--note', '--take-over'], fn: cmdNext },
+  dispatch: { args: ['run', 'what'], flags: [], fn: cmdDispatch },
   wait: { args: ['run', 'reason'], flags: [], fn: cmdWait },
   done: { args: ['run'], flags: [], fn: cmdDone },
   status: { args: [], flags: ['--json'], fn: cmdStatus },
@@ -145,14 +189,15 @@ const COMMANDS = {
   raise: { args: ['run', 'key', 'to'], flags: ['--from', '--approval'], fn: cmdRaise },
   budget: { args: ['run', 'key'], flags: [], fn: cmdBudget },
   raises: { args: ['run'], flags: [], fn: cmdRaises },
-  watch: { args: [], flags: ['--idle-minutes', '--once', '--notify'], fn: cmdWatch },
+  watch: { args: [], flags: ['--idle-minutes', '--inflight-minutes', '--once', '--notify'], fn: cmdWatch },
 };
 
 const VALUE_FLAGS = new Set([
   '--root', '--host', '--note', '--spec', '--question', '--answer', '--by', '--from', '--approval', '--idle-minutes',
-  '--notify',
+  '--inflight-minutes', '--notify',
 ]);
-const BOOLEAN_FLAGS = new Set(['--force', '--json', '--all', '--once']);
+// The Stop hook keeps its own copy of this set, so that `next --take-over <run>` does not hide the run from it.
+const BOOLEAN_FLAGS = new Set(['--force', '--json', '--all', '--once', '--take-over']);
 
 /** Code-unit ordering, as in the sibling scripts — never `localeCompare`, whose answer depends on the machine. */
 const byKey = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
@@ -160,8 +205,23 @@ const byKey = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 /** UTC to the second, the shape the artifacts' own timestamps use. */
 const isoNow = () => new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
 
+/**
+ * UTC to the millisecond, for an `in_flight` line: the Stop hook compares it with the
+ * block it recorded moments earlier, and a second is too coarse to order the two.
+ */
+const isoMs = () => new Date().toISOString();
+
+/** `HH:MMZ`, the time of day a notification names. */
+const clock = (ms) => (Number.isFinite(ms) ? `${new Date(ms).toISOString().slice(11, 16)}Z` : 'an unknown time');
+
 /** Collapse every run of whitespace, newlines included, so a one-line file stays one line. */
 const oneLine = (s) => String(s).replace(/\s+/g, ' ').trim();
+
+/** A session id as a message shows it: its first eight characters. */
+const short = (id) => String(id).slice(0, 8);
+
+/** The session this command runs in: the opencode plugin's id, else Claude Code's, else null. */
+const sessionNow = () => process.env.ORCHESTRATOR_SESSION_ID || process.env.CLAUDE_CODE_SESSION_ID || null;
 
 /** A non-negative integer in plain digits, or null: `-1`, `+4`, `2.0` and `1e3` are all null. */
 function wholeNumber(value) {
@@ -232,6 +292,7 @@ function paths(root, run) {
     lease: path.join(dir, 'lease.json'),
     next: path.join(dir, 'NEXT'),
     pending: path.join(dir, 'pending_decision'),
+    inFlight: path.join(dir, 'in_flight'),
     decisions: path.join(dir, 'decisions.jsonl'),
     raises: path.join(dir, 'budget-raises.jsonl'),
   };
@@ -292,11 +353,13 @@ function readJsonl(file) {
   return records;
 }
 
-/** Append one record by rewriting the file through `writeAtomic`, so no reader ever sees half a line. */
-function appendJsonl(file, record) {
+/** Append one line by rewriting the file through `writeAtomic`, so no reader ever sees half a line. */
+function appendLine(file, line) {
   const text = readText(file) || '';
-  writeAtomic(file, `${text}${text && !text.endsWith('\n') ? '\n' : ''}${JSON.stringify(record)}\n`);
+  writeAtomic(file, `${text}${text && !text.endsWith('\n') ? '\n' : ''}${line}\n`);
 }
+
+const appendJsonl = (file, record) => appendLine(file, JSON.stringify(record));
 
 /**
  * The run's lease, or null when it has none. A lease that exists but is not a JSON
@@ -320,8 +383,29 @@ function loadLease(root, run) {
   return lease;
 }
 
+/** The session the lease names as the run's conductor, or null: a v1 lease, or one started with no session id. */
+const conductorOf = (lease) =>
+  (typeof lease?.conductor_session === 'string' && lease.conductor_session ? lease.conductor_session : null);
+
+/**
+ * The lease in the v2 shape: the v1 keys it has, `version: 2`, the four v2 keys — its
+ * own values, else their defaults — and then anything else it carries, such as the
+ * Stop hook's `last_block_at`, in its own order.
+ */
+function leaseV2(lease) {
+  const out = {};
+  for (const key of V1_KEYS) if (Object.hasOwn(lease, key)) out[key] = lease[key];
+  out.version = 2;
+  out.conductor_session = conductorOf(lease);
+  out.dispatched_at = lease.dispatched_at ?? null;
+  out.takeovers = Array.isArray(lease.takeovers) ? lease.takeovers : [];
+  out.stop_failure = lease.stop_failure ?? null;
+  for (const [key, value] of Object.entries(lease)) if (!Object.hasOwn(out, key)) out[key] = value;
+  return out;
+}
+
 function saveLease(root, run, lease) {
-  writeAtomic(paths(root, run).lease, JSON.stringify(lease, null, 2) + '\n');
+  writeAtomic(paths(root, run).lease, JSON.stringify(leaseV2(lease), null, 2) + '\n');
 }
 
 /**
@@ -341,10 +425,12 @@ function requireLease(root, run) {
 /**
  * Merge `fields` into the run's lease and bump `heartbeat_at`, the last step of every
  * write command. It re-reads the lease instead of reusing an earlier copy, because the
- * Stop hook writes `blocks` and `session_id` into the same file between turns.
+ * Stop hook writes `blocks`, `session_id` and `stop_failure` into the same file
+ * between turns. A write is the conductor at work again, so it clears `stop_failure`,
+ * the turn that ended on an API error.
  */
 function touch(root, run, fields) {
-  saveLease(root, run, { ...requireLease(root, run), ...fields, heartbeat_at: isoNow() });
+  saveLease(root, run, { ...requireLease(root, run), stop_failure: null, ...fields, heartbeat_at: isoNow() });
 }
 
 /** The run ACTIVE names, or null when there is none or the file does not hold a valid run name. */
@@ -355,10 +441,14 @@ function activeRun(root) {
   return run && !runProblem(run) ? run : null;
 }
 
-/**
- * The lease of a run that is still alive — `active` or `waiting`, heartbeated inside
- * 12 h — or null. An unreadable lease is no proof of life, so it is null too.
- */
+/** Whether a lease belongs to a run still under way: active, dispatched or waiting, heartbeated within 12 h. */
+function isLive(lease, now = Date.now()) {
+  if (!lease || !LIVE_STATES.includes(lease.state)) return false;
+  const beat = Date.parse(lease.heartbeat_at);
+  return Number.isFinite(beat) && now - beat < LIVE_MS;
+}
+
+/** The lease of a run that is still alive, or null. An unreadable lease is no proof of life, so it is null too. */
 function liveLease(root, run, now) {
   let lease;
   try {
@@ -366,9 +456,59 @@ function liveLease(root, run, now) {
   } catch {
     return null;
   }
-  if (!lease || (lease.state !== 'active' && lease.state !== 'waiting')) return null;
-  const beat = Date.parse(lease.heartbeat_at);
-  return Number.isFinite(beat) && now - beat < LIVE_MS ? lease : null;
+  return isLive(lease, now) ? lease : null;
+}
+
+/**
+ * The conductor that fences this session out of the run, or null when nothing does.
+ * Only a live run is fenced — a done or abandoned run has nobody left to protect — and
+ * only when both sessions are known and differ.
+ */
+function foreignConductor(lease) {
+  const conductor = conductorOf(lease);
+  const self = sessionNow();
+  if (!conductor || !self || conductor === self || !isLive(lease)) return null;
+  return conductor;
+}
+
+/**
+ * The refusal of a write from a session that does not conduct the run: exit 5, nothing
+ * written, nothing on stdout. It names how to take the run over, as a `next` with the
+ * flag last and no script name, so the line is never ownership evidence.
+ */
+function refuseForeign(root, run, lease, conductor) {
+  const { label } = readNext(root, run);
+  const step = label ? `'${label.replace(/'/g, "'\\''")}'` : "'<its NEXT label>'";
+  console.error(
+    `${LABEL}: ${run} is conducted by session ${short(conductor)} (state ${lease.state}, last write ${lease.heartbeat_at}); ` +
+      `this session (${short(sessionNow())}) is not its conductor, so nothing was written. ` +
+      `Stop unless the operator asked this session to take the run over; then move it here: next ${run} ${step} --take-over`,
+  );
+  return EXIT_NOT_CONDUCTOR;
+}
+
+/** Refuse a write from a session that does not conduct the run: the exit code, or null to go on. */
+function fenced(root, run, lease) {
+  const conductor = foreignConductor(lease);
+  return conductor ? refuseForeign(root, run, lease, conductor) : null;
+}
+
+/**
+ * Who conducts the run after a `start` or `next` from this session: `{ conductor,
+ * takeovers }`, or `{ refused }` with the exit code. Another session's live run moves
+ * here only with `--take-over`, which logs `{from, to, at}` and says so on stderr. A
+ * `--take-over` that moves nothing records nothing, and `--force` never implies it.
+ */
+function claim(root, run, prior, flags) {
+  const self = sessionNow();
+  const takeovers = Array.isArray(prior?.takeovers) ? [...prior.takeovers] : [];
+  const holder = prior ? foreignConductor(prior) : null;
+  if (holder) {
+    if (!flags['--take-over']) return { refused: refuseForeign(root, run, prior, holder) };
+    takeovers.push({ from: holder, to: self, at: isoNow() });
+    console.error(`${LABEL}: warning: took ${run} over from session ${short(holder)}; this session (${short(self)}) conducts it now`);
+  }
+  return { conductor: self ?? conductorOf(prior), takeovers };
 }
 
 /** Every run directory under `.orchestrator/runs/`, in code-unit order. A name that is not a valid run is skipped. */
@@ -390,6 +530,16 @@ function readNext(root, run) {
   return { label: first || null, note: note || null };
 }
 
+/** The lines of `in_flight`, oldest first, as `{ line, at, what }`; `at` is NaN for a line with no timestamp. */
+function readInFlight(root, run) {
+  const text = readText(paths(root, run).inFlight);
+  if (text === null) return [];
+  return text.split('\n').filter((line) => line.trim()).map((line) => {
+    const m = /^(\S+)\s+(.*)$/.exec(line.trim());
+    return m ? { line: line.trim(), at: Date.parse(m[1]), what: m[2] } : { line: line.trim(), at: NaN, what: line.trim() };
+  });
+}
+
 /** The newest `plans/<run>/FINAL-*.md`, repo-relative, or null. Its presence is what says a run finished. */
 function finalOf(root, run) {
   let names;
@@ -403,33 +553,64 @@ function finalOf(root, run) {
 }
 
 /**
- * The active run as its files describe it, or null when ACTIVE names none. `status`
- * prints it and `watch` judges it. A missing or unreadable lease leaves `state` null
- * instead of throwing, because both readers must fail open.
+ * Everything the files say about one run. A missing or unreadable lease leaves `lease`
+ * null instead of throwing, because `status` and `watch` must fail open.
  */
-function snapshot(root, now) {
-  const run = activeRun(root);
-  if (!run) return null;
+function readRun(root, run) {
   let lease = null;
   try {
     lease = loadLease(root, run);
   } catch {
     lease = null;
   }
-  const { label, note } = readNext(root, run);
   const pending = readText(paths(root, run).pending);
-  const beat = Date.parse(lease?.heartbeat_at);
+  return {
+    run,
+    lease,
+    ...readNext(root, run),
+    pending: pending === null ? null : oneLine(pending),
+    flight: readInFlight(root, run),
+    final: finalOf(root, run),
+  };
+}
+
+/** What `status` says about whoever conducts the run, from this session's point of view. */
+function conductorLine(lease) {
+  const conductor = conductorOf(lease);
+  if (!conductor) return 'none';
+  const self = sessionNow();
+  if (!self) return `${short(conductor)} (this session's id is unknown)`;
+  if (conductor === self) return `${short(conductor)} (this session)`;
+  return isLive(lease)
+    ? `${short(conductor)} (another session: a write needs --take-over)`
+    : `${short(conductor)} (another session; the run is not live, so a write needs no --take-over)`;
+}
+
+/** The active run as `status` prints it, or null when ACTIVE names none. */
+function snapshot(root, now) {
+  const run = activeRun(root);
+  if (!run) return null;
+  const r = readRun(root, run);
+  const beat = Date.parse(r.lease?.heartbeat_at);
+  const conductor = conductorOf(r.lease);
+  const self = sessionNow();
   return {
     run,
     run_dir: `plans/${run}`,
-    host: lease?.host ?? null,
-    state: lease?.state ?? null,
-    next: label,
-    note,
-    pending_decision: pending === null ? null : oneLine(pending),
-    heartbeat_at: lease?.heartbeat_at ?? null,
+    host: r.lease?.host ?? null,
+    state: r.lease?.state ?? null,
+    next: r.label,
+    note: r.note,
+    pending_decision: r.pending,
+    heartbeat_at: r.lease?.heartbeat_at ?? null,
     idle_minutes: Number.isFinite(beat) ? Math.max(0, Math.floor((now - beat) / 60000)) : null,
-    final: finalOf(root, run),
+    final: r.final,
+    in_flight: r.flight.length ? r.flight.map((f) => f.line) : null,
+    dispatched_at: r.lease?.dispatched_at ?? null,
+    conductor_session: conductor,
+    this_session_conducts: self === null ? null : conductor === self,
+    conductor_line: conductorLine(r.lease),
+    stop_failure: r.lease?.stop_failure ?? null,
   };
 }
 
@@ -467,23 +648,28 @@ function cmdStart(root, [run], flags) {
   if (active && active !== run && !flags['--force']) {
     const live = liveLease(root, active, Date.now());
     if (live) {
+      // Dispatched work reports back into the holder's session; superseding the run would orphan it.
+      const end = live.state === 'dispatched' ? '; work in flight: ask the operator before superseding it' : '.';
       console.error(
         `${LABEL}: another run is active: ${active} (state ${live.state}, last heartbeat ${live.heartbeat_at}). ` +
-          `Finish it with done, or pass --force to start ${run} anyway.`,
+          `Finish it with done, or pass --force to start ${run} anyway${end}`,
       );
       return 3;
     }
   }
   const p = paths(root, run);
-  fs.mkdirSync(p.dir, { recursive: true });
-  // Starting a run twice is harmless: the second start keeps when the run began and
-  // who last conducted it. An unreadable earlier lease is replaced, not preserved.
+  // Starting a run twice is harmless: the second start keeps when the run began, who
+  // last conducted it and every takeover. An unreadable earlier lease is replaced, not
+  // preserved.
   let prior = null;
   try {
     prior = loadLease(root, run);
   } catch {
     prior = null;
   }
+  const claimed = claim(root, run, prior, flags);
+  if (claimed.refused !== undefined) return claimed.refused;
+  fs.mkdirSync(p.dir, { recursive: true });
   const now = isoNow();
   saveLease(root, run, {
     run,
@@ -495,10 +681,15 @@ function cmdStart(root, [run], flags) {
     heartbeat_at: now,
     blocks: 0,
     last_block_next: null,
-    version: 1,
+    version: 2,
+    conductor_session: claimed.conductor,
+    dispatched_at: null,
+    takeovers: claimed.takeovers,
+    stop_failure: null,
   });
   writeAtomic(p.next, `${FIRST_STEP}\n`);
   fs.rmSync(p.pending, { force: true });
+  fs.rmSync(p.inFlight, { force: true });
   // ACTIVE last: the hook sees the run only once everything it reads is in place.
   writeAtomic(activePath(root), `${run}\n`);
   const superseded = active && active !== run ? `; ACTIVE named ${active}, which the watchdog no longer follows` : '';
@@ -510,28 +701,59 @@ function cmdNext(root, [run, label], flags) {
   const step = oneLine(label);
   if (!step) usage('next needs a non-empty step label');
   const lease = requireLease(root, run);
+  const claimed = claim(root, run, lease, flags);
+  if (claimed.refused !== undefined) return claimed.refused;
   const p = paths(root, run);
-  // Re-recording the step an active run is already at is not progress. Resetting
-  // `blocks` then would let a conductor that re-runs `next` on every re-prompt and
-  // stops again slip the watchdog's three-block guard forever; a new step, or a
-  // resume from `waiting` or `done`, starts the count over.
-  const moved = lease.state !== 'active' || readNext(root, run).label !== step;
+  // Re-recording the step a run is already at is not progress, whether it was active
+  // or dispatched there. Resetting `blocks` then would let a conductor that re-runs
+  // `next` on every re-prompt, or dispatches, is blocked and re-runs `next`, slip the
+  // watchdog's three-block guard forever; a new step, or a resume from `waiting` or
+  // `done`, starts the count over.
+  const moved = !['active', 'dispatched'].includes(lease.state) || readNext(root, run).label !== step;
   const note = (flags['--note'] ?? '').replace(/^\n+|\s+$/g, '');
   writeAtomic(p.next, `${step}\n${note ? `${note}\n` : ''}`);
   fs.rmSync(p.pending, { force: true });
-  touch(root, run, moved ? { state: 'active', blocks: 0 } : { state: 'active' });
+  fs.rmSync(p.inFlight, { force: true });
+  touch(root, run, {
+    state: 'active',
+    ...(moved ? { blocks: 0 } : {}),
+    dispatched_at: null,
+    conductor_session: claimed.conductor,
+    takeovers: claimed.takeovers,
+  });
   reclaimActive(root, run);
   warnUnfollowed(root, run);
   console.log(`${LABEL}: ${run} NEXT: ${step}`);
   return 0;
 }
 
+function cmdDispatch(root, [run, what]) {
+  const line = oneLine(what);
+  if (!line) usage('dispatch needs a non-empty <what>');
+  const lease = requireLease(root, run);
+  const refused = fenced(root, run, lease);
+  if (refused !== null) return refused;
+  const p = paths(root, run);
+  // in_flight before the lease, so a hook that reads `dispatched` finds what is in flight.
+  appendLine(p.inFlight, `${isoMs()} ${line}`);
+  // A dispatch never resets `blocks`: a declaration must not buy the guard back.
+  const waiting = readText(p.pending) !== null;
+  touch(root, run, { state: waiting ? 'waiting' : 'dispatched', dispatched_at: lease.dispatched_at ?? isoNow() });
+  reclaimActive(root, run);
+  warnUnfollowed(root, run);
+  console.log(`${LABEL}: ${run} in flight: ${line}`);
+  return 0;
+}
+
 function cmdWait(root, [run, reason]) {
   const line = oneLine(reason);
   if (!line) usage('wait needs a non-empty reason');
-  requireLease(root, run);
+  const lease = requireLease(root, run);
+  const refused = fenced(root, run, lease);
+  if (refused !== null) return refused;
   // pending_decision before the state: the hook refuses to block the moment the file
-  // exists, whether or not the lease has caught up.
+  // exists, whether or not the lease has caught up. in_flight stays: the work it names
+  // is still running while the operator answers.
   writeAtomic(paths(root, run).pending, `${isoNow()} ${line}\n`);
   touch(root, run, { state: 'waiting' });
   reclaimActive(root, run);
@@ -540,9 +762,21 @@ function cmdWait(root, [run, reason]) {
   return 0;
 }
 
+/**
+ * `done` clears the run's resume state — NEXT, `pending_decision` and `in_flight` — so
+ * nothing stale reads as a step to resume or a question to answer, and touches no other
+ * file: the run folder also keeps decisions, raises and evidence such as `barrier/`.
+ * Closing a run that has its FINAL is safe from any session; before that, only its
+ * conductor closes it.
+ */
 function cmdDone(root, [run]) {
-  requireLease(root, run);
-  touch(root, run, { state: 'done' });
+  const lease = requireLease(root, run);
+  const refused = finalOf(root, run) ? null : fenced(root, run, lease);
+  if (refused !== null) return refused;
+  const p = paths(root, run);
+  // The state first: a hook reading between the two writes sees a done run, never an active one with no NEXT.
+  touch(root, run, { state: 'done', stop_failure: null });
+  for (const file of [p.next, p.pending, p.inFlight]) fs.rmSync(file, { force: true });
   if (activeRun(root) === run) fs.rmSync(activePath(root), { force: true });
   console.log(`${LABEL}: ${run} done`);
   return 0;
@@ -554,20 +788,25 @@ function cmdStatus(root, _args, flags) {
     console.error(`${LABEL}: no active run`);
     return 1;
   }
+  const { conductor_line: conductorText, ...json } = s;
   if (flags['--json']) {
-    console.log(JSON.stringify(s));
+    console.log(JSON.stringify(json));
     return 0;
   }
+  const failure = s.stop_failure;
   const lines = [
     `run: ${s.run}`,
     `run_dir: ${s.run_dir}`,
     `host: ${s.host ?? 'unknown'}`,
     `state: ${s.state ?? 'unknown (the lease is missing or unreadable)'}`,
+    `conductor: ${conductorText}`,
     `next: ${s.next ?? 'none'}`,
     ...(s.note ? s.note.split('\n').map((l) => `  ${l}`) : []),
     `pending_decision: ${s.pending_decision ?? 'none'}`,
+    ...(s.in_flight ? ['in_flight:', ...s.in_flight.map((l) => `  ${l}`)] : ['in_flight: none']),
     `idle_minutes: ${s.idle_minutes ?? 'unknown'}`,
     `final: ${s.final ?? 'none'}`,
+    ...(failure ? [`stop_failure: ${failure.at} ${failure.error}${failure.details ? `: ${failure.details}` : ''}`] : []),
   ];
   console.log(lines.join('\n'));
   return 0;
@@ -593,6 +832,8 @@ function cmdDecide(root, [run, rawId], flags) {
   const host = hostOf(flags);
   const spec = specOf(flags);
   const lease = requireLease(root, run);
+  const refused = fenced(root, run, lease);
+  if (refused !== null) return refused;
   // Without --host the record carries the host the run was started on, the best
   // evidence there is of where the question was asked.
   appendJsonl(paths(root, run).decisions, {
@@ -667,7 +908,9 @@ function cmdRaise(root, [run, key, rawTo], flags) {
   if (inForce !== null && from < inForce) {
     return refuse(`${key} is already ${inForce}, raised earlier in this run; --from must be the cap in force, not ${from}`);
   }
-  requireLease(root, run);
+  const lease = requireLease(root, run);
+  const refused = fenced(root, run, lease);
+  if (refused !== null) return refused;
   appendJsonl(paths(root, run).raises, { key, from, to, approval, at: isoNow() });
   touch(root, run, {});
   console.log(`BUDGET RAISED ${key} ${from}→${to}`);
@@ -708,7 +951,8 @@ function cmdRaises(root, [run]) {
  * `--notify` names a command line, split here into words the way a shell splits them —
  * whitespace separates, single quotes are literal, double quotes and a backslash escape
  * — and nothing else: no variables, no globs, no substitution, so nothing in it is ever
- * evaluated. Returns null for an unterminated quote.
+ * evaluated. Returns null for an unterminated quote. The Stop hook splits
+ * ORCHESTRATOR_NOTIFY with a copy of this function.
  */
 function splitCommand(line) {
   const words = [];
@@ -760,26 +1004,114 @@ function sendNotification(command, message) {
 }
 
 /**
- * What the notifier would report right now: null, or `{ key, message }`, where `key`
- * names the episode. An idle episode is keyed by the heartbeat the run went quiet at,
- * so any progress starts a new one; a pending decision by its own line, so each new
- * `wait` is announced once.
+ * The notification for a conductor turn that ended on an API error, which runs no Stop
+ * hook. The StopFailure hook sends the same words the moment it happens; `watch` sends
+ * them when nothing has written the run since.
  */
-function watchFinding(root, idleMinutes, now) {
-  const s = snapshot(root, now);
-  if (!s) return null;
-  if (s.state === 'waiting') {
-    const reason = (s.pending_decision ?? '').replace(/^\d{4}-\d\d-\d\dT\S*\s*/, '');
+function stopFailureMessage(run, failure) {
+  const details = failure.details ? `: ${failure.details}` : '';
+  return `orchestrator run ${run}: the conductor's turn failed at ${clock(Date.parse(failure.at))} ` +
+    `(${failure.error}${details}); continue the session once it clears`;
+}
+
+/** A session id safe to use as a file name: a Claude Code UUID, an opencode `ses_…`. */
+const SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
+
+/**
+ * When the run's Claude Code session last wrote anything, as an mtime in ms, or null
+ * when no transcript of it can be found: the newest of `<projects>/*\/<sid>.jsonl` and
+ * its subagents' `<sid>/subagents/*.jsonl`. A subagent writes its transcript as it
+ * works, so a long but busy subagent reads as activity, and a hung one does not.
+ */
+function transcriptActivity(sid, configDir) {
+  if (!sid || !SESSION_ID.test(sid)) return null;
+  const projects = path.join(configDir, 'projects');
+  let dirs;
+  try {
+    dirs = fs.readdirSync(projects, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  let newest = null;
+  const consider = (file) => {
+    try {
+      const st = fs.statSync(file, { throwIfNoEntry: false });
+      if (st && st.isFile() && (newest === null || st.mtimeMs > newest)) newest = st.mtimeMs;
+    } catch {
+      /* unreadable: no evidence either way */
+    }
+  };
+  for (const entry of dirs) {
+    if (!entry.isDirectory()) continue;
+    const dir = path.join(projects, entry.name);
+    consider(path.join(dir, `${sid}.jsonl`));
+    let subagents = [];
+    try {
+      subagents = fs.readdirSync(path.join(dir, sid, 'subagents'));
+    } catch {
+      /* no subagents in this project */
+    }
+    for (const name of subagents) if (name.endsWith('.jsonl')) consider(path.join(dir, sid, 'subagents', name));
+  }
+  return newest;
+}
+
+/**
+ * The run's last sign of life, in ms: the heartbeat, or a later write to its session's
+ * transcripts. `probed` says whether a transcript was found; without one, the heartbeat
+ * is all there is. Only a Claude Code session has transcripts to read.
+ */
+function lastActivity(lease, configDir) {
+  const beat = Date.parse(lease?.heartbeat_at);
+  const sid = conductorOf(lease) ?? (typeof lease?.session_id === 'string' ? lease.session_id : null);
+  const transcripts = lease?.host === 'claude-code' || lease?.host === 'unknown' ? transcriptActivity(sid, configDir) : null;
+  const at = Math.max(Number.isFinite(beat) ? beat : -Infinity, transcripts ?? -Infinity);
+  return { at: Number.isFinite(at) ? at : null, probed: transcripts !== null };
+}
+
+/**
+ * What the notifier would report right now: null, or `{ key, message }`, where `key`
+ * names the episode. In order: a turn that ended on an API error since the last write;
+ * a pending decision, keyed by its own line, so each new `wait` is announced once;
+ * dispatched work with no activity; an active run with none. The last two are keyed by
+ * the activity they went quiet at, so any progress starts a new episode.
+ */
+function watchFinding(root, options, now) {
+  const run = activeRun(root);
+  if (!run) return null;
+  const r = readRun(root, run);
+  const lease = r.lease;
+  const failure = lease?.stop_failure;
+  const failedAt = Date.parse(failure?.at);
+  if (typeof failure?.error === 'string' && Number.isFinite(failedAt) && !(failedAt <= Date.parse(lease.heartbeat_at))) {
+    return { key: `failed ${run} ${failure.at}`, message: stopFailureMessage(run, failure) };
+  }
+  const newest = r.flight.at(-1) ?? null;
+  if (lease?.state === 'waiting') {
+    const reason = (r.pending ?? '').replace(/^\d{4}-\d\d-\d\dT\S*\s*/, '');
+    const inFlight = newest ? ` (in flight: ${newest.what})` : '';
     return {
-      key: `waiting ${s.run} ${s.pending_decision ?? s.heartbeat_at}`,
-      message: `orchestrator run ${s.run} is waiting for your decision${reason ? `: ${reason}` : ''}`,
+      key: `waiting ${run} ${r.pending ?? lease.heartbeat_at}`,
+      message: `orchestrator run ${run} is waiting for your decision${reason ? `: ${reason}` : ''}${inFlight}`,
     };
   }
-  if (s.state !== 'active' || s.final || s.pending_decision !== null) return null;
-  if (s.idle_minutes === null || s.idle_minutes < idleMinutes) return null;
+  if ((lease?.state !== 'active' && lease?.state !== 'dispatched') || r.final || r.pending !== null) return null;
+  const activity = lastActivity(lease, options.configDir);
+  if (activity.at === null) return null;
+  const idle = Math.max(0, Math.floor((now - activity.at) / 60000));
+  if (lease.state === 'dispatched') {
+    if (idle < (activity.probed ? options.idleMinutes : options.inflightMinutes)) return null;
+    const since = newest && Number.isFinite(newest.at) ? newest.at : Date.parse(lease.dispatched_at ?? lease.heartbeat_at);
+    return {
+      key: `inflight ${run} ${activity.at}`,
+      message: `orchestrator run ${run}: ${newest?.what ?? 'dispatched work'} in flight since ${clock(since)}, ` +
+        `no activity for ${idle} min — check the subagent and the session`,
+    };
+  }
+  if (idle < options.idleMinutes) return null;
   return {
-    key: `idle ${s.run} ${s.heartbeat_at}`,
-    message: `orchestrator run ${s.run} has been idle ${s.idle_minutes} min at ${s.next ?? 'no NEXT'}`,
+    key: `idle ${run} ${activity.at}`,
+    message: `orchestrator run ${run} has been idle ${idle} min at ${r.label ?? 'no NEXT'}`,
   };
 }
 
@@ -787,12 +1119,18 @@ function watchFinding(root, idleMinutes, now) {
  * One poll of the notifier as a function of the clock, so the suite can drive it. It
  * remembers the last episode it announced: a run idle for three hours produces one
  * notification, not 180. That memory lives in the long-running process, so each
- * `--once` reports whatever it finds.
+ * `--once` reports whatever it finds. `configDir` is where Claude Code keeps its
+ * transcripts: CLAUDE_CONFIG_DIR, else `.claude` in the home directory.
  */
-function watcher(root, idleMinutes, notify) {
+function watcher(root, idleMinutes, notify, { inflightMinutes = INFLIGHT_MINUTES, configDir } = {}) {
+  const options = {
+    idleMinutes,
+    inflightMinutes,
+    configDir: configDir ?? (process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude')),
+  };
   let announced = null;
   return (now) => {
-    const finding = watchFinding(root, idleMinutes, now);
+    const finding = watchFinding(root, options, now);
     if (!finding || finding.key === announced) return false;
     announced = finding.key;
     notify(finding.message);
@@ -800,17 +1138,28 @@ function watcher(root, idleMinutes, notify) {
   };
 }
 
+/** A `watch` threshold in whole minutes, 1 or more, or the default when the flag is absent. */
+function minutesFlag(flags, name, fallback) {
+  if (flags[name] === undefined) return fallback;
+  const value = wholeNumber(flags[name]);
+  if (value === null || value < 1) usage(`${name} must be a whole number of minutes, 1 or more`);
+  return value;
+}
+
 function cmdWatch(root, _args, flags) {
-  const idle = flags['--idle-minutes'] === undefined ? 30 : wholeNumber(flags['--idle-minutes']);
-  if (idle === null || idle < 1) usage('--idle-minutes must be a whole number of minutes, 1 or more');
+  const idle = minutesFlag(flags, '--idle-minutes', IDLE_MINUTES);
+  const inflight = minutesFlag(flags, '--inflight-minutes', INFLIGHT_MINUTES);
   let command = null;
   if (flags['--notify'] !== undefined) {
     command = splitCommand(flags['--notify']);
     if (!command || !command.length) usage('--notify needs a command, with any quotes closed');
   }
-  const tick = watcher(root, idle, (message) => sendNotification(command, message));
+  const tick = watcher(root, idle, (message) => sendNotification(command, message), { inflightMinutes: inflight });
   if (flags['--once']) return tick(Date.now()) ? 4 : 0;
-  console.log(`${LABEL}: watching ${root}, every ${POLL_MS / 1000} s, idle after ${idle} min`);
+  console.log(
+    `${LABEL}: watching ${root}, every ${POLL_MS / 1000} s, idle after ${idle} min, ` +
+      `in-flight work with no transcript to read after ${inflight} min`,
+  );
   const poll = () => {
     try {
       tick(Date.now());
@@ -871,7 +1220,7 @@ function main(argv) {
   return command.fn(resolveRoot(flags['--root']), rest, flags);
 }
 
-module.exports = { RAISABLE, splitCommand, watcher };
+module.exports = { RAISABLE, splitCommand, watcher, stopFailureMessage };
 
 if (require.main === module) {
   try {

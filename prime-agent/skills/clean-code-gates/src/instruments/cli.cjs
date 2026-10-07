@@ -4,7 +4,7 @@ const { assertBaseRefShape } = require('../baseref.cjs');
 const { KINDS } = require('./vocab.cjs');
 const { repoRoot, resolveBase, excludeOutputs } = require('./git.cjs');
 const { loadInstruments } = require('./anchor.cjs');
-const { summarize, writeReport } = require('./envelope.cjs');
+const { summarize, writeReport, archive } = require('./envelope.cjs');
 const { recover } = require('./plants.cjs');
 const { version: VERSION } = require('../../package.json');
 
@@ -51,16 +51,21 @@ async function main(kind, argv, io = {}) {
     const base = resolveBase(root, opts.base);
     const instruments = loadInstruments(root, { baseSha: base.sha, from: opts.from, warn: (w) => err(`warning: ${w}\n`) });
     const kindModule = (io.kinds && io.kinds[kind]) || require(`./${kind}.cjs`);
-    // The engine's own output inside the repo (--out, a barrier --cache) never enters a measured tree.
-    const [outDir, at] = [path.resolve(root, opts.out), kind === 'barrier' ? opts.rest.indexOf('--cache') : -1];
+    // The engine's own output inside the repo (--out and its history, a barrier --cache with its lock) never enters a measured
+    // tree, nor does what barrier.frozen declares is not the product: every kind measures those paths as HEAD holds them.
+    const toStdout = opts.out === '-'; // the report to stdout and the summary to stderr; logs and the default cache in .cleancode/
+    const [outDir, at] = [path.resolve(root, toStdout ? '.cleancode' : opts.out), kind === 'barrier' ? opts.rest.indexOf('--cache') : -1];
     const inRepo = (abs, globs) => { const r = path.relative(root, abs); return r.startsWith('..') || path.isAbsolute(r) ? [] : globs(r); };
-    excludeOutputs([...inRepo(outDir, (r) => (r ? [`${r}/**`] : [...KINDS.map((k) => `${k}.json`), 'logs/**', 'barrier-cache.json'])),
-      ...(at < 0 ? [] : inRepo(path.resolve(root, String(opts.rest[at + 1])), (r) => [r]))]);
+    excludeOutputs([...inRepo(outDir, (r) => (r ? [`${r}/**`] : [...KINDS.map((k) => `${k}.json`), 'logs/**', 'history/**', 'barrier-cache.json*'])),
+      ...(at < 0 ? [] : inRepo(path.resolve(root, String(opts.rest[at + 1])), (r) => [r, `${r}.*`])),
+      ...((instruments.barrier && instruments.barrier.frozen) || [])]);
+    if (!toStdout) archive(outDir, kind);
     const ctx = { root, args: opts.rest, base, instruments, outDir,
       now: opts.now || new Date().toISOString(), version: VERSION, env: io.env || process.env, io,
       signal: io.signal || new AbortController().signal };
     const { report, lines = [], exitCode, warnings = [] } = await kindModule.run(ctx);
-    if (report) out(summarize(lines, writeReport(ctx.outDir, kind, report)));
+    if (report && toStdout) out(`${JSON.stringify(report, null, 2)}\n`);
+    if (report) (toStdout ? err : out)(summarize(lines, toStdout ? 'stdout' : writeReport(ctx.outDir, kind, report)));
     else for (const line of lines) err(`${line}\n`);
     for (const w of warnings) err(`warning: ${w}\n`);
     err(movedLine(instruments, base.ref));

@@ -1,0 +1,15 @@
+{
+  "id": "barrier-batches",
+  "kind": "synthetic",
+  "class": "a selection too long for one bounded invocation, run whole under the long bound, or batched by hand outside the engine with nothing recorded",
+  "caught_by": "select.batch_files: a selection longer than it runs as contiguous slices of the sorted list, each its own invocation with its own log and report under bound_minutes, never doubled by retry-2x. Only finished slices contribute suites; a slice that times out keeps its partial counts and makes the tier not-run (timeout) naming the batch, unless a red suite already failed it. A merged fail records the finished slices' files, and a merged pass what it was asked, so a whole_on pass is a whole pass the next whole_on run reuses. In tier mode, select reads the batches as scope and passes",
+  "missed_by": "a selection past max that silently took the whole-run bound, so the operator's limit on minutes per invocation held only where a role ran the tier outside the engine in batches of its own",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/clean-code-gates/__tests__/instruments-barrier.test.cjs",
+  "evidence": "docs/adr/0031-the-engine-runs-from-a-pinned-copy-and-measures-its-base-in-place.md#10-a-selection-longer-than-batch_files-runs-in-batches-under-the-tiers-bound",
+  "private_ref": "inc31-h6-batches"
+}

@@ -51,7 +51,7 @@
       }
     },
     "isolation": { "type": "null" },
-    "status": { "type": "string", "enum": ["pass", "red"], "description": "red when the selection exceeds max, else pass. A usage or config error exits 3 and writes no report." },
+    "status": { "type": "string", "enum": ["pass", "red"], "description": "red when the selection exceeds max, else pass; in tier mode a tier with select.batch_files passes whatever the size, since the barrier runs it in batches (the summary says `(over max K) → k batches of ≤ B`). A usage or config error exits 3 and writes no report." },
     "timing": {
       "type": "object",
       "required": ["select_ms"],

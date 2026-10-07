@@ -14,7 +14,8 @@ Node's built-ins only, so no `npm install` in the target project.
 | `check-artifact-links.cjs` | Gate: every local link in a branch-added `plans/**.html` resolves on disk. |
 | `check-artifact-home.cjs` | Gate: every branch-added artifact sits in a legal home — a `plans/<RUN-TOKEN>-<slug>/` run folder, or one of the seven frozen legacy kind directories — at depth exactly 2. Runs in **both** md and html mode: it audits a path, not a render. |
 | `index-plans.cjs` | Generator: the whole `plans/` tree → one self-contained `plans/index.html`, grouped by **family** (every artifact answering one `SPEC-*`, across all the runs that touched it). Deterministic — byte-identical output for an unchanged tree, so it can be committed and `--check`ed. |
-| `run-state.cjs` | The run's resume point under `.orchestrator/runs/` (untracked): the active run, its NEXT step, a pending operator decision, decisions keyed by id and in-session budget raises. The conductor writes it at every step boundary; `status`, `watch`, the Claude Code Stop hook and the opencode plugin read it. |
+| `run-state.cjs` | The run's resume point under `.orchestrator/runs/` (untracked): the active run, its NEXT step, a pending operator decision, the work in flight and the session that conducts it, decisions keyed by id and in-session budget raises. The conductor writes it at every step boundary and after every background dispatch; `status`, `watch`, the Claude Code Stop and StopFailure hooks and the opencode plugin read it. |
+| `pin-engine.cjs` | **Skill-only: never copied into a project.** Bootstrap (B3, item 2) runs it from the skill directory to pin the sibling `clean-code-gates` engine into `<project>/.orchestrator/engine/`: `bin/`, `src/`, `defaults.cjs`, `package.json` and `references/instruments.md`, plus a self-ignoring `.gitignore` and a `PINNED` record (source, stamp, engine digest). The copy is built beside the old one and renamed into place, so the directory never holds half a copy. Its `isEngineFile` / `engineFiles` exports are the one engine file list: `scripts/stamp-orchestrator-version.mjs` and the Prime builder stamp exactly what it copies. |
 
 ## `index-plans.cjs` — the read view over `plans/`
 
@@ -88,14 +89,33 @@ from the skill source tree.
 `node --test scripts/run-state.test.cjs scripts/run-state-skill.test.cjs` — **runnable from this
 repo.** The first pins `run-state.cjs` on temp projects. The second runs the commands `SKILL.md`'s
 *Run state* rule tells the conductor to run, as written, with an operator answer carrying backticks,
-`$` and quotes, and pins the prose a resume or a bounded gate must not lose.
+`$` and quotes, and pins the prose a resume or a bounded gate must not lose. Both suites build every
+child environment through a helper that drops the host session's id.
 
 `node --test scripts/qa-barrier-prose.test.cjs` — **runnable from this repo.** Pins the prose that
 makes QA's Step 3 run the clean-code-gates barrier, record one ledger row per tier, read a
 `not-run` tier as stale and never narrow a suite by name, plus the two-producer `stale_gates:`
 wording in Step 0, Step 6, `SKILL.md` Step 5d, `references/config.md` and `templates/coder.md`.
+It also pins the pinned engine: `gate-config.md` defines `<gates-cli>`, QA, the architect and the
+coder run it, no template or reference a run reads names another engine path, bootstrap pins it
+inside item 2 without renumbering, and a new worktree copies it. And it pins Step 0d's barrier
+baseline (it runs whatever `baseline_sweep` says, with `--whole`, never on a change-selected tier,
+as one chain from the repository root that writes `baseline/exits` after its last tier, its dispatch
+re-recorded before a turn waits on it), QA's no-base rule (a suite that names no failing test never
+matches a baseline row), the change-selected scope and test-timeout rules in QA's Step 3, and the
+default branch's tiers at a base that predates them, through to the FINAL banner.
 From a repository checkout it also pins the touchpoint's entry in `fixtures/admission.json`; an
 installed copy, with no registry above it, skips that one test.
+
+`node --test scripts/pin-engine.test.cjs` — **runnable from this repo.** Builds a throwaway skills
+directory and git project per case and pins: exactly the engine set is copied, byte for byte; the
+copy's `.gitignore` keeps it out of git and its `PINNED` names source, stamp and digest; a re-pin
+is idempotent and replaces the whole directory; the swap is atomic (a preloaded observer checks
+`.orchestrator/engine` before every write and rename, and an injected write failure leaves the old
+copy intact); the pinned copy runs `--scaffold` and prints `barrier --help` from its own
+reference; and a missing engine skill or a root that is not a git top level holding
+`.orchestrator/` is refused with nothing written. `scripts/__tests__/stamp-engine.test.mjs` pins the
+other half: the stamp, shared and Prime, covers exactly these files.
 
 `gate-scope.test.cjs` and `gate-shell-injection.test.cjs` are **integration tests of
 a bootstrapped project layout** — they drive the gates in place at `<project>/.orchestrator/`

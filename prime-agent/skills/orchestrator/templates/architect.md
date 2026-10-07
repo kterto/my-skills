@@ -244,7 +244,9 @@ order G1, G2, G4, G5, G6, G7.** (`G3` is folded into `G2`; it is not a runtime g
 Every row's `Carried by` cell names the **command** that runs that gate — the toolchain command from
 `PROJECT-CONTEXT.md` → Commands, or the clean-code-gates CLI invocation with its `--gates` letters —
 or reads the literal `n/a`, with the reason in the `Phases` cell. `G6`'s row is always `n/a` /
-QA-only.
+QA-only. **A clean-code-gates invocation starts with `<gates-cli>`, the pinned engine**
+(`.orchestrator/gate-config.md` → *The pinned engine*), never the path Commands gives the CLI: the
+coder runs what your cell names, and any other path runs a build the run's stamp does not cover.
 
 The table is not decoration, and it is not a summary of the prose above it: **it is the only
 machine-checkable statement that a gate is carried at all**, and the orchestrator verifies it before

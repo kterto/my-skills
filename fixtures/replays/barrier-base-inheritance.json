@@ -1,8 +1,8 @@
 {
   "id": "barrier-base-inheritance",
   "kind": "synthetic",
-  "class": "a red that was already on main read as the change's, or the base re-run on every run",
-  "caught_by": "the base side is inherited from a cached pass of the same tier at the base tree (a fail is never inherited), run in a worktree at the base, or absent. Absent, it is not-run (unmeasured), and every red over it is newly red with basis no-base",
+  "class": "a red that was already on main read as the change's, the base re-run on every run, or a red recorded in a broken environment carried as pre-existing",
+  "caught_by": "the base side reads the cache at the base's key before any worktree runs: a pass of any run that covers every red file is inherited, and a named fail only from a whole run's record whose inputs include every path the tier copies, so a red whose failing tests all failed there is carried and any other is newly red against the base. A compared run's records serve passes only. Without a usable record the base runs in a worktree, a change-selected tier's limited to the red files the base has and a whole tier's whole, or is absent: not-run (unmeasured), and every red over it is newly red with basis no-base",
   "missed_by": "no base result at all, so a pre-existing red and a new one looked the same",
   "cost": {
     "value": 0,

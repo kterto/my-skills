@@ -428,3 +428,133 @@ test('stdout stays within 2,048 bytes over 20 KB of details, keeping the verdict
   assert.equal(lines.at(-2), `report → ${path.join(dir, '.cleancode', 'select.json')}`);
   assert.match(lines.at(-3), /^… \+\d+ more lines$/);
 });
+
+// ---- barrier.frozen: paths that are not the product, held at HEAD in every kind's tree and changed set ----
+
+const FROZEN_CONFIG = `${JSON.stringify({ barrier: { frozen: ['plans/**', '.orchestrator/**'] } })}\n`;
+const SELECT = ['select', '--tests', 'spec/**/*.spec.ts', '--sources', 'src/**/*.ts'];
+const PRODUCT = { 'src/a.ts': 'export const a = 1;\n', 'spec/a.spec.ts': "import { a } from '../src/a';\n" };
+const reportOf = (dir, kind) => JSON.parse(fs.readFileSync(path.join(dir, '.cleancode', `${kind}.json`), 'utf8'));
+
+test('barrier.frozen, declared with no tier, holds a run\'s plans and state at HEAD for every kind: the tree stays HEAD\'s', (t) => {
+  const { dir, git } = repo(t, { '.cleancode-gates.json': FROZEN_CONFIG, ...PRODUCT, 'plans/kept.md': 'v1\n' });
+  write(dir, { 'plans/run/QA.md': 'qa\n', '.orchestrator/runs/x/NEXT': 'coder\n', 'plans/kept.md': 'v2\n' });
+  const head = git('rev-parse', 'HEAD^{tree}');
+  for (const args of [SELECT, ['live', 'check']]) {
+    const r = spawn(dir, args);
+    assert.equal(reportOf(dir, args[0]).tree.candidateTree, head, `${args[0]}: ${r.stderr}`);
+    assert.doesNotMatch(r.stderr, /INSTRUMENT MOVED/);
+  }
+  write(dir, { 'src/a.ts': 'export const a = 2;\n' });
+  spawn(dir, SELECT);
+  assert.deepEqual(reportOf(dir, 'select').changed, ['src/a.ts'], 'a frozen edit is no change');
+  assert.notEqual(reportOf(dir, 'select').tree.candidateTree, head);
+});
+
+test('a barrier.frozen only the branch declares is ignored, with the move: its paths still count', (t) => {
+  const { dir, git } = repo(t, PRODUCT);
+  write(dir, { '.cleancode-gates.json': FROZEN_CONFIG, 'plans/run/QA.md': 'qa\n' });
+  const r = spawn(dir, SELECT);
+  assert.match(r.stderr, /^INSTRUMENT MOVED — barrier\.frozen changed \(changed\) — measured against built-in defaults values$/m);
+  assert.deepEqual(reportOf(dir, 'select').changed, ['.cleancode-gates.json', 'plans/run/QA.md']);
+  assert.notEqual(reportOf(dir, 'select').tree.candidateTree, git('rev-parse', 'HEAD^{tree}'));
+});
+
+// ---- --out -, --help and the report history ----------------------------------------------------------------------
+
+/** A repo with one exit-code tier that prints mark.txt, an untracked file, so each run's tree (and log) is its own. */
+function marked(t) {
+  const unit = { id: 'unit', cwd: '.', run: 'cat mark.txt', report: 'exit-code', scope: 'whole', bound_minutes: 1 };
+  return repo(t, { '.cleancode-gates.json': `${JSON.stringify({ barrier: { tiers: [unit] } })}\n` });
+}
+
+test('--out -: the report goes to stdout and the summary to stderr, ending report → stdout; logs and the default cache stay '
+  + 'under .cleancode, and no folder named - appears', (t) => {
+  const { dir, git } = marked(t);
+  write(dir, { 'mark.txt': 'run 1\n' });
+  const r = spawn(dir, ['barrier', '--out', '-']);
+  assert.equal(r.status, 0, r.stderr);
+  const report = JSON.parse(r.stdout);
+  assert.deepEqual([report.kind, report.status, report.tiers[0].candidate.evidence.log], ['barrier', 'pass', '.cleancode/logs/barrier-unit-candidate.log']);
+  assert.match(r.stderr, /^BARRIER pass · unit pass \d+s \(exit-code only\)\nreport → stdout\n$/);
+  assert.equal(fs.existsSync(path.join(dir, '-')), false);
+  assert.ok(fs.existsSync(path.join(dir, '.cleancode', 'barrier-cache.json')));
+  assert.equal(fs.existsSync(path.join(dir, '.cleancode', 'barrier.json')), false, 'the report went to a file too');
+  assert.notEqual(report.tree.candidateTree, git('rev-parse', 'HEAD^{tree}'), 'mark.txt counts');
+  const select = spawn(dir, ['select', '--tests', 'mark.txt', '--sources', 'mark.txt', '--out', '-']);
+  assert.deepEqual([select.status, JSON.parse(select.stdout).kind, select.stderr.split('\n').at(-2)], [0, 'select', 'report → stdout']);
+});
+
+test('--help and -h exit 0 before anything resolves, outside a repository and over a broken config: the usage, or the '
+  + 'common flags and the kind\'s section of the reference, read from the engine\'s own copy', (t) => {
+  const dir = tmp(t);
+  write(dir, { '.cleancode-gates.json': '{ "barrier": \n' });
+  for (const flag of ['--help', '-h']) {
+    const usage = spawn(dir, ['--scope', 'diff', flag]);
+    assert.deepEqual([usage.status, usage.stderr], [0, ''], flag);
+    assert.match(usage.stdout, /^usage: gates\.cjs \[--scope /);
+    assert.match(usage.stdout, /gates\.cjs <barrier\|select\|sweep\|live> /);
+  }
+  const ref = fs.readFileSync(path.join(__dirname, '..', 'references', 'instruments.md'), 'utf8');
+  const heads = ['barrier', 'select', 'sweep', 'live'].map((k) => ref.indexOf(`\n## \`${k}\`\n`) + 1);
+  heads.forEach((at, i) => {
+    const kind = ['barrier', 'select', 'sweep', 'live'][i];
+    const r = spawn(dir, [kind, '--tier', 'x', i % 2 ? '-h' : '--help']);
+    assert.deepEqual([r.status, r.stderr], [0, ''], kind);
+    assert.match(r.stdout, /^common flags: --base <ref> --instruments-from <ref>\|file:<path> --out <dir>\|- --now <ISO 8601>\n\n/);
+    const section = ref.slice(at, i < 3 ? heads[i + 1] : ref.length).trimEnd();
+    assert.ok(at > 0 && r.stdout.endsWith(`\n${section}\n`), kind);
+  });
+  const copy = tmp(t);
+  for (const p of ['bin', 'src', 'defaults.cjs', 'package.json']) fs.cpSync(path.join(__dirname, '..', p), path.join(copy, p), { recursive: true });
+  const bare = cp.spawnSync(process.execPath, [path.join(copy, 'bin', 'gates.cjs'), 'barrier', '--help'], { cwd: dir, env: ENV, encoding: 'utf8' });
+  assert.equal(bare.status, 0, bare.stderr);
+  assert.match(bare.stdout, /^common flags: .*\n\n\(kind reference not found\)\n$/);
+});
+
+test('a kind first moves its last report and that kind\'s logs to history/<generatedAt>/: the archive is that run\'s, the '
+  + 'five newest stay per kind, and nothing moves for a report that does not parse or under --out -', async (t) => {
+  const { dir } = marked(t);
+  const out = path.join(dir, 'qa');
+  const now = (i) => `2026-01-${String(i).padStart(2, '0')}T00:00:00Z`;
+  const dirOf = (i) => path.join(out, 'history', now(i).replace(/:/g, '-'));
+  const run = async (i, flag = ['--out', 'qa']) => {
+    write(dir, { 'mark.txt': `run ${i}\n` });
+    const r = await inProcess(dir, 'barrier', [...flag, '--now', now(i)]);
+    assert.equal(r.code, 0, r.stderr);
+  };
+  await run(1);
+  const first = fs.readFileSync(path.join(out, 'barrier.json'), 'utf8');
+  write(out, { 'logs/sweep-other.log': 'another kind\'s log\n' });
+  await run(2);
+  assert.equal(fs.readFileSync(path.join(dirOf(1), 'barrier.json'), 'utf8'), first);
+  assert.match(fs.readFileSync(path.join(dirOf(1), 'logs', 'barrier-unit-candidate.log'), 'utf8'), /^run 1$/m, 'the first run\'s log');
+  assert.match(fs.readFileSync(path.join(out, 'logs', 'barrier-unit-candidate.log'), 'utf8'), /^run 2$/m);
+  assert.deepEqual([JSON.parse(fs.readFileSync(path.join(out, 'barrier.json'), 'utf8')).generatedAt, fs.readdirSync(path.join(dirOf(1), 'logs'))],
+    [now(2), ['barrier-unit-candidate.log']], 'the new report keeps its path; another kind\'s log stays put');
+  write(dirOf(1), { 'select.json': '{}\n' });
+  for (let i = 3; i <= 8; i += 1) await run(i);
+  assert.deepEqual(fs.readdirSync(path.join(out, 'history')).sort(), [1, 3, 4, 5, 6, 7].map((i) => path.basename(dirOf(i))));
+  assert.deepEqual(fs.readdirSync(dirOf(1)), ['select.json'], 'only the kind\'s own files leave an older folder');
+  write(out, { 'barrier.json': 'not a report\n' });
+  await run(9);
+  assert.equal(fs.readdirSync(path.join(out, 'history')).length, 6, 'a report that does not parse is replaced, never moved');
+  for (const generatedAt of ['../../escaped', '..', '.']) {
+    write(out, { 'barrier.json': `${JSON.stringify({ generatedAt })}\n` });
+    await run(9);
+    assert.deepEqual([fs.readdirSync(path.join(out, 'history')).length, fs.existsSync(path.join(dir, 'escaped')),
+      fs.existsSync(path.join(out, 'history', 'barrier.json'))], [6, false, false], `a generatedAt of ${generatedAt} names no folder`);
+  }
+  await run(10, []);
+  await run(11, ['--out', '-']);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(dir, '.cleancode', 'barrier.json'), 'utf8')).generatedAt, now(10));
+  assert.equal(fs.existsSync(path.join(dir, '.cleancode', 'history')), false, 'something moved under --out -');
+});
+
+test('the engine is 0.2.0, so a report from an older engine sharing one cache tells itself apart (tool.version)', async (t) => {
+  assert.equal(VERSION, '0.2.0');
+  const { dir } = marked(t);
+  write(dir, { 'mark.txt': 'run 1\n' });
+  const r = await inProcess(dir, 'barrier', ['--out', '-']);
+  assert.deepEqual([r.code, JSON.parse(r.stdout).tool], [0, { name: 'clean-code-gates', version: '0.2.0' }]);
+});

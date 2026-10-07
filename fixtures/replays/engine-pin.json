@@ -1,0 +1,14 @@
+{
+  "id": "engine-pin",
+  "kind": "synthetic",
+  "class": "an instrument that could change under a run: roles and the schedule ran the engine from a developer's working tree, so a commit there changed what measured",
+  "caught_by": "bootstrap copies the clean-code-gates runtime (bin, src, defaults.cjs, package.json and references/instruments.md) into .orchestrator/engine/ with an atomic swap, and writes PINNED with its source, stamp and digest; the orchestrator's stamp covers those files, so an engine change re-bootstraps the project. Every role and the conductor run the pinned copy through one unexpanded command string",
+  "missed_by": "a gates path each project wrote into its own context, resolving through a link into a live checkout, with no report saying which build measured",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/orchestrator/scripts/pin-engine.test.cjs",
+  "evidence": "docs/adr/0031-the-engine-runs-from-a-pinned-copy-and-measures-its-base-in-place.md#14-bootstrap-pins-the-engine"
+}

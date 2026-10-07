@@ -159,11 +159,16 @@ plan names the unscoped form of a narrowable command anyway, **run the scoped fo
 substitution** — do not obey it, and do not refuse it. Run a `whole-project` row exactly as written;
 run an `advisory-instrument` row as written and record its number as a lower bound.
 
-This is the one exception to running the commands as the architect listed them, and it exists because
-a plan that names the whole-app suite beats every rule written in this template: you read the plan,
-not the authoring guidance the architect read. A plan whose close-out phase demands the *full* suite
-in bold is exactly the case — it has been obeyed, three times in one lane, against a rule two
-sections below that forbids it.
+Narrowing is one of two exceptions to running the commands as the architect listed them, and it
+exists because a plan that names the whole-app suite beats every rule written in this template: you
+read the plan, not the authoring guidance the architect read. A plan whose close-out phase demands
+the *full* suite in bold is exactly the case — it has been obeyed, three times in one lane, against a
+rule two sections below that forbids it.
+
+**The other is the clean-code-gates path.** A listed command that runs the clean-code-gates CLI from
+anywhere but `<gates-cli>`, the pinned engine, runs with that prefix substituted
+(`.orchestrator/gate-config.md` → *The pinned engine*), and the substitution is recorded on the
+`substituted:` line exactly like a narrowing.
 
 Rules for this sub-step:
 
@@ -175,7 +180,7 @@ Rules for this sub-step:
    Phase: {N}  Files gated: {count}  Base: {base_sha}
    {gate id} ({stack}): {pass | fail | MISSING_TOOL | UNMEASURED | baseline} — {measured vs configured, or the reason}
      cmd: {the exact command string you ran}  scope: {changed-files | whole-project | advisory-instrument | deferred-to-join}
-     substituted: {the plan's literal string} → narrowed to this phase's intersection   ← only when you narrowed
+     substituted: {the plan's literal string} → {narrowed to this phase's intersection | run with <gates-cli>}   ← only when you narrowed or substituted
    ```
 
    **The first three lines are byte-compatible with what QA already reads** — the verdict vocabulary
@@ -264,10 +269,13 @@ Rules for this sub-step:
    If a gate has **no path-scoped form** in `PROJECT-CONTEXT.md` → Commands, **defer it to the nearest enclosing join** instead of running it concurrently — the **inner** join if you are a sub-lane, the **outer** join if you are an unsplit lane. Note the deferral in `.progress.md` and proceed; that join **records** the deferral rather than running the gate, and passes it outward — every deferred gate runs once, at the **outer** join (the orchestrator's outer join), the first point at which nothing else is in flight. Deferring is the correct outcome here, not a failure. **This outcome is parallel-mode only** — a laneless plan (sequential, `FIX`, `QAF`) has no join to redeem a deferral at, so a non-narrowable command there is run in place under its `whole-project` row, never deferred into nothing.
 
    **A whole-app test suite is never run at phase exit — in any mode, on any plan type, lane or no
-   lane.** In parallel mode a repo-wide suite reports a sibling's in-flight state as your failure; in
-   sequential and remediation mode the cost is fixed and multi-minute, this phase's diff does not
-   justify it, and the run's own barriers execute it over a settled tree anyway. Naming those barriers
-   matters, because this rule is not "nobody runs the suite":
+   lane — nor a folder sweep standing in for one; on a change-selected stack (one whose suite the
+   barrier runs as a `change-selected` tier), phase exit runs the test files the phase created or
+   edited.** In parallel mode a repo-wide suite reports a sibling's
+   in-flight state as your failure; in sequential and remediation mode the cost is fixed and
+   multi-minute, this phase's diff does not justify it, and the run's own barriers execute it over a
+   settled tree anyway. Naming those barriers matters, because this rule is not "nobody runs the
+   suite":
 
    - **The tester's coverage command** (`templates/tester.md` → Step 4) is a whole-app execution by
      construction. Its *measurement* scope stays changed-files-only — execution scope and measurement

@@ -1,0 +1,14 @@
+{
+  "id": "barrier-base-copy",
+  "kind": "synthetic",
+  "class": "a base worktree without the gitignored files its suites read, so the base failed for its environment and the same failures at the candidate read as carried",
+  "caught_by": "base.copy lists repo-relative paths that a worktree base copies from the checkout, following links, after the worktree is added and before prepare. A missing source, or a path tracked at base or in the working index, makes the base not-run (vacuous), and tracked is read by any spelling: a letter-case variant, a path the fresh worktree already holds or reaches through a link or file there, or a checkout link to a tracked file. A copy that cannot be made is vacuous too, never an engine error; the base line lists what was copied, and every record names the declared inputs it saw",
+  "missed_by": "a worktree holding tracked files only: the suites that read an ignored environment file failed at base by assertion, so a real regression in them would have been carried",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/clean-code-gates/__tests__/instruments-barrier.test.cjs",
+  "evidence": "docs/adr/0031-the-engine-runs-from-a-pinned-copy-and-measures-its-base-in-place.md#2-a-worktree-base-copies-the-inputs-git-does-not-hold"
+}

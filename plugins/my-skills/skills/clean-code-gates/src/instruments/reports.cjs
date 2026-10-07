@@ -101,13 +101,14 @@ function junit(text, map, tierId) {
   return [...suites.values()].map((s) => settle(s, errored.get(s.file) && s.failed > 0));
 }
 
-function flutter(text, map) {
+function flutter(text, map, partial) {
   const suites = new Map();
   const tests = new Map();
   let done = false;
   for (const line of text.split('\n')) {
     if (!line.trim()) continue;
-    const e = JSON.parse(line);
+    let e; // read partially (a run cut off at its bound), a line torn mid-write is skipped
+    try { e = JSON.parse(line); } catch (err) { if (partial) continue; throw err; }
     if (e.type === 'done') done = true;
     else if (e.type === 'suite') suites.set(e.suite.id, suite(map(e.suite.path), true));
     else if (e.type === 'testStart') {
@@ -130,7 +131,7 @@ function flutter(text, map) {
     }
   }
   // A stream without its `done` event is a runner that died mid-run; a test it started and never finished errs its suite.
-  if (!done) throw new Error('the report has no done event');
+  if (!done && !partial) throw new Error('the report has no done event');
   for (const t of tests.values()) if (!t.done) t.s.message = t.s.message || `${t.name}: started, never finished`;
   return [...suites.values()].map((s) => settle(s, false));
 }
@@ -140,12 +141,13 @@ function exitCode(exit, tierId) {
   return { ...s, result: exit === 0 ? 'pass' : 'fail', executed: null, passed: null, failed: null, skipped: null };
 }
 
-function parseReport(format, text, { cwd, runnerCwd, tierId, exit }) {
-  if (format === 'exit-code') return { suites: [exitCode(exit, tierId)] };
+// `partial`: the report of a run cut off at its bound, read for its counts (flutter-json: the tests that finished).
+function parseReport(format, text, { cwd, runnerCwd, tierId, exit, partial = false }) {
+  if (format === 'exit-code') return partial ? null : { suites: [exitCode(exit, tierId)] };
   if (text == null) return null;
   try {
     const map = mapper(cwd, runnerCwd);
-    const suites = format === 'jest-json' ? jest(text, map) : format === 'junit' ? junit(text, map, tierId) : flutter(text, map);
+    const suites = format === 'jest-json' ? jest(text, map) : format === 'junit' ? junit(text, map, tierId) : flutter(text, map, partial);
     return { suites: suites.sort((a, b) => byCodeUnit(a.file, b.file)) };
   } catch {
     return null;
@@ -157,4 +159,11 @@ function totals(suites) {
   return { executed: sum('executed'), passed: sum('passed'), failed: sum('failed'), skipped: sum('skipped') };
 }
 
-module.exports = { parseReport, totals };
+// The counts in a log's last `MM:SS +P ~S -F:` line (flutter's and dart's reporters): what a run cut off before its report had.
+const PROGRESS = /\b\d+:\d\d \+(\d+)(?: ~(\d+))?(?: -(\d+))?:/g;
+function progress(lines) {
+  const [, p, s, f] = (lines.flatMap((l) => [...l.matchAll(PROGRESS)]).pop() || []).map((n) => Number(n || 0));
+  return p === undefined ? null : { executed: p + f, passed: p, failed: f, skipped: s };
+}
+
+module.exports = { parseReport, totals, progress };

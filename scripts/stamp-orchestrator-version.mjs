@@ -7,7 +7,8 @@
 //
 // Bootstrap (references/bootstrap.md → B3) copies the six role templates into the
 // host's agent directory and the six references, the html scaffolds and the seven
-// runtime .cjs into `target/.orchestrator/`. It re-runs when one of those files is
+// runtime .cjs into `target/.orchestrator/`, and pins the clean-code-gates engine
+// into `target/.orchestrator/engine/`. It re-runs when one of those files is
 // MISSING — a trigger that by construction cannot see a file that is present but
 // two releases old. That is the bug this script exists to make visible: a project
 // upgrades the skill, every materialized path still exists, bootstrap stays quiet,
@@ -39,11 +40,14 @@
 
 import { createHash } from "node:crypto"
 import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs"
+import { createRequire } from "node:module"
 import { dirname, join, relative, sep } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)))
-const skillDir = join(repoRoot, "plugins", "my-skills", "skills", "orchestrator")
+const skillsDir = join(repoRoot, "plugins", "my-skills", "skills")
+const skillDir = join(skillsDir, "orchestrator")
+const engineDir = join(skillsDir, "clean-code-gates")
 const stampPath = join(skillDir, "MATERIALIZED-VERSION")
 
 // The materialized set is enumerated, never walked. B3 copies a named list, not a
@@ -75,6 +79,22 @@ export const SKILL_FILES = [
 ]
 
 const HTML_TEMPLATE_DIR = "templates/html"
+
+// The engine is materialized too. B3 pins the clean-code-gates engine into
+// `.orchestrator/engine/` (`scripts/pin-engine.cjs`), and every role runs that copy, so
+// its files are in the stamp, keyed `engine/<path>`, and an engine release
+// re-bootstraps a project exactly as a template release does. The file list is
+// pin-engine.cjs's own `isEngineFile`, never a second list kept here: a file it copies
+// that the stamp skipped would go stale in every project without moving the stamp.
+const ENGINE_KEY = "engine/"
+
+// Loaded when a stamp is computed, never at import. build-prime-agent.mjs imports this
+// module for its helpers, and prime-agent/tests/parity.sh runs that builder in a
+// scaffold that holds no skills at all, where a module-level load would fail before
+// anything was stamped.
+export function loadPinEngine(orchestratorDir = skillDir) {
+  return createRequire(import.meta.url)(join(orchestratorDir, "scripts", "pin-engine.cjs"))
+}
 
 const toPosix = (path) => path.split(sep).join("/")
 
@@ -136,9 +156,29 @@ export function stampFromEntries(entries) {
   return `mat-${digestOf(sorted).slice(0, 12)}\n`
 }
 
-function materializedSet() {
+// The stamp keys for an engine file list. An engine without its CLI is a missing input,
+// as a missing template is: a stamp over it would vouch for a copy that cannot run.
+export function engineKeys(rels) {
+  if (!rels.includes("bin/gates.cjs")) fail(`missing input: the clean-code-gates engine has no bin/gates.cjs — B3 pins it beside the orchestrator, so the stamp must cover it`)
+  return rels.map((rel) => `${ENGINE_KEY}${rel}`)
+}
+
+function engineSet() {
+  let rels
+  try {
+    rels = loadPinEngine().engineFiles(engineDir)
+  } catch (error) {
+    fail(`missing input: cannot list the clean-code-gates engine at ${toPosix(relative(repoRoot, engineDir))} — ${error.message}`)
+  }
+  return engineKeys(rels).map((key, index) => ({ key, path: join(engineDir, ...rels[index].split("/")) }))
+}
+
+// Everything the stamp digests, as [{key, path}]: the files B3 copies, then the engine
+// it pins.
+export function materializedSet() {
   const names = [...SKILL_FILES.filter((rel) => statSync(join(skillDir, ...rel.split("/")), { throwIfNoEntry: false })?.isFile()), ...htmlTemplates()]
-  return materializedRelPaths(names).map((rel) => ({ key: rel, path: join(skillDir, ...rel.split("/")) }))
+  const copied = materializedRelPaths(names).map((rel) => ({ key: rel, path: join(skillDir, ...rel.split("/")) }))
+  return [...copied, ...engineSet()]
 }
 
 // A missing input is a hard error in both modes, naming the path. Skipping it would

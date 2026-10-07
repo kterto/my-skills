@@ -184,6 +184,8 @@
         "scripts/gate-target-guard.test.cjs",
         "scripts/index-plans.cjs",
         "scripts/index-plans.test.cjs",
+        "scripts/pin-engine.cjs",
+        "scripts/pin-engine.test.cjs",
         "scripts/qa-barrier-prose.test.cjs",
         "scripts/README.md",
         "scripts/render-artifact.cjs",

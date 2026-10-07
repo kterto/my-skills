@@ -1,0 +1,14 @@
+{
+  "id": "in-flight",
+  "kind": "history",
+  "class": "a conductor's turn that ends while work it handed to a background subagent is still running, blocked as a stall and then answered with a wait, so a pending operator decision stood whether or not there was a question, and stopped meaning one",
+  "caught_by": "run-state.cjs dispatch records the work in in_flight and sets the lease dispatched; the Stop hook reads the host's background_tasks and session_crons and lets the stop through while a subagent, workflow, cloud session or MCP task runs (a shell, monitor or teammate only while dispatched), and once the dispatched work has reported back with nothing in flight it blocks with the returned reason instead of the stall one",
+  "missed_by": "the watchdog with pending_decision as its only exception: it saw an active run with no pending decision and blocked every turn that ended after an asynchronous dispatch",
+  "cost": {
+    "value": 1,
+    "unit": "run-state call per background dispatch",
+    "source": "by construction"
+  },
+  "test": "plugins/my-skills/hooks/__tests__/orchestrator-stop.test.cjs",
+  "evidence": "docs/adr/0032-run-state-tells-work-in-flight-from-an-operator-wait.md#1-dispatch-in_flight-and-the-state-dispatched"
+}

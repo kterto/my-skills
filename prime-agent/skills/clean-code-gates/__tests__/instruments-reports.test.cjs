@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { parseReport, totals } = require('../src/instruments/reports.cjs');
+const { parseReport, totals, progress } = require('../src/instruments/reports.cjs');
 
 const sample = (name) => fs.readFileSync(path.join(__dirname, 'fixtures', 'instruments', 'reports', name), 'utf8');
 const byFile = (parsed) => Object.fromEntries(parsed.suites.map((s) => [s.file, s]));
@@ -106,6 +106,34 @@ test('flutter-json: a test that started and never finished makes its suite error
   const widget = byFile(parsed)['apps/mobile/test/widget_test.dart'];
   assert.equal(widget.result, 'error');
   assert.equal(widget.message, 'widget shows a title: started, never finished');
+});
+
+test('flutter-json read partially (a timed-out run): the tests that finished count, a torn last line is skipped, nothing else', () => {
+  const lines = sample('flutter-events.jsonl').trimEnd().split('\n');
+  const opts = { cwd: 'apps/mobile', runnerCwd: '/work/app', tierId: 'mobile' };
+  // Cut while "widget saves a draft" runs: "widget shows a title" passed, and order_test never finished loading.
+  const cut = `${lines.slice(0, 11).join('\n')}\n{"testID":6,"res`;
+  assert.equal(parseReport('flutter-json', cut, opts), null, 'read whole, a cut stream is unparseable');
+  const partial = parseReport('flutter-json', cut, { ...opts, partial: true });
+  assert.deepEqual(totals(partial.suites), { executed: 1, passed: 1, failed: 0, skipped: 0 }, 'an unfinished test counts in no column');
+  const whole = parseReport('flutter-json', lines.join('\n'), opts);
+  assert.deepEqual(parseReport('flutter-json', lines.join('\n'), { ...opts, partial: true }), whole, 'a whole stream reads the same');
+  const doc = sample('jest-runner-cwd.json');
+  assert.deepEqual(parseReport('jest-json', doc, { cwd: 'apps/api', runnerCwd: '/app', tierId: 'e2e', partial: true }),
+    parseReport('jest-json', doc, { cwd: 'apps/api', runnerCwd: '/app', tierId: 'e2e' }), 'a finished jest report is read as is');
+  assert.equal(parseReport('jest-json', '{ "testResults": [', { cwd: 'apps/api', runnerCwd: '/app', tierId: 'e2e', partial: true }), null);
+  assert.equal(parseReport('exit-code', null, { cwd: '.', runnerCwd: '/r', tierId: 'smoke', exit: 124, partial: true }), null,
+    'a timed-out exit code says nothing');
+});
+
+test('progress: the last `MM:SS +P ~S -F:` line of a log gives the counts so far; a log without one gives none', () => {
+  const log = ['00:00 +0: loading test/widget_test.dart', '00:04 +3 -1: widget saves a draft [E]', 'Expected: true',
+    '01:02 +5 ~2 -1: order totals', '  stack line 00:09 is not a count'];
+  assert.deepEqual(progress(log), { executed: 6, passed: 5, failed: 1, skipped: 2 });
+  assert.deepEqual(progress(['00:01 +2: a\r00:02 +4 ~1: b']), { executed: 4, passed: 4, failed: 0, skipped: 1 }, 'a rewritten line');
+  assert.deepEqual(progress(['123:45 +7 -2: c']), { executed: 9, passed: 7, failed: 2, skipped: 0 });
+  assert.equal(progress(['PASS test/a.spec.ts', 'Tests: 2 passed']), null);
+  assert.equal(progress([]), null);
 });
 
 test('exit-code: one pseudo-suite, a pass or fail with an unknown executed count', () => {
