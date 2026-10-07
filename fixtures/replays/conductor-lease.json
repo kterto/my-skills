@@ -1,0 +1,14 @@
+{
+  "id": "conductor-lease",
+  "kind": "history",
+  "class": "a second session resumed beside a live conductor writes the same run: a duplicate dispatch, and a wait that stands as a false operator question",
+  "caught_by": "lease v2 records the conductor's session id from start and next; on a live run, dispatch, wait, done, decide and raise from another known session exit 5 and write nothing, and start or next move the run only with --take-over, which is logged in takeovers; status names the conductor, and the Stop hook owns a run by that id",
+  "missed_by": "a lease that recorded only who was blocked last and checked no writer, so any session that ran a command wrote the run",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/orchestrator/scripts/run-state.test.cjs",
+  "evidence": "docs/adr/0032-run-state-tells-work-in-flight-from-an-operator-wait.md#5-only-the-conductor-writes-a-live-run"
+}

@@ -1,0 +1,15 @@
+{
+  "id": "barrier-candidate-reuse",
+  "kind": "synthetic",
+  "class": "a tier run again in full at a candidate it had already passed, unchanged",
+  "caught_by": "before the candidate side runs, and never under --whole, the barrier reads the record at the candidate's own key. A pass written in place, by a candidate or a whole run, that saw every input the tier copies and covers the current selection is reused: nothing runs, the tier reports reused with the key, and nothing new is recorded. A fail is never reused, and a whole run reuses only a whole record",
+  "missed_by": "a candidate side that never read the cache, so a second QA pass re-ran byte-identical folders at full cost",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/clean-code-gates/__tests__/instruments-barrier.test.cjs",
+  "evidence": "docs/adr/0031-the-engine-runs-from-a-pinned-copy-and-measures-its-base-in-place.md#7-an-unchanged-candidate-is-not-run-again",
+  "private_ref": "inc31-h5-reuse"
+}

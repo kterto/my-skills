@@ -1,0 +1,15 @@
+{
+  "id": "barrier-named-fail-inheritance",
+  "kind": "synthetic",
+  "class": "a red already on the base, with no base result at hand, read as the change's and sent to remediation",
+  "caught_by": "cache records keep each red file's failing test names, where the side ran and which inputs it saw. The base side inherits a named fail only from a whole run's record at the base's key, Step 0d's or a schedule's, that saw every path the tier copies: a red whose failing tests all failed there is carried, other names are newly red against the base, and a file the record marks flaky goes to the rerun. The records of a compared run, and records without names, serve passes only",
+  "missed_by": "pass-only inheritance with no pass at the base's key: the base was absent or vacuous, every red over it was newly red with basis no-base, and a red the change had not caused blocked the run",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/clean-code-gates/__tests__/instruments-barrier.test.cjs",
+  "evidence": "docs/adr/0031-the-engine-runs-from-a-pinned-copy-and-measures-its-base-in-place.md#4-a-named-fail-is-inherited-only-from-a-whole-run",
+  "private_ref": "inc31-h5-vacuous"
+}

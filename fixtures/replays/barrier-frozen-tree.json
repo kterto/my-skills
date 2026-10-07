@@ -1,0 +1,14 @@
+{
+  "id": "barrier-frozen-tree",
+  "kind": "synthetic",
+  "class": "a measured tree that moved with the run's own notes and state files, so no key matched the ledger's tree or a clean base",
+  "caught_by": "barrier.frozen, read at the base like every instrument: globs, each holding a slash and only syntax that git's pathspec and the engine's matcher read alike, that every kind resets to HEAD in the candidate tree and leaves out of the changed files, even when no tier is declared. On a clean start the candidate tree is HEAD's, and an edit under a frozen path neither moves a key nor selects a test",
+  "missed_by": "a candidate tree built from every untracked file, so the run's plans and state entered each key and an unchanged product never matched its earlier record",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/clean-code-gates/__tests__/instruments-cli.test.cjs",
+  "evidence": "docs/adr/0031-the-engine-runs-from-a-pinned-copy-and-measures-its-base-in-place.md#8-frozen-paths-leave-the-measured-tree"
+}

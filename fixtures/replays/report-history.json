@@ -1,0 +1,14 @@
+{
+  "id": "report-history",
+  "kind": "synthetic",
+  "class": "an earlier run's report and logs overwritten by the next run into the same output folder",
+  "caught_by": "before a kind runs, its previous report, when it parses with a generatedAt, moves with that kind's logs into history/<generatedAt>/ under the output folder, and the five newest such folders per kind are kept. The new report keeps its path, so the command string a ledger keys on never varies",
+  "missed_by": "one report per output folder, replaced on every run, so an earlier QA pass's evidence survived only where a role had copied it by hand",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/clean-code-gates/__tests__/instruments-cli.test.cjs",
+  "evidence": "docs/adr/0031-the-engine-runs-from-a-pinned-copy-and-measures-its-base-in-place.md#earlier-reports-move-to-history"
+}

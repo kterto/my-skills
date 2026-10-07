@@ -86,6 +86,25 @@
     {"id": "orchestrator-flash.live.not-run", "skill": "orchestrator-flash", "enum": "LIVE", "name": "NOT RUN", "fixture": "fixtures/replays/flash-live-check.json"},
     {"id": "my-skills.budgets.files", "skill": "my-skills", "enum": "budgets.json", "name": "files", "fixture": "fixtures/replays/byte-budgets.json"},
     {"id": "my-skills.budgets.budget-moved", "skill": "my-skills", "enum": "check-skill-budgets", "name": "BUDGET MOVED", "fixture": "fixtures/replays/byte-budgets.json"},
-    {"id": "my-skills.touchpoint.accept-moved", "skill": "my-skills", "enum": "touchpoint", "name": "--accept-moved", "fixture": "fixtures/replays/byte-budgets.json"}
+    {"id": "my-skills.touchpoint.accept-moved", "skill": "my-skills", "enum": "touchpoint", "name": "--accept-moved", "fixture": "fixtures/replays/byte-budgets.json"},
+    {"id": "ccg.mechanism.base-copy", "skill": "clean-code-gates", "enum": "barrier.base", "name": "copy", "fixture": "fixtures/replays/barrier-base-copy.json"},
+    {"id": "ccg.mechanism.named-fail-inheritance", "skill": "clean-code-gates", "enum": "barrier.cache", "name": "failing", "fixture": "fixtures/replays/barrier-named-fail-inheritance.json"},
+    {"id": "ccg.mechanism.candidate-reuse", "skill": "clean-code-gates", "enum": "barrier.tier", "name": "reused", "fixture": "fixtures/replays/barrier-candidate-reuse.json"},
+    {"id": "ccg.mechanism.frozen-tree", "skill": "clean-code-gates", "enum": "barrier", "name": "frozen", "fixture": "fixtures/replays/barrier-frozen-tree.json"},
+    {"id": "ccg.mechanism.batches", "skill": "clean-code-gates", "enum": "barrier.select", "name": "batch_files", "fixture": "fixtures/replays/barrier-batches.json"},
+    {"id": "ccg.mechanism.report-history", "skill": "clean-code-gates", "enum": "envelope", "name": "history", "fixture": "fixtures/replays/report-history.json"},
+    {"id": "ccg.mechanism.cache-lock", "skill": "clean-code-gates", "enum": "barrier.cache", "name": "lock", "fixture": "fixtures/replays/cache-lock.json"},
+    {"id": "ccg.rule.no-worktree-prune", "skill": "clean-code-gates", "enum": "rule", "name": "no worktree prune", "fixture": "fixtures/replays/no-worktree-prune.json"},
+    {"id": "orchestrator.step0d.barrier-baseline", "skill": "orchestrator", "enum": "step0d", "name": "barrier-baseline", "fixture": "fixtures/replays/step0d-barrier-baseline.json"},
+    {"id": "orchestrator.qa.instruments-absent-at-base", "skill": "orchestrator", "enum": "qa", "name": "instruments_from", "fixture": "fixtures/replays/stacked-base-instruments.json"},
+    {"id": "orchestrator.bootstrap.engine-pin", "skill": "orchestrator", "enum": "bootstrap", "name": "engine-pin", "fixture": "fixtures/replays/engine-pin.json"},
+    {"id": "orchestrator.run-state.command.dispatch", "skill": "orchestrator", "enum": "run-state.command", "name": "dispatch", "fixture": "fixtures/replays/in-flight.json"},
+    {"id": "orchestrator.run-state.lease.dispatched", "skill": "orchestrator", "enum": "run-state.lease", "name": "dispatched", "fixture": "fixtures/replays/in-flight.json"},
+    {"id": "orchestrator.run-state.file.in-flight", "skill": "orchestrator", "enum": "run-state.file", "name": "in_flight", "fixture": "fixtures/replays/in-flight.json"},
+    {"id": "orchestrator.run-state.exit.not-conductor", "skill": "orchestrator", "enum": "run-state.exit", "name": "5", "fixture": "fixtures/replays/conductor-lease.json"},
+    {"id": "orchestrator.touchpoint.take-over", "skill": "orchestrator", "enum": "touchpoint", "name": "--take-over", "fixture": "fixtures/replays/conductor-lease.json"},
+    {"id": "orchestrator.watchdog.stop-failure-hook", "skill": "orchestrator", "enum": "watchdog", "name": "StopFailure hook", "fixture": "fixtures/replays/stop-failure.json"},
+    {"id": "orchestrator.watchdog.background-tasks", "skill": "orchestrator", "enum": "watchdog", "name": "background_tasks", "fixture": "fixtures/replays/in-flight.json"},
+    {"id": "orchestrator.watchdog.returned-reason", "skill": "orchestrator", "enum": "watchdog", "name": "returned", "fixture": "fixtures/replays/in-flight.json"}
   ]
 }

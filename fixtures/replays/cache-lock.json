@@ -1,0 +1,14 @@
+{
+  "id": "cache-lock",
+  "kind": "synthetic",
+  "class": "concurrent barrier runs writing one cache file, where one write can lose another's record",
+  "caught_by": "the cache write holds a lock file naming the writer's pid. A lock whose pid is dead, or older than 60 seconds, is broken with a warning, by moving it aside and dropping it only if it still names the pid judged dead, so a lock taken since that judgement stands; a writer whose lock was broken anyway writes nothing; otherwise the writer retries every 100 ms for up to 30 seconds, then skips the cache write with a warning, and still writes its report and exits with its tiers' status",
+  "missed_by": "an unlocked read, merge and rename, safe for one writer only, while QA ran its tiers concurrently against one cache",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/clean-code-gates/__tests__/instruments-barrier.test.cjs",
+  "evidence": "docs/adr/0031-the-engine-runs-from-a-pinned-copy-and-measures-its-base-in-place.md#the-cache-write-takes-a-lock"
+}

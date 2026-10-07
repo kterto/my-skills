@@ -1,0 +1,15 @@
+{
+  "id": "step0d-barrier-baseline",
+  "kind": "synthetic",
+  "class": "a tier no worktree can host, with no base result, so every red already on the base blocked QA as the change's",
+  "caught_by": "Step 0d runs every declared scope: whole tier through the barrier with --whole at the run's base, in place and on every run, whatever baseline_sweep says, and never a change-selected tier. Its whole record at the base's key serves QA's base side, and a tier that a Commands suite maps to gets a baseline ledger row with file-qualified failing names. Run in the background, as one chain from the repository root, it records the dispatch, re-records it before a turn waits for it, and is joined before the first coder dispatch on a file of exit codes the chain writes only after its last tier",
+  "missed_by": "a baseline sweep that skipped the tiers needing running services, or was written by hand outside the engine, so a red already on the base had no row and no base, blocked QA, and sent a test-only loop to remediation",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/orchestrator/scripts/qa-barrier-prose.test.cjs",
+  "evidence": "docs/adr/0031-the-engine-runs-from-a-pinned-copy-and-measures-its-base-in-place.md#9-step-0d-measures-every-whole-tier-at-the-base-in-place-on-every-run",
+  "private_ref": "inc31-h5-vacuous"
+}

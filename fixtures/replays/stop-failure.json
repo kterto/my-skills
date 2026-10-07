@@ -1,0 +1,14 @@
+{
+  "id": "stop-failure",
+  "kind": "history",
+  "class": "a conductor turn that ends on an API error, such as a provider rate limit, for which the host runs no Stop hook, so the run sits idle with nothing watching it",
+  "caught_by": "the plugin registers StopFailure on the Stop hook's script: for a live run the session owns, it records stop_failure in the lease and notifies the operator at once (a macOS notification by default on darwin; ORCHESTRATOR_NOTIFY names another notifier or, at 0, none), and run-state.cjs watch reports the same failure until the conductor writes again",
+  "missed_by": "the Stop hook, which the host never runs for a failed turn, and run-state.cjs watch, which nothing ran",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/hooks/__tests__/orchestrator-stop.test.cjs",
+  "evidence": "docs/adr/0032-run-state-tells-work-in-flight-from-an-operator-wait.md#7-stopfailure-record-then-notify"
+}

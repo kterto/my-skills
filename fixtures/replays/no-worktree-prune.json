@@ -1,0 +1,14 @@
+{
+  "id": "no-worktree-prune",
+  "kind": "synthetic",
+  "class": "a cleanup that pruned the repository's worktree registry, so every registration whose folder it could not see was dropped, other tools' included",
+  "caught_by": "the engine removes only the base worktree it created, by name: git worktree remove --force --force on a folder whose unique name is its registration's, then the folder itself, and nothing prunes. A static test fails on a worktree prune in any script or source file under plugins/, prime-agent/ and scripts/",
+  "missed_by": "a git worktree prune after every base run, against the operator's standing rule that nothing prunes; a prune that cannot read a protected folder can drop a registration that is still live",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "scripts/__tests__/no-worktree-prune.test.mjs",
+  "evidence": "docs/adr/0031-the-engine-runs-from-a-pinned-copy-and-measures-its-base-in-place.md#1-the-engine-removes-only-its-own-worktree-and-nothing-prunes"
+}
