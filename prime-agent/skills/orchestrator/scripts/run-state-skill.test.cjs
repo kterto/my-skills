@@ -23,6 +23,18 @@ const SCRIPT = path.join(__dirname, 'run-state.cjs');
 const SKILL = fs.readFileSync(path.join(__dirname, '..', 'SKILL.md'), 'utf8');
 const QA = fs.readFileSync(path.join(__dirname, '..', 'templates', 'qa.md'), 'utf8');
 
+/**
+ * The environment of the shell each template runs in: this process's own, minus the
+ * session ids a host sets for every command, a debug sink and a config dir, and with
+ * notifications off — so a suite run inside a host session records no conductor.
+ */
+const SCRUBBED = ['CLAUDE_CODE_SESSION_ID', 'ORCHESTRATOR_SESSION_ID', 'ORCHESTRATOR_HOOK_DEBUG', 'CLAUDE_CONFIG_DIR'];
+function childEnv() {
+  const env = { ...process.env, ORCHESTRATOR_NOTIFY: '0' };
+  for (const key of SCRUBBED) delete env[key];
+  return env;
+}
+
 const RUN = '20260929T101500Z-a1b2-skill';
 // Backticks, a `$`, a double quote and an apostrophe: everything a shell would act on.
 const FREE = 'Yes — keep `max_review_cycles` at 6, it costs $5 more; don\'t "ask" again';
@@ -60,17 +72,17 @@ function fill(template) {
 
 test('the Run state rule\'s commands run as written, and the operator\'s free text arrives verbatim', () => {
   const templates = {};
-  for (const [, template] of ruleBlock().matchAll(/`((start|next|done|wait|lookup|decide|raise|budget) <run>[^`]*)`/g)) {
+  for (const [, template] of ruleBlock().matchAll(/`((start|next|dispatch|done|wait|lookup|decide|raise|budget) <run>[^`]*)`/g)) {
     templates[template.split(' ')[0]] ??= template;
   }
-  assert.deepEqual(Object.keys(templates).sort(), ['budget', 'decide', 'done', 'lookup', 'next', 'raise', 'start', 'wait']);
+  assert.deepEqual(Object.keys(templates).sort(), ['budget', 'decide', 'dispatch', 'done', 'lookup', 'next', 'raise', 'start', 'wait']);
   assert.match(ruleBlock(), /'\\''/, 'the rule says how to write an apostrophe inside single quotes');
 
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'run-state-skill-'));
   try {
     const run = (name) => {
       const command = `${JSON.stringify(process.execPath)} ${JSON.stringify(SCRIPT)} --root ${JSON.stringify(root)} ${fill(templates[name])}`;
-      const r = spawnSync('bash', ['-c', command], { cwd: root, encoding: 'utf8' });
+      const r = spawnSync('bash', ['-c', command], { cwd: root, encoding: 'utf8', env: childEnv() });
       assert.equal(r.status, 0, `${name}: ${r.stderr}`);
       return r;
     };
@@ -79,6 +91,9 @@ test('the Run state rule\'s commands run as written, and the operator\'s free te
     run('start');
     run('next');
     assert.equal(file('NEXT'), `Step 4 — reviewer\n${FREE}\n`);
+    run('dispatch');
+    assert.ok(file('in_flight').endsWith(` ${FILL['{what}']}\n`), file('in_flight'));
+    assert.equal(JSON.parse(file('lease.json')).state, 'dispatched');
     run('wait');
     assert.ok(file('pending_decision').endsWith(` ${FREE}\n`), file('pending_decision'));
     run('decide');

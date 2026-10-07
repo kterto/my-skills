@@ -376,6 +376,27 @@ test('--tier reads the tier select block; the tier must be change-selected', asy
   }
 });
 
+test('--tier with select.batch_files: a selection past it passes, exit 0, as batches the barrier runs; over max is said, never red; '
+  + 'ad hoc --max stays red', async (t) => {
+  const r = repo(t, NEST, REPO_CHANGE);
+  const schema = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'schema', 'select.schema.json'), 'utf8'));
+  const tierRun = async (more) => run(ctxFor(r, ['--tier', 'api-e2e'], { barrier: { on_timeout: 'not-done', tiers: [{ id: 'api-e2e',
+    scope: 'change-selected', whole_run: 'nightly', select: { tests: ['api/test/**/*.e2e-spec.ts'], sources: ['api/src/**/*.ts'], by: ['routes'], ...more } }] } }));
+  const over = await tierRun({ max: 2, batch_files: 2 });
+  assert.deepEqual([over.report.status, over.exitCode, over.report.selection.within_max], ['pass', 0, false]);
+  assert.equal(over.lines[0], 'SELECT pass · 3/5 selected (over max 2) → 2 batches of ≤ 2 · by routes · 2 unresolved');
+  assert.deepEqual(validate(schema, over.report), []);
+  const within = await tierRun({ max: 10, batch_files: 2 });
+  assert.equal(within.lines[0], 'SELECT pass · 3/5 selected (max 10) → 2 batches of ≤ 2 · by routes · 2 unresolved');
+  const one = await tierRun({ max: 2, batch_files: 3 });
+  assert.deepEqual([one.report.status, one.lines[0]], ['pass', 'SELECT pass · 3/5 selected (over max 2) · by routes · 2 unresolved'],
+    'one batch: the barrier runs it under bound_minutes, so it is scope too');
+  const unbatched = await tierRun({ max: 2 });
+  assert.deepEqual([unbatched.report.status, unbatched.exitCode, unbatched.lines[0].split(' · ')[1]], ['red', 1, '3/5 selected (max 2)']);
+  const adhoc = await run(ctxFor(r, [...NEST_ARGS, '--max', '2']));
+  assert.deepEqual([adhoc.report.status, adhoc.exitCode], ['red', 1]);
+});
+
 test('--flows reports the live flows whose paths match a changed file, and warns without a block', async (t) => {
   const r = repo(t, NEST, REPO_CHANGE);
   const block = { flows: { checkout: { surface: 'web', paths: ['api/src/orders/**'] }, catalog: { surface: 'web', paths: ['api/src/widgets/**'] } } };

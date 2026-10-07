@@ -43,7 +43,20 @@ function main() {
   }
   process.exit(exitCode);
 }
+// --help and -h answer before any repository, base or config is read, and exit 0: the usage, or the common flags and the
+// kind's section of this engine's own reference (a copy without it says so).
+function help(kind) {
+  if (!kind) return 'usage: gates.cjs [--scope project|diff[:<ref>]|module:<path>|files:<a,b>] [--gates G1,…] [--skip G6] [--out <dir>|-]\n'
+    + '         [--rigor sketch|delivery|hardened] [--base-ref <ref>] [--require-tools] [--scaffold]\n'
+    + '       gates.cjs <barrier|select|sweep|live> [flags] (gates.cjs <kind> --help)\n';
+  let ref = '';
+  try { ref = fs.readFileSync(path.join(__dirname, '..', 'references', 'instruments.md'), 'utf8'); } catch { /* not in this copy */ }
+  const section = ref.split(/^(?=## )/m).find((s) => s.startsWith(`## \`${kind}\`\n`));
+  return `common flags: --base <ref> --instruments-from <ref>|file:<path> --out <dir>|- --now <ISO 8601>\n\n${section ? section.trimEnd() : '(kind reference not found)'}\n`;
+}
 // Instruments set exitCode rather than exit: exiting right after a large write can cut a darwin pipe.
 const argv = process.argv.slice(2);
-if (!require('../src/instruments/vocab.cjs').KINDS.includes(argv[0])) main();
-else require('../src/instruments/cli.cjs').main(argv[0], argv.slice(1)).then((code) => { process.exitCode = code; });
+const kind = require('../src/instruments/vocab.cjs').KINDS.includes(argv[0]) ? argv[0] : null;
+if (argv.includes('--help') || argv.includes('-h')) process.stdout.write(help(kind));
+else if (!kind) main();
+else require('../src/instruments/cli.cjs').main(kind, argv.slice(1)).then((code) => { process.exitCode = code; });

@@ -40,10 +40,10 @@ const TIER = {
   id: [id, R], cwd: [rel, R], run: [str, R], report: [one('jest-json', 'junit', 'flutter-json', 'exit-code'), R],
   scope: [one('whole', 'change-selected'), R], bound_minutes: [minutes, R], isolation: [one(...V.ISOLATION)],
   env: [env], rerun: [str], cleanup: [str], whole_run: [str], runner_cwd: [(v) => str(v) && path.isAbsolute(v)],
-  cache_scope: [one('tree', 'cwd')], whole_minutes: [minutes],
+  cache_scope: [one('tree', 'cwd')], whole_minutes: [minutes], cleanup_minutes: [minutes],
   select: [obj({ tests: [some(str), R], sources: [some(str), R], by: [some(one('imports', 'routes'))],
-    max: [(v) => Number.isInteger(v) && v > 0], whole_on: [all(str)] })],
-  base: [obj({ mode: [one('worktree', 'inherit-only')], prepare: [str], prepare_minutes: [minutes], env: [env] })],
+    max: [(v) => Number.isInteger(v) && v > 0], batch_files: [(v) => Number.isInteger(v) && v > 0], whole_on: [all(str)] })],
+  base: [obj({ mode: [one('worktree', 'inherit-only')], prepare: [str], prepare_minutes: [minutes], env: [env], copy: [all(rel)] })],
 };
 function validateTier(t, p) {
   const selected = isObj(t) && t.scope === 'change-selected';
@@ -52,7 +52,8 @@ function validateTier(t, p) {
     || rule(selected && !t.whole_run, 'whole_run: required when scope is change-selected')
     || rule(!selected && t.select, 'select: only allowed when scope is change-selected')
     || rule(!selected && t.whole_minutes !== undefined, 'whole_minutes: only allowed when scope is change-selected')
-    || rule(t.runner_cwd && t.base && t.base.mode === 'worktree', 'runner_cwd: a fixed runner path cannot run a worktree base');
+    || rule(t.runner_cwd && t.base && t.base.mode === 'worktree', 'runner_cwd: a fixed runner path cannot run a worktree base')
+    || rule(t.base && t.base.copy && t.base.mode !== 'worktree', 'base.copy: only allowed when base.mode is worktree');
 }
 const SHAPES = {
   regex: { files: [some(str), R], exclude: [all(str)], pattern: [re, R], flags: [(v) => /^(?!.*(.).*\1)[gimsu]*$/.test(v)] },
@@ -83,7 +84,9 @@ function validateGuard(g, p) {
   return check(g, spec, p);
 }
 
-const BARRIER = { on_timeout: [one(...V.ON_TIMEOUT)], tiers: [Array.isArray] };
+// frozen globs name repo paths from the root, so each holds a `/` (one without matches at any depth here, at the root in git),
+const UNALIKE = /[[\\]|[^/]\*\*|\*\*[^/]|(^|\/)\.{0,2}(\/|$)/; // in syntax git's pathspec and globToRe read alike: no `[`, `\`, empty, . or .. segment, part-`**`
+const BARRIER = { on_timeout: [one(...V.ON_TIMEOUT)], frozen: [all((g) => str(g) && g.includes('/') && !UNALIKE.test(g))], tiers: [Array.isArray] };
 const duplicate = (xs) => xs.map((x) => x.id).find((x, i, ids) => ids.indexOf(x) !== i);
 const byId = (x, y) => byCodeUnit(x.id, y.id);
 // [config, null] or [null, why it is invalid]. An entry `anchored(list, id)` names is not validated: the base's runs.
@@ -94,7 +97,8 @@ function configOf(c, anchored = () => false) {
     .find(Boolean) || (duplicate(xs) === undefined ? null : `${p}: duplicate id "${duplicate(xs)}"`);
   const e = (barrier === null ? null : check(barrier, BARRIER, 'barrier') || entries(barrier.tiers || [], 'barrier.tiers', validateTier))
     || (Array.isArray(guards) ? entries(guards, 'guards', validateGuard) : 'guards: must be an array');
-  return e ? [null, e] : [{ barrier: { on_timeout: (barrier && barrier.on_timeout) || 'not-done', tiers: (barrier && barrier.tiers) || [] }, guards }, null];
+  const { on_timeout = 'not-done', frozen = [], tiers = [] } = barrier || {};
+  return e ? [null, e] : [{ barrier: { on_timeout, frozen, tiers }, guards }, null];
 }
 function readConfig(text, anchored) {
   try { return configOf(text === null ? {} : JSON.parse(text), anchored); } catch (e) { return [null, `invalid JSON (${e.message})`]; }
@@ -107,7 +111,7 @@ function readLive(text, lb) {
 
 // Time bounds are not anchored: each takes max(base, working), so a branch may lengthen
 // a bound and never shorten it. raise() lifts the base copy in place; true if any differed.
-const BOUNDS = { bound_minutes: 10, prepare_minutes: 15, whole_minutes: 0 }; // an absent whole_minutes is no bound
+const BOUNDS = { bound_minutes: 10, prepare_minutes: 15, whole_minutes: 0, cleanup_minutes: 1 }; // an absent whole_minutes is no bound
 const unbound = (v) => JSON.parse(JSON.stringify(v, (k, x) => (Object.hasOwn(BOUNDS, k) ? undefined : x)));
 const differ = (b, w) => stableJson(unbound(b)) !== stableJson(unbound(w));
 function raise(b, w) {
@@ -147,11 +151,12 @@ function anchorLive(b, w, moves) {
   return b;
 }
 
-// An empty tier set resolves to no barrier at all, never to one that runs nothing and passes. A tier
-// whose cwd is missing still loads: the barrier types it at run time, and no other kind depends on it.
+// An empty tier set resolves to no barrier at all, never to one that runs nothing and passes, unless frozen paths ride along
+// (declared only, so no digest moves otherwise). A tier whose cwd is missing still loads: the barrier types it at run time.
 function resolved(source, from, { barrier, guards, live }, moves) {
-  const tiers = barrier.tiers.sort(byId);
-  const inst = { barrier: tiers.length ? { on_timeout: barrier.on_timeout, tiers } : null, guards: guards.sort(byId), live };
+  const [tiers, { frozen }] = [barrier.tiers.sort(byId), barrier];
+  const inst = { barrier: tiers.length || frozen.length ? { on_timeout: barrier.on_timeout, tiers, ...(frozen.length ? { frozen } : {}) } : null,
+    guards: guards.sort(byId), live };
   const digest = crypto.createHash('sha256').update(stableJson({ ...inst, live: live && live.text })).digest('hex');
   return { source, from, digest, moves: moves.sort((x, y) => byCodeUnit(x.key, y.key)), ...inst };
 }
@@ -184,7 +189,8 @@ function loadInstruments(root, { baseSha, from = null, liveblock, warn = () => {
     [w, moves[0]] = [b, move('config', 'invalid', 'changed')];
   }
   if (b.barrier.on_timeout !== w.barrier.on_timeout) moves.push(move('barrier.on_timeout', 'changed', 'changed'));
-  const barrier = { on_timeout: b.barrier.on_timeout, tiers: anchorList('barrier.tiers', b.barrier.tiers, w.barrier.tiers, moves) };
+  if (differ(b.barrier.frozen, w.barrier.frozen)) moves.push(move('barrier.frozen', 'changed', 'changed'));
+  const barrier = { on_timeout: b.barrier.on_timeout, frozen: b.barrier.frozen, tiers: anchorList('barrier.tiers', b.barrier.tiers, w.barrier.tiers, moves) };
   const guards = anchorList('guards', b.guards, w.guards, moves);
   const live = anchorLive(readLive(baseContext, lb), readLive(disk(CONTEXT), lb), moves);
   const source = baseConfig === null && baseContext === null ? 'defaults' : 'merge-base';

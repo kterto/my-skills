@@ -156,10 +156,11 @@ function flowsFor(live, changed, warnings) {
   return [];
 }
 
-function summaryLines(report, withFlows) {
+function summaryLines(report, withFlows, B) {
   const s = report.selection;
-  const facts = [`${s.size}/${s.tests_total} selected${s.max === null ? '' : ` (max ${s.max})`}`, `by ${s.by.join(',')}`, `${s.unresolved} unresolved`,
-    ...(s.unmapped.length ? [`unmapped: ${s.unmapped.length}`] : [])];
+  const k = B && s.size > B ? ` → ${Math.ceil(s.size / B)} batches of ≤ ${B}` : '';
+  const facts = [`${s.size}/${s.tests_total} selected${s.max === null ? '' : ` (${B && !s.within_max ? 'over ' : ''}max ${s.max})`}${k}`,
+    `by ${s.by.join(',')}`, `${s.unresolved} unresolved`, ...(s.unmapped.length ? [`unmapped: ${s.unmapped.length}`] : [])];
   if (withFlows) facts.push(`${report.flows.length} flows`);
   return [`SELECT ${report.status} · ${facts.join(' · ')}`,
     ...report.flows.map(f => `flow ${f.name}: ${f.reasons[0]}`), ...s.selected.map(t => `${t.file}: ${t.reasons[0]}`)];
@@ -178,12 +179,14 @@ async function run(ctx) {
     cwd: tier ? tier.cwd : '.', base: ctx.base.sha });
   const warnings = [];
   const flows = o.flows ? flowsFor(ctx.instruments.live, changed, warnings) : [];
-  const status = sel.within_max === false ? 'red' : 'pass';
+  // A tier with batch_files runs a selection of any size, in batches under its bound: there, size is scope, never red.
+  const B = tier && tier.select.batch_files;
+  const status = sel.within_max === false && !B ? 'red' : 'pass';
   const head = envelope({ kind: 'select', mode: o.tier === undefined ? 'adhoc' : 'tier', root: ctx.root, base: ctx.base,
     instruments: ctx.instruments, isolation: null, now: ctx.now, version: ctx.version });
   const report = { ...head, status, timing: { select_ms: Date.now() - started }, changed,
     selection: { tier: o.tier === undefined ? null : o.tier, by, ...sel }, flows };
-  return { report, lines: summaryLines(report, o.flows), exitCode: status === 'red' ? 1 : 0, warnings };
+  return { report, lines: summaryLines(report, o.flows, B), exitCode: status === 'red' ? 1 : 0, warnings };
 }
 
 module.exports = { run, selectTests, selectFlows };

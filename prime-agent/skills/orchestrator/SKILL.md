@@ -78,7 +78,7 @@ On invocation with a plain-language task description (and optional `--setup`):
 **Run state — one rule for every step.** Each command below is `node .orchestrator/run-state.cjs …`, and `<run>` is `run_dir`'s basename, typed out, never a variable, since the watchdog reads it from the command. Single-quote free text, each `'` as `'\''`: in double quotes the shell runs backticks and expands `$`.
 
 - `start <run> --host {claude-code|opencode|prime}` as soon as Step 0a mints `run_dir` (exit 3 names another run still holding the project: supersede a `waiting` one with `--force`, and ask the operator first (`AskUserQuestion` / `question`) about an `active` one); `next <run> 'Step {N} — {what}' --note '{the paths, ids and cycle counts a resume needs}'` on entering each step and sub-step from Step 1 on; `done <run>` once Step 7b prints its `pipeline complete` banner.
-- Once started, before ending the turn on a `STALLED` banner or on anything else that waits for the operator, run `wait <run> '{its Status line, or what you are waiting for}'`.
+- Once started, end a turn awaiting the operator (`STALLED`, a question) by `wait <run> '{Status line or question}'`; after a background spawn, `dispatch <run> '{what}'`.
 - **Decisions are keyed by id.** Before asking the operator about an FR, gap, AC or requirement id, run `lookup <run> {id} --spec {spec_id} --all`; on a hit whose `question` asks what you would, use its answer and print `Decision reused: {id} — {answer}`. Record every answer about an id with `decide <run> {id} --spec {spec_id} --question '{q}' --answer '{a}'`, and a recorded default you apply without asking with `--by default`.
 - **The six execution budgets can be raised in session, never lowered**: `max_contract_amendments`, `max_review_cycles`, `max_family_cycles`, `max_qa_cycles`, `max_run_minutes` and `gate_wall_clock_minutes`, each starting from its Step 0b value. When a started run reaches one, you may ask the operator (`AskUserQuestion` / `question`) whether to raise it instead of stopping: show the cap, its current value and the proposed one, and never label the raise "(Recommended)". On approval run `raise <run> {key} {to} --from {current} --approval '{the answer, verbatim}'` and continue at max(resolved value, highest raise) — re-derive `review_budget` and `eval_remediation_budget` when the key feeds them, pass QA a raised `gate_wall_clock_minutes=` line, and on a resume read it back with `budget <run> {key}`. No raise touches `max_eval_cycles`, `max_spec_requirements`, `rigor`, `parallelism` or `max_parallel_lanes`, and no role raises anything.
 
@@ -355,7 +355,7 @@ If the current branch is also protected (dirty + protected), drop option 1 from 
 
 - **Use current branch:** no-op. Continue to Step 0b.
 - **New branch:** ask for a branch name. Default: `orch/{YYYY-MM-DD-HHMM}-{first-3-or-4-kebab-words-of-input}` (e.g. `orch/2026-05-21-1430-add-list-sharing`). Run `git checkout -b {name}`. Verify with `git rev-parse --abbrev-ref HEAD`.
-- **New worktree:** ask for branch name (same default as above) and worktree path. Default path: `../{repo-name}-{slug}`, or `.worktrees/{slug}` if `.worktrees/` already exists in the repo. Run `git worktree add {path} -b {name}`; a checkout holds only tracked files, so copy B3's in: `mkdir -p {path}/.orchestrator && cp -R .orchestrator/{*.cjs,artifact-format*.md,config.md,gate-config.md,lane-protocol.md,html-templates} {path}/.orchestrator/`. `cd {path}` for the rest of the pipeline — every subagent invocation, every file path, every `git` call from here on is rooted at the worktree, and so is the run state the watchdog follows.
+- **New worktree:** ask for branch name (same default as above) and worktree path. Default path: `../{repo-name}-{slug}`, or `.worktrees/{slug}` if `.worktrees/` already exists in the repo. Run `git worktree add {path} -b {name}`; a checkout holds only tracked files, so copy B3's in: `mkdir -p {path}/.orchestrator && cp -R .orchestrator/{*.cjs,artifact-format*.md,config.md,gate-config.md,lane-protocol.md,html-templates,engine} {path}/.orchestrator/`. `cd {path}` for the rest of the pipeline — every subagent invocation, every file path, every `git` call from here on is rooted at the worktree, and so is the run state the watchdog follows.
 - **Commit first:** show `git diff --stat` and `git diff` (truncated) and propose a Conventional-Commit message based on the dirty diff. Confirm with the user, then `git add` the affected paths explicitly (never `git add -A`) and `git commit`. After commit, re-run the case detection.
 - **Stash:** run `git stash push -u -m "orchestrator pre-flight {ISO-timestamp}"`. Explicitly tell the user: *"Your changes are stashed as `{stash-ref}`. Run `git stash pop` after the pipeline finishes."* After the stash, re-run the case detection.
 - **Cancel:** stop. Print:
@@ -774,16 +774,14 @@ parallelism: {resolved parallelism}
 
 #### 0d — Baseline sweep (advisory; it blocks nothing)
 
-**Resolve `baseline_sweep`** with the standard precedence (`references/config.md`). On `off`, skip
-this sub-step entirely. On `always`, run it. On `auto` — the default — run it when the resolved
-`parallelism` is not `off`, and skip it otherwise.
+**Resolve `baseline_sweep`** with the standard precedence (`references/config.md`, which says when to
+override `auto`). On `off`, skip the Commands sweep below. On `always`, run it. On `auto`, the
+default, run it only when the resolved `parallelism` is not `off`.
 
-**`auto` is a proxy, and a rough one.** What the sweep needs to know is *will this run be long enough
-to pay for one extra sweep*, and the only signal available this early is the parallelism level: at
-Step 0 the leaf count does not exist yet, and by the time it does the tree has moved and a baseline
-is no longer takeable. A project whose sequential runs are routinely long should set `always`; one
-doing many small fixes should set `off`. Neither is a worse answer than the default — the default is
-just the one that has to be picked without knowing.
+**The barrier baseline is not that sweep: it runs whenever tiers are declared**, whatever
+`baseline_sweep` says (`.orchestrator/gate-config.md` → *Baselining the barrier*). Run in the
+background, it stays in every `next --note` until its chain writes `baseline/exits`; re-`dispatch`
+it before a turn waits for it; dispatch no coder before that file.
 
 **Why here and nowhere later.** The baseline answers *was this already red before we started*, and it
 can only be measured on a tree carrying none of the run's work. Step 0 is the last moment such a tree
@@ -794,6 +792,7 @@ Run each whole-app suite and gate command from `PROJECT-CONTEXT.md` → Commands
 `tree_base`, and append one `suites[]` row per command to `.orchestrator/verification-ledger.json`
 with `role: "baseline"`, `artifact: "baseline"`, and a `failing[]` array naming every failing test or
 path — the names are the whole point, because attribution is per failure, not per suite.
+A suite Commands maps to a barrier tier is left to the barrier baseline above.
 
 **Nothing here can stop the run.** A red baseline is the *expected* state of a real repository —
 standing lint debt, a flaky suite, an environment-dependent test — and capturing it is what this
@@ -2012,7 +2011,7 @@ what the run has to show for it, and both come from evidence already on disk:
 - **`Instrument moved:`** — every anchored key whose working-tree value disagreed with the merge-base:
   the nine config keys resolved at Step 0b (`references/config.md` → *The anchored set*) and the
   `.cleancode-gates.json` fields the gate runner reports in `report.instrument.moves` or the
-  barrier's `instruments.moves` (`references/gate-config.md`). Copy the values and directions; never
+  barrier's `instruments.moves` (`references/gate-config.md`), plus QA's `instruments_from:` as `barrier tiers from <ref> (absent at base)`. Copy the values and directions; never
   re-derive or summarise them. The run already executed on the merge-base values, so this line
   changes no verdict — it exists because a reviewer must see a branch that moved its own instrument,
   in either direction, before anything else on this banner. `none` when nothing

@@ -89,7 +89,7 @@ were given, the result and the totals. **Inheriting changes nothing about what i
 coverage rule, the per-file floor and the scope above are all unaffected; you are skipping a second
 execution of a command whose result against this exact tree is already recorded.
 
-Run the coverage command from PROJECT-CONTEXT. Below threshold, add unit/integration tests (not e2e) for the lowest-covered changed paths until the thresholds are met or no further meaningful tests remain. Audit existing coder tests for assertion quality (no empty asserts, no tautologies); note weak tests.
+Run the coverage command from PROJECT-CONTEXT; on a change-selected stack (one whose suite the barrier runs as a `change-selected` tier), never a unit-directory sweep in its place. Below threshold, add unit/integration tests (not e2e) for the lowest-covered changed paths until the thresholds are met or no further meaningful tests remain. Audit existing coder tests for assertion quality (no empty asserts, no tautologies); note weak tests.
 
 **If no `.cleancode-gates.json` governs this tree, or it is unreadable, report `BELOW_FLOOR` with the reason `no gate config — <path looked for> not found`** — do not substitute a remembered floor, and do not stop the run. The e2e work and the test-quality audit of this step still stand on their own; a missing config is a bootstrap gap for a human to close, not a tooling failure that invalidates the step. Stopping here would kill a pipeline that used to complete.
 
