@@ -5,7 +5,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
-const { RUN, STEP, project, tempDir, cleanup, readLease, writeFinal, PENDING_LINE } = require('./fixtures/run.cjs');
+const {
+  RUN, STEP, project, v2, writeInFlight, tempDir, cleanup, childEnv, readLease, writeFinal, PENDING_LINE,
+} = require('./fixtures/run.cjs');
 const { blockReason } = require('../orchestrator-stop.cjs');
 
 after(cleanup);
@@ -178,7 +180,7 @@ test('a wait that lands while the plugin awaits the client is never reverted or 
   const client = fakeClient({ messages: OWNED });
   const listed = client.session.messages;
   client.session.messages = async (request) => {
-    const r = cp.spawnSync(process.execPath, [RUN_STATE, '--root', root, 'wait', RUN, 'Status: STALLED — which auth provider?'], { encoding: 'utf8' });
+    const r = cp.spawnSync(process.execPath, [RUN_STATE, '--root', root, 'wait', RUN, 'Status: STALLED — which auth provider?'], { encoding: 'utf8', env: childEnv() });
     assert.strictEqual(r.status, 0, r.stderr);
     return listed(request);
   };
@@ -332,4 +334,134 @@ test('malformed run state and malformed input fail open', async () => {
   await assert.doesNotReject(hooks['experimental.session.compacting'](undefined, undefined));
   await assert.doesNotReject(hooks['experimental.session.compacting']({ sessionID: CONDUCTOR }, {}));
   assert.strictEqual(client.calls.prompts.length, 0);
+});
+
+// ---------- lease v2: the conductor, work in flight, and the session id ----------
+
+const RUN_STATE = path.join(__dirname, '..', '..', 'skills', 'orchestrator', 'scripts', 'run-state.cjs');
+const FLAGS = ['OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS', 'OPENCODE_EXPERIMENTAL'];
+
+/** Run `fn` with opencode's background-subagent flags set as given, in this process, where the plugin reads them. */
+async function withFlags(flags, fn) {
+  const saved = Object.fromEntries(FLAGS.map((key) => [key, process.env[key]]));
+  const set = (values) => {
+    for (const key of FLAGS) {
+      if (values[key] === undefined) delete process.env[key];
+      else process.env[key] = values[key];
+    }
+  };
+  set(flags);
+  try {
+    return await fn();
+  } finally {
+    set(saved);
+  }
+}
+
+test('shell.env gives every command a session runs that session\'s id, and leaves a call without one alone', async () => {
+  const { root } = project();
+  const hooks = await watchdog(fakeClient({ messages: OWNED }), { directory: root, worktree: root });
+  const output = { env: { LANG: 'C' } };
+  await hooks['shell.env']({ cwd: root, sessionID: CONDUCTOR, callID: 'call_01' }, output);
+  assert.deepStrictEqual(output.env, { LANG: 'C', ORCHESTRATOR_SESSION_ID: CONDUCTOR });
+
+  // The terminal pane fires it with the cwd alone.
+  const pty = { env: {} };
+  await hooks['shell.env']({ cwd: root }, pty);
+  assert.deepStrictEqual(pty.env, {});
+  for (const [input, out] of [[undefined, undefined], [{ sessionID: CONDUCTOR }, {}], [{ sessionID: CONDUCTOR }, { env: null }], [{ sessionID: 7 }, { env: {} }]]) {
+    await assert.doesNotReject(hooks['shell.env'](input, out));
+  }
+
+  // The id it sets is the one run-state.cjs records as the conductor.
+  const r = cp.spawnSync(process.execPath, [RUN_STATE, '--root', root, 'next', RUN, STEP], { encoding: 'utf8', env: childEnv(output.env) });
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.strictEqual(JSON.parse(readLease(path.join(root, '.orchestrator', 'runs', RUN))).conductor_session, CONDUCTOR);
+});
+
+test('the conductor the lease names owns the run: it needs no evidence, and another session is never re-prompted', async () => {
+  const { root } = project({ lease: v2({ conductor_session: CONDUCTOR }) });
+  const named = fakeClient({ messages: [USER] });
+  await (await watchdog(named, { directory: root, worktree: root })).event(idle());
+  assert.strictEqual(named.calls.prompts.length, 1);
+  assert.strictEqual(named.calls.prompts[0].body.parts[0].text, blockReason(RUN));
+
+  const other = project({ lease: v2({ conductor_session: 'ses_other' }) });
+  const evidence = fakeClient({ messages: OWNED });
+  const before = readLease(other.dir);
+  await (await watchdog(evidence, { directory: other.root, worktree: other.root })).event(idle());
+  assert.strictEqual(evidence.calls.prompts.length, 0);
+  assert.strictEqual(readLease(other.dir), before);
+});
+
+test('without background subagents, a dispatched run has nothing in flight once idle: it is re-prompted with the returned reason, under the guard', async () => {
+  for (const flags of [{}, { OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS: 'false', OPENCODE_EXPERIMENTAL: 'true' }, { OPENCODE_EXPERIMENTAL: '0' }]) {
+    await withFlags(flags, async () => {
+      const { root, dir } = project({ lease: v2({ state: 'dispatched' }) });
+      writeInFlight(dir, 'reviewer');
+      const client = fakeClient({ messages: OWNED });
+      const hooks = await watchdog(client, { directory: root, worktree: root });
+      await hooks.event(idle());
+      assert.strictEqual(client.calls.prompts.length, 1, JSON.stringify(flags));
+      assert.strictEqual(client.calls.prompts[0].body.parts[0].text, blockReason(RUN, 'returned'));
+      assert.strictEqual(JSON.parse(readLease(dir)).blocks, 1);
+      for (let n = 2; n <= 4; n++) await hooks.event(idle());
+      assert.strictEqual(client.calls.prompts.length, 3, 'the three-block guard holds');
+      assert.strictEqual(JSON.parse(readLease(dir)).state, 'waiting');
+    });
+  }
+});
+
+test('with background subagents on, a dispatched run is in flight and left alone; an active one is still re-prompted', async () => {
+  for (const flags of [
+    { OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS: 'true' },
+    { OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS: '1' },
+    { OPENCODE_EXPERIMENTAL: 'TRUE' },
+    { OPENCODE_EXPERIMENTAL: '1' },
+  ]) {
+    await withFlags(flags, async () => {
+      const { root, dir } = project({ lease: v2({ state: 'dispatched' }) });
+      writeInFlight(dir, 'reviewer');
+      const client = fakeClient({ messages: OWNED });
+      const before = readLease(dir);
+      await (await watchdog(client, { directory: root, worktree: root })).event(idle());
+      assert.strictEqual(client.calls.prompts.length, 0, JSON.stringify(flags));
+      assert.strictEqual(client.calls.get, 0, 'nothing to check, so no client call');
+      assert.strictEqual(readLease(dir), before);
+
+      const activeRun = project();
+      const stalled = fakeClient({ messages: OWNED });
+      await (await watchdog(stalled, { directory: activeRun.root, worktree: activeRun.root })).event(idle());
+      assert.deepStrictEqual(stalled.calls.prompts.map((p) => p.body.parts[0].text), [blockReason(RUN)]);
+    });
+  }
+});
+
+test('a dispatch that lands while the plugin awaits the client wins, when background subagents are on', async () => {
+  await withFlags({ OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS: 'true' }, async () => {
+    const { root, dir } = project();
+    const client = fakeClient({ messages: OWNED });
+    const listed = client.session.messages;
+    client.session.messages = async (request) => {
+      const r = cp.spawnSync(process.execPath, [RUN_STATE, '--root', root, 'dispatch', RUN, 'reviewer'], { encoding: 'utf8', env: childEnv() });
+      assert.strictEqual(r.status, 0, r.stderr);
+      return listed(request);
+    };
+    await (await watchdog(client, { directory: root, worktree: root })).event(idle());
+    assert.strictEqual(client.calls.prompts.length, 0);
+    const lease = JSON.parse(readLease(dir));
+    assert.strictEqual(lease.state, 'dispatched');
+    assert.strictEqual(lease.blocks, 0);
+  });
+});
+
+test('compaction carries the resume line into a dispatched run\'s session too', async () => {
+  const dispatched = project({ lease: v2({ state: 'dispatched' }) });
+  const hooks = await watchdog(fakeClient({ messages: OWNED }), { directory: dispatched.root, worktree: dispatched.root });
+  assert.deepStrictEqual(await compact(hooks), [RESUME_LINE]);
+
+  // By the conductor on record, with no evidence in the window.
+  const named = project({ lease: v2({ state: 'dispatched', conductor_session: CONDUCTOR }) });
+  const namedHooks = await watchdog(fakeClient({ messages: [USER] }), { directory: named.root, worktree: named.root });
+  assert.deepStrictEqual(await compact(namedHooks), [RESUME_LINE]);
 });
