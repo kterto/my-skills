@@ -105,6 +105,12 @@
     {"id": "orchestrator.touchpoint.take-over", "skill": "orchestrator", "enum": "touchpoint", "name": "--take-over", "fixture": "fixtures/replays/conductor-lease.json"},
     {"id": "orchestrator.watchdog.stop-failure-hook", "skill": "orchestrator", "enum": "watchdog", "name": "StopFailure hook", "fixture": "fixtures/replays/stop-failure.json"},
     {"id": "orchestrator.watchdog.background-tasks", "skill": "orchestrator", "enum": "watchdog", "name": "background_tasks", "fixture": "fixtures/replays/in-flight.json"},
-    {"id": "orchestrator.watchdog.returned-reason", "skill": "orchestrator", "enum": "watchdog", "name": "returned", "fixture": "fixtures/replays/in-flight.json"}
+    {"id": "orchestrator.watchdog.returned-reason", "skill": "orchestrator", "enum": "watchdog", "name": "returned", "fixture": "fixtures/replays/in-flight.json"},
+    {"id": "envision.touchpoint.round", "skill": "envision", "enum": "touchpoint", "name": "round", "fixture": "fixtures/replays/envision-round.json"},
+    {"id": "envision.touchpoint.feel", "skill": "envision", "enum": "touchpoint", "name": "feel", "fixture": "fixtures/replays/envision-feel.json"},
+    {"id": "envision.gate.ready", "skill": "envision", "enum": "gate", "name": "ready()", "fixture": "fixtures/replays/envision-ready.json"},
+    {"id": "envision.gate.direction-contract", "skill": "envision", "enum": "gate", "name": "direction contract", "fixture": "fixtures/replays/envision-direction-contract.json"},
+    {"id": "envision.result.agreed", "skill": "envision", "enum": "board.status", "name": "agreed", "fixture": "fixtures/replays/envision-agreement.json"},
+    {"id": "envision.result.draft", "skill": "envision", "enum": "board.status", "name": "draft", "fixture": "fixtures/replays/envision-agreement.json"}
   ]
 }

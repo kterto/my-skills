@@ -1,0 +1,14 @@
+{
+  "id": "envision-round",
+  "kind": "synthetic",
+  "class": "a user who cannot yet say what they want answers question after question while nothing is shown, and the same reaction, filed apart each time, never adds up to a need",
+  "caught_by": "envision's round: render.cjs draws one board from board.json, refuses one whose Your turn holds more than seven decisions (another person's open items do not count toward the owner's), and gives another person a share copy without What I heard, provenance or any other words of the owner's, asking them only what names them; the agent echoes every change with an undo before anything else",
+  "missed_by": "context-builder's convergent grill, as the role-play showed it: questions are engineering-shaped, nothing concrete is shown, the one interviewee is the only authority, and \"getting paid\" heard seven times was filed as seven answers (M1, M2, M4, M5)",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/envision/__tests__/render.test.cjs",
+  "evidence": "docs/adr/0033-envision-a-divergent-step-before-context-builder.md#6-a-round-is-one-board-one-echo-and-at-most-seven-decisions"
+}

@@ -1,0 +1,14 @@
+{
+  "id": "envision-ready",
+  "kind": "synthetic",
+  "class": "agreement declared while the agent's side is incomplete: a pick with no stated miss, an open tension, a first-version feature that is still the agent's guess, or no teach-back, one flow or annoying item on record",
+  "caught_by": "ready(), seven checks in render.cjs: render refuses status agreed while any of them fails and prints each failing line, which the board shows as Before we can agree",
+  "missed_by": "context-builder's convergence, as the role-play showed it: contradictions between accepted answers go untracked, and a reconciling default the agent wrote passes the ambiguity gate (M6, M7)",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/envision/__tests__/render.test.cjs",
+  "evidence": "docs/adr/0033-envision-a-divergent-step-before-context-builder.md#8-ready-holds-agreed-until-the-agents-side-is-complete"
+}
