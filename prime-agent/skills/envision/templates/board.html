@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<!-- envision's vision board. render.cjs swaps the vision-data element for {board, view}; this page draws it
+     and turns marks into Copy lines. Keep, byte for byte: the CSP meta (re-bake after any script edit:
+     node scripts/render.cjs bake templates/board.html), the seam element, and ONE inline script.
+     Text goes in through textContent only; no inline handlers; hrefs stay relative. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-y3qPG7Wuf6brZDdldT9uiC3ZlUTl4TaYbsBKaRKEHIY='; style-src 'unsafe-inline'; img-src data:; font-src data:; base-uri 'none'; form-action 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vision board</title>
+<style>
+/* EDITORIAL DESIGN SYSTEM v1. Product drawings use the --sk greys only; a look tile sets its own. */
+:root {
+  --bg-page: #faf9f7; --bg-surface: #f3f1ee; --bg-overlay: #ece9e4;
+  --text-primary: #1a1917; --text-secondary: #4a4844; --text-muted: #8a8680;
+  --accent: #3730a3; --accent-subtle: #e0e7ff; --accent-focus: #4f46e5; --rule: #d6d2cb; --rule-heavy: #b5b0a8;
+  --ok: #166534; --ok-bg: #dcfce7; --active: #92400e; --active-bg: #fef3c7; --muted: #374151; --muted-bg: #f3f4f6;
+  --sk-bg: #ffffff; --sk-ink: #333333; --sk-accent: #555555;
+  --font-serif: Georgia, "Times New Roman", serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-page: #141312; --bg-surface: #1e1c1a; --bg-overlay: #272420;
+    --text-primary: #f0ece6; --text-secondary: #b8b3ab; --text-muted: #7a7570;
+    --accent: #818cf8; --accent-subtle: #1e1b4b; --accent-focus: #a5b4fc; --rule: #2e2b28; --rule-heavy: #3d3a36;
+    --ok: #86efac; --ok-bg: #14532d; --active: #fcd34d; --active-bg: #451a03; --muted: #9ca3af; --muted-bg: #1f2937;
+    --sk-bg: #1c1c1c; --sk-ink: #dddddd; --sk-accent: #bbbbbb;
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; padding: 0 16px; background: var(--bg-page); color: var(--text-primary); font: 1rem/1.65 var(--font-sans); overflow-wrap: anywhere; }
+main { max-width: 56rem; margin: 0 auto; padding-top: 2rem; }
+h1, h2 { font-family: var(--font-serif); font-weight: 600; line-height: 1.2; margin: 0; }
+h1 { font-size: 2rem; }
+h2 { font-size: 1.5rem; }
+h3 { font-size: 1.05rem; margin: 1rem 0 .25rem; }
+p { margin: .4rem 0; }
+a { color: var(--accent); }
+.muted, .sum, cite { color: var(--text-muted); font-size: .875rem; font-style: normal; }
+.meta, .chip, .badge, .pill, .lines { font-family: var(--font-mono); }
+.badge { font-size: .75rem; background: var(--accent-subtle); color: var(--accent); padding: 1px 6px; border-radius: 4px; vertical-align: middle; }
+.pill { font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; padding: 1px 8px; border-radius: 999px; margin-right: .5rem; background: var(--active-bg); color: var(--active); }
+.pill::before { content: "\25CF  "; }
+.pill.agreed { background: var(--ok-bg); color: var(--ok); }
+.pill.draft { background: var(--muted-bg); color: var(--muted); }
+.meta { font-size: .875rem; color: var(--text-secondary); }
+.banner { border-left: 3px solid var(--rule-heavy); padding-left: .75rem; font-style: italic; color: var(--text-secondary); }
+.old { background: var(--active-bg); color: var(--active); padding: .5rem .75rem; border-radius: 6px; }
+.turn, .sec { border-top: 1px solid var(--rule); padding: .75rem 0; }
+.sec > summary { cursor: pointer; list-style: none; display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem .75rem; }
+.sec > summary::-webkit-details-marker { display: none; }
+.sec > summary::before { content: "\25B6"; font-size: .7rem; color: var(--text-muted); }
+.sec[open] > summary::before { content: "\25BC"; }
+.body { border-left: 3px solid var(--accent); padding-left: 1rem; margin-top: .5rem; }
+.grid { display: grid; gap: .75rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); }
+.card { background: var(--bg-surface); border: 1px solid var(--rule); border-radius: 6px; padding: .75rem; margin-bottom: .75rem; }
+.card.picked { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.card.guess, .sk.guess, .chip.guess { border-style: dashed; }
+.chip { display: inline-block; font-size: .75rem; border: 1px solid var(--rule-heavy); border-radius: 4px; padding: 0 .4rem; margin: 0 .25rem .25rem 0; color: var(--text-secondary); }
+button, input, textarea { font: inherit; color: inherit; }
+.btn { min-height: 2.25rem; margin: .25rem .25rem 0 0; padding: .2rem .65rem; border: 1px solid var(--rule-heavy); border-radius: 4px; background: var(--bg-page); cursor: pointer; }
+.btn[aria-pressed="true"], .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--bg-page); }
+.btn[aria-current="true"] { border-color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent-focus); outline-offset: 2px; }
+.field { display: block; margin-top: .5rem; font-size: .875rem; color: var(--text-secondary); }
+.field input, .field textarea { display: block; width: 100%; margin-top: .2rem; padding: .4rem; border: 1px solid var(--rule-heavy); border-radius: 4px; background: var(--bg-page); }
+.choices { display: inline-flex; flex-wrap: wrap; margin-right: .5rem; }
+blockquote { margin: .5rem 0; padding-left: .75rem; border-left: 2px solid var(--rule-heavy); }
+.checks { padding-left: 1.25rem; }
+.checks .ok { color: var(--text-muted); }
+.cant { font-weight: 600; }
+dt { font-weight: 600; }
+dd { margin: 0 0 .5rem; }
+.frame { --sk-fill: color-mix(in srgb, var(--sk-ink) 9%, var(--sk-bg)); --sk-line: color-mix(in srgb, var(--sk-ink) 45%, var(--sk-bg));
+  background: var(--sk-bg); color: var(--sk-ink); border: 1px solid var(--sk-line); border-radius: 12px; padding: .5rem; margin: .5rem 0; font-size: .875rem; }
+.phone { max-width: 24rem; }
+.sk-row { display: flex; flex-wrap: wrap; gap: .4rem; }
+.sk-row > * { flex: 1 1 6rem; }
+.sk-col { display: flex; flex-direction: column; gap: .4rem; }
+.sk { display: block; width: 100%; padding: .35rem .5rem; border: 1px solid var(--sk-line); border-radius: 4px; background: var(--sk-bg); color: var(--sk-ink); text-align: left; font: inherit; }
+button.sk { cursor: pointer; text-decoration: underline dotted; }
+.sk-label { display: block; font-size: .68rem; letter-spacing: .05em; text-transform: uppercase; opacity: .7; }
+.sk-copy { display: block; }
+.sk-button .sk-label, .sk-badge .sk-label { font-size: inherit; letter-spacing: 0; text-transform: none; opacity: 1; }
+.sk-nav, .sk-tabs, .sk-table { background: var(--sk-fill); }
+.sk-header .sk-copy { font-size: 1.1rem; font-weight: 600; }
+.sk-list .sk-copy, .sk-table .sk-copy, .sk-field .sk-copy { border-bottom: 1px dotted var(--sk-line); }
+.sk-button { background: var(--sk-accent); color: var(--sk-bg); border-radius: 8px; text-align: center; }
+.sk-image { min-height: 4.5rem; background: linear-gradient(to top right, transparent 49.5%, var(--sk-line) 50%, transparent 50.5%), linear-gradient(to top left, transparent 49.5%, var(--sk-line) 50%, transparent 50.5%), var(--sk-fill); }
+.sk-empty { border-style: dashed; text-align: center; }
+.sk-modal { box-shadow: 0 6px 16px rgba(0, 0, 0, .25); }
+.sk-badge { width: auto; align-self: flex-start; border-radius: 999px; }
+.sk-row > .sk-badge { flex: 0 0 auto; }
+.swatch { display: inline-block; width: 2rem; height: 2rem; margin-right: .25rem; border: 1px solid var(--rule-heavy); border-radius: 4px; }
+.dock { position: sticky; bottom: 0; margin-top: 2rem; padding: .5rem .75rem; background: var(--bg-surface); border: 1px solid var(--rule-heavy); border-radius: 8px 8px 0 0; box-shadow: 0 -4px 12px rgba(0, 0, 0, .08); }
+.dock .row { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem .75rem; }
+.dock .row .field { display: flex; align-items: center; gap: .4rem; margin: 0; }
+.dock .row input { width: 8rem; margin: 0; }
+.lines { display: block; width: 100%; white-space: pre-wrap; font-size: .8rem; max-height: 8rem; overflow: auto; padding: .5rem; background: var(--bg-overlay); border-radius: 4px; }
+.nojs { padding: 1rem; background: var(--bg-surface); }
+</style>
+</head>
+<body>
+<noscript><p class="nojs">This page needs JavaScript to draw the board. Nothing is lost: answer in chat, or by message, in your own words.</p></noscript>
+<main id="app"></main>
+<script id="vision-data" type="application/json">/*__VISION_DATA__*/</script>
+<script>
+(function () {
+  "use strict";
+  // Draws the board from the seam and turns marks into Copy lines. Marks stay in this browser, per project
+  // and round, until copied; the page writes no file and an older round's marks are shown, never applied.
+  var app = document.getElementById("app"), raw = document.getElementById("vision-data").textContent;
+  if (raw.trim() === "/*__VISION_DATA__*/") return void el("p", "nojs", "This is the empty template. Open docs/vision/index.html instead.", app);
+  var data = JSON.parse(raw), B = data.board, V = data.view, A = B.agreement, F = B.feel;
+  var owner = !V.for, from = V.for || "me", KEY = "envision:" + B.project + ":" + B.round + (owner ? "" : ":" + V.for);
+  // byId and screens are keyed by board ids, so they have no prototype: an id like "constructor" is just an id.
+  var saved = load(KEY) || {}, marks = saved.marks || {}, byId = Object.create(null), secs = {}, screens = Object.create(null), hist = [], refresh = [];
+  var sec, back, status, manual, missInput, waited = false;
+  if (owner && saved.from) from = saved.from;
+  var BUCKET = { first: "First version", later: "Later", no: "No" }, SOURCE = { said: "you said", picked: "you picked", guess: "my guess" };
+  var KIND = { tension: "Two things you said pull against each other", decision: "To decide", question: "A question" };
+  var DO = { find: "find it again", change: "change it", undo: "undo it" };
+  var LOOK = { adopt: "Your design system, adopted.", impeccable: "Proposed with impeccable.", "claude-design": "Made with Claude Design.", "in-session": "Looks I drew from your words." };
+  [B.concepts, B.screens, B.features, B.open, F.tiles].forEach(function (l) { l.forEach(function (x) { byId[x.id] = { item: x }; }); });
+
+  function el(tag, cls, text, parent) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function btn(text, parent, cls) { var b = el("button", cls || "btn", text, parent); b.setAttribute("type", "button"); return b; }
+  function on(f) { refresh.push(f); f(); }
+  function changed() { saved.sent = false; save(); refresh.forEach(function (f) { f(); }); }
+  function cur(key, now) { return key in marks ? marks[key] : now; }
+  function title(id) { var x = byId[id]; return x ? x.item.title || x.item.name || x.item.text : id; }
+  function q(s) { return "\"" + String(s).replace(/\s+/g, " ").trim() + "\""; }
+  function cut(s) { s = String(s).replace(/\s+/g, " ").trim(); return s.length > 60 ? s.slice(0, 59) + "…" : s; }
+  function store() { try { return window.localStorage; } catch (e) { return null; } }
+  function load(k) { try { return JSON.parse(store().getItem(k)); } catch (e) { return null; } }
+  function save() {
+    try {
+      if (Object.keys(marks).length) store().setItem(KEY, JSON.stringify({ marks: marks, from: from, text: block(), sent: saved.sent }));
+      else store().removeItem(KEY);
+    } catch (e) { /* storage off (private window, blocked site data): marks last until the tab closes */ }
+  }
+
+  // --- Copy lines: one plain line per mark, ids in brackets for the agent ----------------------
+  function line(k, v) {
+    var p = k.split(":"), id = p[1], it = id && q(cut(title(id))) + " [" + id + "]", note = v && v.trim() ? ": " + q(v) : "";
+    if (k === "pick" || k === "tile") return (k === "pick" ? "picked: " : "look: ") + title(v) + " [" + v + "]";
+    if (k === "miss") return "would miss: " + q(v);
+    if (k === "none") return "none of these: " + q(v);
+    if (k === "add") return "add a card: " + q(v);
+    if (k === "note") return "note: " + q(v);
+    if (k === "fine") return "everything else in the walk is fine (" + untouched() + " screens)";
+    if (p[0] === "not") return "not this one: " + title(id) + " [" + id + "]";
+    if (p[0] === "b") return it + ": " + BUCKET[v].toLowerCase();
+    if (p[0] === "do") return it + ": I'll need to " + DO[p[2]];
+    if (p[0] === "w" || p[0] === "tn") return (p[0] === "w" ? "note on " : "note on look ") + it + ": " + q(v);
+    if (p[0] === "a" || p[0] === "o") return "answer to " + it + ": " + q(v);
+    if (p[0] === "who") return "who decides " + it + ": " + q(v);
+    if (p[0] === "i") return "not quite: item " + (+id + 1) + " " + q(cut(A.items[id])) + note;
+    if (p[0] === "h") return "that's not what I meant: " + q(cut(B.heard[id].quotes[p[2]].text)) + " (" + B.heard[id].theme + ")" + note;
+    if (p[0] === "m") return "say more about " + q(B.heard[id].theme) + ": " + q(v);
+  }
+  function block() {
+    return ["envision · round " + B.round + " · from: " + from].concat(Object.keys(marks).map(function (k) {
+      try { return line(k, marks[k]); } catch (e) { return ""; } // a mark on something this round no longer has
+    }).filter(Boolean)).join("\n");
+  }
+  function untouched() { return B.screens.filter(function (s) { return !("w:" + s.id in marks); }).length; }
+
+  // --- Controls: the board's current answer shows pressed; choosing it again drops the mark ----
+  function choice(parent, key, opts, now) {
+    var row = el("div", "choices", null, parent), bs = opts.map(function (o) {
+      var b = btn(o[1], row);
+      b.addEventListener("click", function () {
+        if (o[0] === now || marks[key] === o[0]) delete marks[key]; else marks[key] = o[0];
+        changed();
+      });
+      return b;
+    });
+    on(function () { bs.forEach(function (b, i) { b.setAttribute("aria-pressed", String(opts[i][0] === cur(key, now))); }); });
+    return bs;
+  }
+  function field(parent, key, label, big, keep) {
+    var w = el("label", "field", null, parent), f;
+    el("span", null, label, w);
+    f = el(big ? "textarea" : "input", null, null, w);
+    if (big) f.setAttribute("rows", "2");
+    f.addEventListener("input", function () { if (f.value.trim() || keep) marks[key] = f.value; else delete marks[key]; changed(); });
+    on(function () { var v = key in marks ? marks[key] : ""; if (f.value.trim() !== v.trim()) f.value = v; });
+    return f;
+  }
+  function flag(parent, key, label, note) {
+    var b = btn(label, parent), box = el("div", null, null, parent);
+    field(box, key, note, false, true);
+    b.addEventListener("click", function () { if (key in marks) delete marks[key]; else marks[key] = ""; changed(); });
+    on(function () { b.setAttribute("aria-pressed", String(key in marks)); box.hidden = !(key in marks); });
+  }
+  function reg(id, e) { e.setAttribute("data-id", id); e.setAttribute("tabindex", "-1"); byId[id].el = e; byId[id].sec = sec; return e; }
+  function jumpTo(parent, refs) {
+    if (!refs.length) return;
+    var b = btn("Show me", parent);
+    b.setAttribute("data-refs", refs.join(" "));
+    b.addEventListener("click", function () {
+      var x = refs.map(function (id) { return byId[id]; }).filter(function (x) { return x && x.el; })[0];
+      if (!x) return;
+      x.sec.open = true;
+      if (screens[x.item.id]) walkTo(x.item.id);
+      x.el.focus();
+      if (x.el.scrollIntoView) x.el.scrollIntoView({ block: "center" });
+    });
+  }
+  function rel(l) { return /^(?:[\w.-]+\/)*[\w.-]+$/.test(l.href); } // relative paths only: no scheme, host or root
+  function link(l, parent) {
+    if (!rel(l)) return;
+    var name = l.href.split("/").pop().replace(/\.html$/, "").replace(/[-_]/g, " ");
+    el("a", null, l.kind === "agreement" ? "the agreement" : l.kind === "tokens" ? "the look (colours and type)" : "screen: " + name, parent).setAttribute("href", l.href);
+    el("span", null, " ", parent);
+  }
+
+  // --- Wireframes: greyscale boxes with the real wording; a region with a screen to go to is a button
+  function sketch(n, parent) {
+    if (n.children) { var box = el("div", "sk-" + n.type, null, parent); n.children.forEach(function (c) { sketch(c, box); }); return; }
+    var g = byId[n.feature] && byId[n.feature].item.source === "guess", r = el(n.go ? "button" : "div", "sk sk-" + n.type + (g ? " guess" : ""), null, parent);
+    if (n.go) { r.setAttribute("type", "button"); r.setAttribute("data-go", n.go); r.addEventListener("click", function () { walkTo(n.go, true); }); }
+    if (n.feature) r.setAttribute("data-feature", n.feature);
+    el("span", "sk-label", n.label + (g ? " (my guess)" : ""), r);
+    if (n.copy) el("span", "sk-copy", n.copy, r);
+  }
+  function walkTo(id, focus) {
+    if (!screens[id]) return;
+    hist.push(id);
+    Object.keys(screens).forEach(function (k) { screens[k].el.hidden = k !== id; screens[k].tab.setAttribute("aria-current", String(k === id)); });
+    back.hidden = hist.length < 2;
+    if (focus) { secs.walk.open = true; screens[id].el.focus(); }
+  }
+  function fields(n) { return n.children ? n.children.reduce(function (s, c) { return s + fields(c); }, 0) : +(n.type === "field" || n.type === "form"); }
+
+  // --- The page ---------------------------------------------------------------------------------
+  var done = V.ready.filter(function (r) { return r.ok; }).length;
+  // The agent sets the step each round. Its own section and whatever "Your turn" points into stay open; the rest
+  // collapse to one line. With 6 cards or fewer, sorting what's in shares the Try it round.
+  var step = B.status === "exploring" ? B.step : 4, central = {};
+  central[["", "dirs", "walk", "in", "agree"][step]] = true;
+  central["in"] = central["in"] || (step === 2 && B.features.length > 0 && B.features.length <= 6);
+  central.heard = step === 1;
+  central.look = B.status === "agreed";
+  V.turn.forEach(function (t) { central[{ pick: "dirs", miss: "dirs", walk: "walk", guess: "in" }[t.kind] || "open"] = true; });
+  var stepName = step === 2 && central["in"] ? "Try it and sort what's in" : ["", "Pick a direction", "Try it", "Sort what's in", "Agree"][step];
+  var minutes = Math.max(3, 2 * V.turn.length + (step === 1 ? 2 * B.concepts.length : step === 2 ? B.screens.length : step === 4 ? A.items.length : 0));
+
+  document.title = B.project + " · Round " + B.round;
+  var head = el("header", null, null, app);
+  el("span", "badge", "Round " + B.round, el("h1", null, B.project + " ", head));
+  var meta = el("p", "meta", null, head);
+  el("span", "pill " + B.status, B.status === "draft" ? B.outcome : B.status === "agreed" ? (B.stillToSee.length ? "Agreed, waiting on " + B.stillToSee.join(", ") : "Agreed") : "Still exploring", meta);
+  if (B.status === "exploring") el("span", null, "Step " + step + " of about 4: " + stepName + " · about " + minutes + " min", meta);
+  if (step === 4 && B.status === "exploring" && !A.teach) el("p", "muted", "My read of what we're building stays hidden until you've said it in your own words in chat.", head);
+  else if (B.intent) { var ip = el("p", null, null, head); el("strong", null, "Current intent (my read): ", ip); el("span", null, B.intent, ip); }
+  if (owner) {
+    var lp = el("p", "muted", "Design: ", head), ls = V.links.filter(rel);
+    if (!ls.length) el("span", null, "none yet; the look comes right after we agree.", lp);
+    ls.forEach(function (l) { link(l, lp); });
+  }
+  if (B.changed.length) {
+    var ch = el("details", null, null, head), cl;
+    ch.open = true;
+    el("summary", null, "What changed since last round (" + B.changed.length + ")", ch);
+    cl = el("ul", null, null, ch);
+    B.changed.forEach(function (c) {
+      var li = el("li", null, c.change, cl);
+      if (c.line) el("span", "muted", " From your answer: " + c.line.replace(/\s*\[[A-Za-z][\w-]*\]/g, ""), li);
+    });
+  }
+  el("p", "banner", "A sketch on purpose: tell me what's wrong, not how it looks.", head);
+  el("p", "muted", "Answer in chat in your own words, or mark things here, press Copy and paste the lines in chat.", head);
+  oldMarks(head);
+
+  var turn = el("section", "turn", null, app), tl;
+  el("h2", null, "Your turn (" + V.turn.length + ")", turn);
+  if (!V.turn.length) el("p", "muted", "Nothing to decide this round. Read it through and tell me what's wrong.", turn);
+  tl = el("ol", null, null, turn);
+  V.turn.forEach(function (t) { var li = el("li", null, null, tl); li.setAttribute("data-kind", t.kind); el("span", null, t.text + " ", li); jumpTo(li, t.refs); });
+
+  function section(key, name, summary, build) {
+    sec = secs[key] = el("details", "sec", null, app);
+    sec.setAttribute("data-section", key);
+    var s = el("summary", null, null, sec);
+    el("h2", null, name, s);
+    el("span", "sum", summary, s);
+    build(el("div", "body", null, sec));
+    sec.open = Boolean(central[key]);
+  }
+  var count = { first: 0, later: 0, no: 0 }, guesses = 0, nFields = 0;
+  B.features.forEach(function (f) { count[f.bucket]++; guesses += f.bucket === "first" && f.source === "guess"; });
+  B.screens.forEach(function (s) { nFields += fields(s.wireframe); });
+  if (B.heard.length || B.people.length || B.tone.length || B.appetite) section("heard", "What I heard", B.heard.map(function (h) { return h.theme + " ×" + h.quotes.length; }).join(" · "), heard);
+  section("dirs", "Directions", B.concepts.length + " directions · " + (B.pick.id ? (owner ? "you picked " : "picked: ") + title(B.pick.id) : "none picked yet"), dirs);
+  if (B.screens.length) section("walk", "Try it", B.screens.length + " screens · " + nFields + (nFields === 1 ? " field" : " fields") + " · about " + Math.max(1, Math.round(B.screens.length / 2)) + " min", walk);
+  if (B.features.length) section("in", "What's in", "First version " + count.first + " · Later " + count.later + " · No " + count.no + (guesses ? " · " + guesses + " still my guess" : ""), whatsIn);
+  section("open", "Open questions", B.open.length ? B.open.length + " open" : "nothing open", openQs);
+  section("agree", "Agreement", B.status === "agreed" ? "agreed" : B.status === "draft" ? B.outcome : owner ? done + " of 7 ready" : "not agreed yet", agreement);
+  section("look", "The look", F.pick ? title(F.pick) + (F.locked ? ", locked" : ", provisional") : F.tiles.length ? F.tiles.length + " looks to pick from" : "comes right after we agree", look);
+  dock();
+
+  function heard(body) {
+    var said = [B.tone.length && "How it should feel: " + B.tone.map(q).join(", "), B.appetite && "How much time: " + B.appetite];
+    if (said[0] || said[1]) el("p", null, said.filter(Boolean).join(" · "), body);
+    B.heard.forEach(function (h, t) {
+      var box = el("div", null, null, body);
+      el("h3", null, h.theme + " ×" + h.quotes.length, box);
+      el("p", "muted", h.episode ? "You told me about a real time this happened." : "No real example yet. Tell me about the last time it happened.", box);
+      h.quotes.forEach(function (x, j) {
+        var bq = el("blockquote", null, null, box);
+        el("p", null, x.text, bq);
+        el("cite", null, "round " + x.round + ", " + (x.from === "me" ? "you" : x.from), bq);
+        flag(bq, "h:" + t + ":" + j, "That's not what I meant", "What did you mean?");
+      });
+      field(box, "m:" + t, "Say more", true);
+    });
+    if (!B.people.length) return;
+    el("h3", null, "Who has a say", body);
+    var ul = el("ul", null, null, body);
+    B.people.forEach(function (p) {
+      var me = p.name === "me", li = el("li", null, null, ul);
+      el("strong", null, (me ? "You" : p.name) + (p.decides ? " (decides)" : "") + ": ", li);
+      el("span", null, "wants " + p.wants + ". What would make " + (me ? "you" : p.name) + " say it failed? " + (p.failsIf || "Not asked yet."), li);
+    });
+  }
+
+  function dirs(body) {
+    el("p", "muted", "Which would you open on Monday? What would you never touch? What would you steal from another? What's missing from all of them?", body);
+    var grid = el("div", "grid", null, body);
+    B.concepts.forEach(function (c) {
+      var card = reg(c.id, el("article", "card", null, grid));
+      el("h3", null, c.title, card);
+      [[c.yours, "your words"], [c.outside, "outside what you said"], [c.existingTools, "uses what you already have"]].forEach(function (t) { if (t[0]) el("span", "chip", t[1], card); });
+      el("p", null, "For: " + c.forWhom, card);
+      el("p", null, "When: " + c.moment, card);
+      sketch(c.home, el("div", "frame", null, card));
+      el("p", "muted", "You'd give up " + c.givesUp + ".", card);
+      choice(card, "pick", [[c.id, "Pick this"]], B.pick.id);
+      choice(card, "not:" + c.id, [["1", "Not this one"]], "");
+      on(function () { card.className = "card" + (cur("pick", B.pick.id) === c.id ? " picked" : ""); });
+    });
+    var mb = el("div", null, null, body), was = owner && B.pick.miss && el("p", "muted", "So far you said: " + q(B.pick.miss), mb);
+    el("p", null, "What will you miss from the others? 'Nothing' is a fine answer.", mb);
+    missInput = field(mb, "miss", "What you'd miss", false);
+    btn("Nothing", mb).addEventListener("click", function () { marks.miss = "nothing"; changed(); });
+    on(function () { mb.hidden = !cur("pick", B.pick.id); if (was) was.hidden = "pick" in marks; });
+    field(body, "none", "None of these? Say what's wrong with all of them", true);
+  }
+
+  function walk(body) {
+    var tabs = el("div", "choices", null, body), stage = el("div", "phone", null, body);
+    B.screens.forEach(function (s, i) {
+      var w = reg(s.id, el("article", null, null, stage)), nx;
+      screens[s.id] = { el: w, tab: btn(i + 1 + ". " + s.title, tabs) };
+      screens[s.id].tab.addEventListener("click", function () { walkTo(s.id, true); });
+      el("h3", null, s.title, w);
+      sketch(s.wireframe, el("div", "frame", null, w));
+      nx = el("p", null, null, w);
+      s.next.forEach(function (id) { btn("Next: " + title(id), nx).addEventListener("click", function () { walkTo(id, true); }); });
+      field(w, "w:" + s.id, "Wrong or missing here?", true);
+    });
+    back = btn("Back", body);
+    back.addEventListener("click", function () { hist.pop(); walkTo(hist.pop(), true); });
+    var fine = choice(body, "fine", [["1", ""]], "")[0];
+    on(function () { fine.textContent = "Everything I didn't touch is fine (" + untouched() + ")"; });
+    walkTo(B.screens[0].id);
+  }
+
+  function whatsIn(body) {
+    var steps = [], grid = el("div", "grid", null, body);
+    B.features.forEach(function (f) { if (steps.indexOf(f.step) === -1) steps.push(f.step); });
+    steps.forEach(function (s) {
+      var col = el("div", null, null, grid);
+      el("h3", null, s, col);
+      B.features.forEach(function (f) { if (f.step === s) card(f, col); });
+    });
+    field(body, "add", "Something missing? Add a card", false);
+    function card(f, col) {
+      var c = reg(f.id, el("article", "card" + (f.source === "guess" ? " guess" : ""), null, col));
+      el("strong", null, f.title, el("p", null, null, c));
+      if (f.source) {
+        el("span", "chip " + f.source, SOURCE[f.source], c);
+        var d = el("details", null, null, c);
+        el("summary", null, "Where did this come from?", d);
+        el("p", "muted", f.source === "said" ? "You said: " + q(f.quote) : f.source === "picked" ? "It came with what you picked." : "My guess: nobody has said it yet. Keep it, move it or drop it.", d);
+      }
+      choice(c, "b:" + f.id, [["first", BUCKET.first], ["later", BUCKET.later], ["no", BUCKET.no]], f.bucket);
+      if (f.bucket !== "first") return;
+      el("p", "muted", "Once it exists, will you need to:", c);
+      Object.keys(DO).forEach(function (k) { choice(c, "do:" + f.id + ":" + k, [["1", DO[k]]], ""); });
+    }
+  }
+
+  function openQs(body) {
+    if (!B.open.length) el("p", "muted", "Nothing open right now.", body);
+    B.open.forEach(function (o) {
+      var c = reg(o.id, el("article", "card", null, body));
+      el("span", "chip", KIND[o.kind], c);
+      el("p", null, o.text, c);
+      if (o.options.length) choice(c, "a:" + o.id, o.options.map(function (x) { return [x, x]; }), "");
+      field(c, "o:" + o.id, o.options.length ? "Or in your own words" : "Your answer", false);
+      el("p", "muted", o.who === (V.for || "me") ? "You decide." : o.who === "me" ? "The person who shared this page decides." : o.who ? o.who + " decides." : "Not yours alone to decide: who decides?", c);
+      if (!o.who) field(c, "who:" + o.id, "Who decides?", false);
+    });
+  }
+
+  function agreement(body) {
+    if (B.status === "agreed") el("p", null, "Agreed in round " + B.round + (owner ? ": you said " + q(A.yes) + " in chat." : "."), body);
+    if (B.status === "draft") el("p", null, B.outcome, body);
+    if (owner) { // the checks ask things of the owner; a share copy carries none
+      el("h3", null, "Before we can agree", body);
+      var ul = el("ul", "checks", null, body);
+      V.ready.forEach(function (r) {
+        var li = el("li", r.ok ? "ok" : null, null, ul);
+        li.setAttribute("data-code", r.code);
+        el("span", null, (r.ok ? "Done: " : "To do: ") + r.text + " ", li);
+        if (!r.ok) jumpTo(li, r.refs);
+      });
+    }
+    if (A.teach) { el("h3", null, "What we're building, in one sentence", body); el("blockquote", null, A.teach, body); }
+    var dl = el("dl", null, null, body);
+    [["The one flow", A.oneFlow && title(A.oneFlow)], ["Could wait", A.couldWait.map(title).join(", ")],
+      ["Would annoy on the first screen", /^none$/i.test(A.annoy.trim()) ? "nothing" : A.annoy && title(A.annoy)]].forEach(function (f) {
+      if (f[1]) { el("dt", null, f[0], dl); el("dd", null, f[1], dl); }
+    });
+    if (A.items.length) {
+      el("h3", null, "What we agree on", body);
+      var ol = el("ol", null, null, body);
+      A.items.forEach(function (t, i) { var li = el("li", null, null, ol); el("span", null, t + " ", li); flag(li, "i:" + i, "Not quite", "What's off?"); });
+    }
+    el("p", "cant", "This page can't agree for you: say yes in chat.", body);
+  }
+
+  function look(body) {
+    el("p", null, F.source ? LOOK[F.source] + (F.locked ? " Locked." : " Provisional until you say 'lock it' in chat.") : "The look comes right after we agree: colours, type and a first look at real screens.", body);
+    var grid = el("div", "grid", null, body), home = byId[B.pick.id];
+    F.tiles.forEach(function (t) {
+      var c = reg(t.id, el("article", "card", null, grid)), sw, mini;
+      el("h3", null, t.name, c);
+      sw = el("div", null, null, c);
+      t.swatches.forEach(function (x) {
+        if (!/^#[0-9a-f]{6}$/i.test(x)) return;
+        var s = el("span", "swatch", null, sw);
+        s.style.background = x;
+        s.setAttribute("role", "img");
+        s.setAttribute("aria-label", x);
+      });
+      t.fonts.forEach(function (f) { el("p", null, "Aa " + f, c).style.fontFamily = f; });
+      mini = el("div", "frame", null, c);
+      ["--sk-bg", "--sk-ink", "--sk-accent"].forEach(function (v, i) { if (/^#[0-9a-f]{6}$/i.test(t.swatches[i] || "")) mini.style.setProperty(v, t.swatches[i]); });
+      if (t.fonts[0]) mini.style.fontFamily = t.fonts[0];
+      if (home) sketch(home.item.home, mini); else mini.hidden = true;
+      el("p", "muted", t.note, c);
+      choice(c, "tile", [[t.id, "Pick this look"]], F.pick);
+      field(c, "tn:" + t.id, "Note on this look", false);
+    });
+    var protos = V.links.filter(function (l) { return l.kind === "prototype"; });
+    if (protos.length) { var p = el("p", null, "First look: ", body); protos.forEach(function (l) { link(l, p); }); }
+  }
+
+  function dock() {
+    var d = el("aside", "dock", null, app), row = el("div", "row", null, d), who, more, pre, n, go, clear;
+    d.setAttribute("aria-label", "Your answer");
+    if (owner) { // a share copy fixes the name; here someone else at this screen can type theirs
+      who = el("input", null, null, el("label", "field", "Answering as ", row));
+      who.value = from;
+      who.addEventListener("input", function () { from = who.value.trim() || "me"; changed(); });
+    } else el("span", null, "Answering as: " + V.for, row);
+    n = el("span", "muted", null, row);
+    go = btn("Copy", row, "btn primary");
+    clear = btn("Clear marks", row);
+    status = el("p", "muted", null, d);
+    status.setAttribute("role", "status");
+    manual = el("textarea", "lines", null, d);
+    manual.setAttribute("readonly", "");
+    manual.setAttribute("aria-label", "Lines to copy");
+    manual.hidden = true;
+    more = el("details", null, null, d);
+    el("summary", null, "Add a note, or see what Copy sends", more);
+    field(more, "note", "A note (on its own it changes nothing)", true);
+    pre = el("pre", "lines", null, more);
+    on(function () { var k = Object.keys(marks).length; n.textContent = k ? k + (k === 1 ? " mark" : " marks") : "No marks yet"; clear.hidden = !k; pre.textContent = block(); });
+    go.addEventListener("click", function () {
+      if (!Object.keys(marks).length) return say("Nothing marked yet. You can also just answer in chat.");
+      if ("pick" in marks && !("miss" in marks) && !waited) { // a new pick waits once for what they'd miss
+        waited = true;
+        secs.dirs.open = true;
+        missInput.focus();
+        return say("One thing first: what will you miss from the other directions? 'Nothing' is fine. Press Copy again to send without it.");
+      }
+      copy(block(), function () { saved.sent = true; save(); });
+    });
+    clear.addEventListener("click", function () { Object.keys(marks).forEach(function (k) { delete marks[k]; }); changed(); say("Marks cleared."); });
+  }
+  function say(t) { status.textContent = t; }
+
+  // Clipboard first, then the execCommand fallback, then the lines pre-selected for a manual copy.
+  function copy(text, after) {
+    function done() { manual.hidden = true; say("Copied. Paste it in chat."); after(); }
+    function fallback() {
+      var ta = el("textarea", null, null, document.body), copied = false;
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "absolute";
+      ta.style.left = "-9999px";
+      ta.select();
+      try { copied = document.execCommand("copy"); } catch (e) { copied = false; }
+      document.body.removeChild(ta);
+      if (copied) return done();
+      manual.value = text;
+      manual.hidden = false;
+      manual.focus();
+      manual.select();
+      say("This browser blocks copying. The lines are selected below: press Ctrl+C (Cmd+C on a Mac), then paste them in chat.");
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback);
+    else fallback();
+  }
+
+  // Marks from an earlier round's page, not yet sent: shown with their own round, never applied here.
+  function oldMarks(parent) {
+    var s = store(), pre = "envision:" + B.project + ":";
+    try {
+      for (var i = s.length - 1; i >= 0; i--) {
+        var k = s.key(i), m = k.indexOf(pre) === 0 && /^(\d+)(?::(.+))?$/.exec(k.slice(pre.length)), o = m && load(k);
+        if (!o || +m[1] >= B.round || (m[2] || "") !== (V.for || "")) continue;
+        if (o.sent) s.removeItem(k); else stale(k, +m[1], o.text);
+      }
+    } catch (e) { /* no storage, nothing to show */ }
+    function stale(k, r, text) {
+      var box = el("div", "old", null, parent), drop = function () { try { s.removeItem(k); } catch (e) { /* ignore */ } box.hidden = true; };
+      el("p", null, "You marked the round " + r + " page and didn't send it. Those marks are kept apart, because the page has changed since.", box);
+      el("pre", "lines", text, box);
+      btn("Copy them as they were", box).addEventListener("click", function () { copy(text, drop); });
+      btn("Throw them away", box).addEventListener("click", drop);
+    }
+  }
+}());
+</script>
+</body>
+</html>

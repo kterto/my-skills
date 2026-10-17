@@ -133,6 +133,22 @@
       ]
     },
     {
+      "name": "envision",
+      "files": [
+        "__tests__/fixtures/prototype-good.html",
+        "__tests__/fixtures/sample-board.json",
+        "__tests__/render.test.cjs",
+        "__tests__/template.test.cjs",
+        "references/design.md",
+        "references/rounds.md",
+        "scripts/render.cjs",
+        "SKILL.md",
+        "templates/board.html",
+        "templates/PRD.template.md",
+        "templates/prototype.html"
+      ]
+    },
+    {
       "name": "explain-codebase",
       "files": [
         "__tests__/analysis-schema.test.cjs",

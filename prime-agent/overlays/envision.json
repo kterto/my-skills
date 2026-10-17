@@ -1,0 +1,17 @@
+{
+  "skill": "envision",
+  "dropFrontmatterKeys": [
+    "allowed-tools"
+  ],
+  "insertAfterFrontmatter": [
+    "preamble.md"
+  ],
+  "replacements": [
+    {
+      "why": "The dual-host paragraph names Claude Code and opencode, neither of which is the Prime Agent host, names a Skill/skill tool Prime does not have for invoking impeccable, and claims an allowed-tools frontmatter this overlay drops. Prime has no picker and opens no page, so it asks in numbered prose and defaults to text mode, as the Hosts table already says.",
+      "count": 1,
+      "find": "**Dual-host.** This single `SKILL.md` serves both Claude Code and opencode via the\nin-place dual-host pattern — there is **no** `.opencode/skills/envision/` override port.\nWhere a host construct differs, both variants are named inline: `AskUserQuestion`\n(Claude) / `question` (opencode); `Skill` (Claude) / `skill` (opencode) to invoke\nimpeccable. The `allowed-tools` frontmatter lists both host variants of every tool the\nbody uses.",
+      "replace": "**Host.** This is the Prime Agent port of a skill whose source serves several hosts from\none `SKILL.md`. Where the body below names a host construct, use the Prime equivalent:\nask the user normally in the conversation, as numbered choices, instead of\n`AskUserQuestion`/`question`. `Skill`/`skill` does not exist here, so impeccable is never\ninvoked at Feel: say so in one line, print no command, and go on to the tiles. Text mode is\nthe default, and the board's path is printed rather than opened. This port carries **no** `allowed-tools` frontmatter —\nPrime Agent does not read one — so the tools the body uses are the ordinary shell and file\ntools the session already has. The skill still never commits and never pushes."
+    }
+  ]
+}
