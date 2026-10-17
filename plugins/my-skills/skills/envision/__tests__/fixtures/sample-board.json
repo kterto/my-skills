@@ -1,0 +1,176 @@
+{
+  "$comment": "envision board.json, schema 1. This sample is the schema document: every key below is required, every list shows one entry at least, and render.cjs refuses any key not shown here. Text is plain text. step is the page's step this round, 1 Pick a direction, 2 Try it, 3 Sort what's in, 4 Agree. appetite, tone (verbatim words) and notes (engineering facts the user volunteered, verbatim) are never themes in heard. Enums: status exploring|agreed|draft; features[].bucket first|later|no; features[].source said|picked|guess; open[].kind tension|decision|question; feel.source \"\"|adopt|impeccable|claude-design|in-session. open[].who is \"me\" (the owner), \"\" (nobody named yet) or a person's name; a tension's who is always \"me\". The look (feel) stays empty until status is agreed. outcome is \"\" unless status is draft, then \"On hold\", \"Not building it: <why>\" or \"Solved without building: <how-to>\". Ids (concepts, screens, features, open, feel.tiles) are unique across the board. A sketch (concepts[].home, screens[].wireframe) is a tree of {type: row|col, children: [...]} and regions {type, label (1-40), copy (<=120), feature (a features id), go (a screens id)}, regions being nav header text list card table form field button image tabs modal empty badge: no colour, font or size fields.",
+  "schema": 1,
+  "project": "Freelance money",
+  "round": 4,
+  "step": 4,
+  "status": "agreed",
+  "outcome": "",
+  "stillToSee": ["Rita"],
+  "intent": "Get paid on time without feeling like a debt collector.",
+  "appetite": "a month, tops",
+  "tone": ["calm", "not pushy"],
+  "notes": ["I already send invoices from my bank's app"],
+  "heard": [
+    {
+      "theme": "getting paid",
+      "episode": true,
+      "quotes": [
+        { "text": "Bruno was 45 days late; I felt like a debt collector.", "round": 1, "from": "me" },
+        { "text": "I hate writing the third reminder.", "round": 1, "from": "me" },
+        { "text": "Can I see it before it goes?", "round": 2, "from": "me" }
+      ]
+    },
+    {
+      "theme": "client notes",
+      "episode": false,
+      "quotes": [{ "text": "I keep a note on every client in a spreadsheet.", "round": 1, "from": "me" }]
+    }
+  ],
+  "people": [
+    { "name": "me", "wants": "to be paid without chasing", "failsIf": "a reminder sounds rude", "decides": true },
+    { "name": "Rita", "wants": "exports she can file", "failsIf": "totals differ from the bank", "decides": false }
+  ],
+  "concepts": [
+    {
+      "id": "C1",
+      "title": "Client hub",
+      "forWhom": "you, keeping every client in one place",
+      "moment": "Monday morning, planning the week",
+      "givesUp": "a quick view of who owes what",
+      "outside": false,
+      "yours": true,
+      "existingTools": false,
+      "home": {
+        "type": "col",
+        "children": [
+          { "type": "header", "label": "Clients", "copy": "Everyone you work with." },
+          { "type": "list", "label": "Client list", "copy": "Bruno · last invoice 45 days ago" }
+        ]
+      }
+    },
+    {
+      "id": "C2",
+      "title": "Money board",
+      "forWhom": "you, when a payment is late",
+      "moment": "the day an invoice goes overdue",
+      "givesUp": "the client notes",
+      "outside": false,
+      "yours": false,
+      "existingTools": false,
+      "home": {
+        "type": "col",
+        "children": [
+          { "type": "header", "label": "Money board", "copy": "Who owes you, oldest first." },
+          { "type": "list", "label": "Overdue", "copy": "Bruno · €1,200 · 45 days", "feature": "F1" },
+          { "type": "button", "label": "Draft a nudge", "feature": "F2", "go": "W3" }
+        ]
+      }
+    },
+    {
+      "id": "C3",
+      "title": "Paid on booking",
+      "forWhom": "clients, before the work starts",
+      "moment": "when a client books you",
+      "givesUp": "invoicing after the work",
+      "outside": true,
+      "yours": false,
+      "existingTools": true,
+      "home": {
+        "type": "row",
+        "children": [
+          { "type": "text", "label": "Booking note", "copy": "Half up front, half on delivery." },
+          { "type": "badge", "label": "Paid 50%" }
+        ]
+      }
+    }
+  ],
+  "pick": { "id": "C2", "miss": "the client notes, a bit" },
+  "screens": [
+    {
+      "id": "W1",
+      "title": "Money board",
+      "wireframe": {
+        "type": "col",
+        "children": [
+          { "type": "nav", "label": "Board · Clients" },
+          { "type": "table", "label": "Who owes you", "copy": "Bruno · €1,200 · 45 days", "feature": "F1" },
+          { "type": "button", "label": "Draft a nudge", "go": "W2" }
+        ]
+      },
+      "next": ["W2"]
+    },
+    {
+      "id": "W2",
+      "title": "Draft a nudge",
+      "wireframe": {
+        "type": "form",
+        "label": "Nudge to Bruno",
+        "copy": "Hi Bruno, just a friendly nudge about invoice 14.",
+        "feature": "F2"
+      },
+      "next": ["W3"]
+    },
+    {
+      "id": "W3",
+      "title": "Preview before it goes",
+      "wireframe": {
+        "type": "col",
+        "children": [
+          { "type": "card", "label": "Preview", "copy": "This is exactly what Bruno will read.", "feature": "F3" },
+          { "type": "row", "children": [
+            { "type": "button", "label": "Send", "go": "W4" },
+            { "type": "button", "label": "Edit", "go": "W2" }
+          ] }
+        ]
+      },
+      "next": ["W4", "W2"]
+    },
+    {
+      "id": "W4",
+      "title": "Sent",
+      "wireframe": { "type": "empty", "label": "Nudge sent", "copy": "We'll tell you when Bruno pays." },
+      "next": ["W1"]
+    }
+  ],
+  "features": [
+    { "id": "F1", "title": "Who owes me, by date", "step": "See who owes", "bucket": "first", "source": "said", "quote": "Bruno was 45 days late" },
+    { "id": "F2", "title": "Draft a friendly nudge", "step": "Nudge", "bucket": "first", "source": "picked", "quote": "" },
+    { "id": "F3", "title": "Preview before it goes", "step": "Nudge", "bucket": "first", "source": "said", "quote": "Can I see it before it goes?" },
+    { "id": "F4", "title": "Send reminders automatically", "step": "Nudge", "bucket": "later", "source": "guess", "quote": "" },
+    { "id": "F5", "title": "Client notes", "step": "See who owes", "bucket": "later", "source": "said", "quote": "I keep a note on every client" },
+    { "id": "F6", "title": "Mark as paid", "step": "Get paid", "bucket": "first", "source": "picked", "quote": "" },
+    { "id": "F7", "title": "Card payments", "step": "Get paid", "bucket": "no", "source": "guess", "quote": "" }
+  ],
+  "open": [
+    { "id": "Q1", "kind": "decision", "text": "Should a nudge mention the late fee?", "options": ["Never", "After 30 days"], "who": "me" },
+    { "id": "Q2", "kind": "question", "text": "Which totals does Rita need in the export?", "options": ["Per client", "Per month"], "who": "Rita" }
+  ],
+  "agreement": {
+    "teach": "A calm money board that shows who owes me and drafts a polite nudge I check before it goes.",
+    "oneFlow": "F2",
+    "couldWait": ["F5", "F4"],
+    "annoy": "F4",
+    "items": [
+      "The board shows who owes me, oldest first.",
+      "A nudge is drafted for me and I always see it before it goes.",
+      "Nothing is sent automatically in the first version.",
+      "I mark an invoice paid by hand.",
+      "Client notes wait for later.",
+      "No card payments."
+    ],
+    "yes": "yes"
+  },
+  "feel": {
+    "source": "in-session",
+    "tiles": [
+      { "id": "quiet-ledger", "name": "Quiet ledger", "swatches": ["#F7F5F0", "#2B2A27", "#46664F"], "fonts": ["Georgia, serif", "system-ui, sans-serif"], "note": "paper and ink, one calm green" },
+      { "id": "clear-desk", "name": "Clear desk", "swatches": ["#FFFFFF", "#111827", "#2563EB"], "fonts": ["system-ui, sans-serif"], "note": "bright and plain" }
+    ],
+    "pick": "quiet-ledger",
+    "locked": false
+  },
+  "changed": [
+    { "line": "note on \"Nudge preview\" [W3]: \"can I see it before it goes?\"", "change": "Added a preview step before any nudge is sent." }
+  ]
+}

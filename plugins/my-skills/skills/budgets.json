@@ -21,6 +21,14 @@
       "maxBytes": 3711,
       "adr": "docs/adr/0026-skill-byte-budgets-and-the-admission-rule.md"
     },
+    "envision/SKILL.md": {
+      "maxBytes": 12288,
+      "adr": "docs/adr/0033-envision-a-divergent-step-before-context-builder.md"
+    },
+    "envision/references/rounds.md": {
+      "maxBytes": 8192,
+      "adr": "docs/adr/0033-envision-a-divergent-step-before-context-builder.md"
+    },
     "explain-codebase/SKILL.md": {
       "maxBytes": 41571,
       "adr": "docs/adr/0026-skill-byte-budgets-and-the-admission-rule.md"
@@ -64,6 +72,12 @@
       "include": ["bin/**/*.cjs", "bin/**/*.js", "bin/**/*.mjs", "src/**/*.cjs", "src/**/*.js", "src/**/*.mjs", "*.cjs", "*.js", "*.mjs"],
       "exclude": ["__tests__/**"],
       "adr": "docs/adr/0031-the-engine-runs-from-a-pinned-copy-and-measures-its-base-in-place.md"
+    },
+    "envision": {
+      "maxLines": 360,
+      "include": ["scripts/**/*.cjs"],
+      "exclude": ["__tests__/**"],
+      "adr": "docs/adr/0033-envision-a-divergent-step-before-context-builder.md"
     }
   }
 }

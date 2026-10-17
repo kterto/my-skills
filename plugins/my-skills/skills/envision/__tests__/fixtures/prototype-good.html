@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-4AOlk2Z6oy3UV8DVaPi8fmKCaxqfhRWTMe99eZISp8s='; style-src 'unsafe-inline'; img-src data:; font-src data:; base-uri 'none'; form-action 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nudge preview · first look</title>
+<style>
+/* TOKENS — mirrored from ../design/tokens.css (PROVISIONAL, Quiet ledger) */
+:root {
+  --paper: #F7F5F0; --ink: #2B2A27; --calm: #46664F; --rule: #DAD6CC;
+  --space-1: 4px; --space-2: 8px; --space-3: 16px; --space-4: 24px;
+  --r-1: 4px; --r-2: 10px;
+  --font-display: Georgia, serif; --font-body: system-ui, sans-serif;
+}
+body { margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.5 var(--font-body); }
+.provisional { padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--rule); font-size: 13px; }
+.screen { max-width: 390px; margin: var(--space-4) auto; padding: var(--space-3); }
+.preview { border: 1px solid var(--rule); border-radius: var(--r-2); padding: var(--space-3); }
+button { font: inherit; border-radius: var(--r-1); padding: var(--space-2) var(--space-3); }
+.send { background: var(--calm); color: var(--paper); border: 0; }
+</style>
+</head>
+<body>
+<div class="provisional" role="note">PROVISIONAL: a first look from envision (round 4). The look can still change.</div>
+
+<!-- PANEL 1 — Screen on phone -->
+<main class="screen" data-screen="nudge-preview">
+  <h1>Preview before it goes</h1>
+  <!-- preview before send, because "Can I see it before it goes?" (R2, said) -->
+  <article class="preview" data-preview>
+    <p>Hi Bruno, just a friendly nudge about invoice 14.</p>
+  </article>
+  <button type="button" class="send" data-send>Send</button>
+  <button type="button" data-edit>Edit</button>
+  <!-- pay button: out of scope here (No: card payments) -->
+  <p data-sent hidden>Nudge sent. We'll tell you when Bruno pays.</p>
+</main>
+
+<!-- PANEL 2 — Component gallery -->
+<section class="screen" data-gallery>
+  <div data-state="empty">No one owes you anything right now.</div>
+  <div data-state="one">Bruno · €1,200 · 45 days</div>
+  <div data-state="many">Bruno, Clara and 3 more owe you €4,300.</div>
+  <div data-state="error">That nudge didn't send. Try again.</div>
+  <div data-state="undo">Nudge sent. <button type="button" data-undo>Undo</button></div>
+</section>
+
+<!-- EDITMODE-BEGIN -->
+<script type="application/json" id="editmode">{"client": "Bruno", "invoice": 14, "amount": "€1,200", "daysLate": 45}</script>
+<!-- EDITMODE-END -->
+
+<script>
+(function () {
+  "use strict";
+  var sent = document.querySelector("[data-sent]");
+  document.querySelector("[data-send]").addEventListener("click", function () { sent.hidden = false; });
+  document.querySelector("[data-edit]").addEventListener("click", function () { sent.hidden = true; });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") sent.hidden = true; });
+}());
+</script>
+</body>
+</html>
