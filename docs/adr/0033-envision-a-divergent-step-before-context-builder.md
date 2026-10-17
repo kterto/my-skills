@@ -295,7 +295,8 @@ flash's live check (ADR-0029), it rests on the owner's decision and says so. Its
 gates and result values enter the registry as **fixture plus issue**: each has an entry in
 `fixtures/admission.json` and a synthetic fixture in `fixtures/replays/`, executed by
 `plugins/my-skills/skills/envision/__tests__/render.test.cjs` and citing the decision above that
-defines it, and one issue tracks the missing replay and the unmeasured costs.
+defines it, and one issue ([#58](https://github.com/kterto/my-skills/issues/58)) tracks the
+missing replay and the unmeasured costs.
 
 | Registry id | Registers | Answers | Fixture |
 |---|---|---|---|
