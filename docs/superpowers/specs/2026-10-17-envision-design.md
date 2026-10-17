@@ -107,7 +107,7 @@ escapes, not HTML entities, and the seam element is replaced exactly once.
 | D4 | State | `board.json`, kept by the agent; `render.cjs` validates, gates and injects it |
 | D5 | Fidelity | Greyscale with real wording until agreement, then the look |
 | D6 | Design source | adopt → impeccable on consent → (Inc 1b, Claude Code) Claude Design → in-session tiles; never the root `DESIGN.md` or `PRODUCT.md` |
-| D7 | Budget | `SKILL.md` ceiling 12,288 (target ≤10.5 KB); `references/rounds.md` 8,192; `code.envision` 360 lines |
+| D7 | Budget | `SKILL.md` ceiling 12,288 (target ≤10.5 KB); `references/rounds.md` 8,192; `code.envision` 539 lines |
 
 ### 3.1 Owner decisions (2026-10-17)
 
@@ -160,7 +160,7 @@ escapes, not HTML entities, and the seam element is replaced exactly once.
 The browser writes no file. Unsent marks for the current round stay in
 `localStorage["envision:<project>:<round>"]`, every access wrapped in try/catch.
 
-**`scripts/render.cjs`** is about 350 lines (all of `code.envision` is held to 360) and costs
+**`scripts/render.cjs`** is 539 lines at normal width (all of `code.envision` is held to 539) and costs
 one node call per round.
 
 - **`render`** validates the schema and the DSL whitelist, shuffles directions (never the
@@ -557,7 +557,7 @@ Files under `plugins/my-skills/skills/envision/`:
 | `scripts/render.cjs`; `__tests__/render.test.cjs` with `__tests__/fixtures/sample-board.json` | ~200 + ~200 lines |
 
 As built (accepted in ADR-0033 decision 13): `SKILL.md` 11.4 KB, `rounds.md` 8.0 KB, `design.md`
-6.3 KB, `board.html` 36 KB, `PRD.template.md` 3.3 KB, `prototype.html` 6.6 KB, `render.cjs` 355
+6.3 KB, `board.html` 36 KB, `PRD.template.md` 3.3 KB, `prototype.html` 6.6 KB, `render.cjs` 539
 lines. The templates are read only by `render.cjs` or copied, so their size is a repo cost; the
 prototype check's head parsing and URL decoding are what grew the script.
 
@@ -567,7 +567,7 @@ Code. `references/live.md` arrives with Inc 1b.
 **Checklist:**
 
 1. **`budgets.json`:** `envision/SKILL.md` 12,288; `envision/references/rounds.md` 8,192;
-   `code.envision` 360 lines; context-builder lowered to its measured size. New entries print no
+   `code.envision` 539 lines; context-builder lowered to its measured size. New entries print no
    `BUDGET MOVED` (`scripts/check-skill-budgets.mjs:206-212`).
 2. **ADR-0033** (`origin/main` holds 0031-0032): the front door and its budget; no ownership
    change; the PRD seam; (d)/(e) as an extra option on an existing touchpoint; the admission
@@ -685,7 +685,7 @@ hypothesis, and are read that way.
 | Prose loses determinism; `ready()` sees only fields the agent wrote | Echo with undo; "Right?" on framing, other people and agreement |
 | Venting reaches its subjects | Share copies drop quotes; other people never decide |
 | Data leaves the machine; impeccable's cost and drift | Opt-in consent; cost shown; the in-session floor (impeccable's direction workshop already differs between releases: 63,517 B in the marketplace copy against 62,108 in 4.6.0) |
-| Regrowth after the first real use; round overload | A 12,288-byte ceiling; a budgeted `rounds.md`; a 360-line code ceiling; ≤7 decisions |
+| Regrowth after the first real use; round overload | A 12,288-byte ceiling; a budgeted `rounds.md`; a 539-line code ceiling; ≤7 decisions |
 | Clipboard, phones, no browser | `fallbackCopy`; prose; a plain ask; text mode; Inc 1b's live tier |
 | Brownfield skips specs; two product truths | `--from=docs/`; row (b); issue (c); one writer per file |
 

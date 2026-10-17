@@ -74,7 +74,7 @@
       "adr": "docs/adr/0031-the-engine-runs-from-a-pinned-copy-and-measures-its-base-in-place.md"
     },
     "envision": {
-      "maxLines": 360,
+      "maxLines": 539,
       "include": ["scripts/**/*.cjs"],
       "exclude": ["__tests__/**"],
       "adr": "docs/adr/0033-envision-a-divergent-step-before-context-builder.md"

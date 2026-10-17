@@ -221,7 +221,7 @@ rule that would let envision's yes stand in for context-builder's restatement.
 |---|---|---|
 | `envision/SKILL.md` | 12,288 bytes | The target was at most 10.5 KB; review fixes (the page's `step`, the exit-2 split, the teach-back order, the missing pointers) bring Inc 1 to about 11.4 KB. The ceiling sits under flash's 16,384 and far under the smallest compaction cut measured (20,163 bytes, ADR-0029), so the skill survives a compaction whole. The roughly 0.9 KB left is named for Inc 1b. |
 | `envision/references/rounds.md` | 8,192 bytes | It is read at every round, so it regrows like a `SKILL.md` would. Budgeting a reference follows ADR-0030 decision 11. |
-| `code.envision` | 360 lines | `render.cjs` was planned at about 200 lines, `ready()` about 30 of them; it lands at 355. Most of the growth is the prototype `check` reading a page as a browser does: the CSP `<meta>` only where the browser honours it, entities and CSS escapes decoded before any URL pattern, navigation refused. A line ceiling for code follows ADR-0030 decision 11. |
+| `code.envision` | 539 lines | `render.cjs` was planned at about 200 lines, `ready()` about 30 of them; it lands at 539, formatted like its neighbours (one statement per line, nothing past 120 columns). The ceiling is the measured size: a tighter one would only be met by packing lines. Most of the growth is the prototype `check` reading a page as a browser does: the CSP `<meta>` only where the browser honours it, entities and CSS escapes decoded before any URL pattern, navigation refused. A line ceiling for code follows ADR-0030 decision 11. |
 | `context-builder/SKILL.md` | 12,682 → 12,661 bytes | The size measured after (d) and (e), net −21. Unused headroom invites regrowth (ADR-0026 decision 2). |
 
 New entries print no `BUDGET MOVED`, because the base has no value to compare against
@@ -362,4 +362,4 @@ shipping it.
   exactly one outside; a rendered page or prototype that loads a network resource; a share copy
   that carries What I heard; context-builder digesting a file under `docs/vision/`; on `main`,
   `envision/SKILL.md` over 12,288 bytes, `references/rounds.md` over 8,192, `envision`'s code over
-  360 lines, or context-builder's `SKILL.md` over its lowered ceiling.
+  539 lines, or context-builder's `SKILL.md` over its lowered ceiling.
