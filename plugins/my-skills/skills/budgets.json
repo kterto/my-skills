@@ -14,8 +14,8 @@
       "adr": "docs/adr/0026-skill-byte-budgets-and-the-admission-rule.md"
     },
     "context-builder/SKILL.md": {
-      "maxBytes": 12682,
-      "adr": "docs/adr/0026-skill-byte-budgets-and-the-admission-rule.md"
+      "maxBytes": 12661,
+      "adr": "docs/adr/0033-envision-a-divergent-step-before-context-builder.md"
     },
     "design-to-code/SKILL.md": {
       "maxBytes": 3711,
