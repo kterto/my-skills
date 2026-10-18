@@ -5,10 +5,10 @@
 <!-- envision's vision board. render.cjs swaps the vision-data element for {board, view}; this page draws it
      and turns marks into Copy lines. Keep, byte for byte: the CSP meta (re-bake after any script edit:
      node scripts/render.cjs bake templates/board.html), the seam element, and ONE inline script.
-     Text goes in through textContent only; no inline handlers; hrefs stay relative. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-y3qPG7Wuf6brZDdldT9uiC3ZlUTl4TaYbsBKaRKEHIY='; style-src 'unsafe-inline'; img-src data:; font-src data:; base-uri 'none'; form-action 'none'">
+     Text goes in through textContent only; no inline handlers; hrefs stay relative. No title element: the
+     script sets the title, and a publish to claude.ai names each page itself. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-8cMln9XVtGLO/YoLnMn7K8+8Q6GzYzYGGZgoYjWzyuI='; style-src 'unsafe-inline'; img-src data:; font-src data:; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Vision board</title>
 <style>
 /* EDITORIAL DESIGN SYSTEM v1. Product drawings use the --sk greys only; a look tile sets its own. */
 :root {
@@ -21,14 +21,22 @@
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
 }
+/* Dark tokens twice, as the host page contract asks: by the OS setting unless the viewer chose light, and by the viewer's choice. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg-page: #141312; --bg-surface: #1e1c1a; --bg-overlay: #272420;
     --text-primary: #f0ece6; --text-secondary: #b8b3ab; --text-muted: #7a7570;
     --accent: #818cf8; --accent-subtle: #1e1b4b; --accent-focus: #a5b4fc; --rule: #2e2b28; --rule-heavy: #3d3a36;
     --ok: #86efac; --ok-bg: #14532d; --active: #fcd34d; --active-bg: #451a03; --muted: #9ca3af; --muted-bg: #1f2937;
     --sk-bg: #1c1c1c; --sk-ink: #dddddd; --sk-accent: #bbbbbb;
   }
+}
+:root[data-theme="dark"] {
+  --bg-page: #141312; --bg-surface: #1e1c1a; --bg-overlay: #272420;
+  --text-primary: #f0ece6; --text-secondary: #b8b3ab; --text-muted: #7a7570;
+  --accent: #818cf8; --accent-subtle: #1e1b4b; --accent-focus: #a5b4fc; --rule: #2e2b28; --rule-heavy: #3d3a36;
+  --ok: #86efac; --ok-bg: #14532d; --active: #fcd34d; --active-bg: #451a03; --muted: #9ca3af; --muted-bg: #1f2937;
+  --sk-bg: #1c1c1c; --sk-ink: #dddddd; --sk-accent: #bbbbbb;
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -116,11 +124,14 @@ button.sk { cursor: pointer; text-decoration: underline dotted; }
   var app = document.getElementById("app"), raw = document.getElementById("vision-data").textContent;
   if (raw.trim() === "/*__VISION_DATA__*/") return void el("p", "nojs", "This is the empty template. Open docs/vision/index.html instead.", app);
   var data = JSON.parse(raw), B = data.board, V = data.view, A = B.agreement, F = B.feel;
+  // HOSTED: opened on claude.ai, where window.claude exists. Offline it is false and none of the hosted block below runs.
+  var HOSTED = Boolean(window.claude && typeof window.claude.use === "function");
   var owner = !V.for, from = V.for || "me", KEY = "envision:" + B.project + ":" + B.round + (owner ? "" : ":" + V.for);
   // byId and screens are keyed by board ids, so they have no prototype: an id like "constructor" is just an id.
   var saved = load(KEY) || {}, marks = saved.marks || {}, byId = Object.create(null), secs = {}, screens = Object.create(null), hist = [], refresh = [];
-  var sec, back, status, manual, missInput, waited = false;
-  if (owner && saved.from) from = saved.from;
+  var sec, back, status, manual, missInput, waited = false, sync, bar;
+  var live = { doc: null, off: false, busy: false, dirty: false, timer: 0, seen: false, retried: false, send: null, notes: null };
+  if (owner && saved.from && !HOSTED) from = saved.from; // hosted, the account is the identity
   var BUCKET = { first: "First version", later: "Later", no: "No" }, SOURCE = { said: "you said", picked: "you picked", guess: "my guess" };
   var KIND = { tension: "Two things you said pull against each other", decision: "To decide", question: "A question" };
   var DO = { find: "find it again", change: "change it", undo: "undo it" };
@@ -136,7 +147,8 @@ button.sk { cursor: pointer; text-decoration: underline dotted; }
   }
   function btn(text, parent, cls) { var b = el("button", cls || "btn", text, parent); b.setAttribute("type", "button"); return b; }
   function on(f) { refresh.push(f); f(); }
-  function changed() { saved.sent = false; save(); refresh.forEach(function (f) { f(); }); }
+  function repaint() { refresh.forEach(function (f) { f(); }); }
+  function changed() { saved.sent = false; save(); push(); repaint(); }
   function cur(key, now) { return key in marks ? marks[key] : now; }
   function title(id) { var x = byId[id]; return x ? x.item.title || x.item.name || x.item.text : id; }
   function q(s) { return "\"" + String(s).replace(/\s+/g, " ").trim() + "\""; }
@@ -204,7 +216,8 @@ button.sk { cursor: pointer; text-decoration: underline dotted; }
     b.addEventListener("click", function () { if (key in marks) delete marks[key]; else marks[key] = ""; changed(); });
     on(function () { b.setAttribute("aria-pressed", String(key in marks)); box.hidden = !(key in marks); });
   }
-  function reg(id, e) { e.setAttribute("data-id", id); e.setAttribute("tabindex", "-1"); byId[id].el = e; byId[id].sec = sec; return e; }
+  function reg(id, e) { // k- keeps a board id like "app" from colliding with the page's own ids
+    e.setAttribute("data-id", id); e.setAttribute("id", "k-" + id); e.setAttribute("data-comment-target", ""); e.setAttribute("tabindex", "-1"); byId[id].el = e; byId[id].sec = sec; return e; }
   function jumpTo(parent, refs) {
     if (!refs.length) return;
     var b = btn("Show me", parent);
@@ -222,7 +235,9 @@ button.sk { cursor: pointer; text-decoration: underline dotted; }
   function link(l, parent) {
     if (!rel(l)) return;
     var name = l.href.split("/").pop().replace(/\.html$/, "").replace(/[-_]/g, " ");
-    el("a", null, l.kind === "agreement" ? "the agreement" : l.kind === "tokens" ? "the look (colours and type)" : "screen: " + name, parent).setAttribute("href", l.href);
+    var text = l.kind === "agreement" ? "the agreement" : l.kind === "tokens" ? "the look (colours and type)" : "screen: " + name;
+    if (HOSTED) return void el("span", null, text + " (a file on your computer) ", parent); // a relative link would go nowhere here
+    el("a", null, text, parent).setAttribute("href", l.href);
     el("span", null, " ", parent);
   }
 
@@ -281,7 +296,8 @@ button.sk { cursor: pointer; text-decoration: underline dotted; }
     });
   }
   el("p", "banner", "A sketch on purpose: tell me what's wrong, not how it looks.", head);
-  el("p", "muted", "Answer in chat in your own words, or mark things here, press Copy and paste the lines in chat.", head);
+  el("p", "muted", !HOSTED ? "Answer in chat in your own words, or mark things here, press Copy and paste the lines in chat."
+    : (owner ? "Mark things here and they are saved for me. Tell me in chat when you are done." : "Mark things here, then press Send for the person who shared this page.") + " Copy still sends the same lines.", head);
   oldMarks(head);
 
   var turn = el("section", "turn", null, app), tl;
@@ -310,6 +326,7 @@ button.sk { cursor: pointer; text-decoration: underline dotted; }
   section("agree", "Agreement", B.status === "agreed" ? "agreed" : B.status === "draft" ? B.outcome : owner ? done + " of 7 ready" : "not agreed yet", agreement);
   section("look", "The look", F.pick ? title(F.pick) + (F.locked ? ", locked" : ", provisional") : F.tiles.length ? F.tiles.length + " looks to pick from" : "comes right after we agree", look);
   dock();
+  if (HOSTED) join();
 
   function heard(body) {
     var said = [B.tone.length && "How it should feel: " + B.tone.map(q).join(", "), B.appetite && "How much time: " + B.appetite];
@@ -476,10 +493,13 @@ button.sk { cursor: pointer; text-decoration: underline dotted; }
     if (owner) { // a share copy fixes the name; here someone else at this screen can type theirs
       who = el("input", null, null, el("label", "field", "Answering as ", row));
       who.value = from;
-      who.addEventListener("input", function () { from = who.value.trim() || "me"; changed(); });
+      if (HOSTED) who.setAttribute("readonly", ""); // the signed-in account is who answers
+      else who.addEventListener("input", function () { from = who.value.trim() || "me"; changed(); });
     } else el("span", null, "Answering as: " + V.for, row);
     n = el("span", "muted", null, row);
+    sync = el("span", "muted", null, row);
     go = btn("Copy", row, "btn primary");
+    bar = { box: d, row: row, copy: go };
     clear = btn("Clear marks", row);
     status = el("p", "muted", null, d);
     status.setAttribute("role", "status");
@@ -494,17 +514,19 @@ button.sk { cursor: pointer; text-decoration: underline dotted; }
     on(function () { var k = Object.keys(marks).length; n.textContent = k ? k + (k === 1 ? " mark" : " marks") : "No marks yet"; clear.hidden = !k; pre.textContent = block(); });
     go.addEventListener("click", function () {
       if (!Object.keys(marks).length) return say("Nothing marked yet. You can also just answer in chat.");
-      if ("pick" in marks && !("miss" in marks) && !waited) { // a new pick waits once for what they'd miss
-        waited = true;
-        secs.dirs.open = true;
-        missInput.focus();
-        return say("One thing first: what will you miss from the other directions? 'Nothing' is fine. Press Copy again to send without it.");
-      }
-      copy(block(), function () { saved.sent = true; save(); });
+      if (!missFirst("Copy")) copy(block(), function () { saved.sent = true; save(); });
     });
     clear.addEventListener("click", function () { Object.keys(marks).forEach(function (k) { delete marks[k]; }); changed(); say("Marks cleared."); });
   }
   function say(t) { status.textContent = t; }
+  function missFirst(name) { // a new pick waits once, for Copy and Send alike, for what they'd miss
+    if (!("pick" in marks) || "miss" in marks || waited) return false;
+    waited = true;
+    secs.dirs.open = true;
+    missInput.focus();
+    say("One thing first: what will you miss from the other directions? 'Nothing' is fine. Press " + name + " again to send without it.");
+    return true;
+  }
 
   // Clipboard first, then the execCommand fallback, then the lines pre-selected for a manual copy.
   function copy(text, after) {
@@ -546,6 +568,105 @@ button.sk { cursor: pointer; text-decoration: underline dotted; }
       btn("Copy them as they were", box).addEventListener("click", function () { copy(text, drop); });
       btn("Throw them away", box).addEventListener("click", drop);
     }
+  }
+  // --- Hosted (claude.ai): the same page plus saved marks and Comment buttons ----------------------
+  // Each part waits for its capability and does nothing without it, so offline and view-only pages keep the floor:
+  // marks in this browser, and Copy. The row is the Copy block, written whole by this page and only this page:
+  // the owner's board saves as they mark; a person's page writes nothing until they press Send.
+  function join() {
+    var C = window.claude;
+    function cap(name) { return Promise.resolve().then(function () { return C.use(name); }).then(function (x) { return x || null; }, function () { return null; }); }
+    cap("comments").then(function (c) { if (c) { live.notes = c; commentButtons(c); } });
+    Promise.all([cap("db"), cap("user")]).then(function (p) {
+      if (!p[0] || !p[1]) return liveStop("Marks stay in this browser. Press Copy and send the lines.");
+      return Promise.all([p[1].isOwner(), p[1].id()]).then(function (w) { attach(p[0], w[0], w[1]); });
+    }).catch(function () { liveStop("Marks stay in this browser. Press Copy and send the lines."); });
+  }
+  function attach(db, isOwner, uid) {
+    if (owner && !isOwner) return lockOut(); // the owner's board seen by someone else
+    if (!owner && isOwner) return liveStop("You made this page, so your marks here are a preview and are not saved.");
+    if (!(owner ? "owner" : uid)) return liveStop("Marks stay in this browser. Press Copy and send the lines.");
+    live.doc = db.doc("marks/" + (owner ? "owner" : uid));
+    if (!owner) { bar.copy.className = "btn"; live.send = btn("Send", bar.row, "btn primary"); live.send.addEventListener("click", send); }
+    live.doc.onSnapshot(rowSeen, function () { liveStop("Marks can't be saved here. Press Copy and send the lines."); });
+  }
+  // The first settled read restores marks made on another device; a row from a newer round stops this page writing.
+  // This callback never writes: on the owner's board it only schedules the save a change would.
+  function rowSeen(snap) {
+    var d = snap.exists ? snap.data() : null;
+    if (d && d.round > B.round) return liveStop("There is a newer round of this page. Reload it; Copy still sends what you marked here.");
+    if (live.seen || (snap.metadata && snap.metadata.fromCache)) return;
+    live.seen = true;
+    if (d && d.round === B.round && !Object.keys(marks).length) restore(d.marks);
+    if (!owner) liveNote("Nothing leaves this page until you press Send.");
+    else if (Object.keys(marks).length) push(); else liveNote("Your marks are saved as you make them.");
+  }
+  // A row is data: only its own keys with text values come back, and "__proto__" is never a mark.
+  function restore(m) {
+    if (!m || typeof m !== "object") return;
+    Object.keys(m).forEach(function (k) { if (k !== "__proto__" && typeof m[k] === "string") marks[k] = m[k]; });
+    repaint();
+  }
+  function row() { return { v: 1, round: B.round, n: Object.keys(marks).length, text: block(), marks: JSON.parse(JSON.stringify(marks)) }; }
+  // The owner's board: a burst of marks is one write. A person's page only notes that its marks are not sent yet.
+  function push() {
+    if (!live.doc || live.off) return;
+    if (!owner) return liveNote("Not sent yet: press Send when you are done.");
+    live.dirty = true;
+    later();
+  }
+  function later() { if (!live.timer) live.timer = window.setTimeout(flush, 500); }
+  function send() {
+    if (live.off) return;
+    if (!Object.keys(marks).length) return say("Nothing marked yet. You can also just answer in chat.");
+    if (missFirst("Send")) return;
+    live.dirty = true;
+    flush();
+  }
+  // One write at a time, newest state wins: a mark or a Send made mid-write is written after it.
+  function flush() {
+    live.timer = 0;
+    if (live.busy || live.off || !live.dirty) return;
+    var r = row();
+    live.busy = true;
+    live.dirty = false;
+    liveNote(owner ? "Saving…" : "Sending…");
+    live.doc.set(r).then(function () {
+      live.retried = false;
+      if (live.dirty) return; // a newer write follows and reports
+      var current = r.text === block();
+      if (current) { saved.sent = true; save(); }
+      if (owner) return liveNote("Saved. Tell me in chat when you are done.");
+      liveNote(current ? "Sent to the person who shared this page." : "Not sent yet: press Send when you are done.");
+      told();
+    }, function (e) {
+      if (e && e.code === "unavailable" && !live.retried) { live.retried = true; live.dirty = true; return; } // once, with the next write
+      liveStop(owner ? "Couldn't save your marks. Press Copy and send the lines." : "Couldn't send from here. Press Copy and send the lines by message.");
+    }).then(function () { live.busy = false; if (live.dirty) later(); });
+  }
+  // After a Send the shell's comment box opens on the dock, for a line to the owner; a refusal is fine.
+  function told() {
+    say("Sent.");
+    if (live.notes) Promise.resolve().then(function () { return live.notes.openComposer({ element: bar.box }); }).then(function (x) {
+      if (x && x.opened) say("Sent. Add a line for them in the comment box, if you like.");
+    }, function () { /* no comment box in this view: nothing to do */ });
+  }
+  function liveNote(t) { if (sync) sync.textContent = t; }
+  function liveStop(t) {
+    live.off = true;
+    if (live.timer) window.clearTimeout(live.timer);
+    live.timer = 0;
+    if (live.send) { live.send.hidden = true; bar.copy.className = "btn primary"; }
+    liveNote(t);
+  }
+  function lockOut() { liveStop(""); app.textContent = ""; el("p", "nojs", "This page belongs to the person who made it.", app); }
+  function commentButtons(c) {
+    Object.keys(byId).forEach(function (id) {
+      var x = byId[id];
+      if (x.el) btn("Comment", x.el).addEventListener("click", function () {
+        Promise.resolve().then(function () { return c.openComposer({ element: x.el }); }).catch(function () { /* no composer in this view: nothing to do */ });
+      });
+    });
   }
 }());
 </script>
