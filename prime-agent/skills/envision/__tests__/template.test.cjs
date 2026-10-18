@@ -631,6 +631,28 @@ test("hosted: restoring a row copies only its own text values that are marks, an
   assert.strictEqual(clip[0], "envision · round 4 · from: me\nnot this one: Money board [C2]", "a number, a prototype name or an unknown key is not a mark");
 });
 
+test("hosted: a row from an earlier round restores nothing and is not written back as this round", async () => {
+  const rows = new Map([["marks/owner", { v: 1, round: 3, n: 1, text: "envision · round 3 · from: me\npicked: Paid on booking [C3]", marks: { pick: "C3" } }]]);
+  const owner = await hosted(exploring(), { rows });
+  await flushTimers(owner.timers);
+  assert.strictEqual(button(byData(owner.app, "C3"), "Pick this").attrs["aria-pressed"], "false");
+  assert.match(allText(dockOf(owner.app)), /No marks yet/);
+  assert.strictEqual(owner.claude.writes.length, 0, "round 3's marks never become round 4's");
+  const person = await ana({ rows: new Map([["marks/u_ana", { v: 1, round: 3, n: 1, text: "…", marks: { "b:F5": "first" } }]]) });
+  await flushTimers(person.timers);
+  assert.strictEqual(button(byData(person.app, "F5"), "First version").attrs["aria-pressed"], "false");
+  assert.match(allText(dockOf(person.app)), /No marks yet/);
+  assert.strictEqual(person.claude.writes.length, 0);
+});
+
+test("hosted: a row holding marks on things this page does not have still restores the rest, and Send still shows", async () => {
+  const rows = new Map([["marks/u_ana", { v: 1, round: 4, n: 3, text: "…", marks: { "h:9:9": "", "m:9": "x", "b:F5": "first" } }]]);
+  const { app } = await ana({ rows });
+  assert.strictEqual(button(byData(app, "F5"), "First version").attrs["aria-pressed"], "true");
+  assert.match(allText(dockOf(app)), /\b1 mark\b/);
+  assert.strictEqual(button(dockOf(app), "Send").hidden, false);
+});
+
 test("hosted: reopening a board whose marks are already saved writes nothing, on this device or a fresh one", async () => {
   const storage = new Map();
   const first = await hosted(exploring(), { storage });
