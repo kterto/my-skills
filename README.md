@@ -7,7 +7,7 @@ Authored agent skills for [Claude Code](https://code.claude.com), [opencode](htt
 | Skill | What it does |
 |---|---|
 | `context-builder` | **Start here.** Bootstraps a new project's shared context: ingests pre-existing materials (pitch, PRD, specs, mockups) from `docs/foundation/` or `--from <path>` via a read-only digest fan-out, grills the user until project intent converges two-sided (self-rated threshold **plus** a confirmed restatement), then writes `.orchestrator/PROJECT-CONTEXT.md` — nine required sections plus an optional intent block — with auxiliary docs under `docs/foundation/` the pipeline roles follow by pointer. Re-runnable: `--refresh` proposes per-section updates and never rewrites curated prose outside its managed fence. Stops at a handoff line; never commits. |
-| `envision` | **Optional step 0, before `context-builder`.** For someone who cannot yet say what they want: starts from one real recent episode, shows 2-4 rough directions that genuinely differ (exactly one outside what the user said) on an offline HTML board, then a clickable greyscale walk of the pick with real wording. Agreement is the user's own "yes" in chat, held back by seven `ready()` checks until the agent's side is complete, and it writes `docs/foundation/PRD-<slug>.md` for `context-builder` to ingest. Right after it comes a provisional look (the project's own design system, impeccable on consent, or three in-session tiles) and 1-3 first-look prototypes in `design-to-code`'s format. Others answer through untracked share copies. Dual-host (Claude Code + opencode) from a single SKILL.md. Never commits. |
+| `envision` | **Optional step 0, before `context-builder`.** For someone who cannot yet say what they want: starts from one real recent episode, shows 2-4 rough directions that genuinely differ (exactly one outside what the user said) on an offline HTML board, then a clickable greyscale walk of the pick with real wording. Agreement is the user's own "yes" in chat, held back by seven `ready()` checks until the agent's side is complete, and it writes `docs/foundation/PRD-<slug>.md` for `context-builder` to ingest. Right after it comes a provisional look (the project's own design system, impeccable on consent, Claude Design on Claude Code, or three in-session tiles) and 1-3 first-look prototypes in `design-to-code`'s format. Others answer through untracked share copies. On Claude Code, an opt-in live board on claude.ai saves marks without a paste. Dual-host (Claude Code + opencode) from a single SKILL.md. Never commits. |
 | `clean-code-gates` | Runs Clean Code quality gates (G1–G7: coverage, complexity, length/nesting, naming, no-comments, mutation, dependency-structure) and emits an agnostic JSON + Markdown report. Portable across stacks (node-ts, dart-flutter). |
 | `spec-driven-eval` | Scores a spec-driven implementation requirement by requirement, with separately evidenced implementation and test coverage grades. Two report profiles — `full` for cross-implementation benchmarking, `in-loop` for a pipeline caller — selecting sections only: no scoring rule, threshold, or number changes between them. |
 | `commit-pr` | Stage, commit, push the current branch, and open a PR targeting `main`. Confirms before any remote mutation. |
@@ -169,9 +169,10 @@ reaches the agent through the shell's composer; and the page shows where no brow
 (SSH, the web). Each person whose reaction you want gets their own page, built like their
 share copy and shared by you from claude.ai's share menu; nothing they mark leaves it until
 they press Send, and the agent applies their marks only after you confirm who sent them.
-Your own page is never shared. Copy and the local page stay the floor. At Feel, Claude Design also puts the picked look on claude.ai as a design system and
-a page of the first screens, with `tokens.css` still the only token file. opencode and Prime
-have neither (ADR-0034).
+Your own page is never shared. Copy and the local page stay the floor. At Feel, Claude
+Design also puts the picked look on claude.ai as a design system and a page of the first
+screens, with `tokens.css` still the only token file. opencode and Prime have neither
+(ADR-0034).
 
 ## orchestrator
 
