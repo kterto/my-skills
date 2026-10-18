@@ -22,8 +22,16 @@
       "adr": "docs/adr/0026-skill-byte-budgets-and-the-admission-rule.md"
     },
     "envision/SKILL.md": {
-      "maxBytes": 12288,
-      "adr": "docs/adr/0033-envision-a-divergent-step-before-context-builder.md"
+      "maxBytes": 11608,
+      "adr": "docs/adr/0034-envision-live-tier-and-claude-design.md"
+    },
+    "envision/references/claude-design.md": {
+      "maxBytes": 3840,
+      "adr": "docs/adr/0034-envision-live-tier-and-claude-design.md"
+    },
+    "envision/references/live.md": {
+      "maxBytes": 6144,
+      "adr": "docs/adr/0034-envision-live-tier-and-claude-design.md"
     },
     "envision/references/rounds.md": {
       "maxBytes": 8192,

@@ -1,6 +1,6 @@
 # ADR-0033 — envision: a divergent step before context-builder, admitted as fixture plus issue
 
-- **Status:** Accepted
+- **Status:** Accepted. Extended by [ADR-0034](0034-envision-live-tier-and-claude-design.md), which builds decision 11 and lowers decision 13's `envision/SKILL.md` ceiling to its measured size.
 - **Date:** 2026-10-17
 - **Amends:** no earlier decision. [ADR-0023](0023-project-context-ownership.md) stands as written: context-builder still owns `.orchestrator/PROJECT-CONTEXT.md` and the auxiliary documents it writes under `docs/foundation/`. [ADR-0026](0026-skill-byte-budgets-and-the-admission-rule.md) decision 4 is applied, not changed; *Admission* below says which of its conditions this skill does not meet.
 - **Skills affected:** `envision` (new: `SKILL.md`, `references/rounds.md`, `references/design.md`, `templates/{board.html,PRD.template.md,prototype.html}`, `scripts/render.cjs`, `__tests__/render.test.cjs` with `__tests__/fixtures/sample-board.json`); `context-builder` (`SKILL.md` → the Nothing-found option and the folded never-commit clause; `references/ingestion.md` → the `.html` row, the `docs/vision/**` rule and the same Nothing-found option); `budgets.json` (three entries, one ceiling lowered); `fixtures/admission.json` (six entries) and five fixtures in `fixtures/replays/`, new; `prime-agent/overlays/envision.json`, new, and the generated Prime tree; `.opencode/commands/envision.md`, new; `plugins/my-skills/skills/index.json`; `README.md`, the two manifests and the skill-count pins (13 → 14).
