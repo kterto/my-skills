@@ -46,8 +46,7 @@ from `docs/design_files/home.html`"). The chain never blocks and never installs 
    When the host does not list it, print no command: say "impeccable isn't installed here,
    so I'll propose 3 looks" and go on.
 
-3. **Claude Design** (`claude-design`), Claude Code only, when the `Artifact` tool is listed:
-   `claude-design.md` → **Flow**. A missing type, a "no" or a failed call: one line, and go on to 4.
+3. **Claude Design** (`claude-design`): Claude Code only; skipped here.
 4. **In session** (`in-session`), on every host: *In-session tiles*.
 
 ## In-session tiles

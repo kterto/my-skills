@@ -571,6 +571,18 @@ test("SKILL.md points at live.md only behind the Artifact condition; Prime's por
   assert.match(mentions[0], /Only when the `Artifact` tool is listed/);
 });
 
+test("no other file points into the live tier's files except behind the Artifact condition, and in Prime's port none does", () => {
+  const tools = /^allowed-tools:/m.test(doc("SKILL.md").split("---")[1]), own = ["references/live.md", "references/claude-design.md"];
+  const walk = (d) => fs.readdirSync(path.join(SKILL, d), { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]));
+  const files = walk(".").map((f) => f.split(path.sep).join("/").replace(/^\.\//, "")).filter((f) => !f.startsWith("__tests__/") && !own.includes(f) && f !== "SKILL.md");
+  assert.ok(files.includes("references/design.md") && files.includes("templates/board.html"));
+  for (const f of files) {
+    const hits = doc(f).split("\n\n").filter((p) => /\blive\.md\b|claude-design\.md|live\.json/.test(p));
+    if (!tools) assert.deepStrictEqual(hits, [], `${f} points into the live tier, which this host cannot run`);
+    else for (const p of hits) assert.match(p, /when the `Artifact` tool is listed/, `${f} points into the live tier unconditionally`);
+  }
+});
+
 test("claude-design.md: the mapping covers every variable the token file example in design.md defines", () => {
   const example = /```css\n([\s\S]*?)```/.exec(doc("references/design.md"))[1];
   const rows = doc("references/claude-design.md").split("\n").filter((l) => /^\s*\| `--/.test(l)).flatMap((l) => l.match(/`--[^`]+`/g).slice(0, 3));
