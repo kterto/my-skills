@@ -539,16 +539,20 @@ test("live.json sample: every key, claude.ai addresses only, and per page what w
   assert.ok(live.people.length > 0, "an empty list would hide the shape of a person's entry");
   assert.deepStrictEqual(Object.keys(live.board), ["name", "url", "round", "seen", "threads"]);
   assert.strictEqual(live.board.name, "me");
-  assert.deepStrictEqual(Object.keys(live.board.seen), ["owner"], "on the owner's board only the owner's row is ever applied");
+  assert.ok("owner" in live.board.seen, "the owner's own row is the one applied on the board");
   for (const p of live.people) {
     assert.deepStrictEqual(Object.keys(p), ["name", "url", "round", "viewer", "seen", "threads"]);
     assert.match(p.viewer, /^u_[A-Za-z0-9_-]+$/, "viewer is the claude.ai id the owner confirmed");
-    assert.deepStrictEqual(Object.keys(p.seen), [p.viewer], "on a person's page only the bound id is applied");
+    assert.ok(p.viewer in p.seen, "the bound id's rows are the ones applied");
+    assert.ok(Object.keys(p.seen).every((id) => /^u_[A-Za-z0-9_-]+$/.test(id)), "a person's page has no owner row");
   }
+  assert.ok(live.people.some((p) => Object.keys(p.seen).length > 1), "a row not applied is recorded too, so it is reported once");
   for (const page of [live.board, ...live.people]) {
     assert.ok(Object.values(page.seen).every((v) => Number.isInteger(v) && v > 0), "seen holds row versions");
-    assert.ok(Array.isArray(page.threads) && page.threads.every((t) => typeof t === "string"));
+    assert.ok(page.threads && typeof page.threads === "object" && !Array.isArray(page.threads), "threads maps a thread to the comments read in it");
+    assert.ok(Object.values(page.threads).every((n) => Number.isInteger(n) && n > 0));
   }
+  assert.ok(Object.keys(live.board.threads).length > 0, "an empty map would hide the shape of a thread entry");
   assert.deepStrictEqual(Object.keys(live.design), ["system", "canvas", "round"]);
   const urls = [live.board.url, ...live.people.map((p) => p.url), live.design.system, live.design.canvas];
   for (const u of urls) assert.match(u, /^https:\/\/claude\.ai\/artifact\/[A-Za-z0-9_-]+$/);
@@ -558,8 +562,10 @@ test("live.json sample: every key, claude.ai addresses only, and per page what w
 test("live.md: the offer is the owner's consent sentence word for word, with no size to keep in sync", () => {
   const offer = /## Offer\n([\s\S]*?)\n## /.exec(doc("references/live.md"))[1].replace(/\s+/g, " "); // prose wraps anywhere
   assert.ok(offer.includes("This copies your idea to claude.ai, private until you share it."), "the consent line is quoted verbatim");
-  assert.match(offer, /each round re-reads the page/i);
+  assert.match(offer, /each round I read the whole page again/i);
   assert.doesNotMatch(offer, /\d\s*(?:KB|kB|bytes|tokens)\b/, "a number here would be a hand-synced fact");
+  assert.match(offer, /^ ?1\. `docs\/vision\/live\.json` has a `board\.url`/, "a live.json that Claude Design wrote is not consent to a live board");
+  assert.match(offer, /run \*\*Collect\*\*/, "a resume reads the marks left since before anything else");
 });
 
 test("SKILL.md points at live.md only behind the Artifact condition; Prime's port, which has no such tool, carries no pointer", () => {

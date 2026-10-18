@@ -30,7 +30,7 @@
       "adr": "docs/adr/0034-envision-live-tier-and-claude-design.md"
     },
     "envision/references/live.md": {
-      "maxBytes": 6144,
+      "maxBytes": 8192,
       "adr": "docs/adr/0034-envision-live-tier-and-claude-design.md"
     },
     "envision/references/rounds.md": {
