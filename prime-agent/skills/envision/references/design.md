@@ -79,8 +79,9 @@ user's pick sets `feel.pick`; a note on a tile proposes, and changes nothing unt
 ```
 
 - The header is `/* PROVISIONAL — envision R<n>, source: <tile id | adopted path |
-  impeccable> */`. It becomes `LOCKED` only when the user says lock in chat, which also
-  sets `feel.locked: true`.
+  impeccable | claude-design> */`, `claude-design` once values come back from claude.ai.
+  It becomes `LOCKED` only when the user says lock in chat, which also sets
+  `feel.locked: true`.
 - Prototypes mirror it; none keeps values of its own.
 - If impeccable later writes a `DESIGN.md` that supersedes it, propose adopting that.
   Never overwrite either file.
