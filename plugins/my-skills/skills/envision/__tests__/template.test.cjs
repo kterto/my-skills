@@ -689,11 +689,13 @@ test("hosted: a first snapshot from the cache restores nothing and saves nothing
   const page = await ana({ rows, cacheFirst: true });
   assert.strictEqual(button(byData(page.app, "F5"), "First version").attrs["aria-pressed"], "false");
   assert.strictEqual(button(dockOf(page.app), "Send").hidden, true, "nothing to send until the page has read its own row");
+  assert.strictEqual(button(dockOf(page.app), "Copy").className, "btn primary", "until Send shows, Copy is the main action");
   assert.doesNotMatch(allText(page.app), /press Send/, "the page promises Send only once it can");
   page.claude.hear("marks/u_ana");
   await flushTimers(page.timers);
   assert.strictEqual(button(byData(page.app, "F5"), "First version").attrs["aria-pressed"], "true", "another device's marks come back");
   assert.strictEqual(button(dockOf(page.app), "Send").hidden, false);
+  assert.strictEqual(button(dockOf(page.app), "Copy").className, "btn", "Copy steps back once Send shows");
   assert.strictEqual(page.claude.writes.length, 0);
   const owner = await hosted(exploring(), { cacheFirst: true });
   click(button(byData(owner.app, "C2"), "Not this one"));
@@ -796,6 +798,26 @@ test("hosted: no db or no user leaves the offline page whole, and says so", asyn
       await settle();
       assert.match(clip[0], /not this one: Client hub \[C1\]/);
     }
+  }
+});
+
+test("hosted: once the page stops saving, the header promises neither saving nor Send", async () => {
+  const OFFLINE = /press Copy and paste the lines in chat/;
+  const owner = await hosted(exploring(), { failWith: "invalid_argument" });
+  assert.match(allText(owner.app), /saved for me/, "after the first read the header says how marks travel");
+  click(button(byData(owner.app, "C1"), "Not this one"));
+  await flushTimers(owner.timers);
+  const person = await ana({ failWith: "invalid_argument" });
+  click(button(byData(person.app, "F5"), "First version"));
+  click(button(dockOf(person.app), "Send"));
+  await settle();
+  const newer = await hosted(exploring());
+  newer.claude.rows.set("marks/owner", { v: 1, round: 5, n: 1, text: "…", marks: { pick: "C1" } });
+  newer.claude.hear("marks/owner");
+  await settle();
+  for (const { app } of [owner, person, newer]) {
+    assert.doesNotMatch(allText(app), /saved for me|press Send for the person/, "the header promises nothing the page cannot do");
+    assert.match(allText(app), OFFLINE);
   }
 });
 

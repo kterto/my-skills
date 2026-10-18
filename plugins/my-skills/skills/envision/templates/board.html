@@ -7,7 +7,7 @@
      node scripts/render.cjs bake templates/board.html), the seam element, and ONE inline script.
      Text goes in through textContent only; no inline handlers; hrefs stay relative. No title element: the
      script sets the title, and a publish to claude.ai names each page itself. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-ZCCXy8Ce1Ky4bVuLVF+ECaG5FtEa31AOq6JA/Db0zY0='; style-src 'unsafe-inline'; img-src data:; font-src data:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-PSGiOrJ/tLPfEe3/JKiCl+Mu5vu7TGJs1Q5E42SzPN4='; style-src 'unsafe-inline'; img-src data:; font-src data:; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
 /* EDITORIAL DESIGN SYSTEM v1. Product drawings use the --sk greys only; a look tile sets its own. */
@@ -137,6 +137,7 @@ button.sk { cursor: pointer; text-decoration: underline dotted; }
   var KIND = { tension: "Two things you said pull against each other", decision: "To decide", question: "A question" };
   var DO = bare({ find: "find it again", change: "change it", undo: "undo it" });
   var LOOK = { adopt: "Your design system, adopted.", impeccable: "Proposed with impeccable.", "claude-design": "Made with Claude Design.", "in-session": "Looks I drew from your words." };
+  var OFFLINE = "Answer in chat in your own words, or mark things here, press Copy and paste the lines in chat.";
   [B.concepts, B.screens, B.features, B.open, F.tiles].forEach(function (l) { l.forEach(function (x) { byId[x.id] = { item: x }; }); });
 
   function el(tag, cls, text, parent) {
@@ -298,8 +299,8 @@ button.sk { cursor: pointer; text-decoration: underline dotted; }
     });
   }
   el("p", "banner", "A sketch on purpose: tell me what's wrong, not how it looks.", head);
-  // Hosted, the page says how marks travel only once it has read its own saved marks (see rowSeen).
-  hint = el("p", "muted", "Answer in chat in your own words, or mark things here, press Copy and paste the lines in chat.", head);
+  // Hosted, the page says how marks travel only once it has read its own saved marks (see rowSeen), until it stops.
+  hint = el("p", "muted", OFFLINE, head);
   oldMarks(head);
 
   var turn = el("section", "turn", null, app), tl;
@@ -592,7 +593,7 @@ button.sk { cursor: pointer; text-decoration: underline dotted; }
     if (!owner && isOwner) return liveStop("You made this page, so your marks here are a preview and are not saved.");
     if (!(owner ? "owner" : uid)) return liveStop("Marks stay in this browser. Press Copy and send the lines.");
     live.doc = db.doc("marks/" + (owner ? "owner" : uid));
-    if (!owner) { bar.copy.className = "btn"; live.send = btn("Send", bar.row, "btn primary"); live.send.hidden = true; live.send.addEventListener("click", send); }
+    if (!owner) { live.send = btn("Send", bar.row, "btn primary"); live.send.hidden = true; live.send.addEventListener("click", send); }
     live.doc.onSnapshot(rowSeen, function () { liveStop("Marks can't be saved here. Press Copy and send the lines."); });
   }
   // The first settled read restores marks made on another device; a row from a newer round stops this page writing.
@@ -607,7 +608,7 @@ button.sk { cursor: pointer; text-decoration: underline dotted; }
     var same = Boolean(d) && d.round === B.round && d.text === block();
     if (same) { saved.sent = true; save(); }
     hint.textContent = (owner ? "Mark things here and they are saved for me. Tell me in chat when you are done." : "Mark things here, then press Send for the person who shared this page.") + " Copy still sends the same lines.";
-    if (live.send) live.send.hidden = false;
+    if (live.send) { live.send.hidden = false; bar.copy.className = "btn"; }
     if (!owner) liveNote("Nothing leaves this page until you press Send.");
     else if (Object.keys(marks).length && !same) push(); else liveNote("Your marks are saved as you make them.");
   }
@@ -654,7 +655,7 @@ button.sk { cursor: pointer; text-decoration: underline dotted; }
       liveNote(current ? "Sent to the person who shared this page." : "Not sent yet: press Send when you are done.");
       told(current);
     }, function (e) {
-      if (e && e.code === "unavailable" && !live.retried) { // once: the owner's with the next write, a person's on their next press
+      if (e && e.code === "unavailable" && !live.retried) { // once: the owner's after a short pause, a person's on their next press
         live.retried = true;
         if (owner) live.dirty = true; else liveNote("Couldn't send just now. Press Send again.");
         return;
@@ -683,6 +684,7 @@ button.sk { cursor: pointer; text-decoration: underline dotted; }
     if (live.timer) window.clearTimeout(live.timer);
     live.timer = 0;
     if (live.send) { live.send.hidden = true; bar.copy.className = "btn primary"; }
+    hint.textContent = OFFLINE;
     liveNote(t);
   }
   function lockOut() { liveStop(""); app.textContent = ""; el("p", "nojs", "This page belongs to the person who made it.", app); }
