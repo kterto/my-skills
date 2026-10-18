@@ -714,6 +714,22 @@ test("hosted: a first snapshot from the cache restores nothing and saves nothing
   assert.strictEqual(later.claude.writes.length, 1, "the settled read lets the waiting save go");
 });
 
+test("hosted: a mark made and undone before the first settled read writes nothing after it", async () => {
+  const storage = new Map();
+  const first = await hosted(exploring(), { storage });
+  click(button(byData(first.app, "C1"), "Not this one"));
+  await flushTimers(first.timers);
+  const saved = await hosted(exploring(), { storage, rows: first.claude.rows, cacheFirst: true });
+  const none = await hosted(exploring(), { cacheFirst: true });
+  for (const page of [saved, none]) {
+    click(button(byData(page.app, "C2"), "Not this one"));
+    click(button(byData(page.app, "C2"), "Not this one"));
+    page.claude.hear("marks/owner");
+    await flushTimers(page.timers);
+    assert.strictEqual(page.claude.writes.length, 0, "the read finds nothing new to save");
+  }
+});
+
 test("hosted: a subscription that fails, or a viewer with no id, leaves Copy alone and writes nothing", async () => {
   for (const opts of [{ snapError: "invalid_argument" }, { id: null }]) {
     const { app, claude, timers } = await ana(opts);

@@ -7,7 +7,7 @@
      node scripts/render.cjs bake templates/board.html), the seam element, and ONE inline script.
      Text goes in through textContent only; no inline handlers; hrefs stay relative. No title element: the
      script sets the title, and a publish to claude.ai names each page itself. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-PSGiOrJ/tLPfEe3/JKiCl+Mu5vu7TGJs1Q5E42SzPN4='; style-src 'unsafe-inline'; img-src data:; font-src data:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-h+dyxh27PuOjkFMNapEE7bwbw548Z2AsJqxWKx6hLuE='; style-src 'unsafe-inline'; img-src data:; font-src data:; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
 /* EDITORIAL DESIGN SYSTEM v1. Product drawings use the --sk greys only; a look tile sets its own. */
@@ -597,13 +597,15 @@ button.sk { cursor: pointer; text-decoration: underline dotted; }
     live.doc.onSnapshot(rowSeen, function () { liveStop("Marks can't be saved here. Press Copy and send the lines."); });
   }
   // The first settled read restores marks made on another device; a row from a newer round stops this page writing.
-  // Nothing is written before it. This callback never writes: on the owner's board it only schedules the save a
-  // change would, and only when this browser's marks differ from the row, so a reload rewrites nothing.
+  // Nothing is written before it, and it decides whether a save waiting from before it still goes. This callback
+  // never writes: on the owner's board it only schedules the save a change would, and only when this browser's
+  // marks differ from the row, so a reload rewrites nothing.
   function rowSeen(snap) {
     var d = snap.exists ? snap.data() : null;
     if (d && d.round > B.round) return liveStop("There is a newer round of this page. Reload it; Copy still sends what you marked here.");
     if (live.seen || (snap.metadata && snap.metadata.fromCache)) return;
     live.seen = true;
+    live.dirty = false;
     if (d && d.round === B.round && !Object.keys(marks).length) restore(d.marks);
     var same = Boolean(d) && d.round === B.round && d.text === block();
     if (same) { saved.sent = true; save(); }
@@ -638,7 +640,7 @@ button.sk { cursor: pointer; text-decoration: underline dotted; }
     flush();
   }
   // One write at a time, newest state wins: a mark or a Send made mid-write is written after it. Nothing is
-  // written before the first settled read, which lets a waiting save go.
+  // written before the first settled read.
   function flush() {
     live.timer = 0;
     if (live.busy || live.off || !live.dirty || !live.seen) return;
