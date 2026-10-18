@@ -1,0 +1,14 @@
+{
+  "id": "envision-live-privacy",
+  "kind": "synthetic",
+  "class": "the page a colleague opens carries the owner's own words, or one person's marks are readable by another",
+  "caught_by": "one page per audience: the owner's board is published for the owner alone and a person gets render --for output whose marks leave their browser only on Send; the one capability declaration is read in live.md and a test refuses any capability beyond db, user and comments and any rule that opens marks to another viewer; a viewer who is not the owner gets a notice on the owner's board and writes nothing; the owner previewing a person's page saves nothing",
+  "missed_by": "a single shared page whose source holds every viewer's view of the idea, since every viewer receives the same HTML",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/envision/__tests__/template.test.cjs",
+  "evidence": "docs/adr/0034-envision-live-tier-and-claude-design.md#2-one-page-per-audience-and-the-owners-page-is-never-shared"
+}

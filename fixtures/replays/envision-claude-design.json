@@ -1,0 +1,14 @@
+{
+  "id": "envision-claude-design",
+  "kind": "synthetic",
+  "class": "the proposed look lives in two token files that drift, or a design page is taken as input for building the screens",
+  "caught_by": "Claude Design as Feel's third slot: tokens.css is written and checked first and stays the only token file, the design system on claude.ai is filled from it by a fixed name mapping that a test holds equal to the token file example, nothing is read back without a yes and an allowlist, check rejects a mirrored token value that loads, imports or breaks out into a script, and the first-look screens stay the five-channel prototypes that check passes",
+  "missed_by": "Feel's in-session tiles alone, which give the user a look to pick but nowhere to browse, edit or share it, and impeccable's separate PRODUCT and design files",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/envision/__tests__/render.test.cjs",
+  "evidence": "docs/adr/0034-envision-live-tier-and-claude-design.md#8-claude-design-is-a-second-home-for-a-look-that-stays-in-one-local-file"
+}
