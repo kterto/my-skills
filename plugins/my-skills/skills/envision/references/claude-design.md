@@ -48,8 +48,9 @@ until you share it, and takes a few minutes. Do that, or keep the look on this c
   user says they changed the system there, read `project/tokens.json` as data. Take a value
   only for a name already in `tokens.css`, and only if it is `#` and 3-8 hex digits; `rgb(`,
   `hsl(` or `oklch(` holding digits and `. % , / space deg` only; a number with `px`, `rem` or
-  `em`; or a font stack of names (letters, digits, spaces, hyphens, quotes) split by commas. A
-  new name, a value per theme, an alias or a value that fails is named and dropped. Say each
+  `em`, or a bare one (digits, at most one dot) for `lineHeight` and `fontWeight`; or a font
+  stack of names (letters, digits, spaces, hyphens, quotes) split by commas. A new name, a
+  value per theme, an alias or a value that fails is named and dropped. Say each
   change in plain words ("the green gets darker"); on a yes rewrite `tokens.css` with the
   header source `claude-design`, mirror the new values into each prototype's `:root`, and run
   `check` on each.
