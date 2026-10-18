@@ -364,9 +364,12 @@ test("prototype skeleton: fails check only on its example text, and carries desi
 // --- The hosted page (claude.ai): saved marks, identity, Comment buttons -----------------------
 
 // window.claude as the page sees it: use(name) resolves a namespace or null. `rows` stands in for the artifact's db.
-function fakeClaude({ owner = true, id = "u_ana", db = true, user = true, comments = true, opened = true, rows = new Map(), failWith = null, failTimes = Infinity, gate = null } = {}) {
+// cacheFirst: the first snapshot is an empty one from the cache, and only hear() delivers the settled one.
+// snapError: the subscription fails at once. composeFail: openComposer rejects with that code.
+function fakeClaude({ owner = true, id = "u_ana", db = true, user = true, comments = true, opened = true, rows = new Map(), failWith = null, failTimes = Infinity, gate = null, cacheFirst = false, snapError = null, composeFail = null } = {}) {
   const writes = [], composers = [], listeners = new Map(), flight = { now: 0, max: 0 };
   const snap = (path) => ({ exists: rows.has(path), data: () => rows.get(path), metadata: { fromCache: false, hasPendingWrites: false } });
+  const cached = { exists: false, data: () => undefined, metadata: { fromCache: true, hasPendingWrites: false } };
   const ref = (path) => ({
     get: async () => snap(path),
     set: async (d) => {
@@ -378,12 +381,17 @@ function fakeClaude({ owner = true, id = "u_ana", db = true, user = true, commen
         rows.set(path, d);
       } finally { flight.now--; }
     },
-    onSnapshot: (next) => { listeners.set(path, next); next(snap(path)); return () => listeners.delete(path); },
+    onSnapshot: (next, error) => {
+      if (snapError) { error({ code: snapError }); return () => {}; }
+      listeners.set(path, next);
+      next(cacheFirst ? cached : snap(path));
+      return () => listeners.delete(path);
+    },
   });
   const ns = {
     db: db ? { doc: ref } : null,
     user: user ? { isOwner: async () => owner, id: async () => id } : null,
-    comments: comments ? { openComposer: async (target) => { composers.push(target); return { opened }; } } : null,
+    comments: comments ? { openComposer: async (target) => { composers.push(target); if (composeFail) throw { code: composeFail }; return { opened }; } } : null,
   };
   return { use: async (name) => ns[name] ?? null, writes, composers, rows, flight, hear: (path) => listeners.get(path)(snap(path)) };
 }
@@ -416,6 +424,7 @@ test("hosted: a mark becomes one row at marks/owner, and the row is the Copy blo
   await settle();
   assert.strictEqual(row.text, clip[0], "the agent reads exactly what Copy would have sent");
   assert.match(allText(app), /Saved\. Tell me in chat when you are done\./);
+  assert.match(allText(app), /Mark things here and they are saved for me\./);
   assert.ok(!button(dockOf(app), "Send"), "the owner's board saves as they mark: no Send");
 });
 
@@ -438,6 +447,9 @@ test("hosted: writes never overlap, and a mark made mid-write lands after it", a
 
 test("hosted: a person's page writes nothing until Send; Send saves the Copy block under their own id and opens the comment box on the dock", async () => {
   const { app, claude, timers, clip } = await ana();
+  assert.strictEqual(button(dockOf(app), "Send").className, "btn primary", "Send is the main action here");
+  assert.strictEqual(button(dockOf(app), "Copy").className, "btn", "Copy steps back beside Send");
+  assert.match(allText(app), /press Send for the person who shared this page/);
   click(button(dockOf(app), "Send"));
   await settle();
   assert.match(allText(app), /Nothing marked yet/);
@@ -492,7 +504,7 @@ test("hosted: two Sends in a row write one at a time, and the comment box opens 
   assert.strictEqual(claude.composers.length, 1);
 });
 
-test("hosted: a mark made while a Send is on its way stays unsent, and the next round offers it back", async () => {
+test("hosted: a mark made while a Send is on its way stays unsent, the dock says so in one voice, and the next round offers it back", async () => {
   let release;
   const gate = { wait: new Promise((r) => { release = r; }) }, storage = new Map();
   const { app, claude } = await ana({ gate, storage });
@@ -503,7 +515,11 @@ test("hosted: a mark made while a Send is on its way stays unsent, and the next 
   release();
   await settle();
   assert.strictEqual(claude.writes.length, 1);
-  assert.match(allText(app), /Not sent yet: press Send when you are done\./);
+  const notes = all(dockOf(app)).filter((n) => n.attrs.role === "status").map((n) => n.textContent);
+  assert.ok(notes.includes("Not sent yet: press Send when you are done."), "the note is announced, not only shown");
+  assert.ok(notes.includes("Sent what you had marked before. What you changed since is not sent yet."));
+  assert.doesNotMatch(allText(app), /Sent to the person|Add a line for them|\nSent\.\n/, "nothing on screen says it all went");
+  assert.strictEqual(claude.composers.length, 0, "the comment box waits for the Send that carries everything");
   const next = open(R.renderHtml(TEMPLATE, Object.assign(exploring(), { round: 5 }), { forName: "Ana" }), { storage });
   assert.match(words(next.app), /You marked the round 4 page and didn't send it/);
 });
@@ -525,7 +541,9 @@ test("hosted: a refused Send says so, takes Send away and leaves Copy", async ()
   click(button(dockOf(app), "Send"));
   await settle();
   assert.match(allText(app), /Couldn't send from here\. Press Copy and send the lines by message\./);
+  assert.strictEqual(find(dockOf(app), (n) => n.text.startsWith("Couldn't send from here")).attrs.role, "status", "a screen reader hears it");
   assert.strictEqual(button(dockOf(app), "Send").hidden, true);
+  assert.strictEqual(button(dockOf(app), "Copy").className, "btn primary", "Copy is the main action again");
   assert.strictEqual(claude.composers.length, 0);
   click(button(dockOf(app), "Copy"));
   await settle();
@@ -601,15 +619,87 @@ test("hosted: only the first settled read restores marks; a late echo cannot und
   assert.match(allText(app), /No marks yet/);
 });
 
-test("hosted: restoring a row copies only its own text values, and never __proto__", async () => {
-  const marks = JSON.parse('{"__proto__": {"not:C1": "1"}, "pick": 1, "not:C2": "1"}');
-  const rows = new Map([["marks/owner", { v: 1, round: 4, n: 3, text: "…", marks }]]);
+test("hosted: restoring a row copies only its own text values that are marks, and never __proto__", async () => {
+  const marks = JSON.parse('{"__proto__": {"not:C1": "1"}, "pick": 1, "not:C2": "1", "do:F4:constructor": "1", "b:F5": "toString", "zz:F1": "1"}');
+  const rows = new Map([["marks/owner", { v: 1, round: 4, n: 6, text: "…", marks }]]);
   const { app, clip } = await hosted(exploring(), { rows });
   assert.strictEqual(button(byData(app, "C1"), "Not this one").attrs["aria-pressed"], "false", "a row cannot reach the marks' prototype");
   assert.strictEqual(button(byData(app, "C2"), "Not this one").attrs["aria-pressed"], "true");
+  assert.match(allText(dockOf(app)), /\b1 mark\b/, "a key the page never writes is not a mark");
   click(button(dockOf(app), "Copy"));
   await settle();
-  assert.strictEqual(clip[0], "envision · round 4 · from: me\nnot this one: Money board [C2]", "a number is not a mark");
+  assert.strictEqual(clip[0], "envision · round 4 · from: me\nnot this one: Money board [C2]", "a number, a prototype name or an unknown key is not a mark");
+});
+
+test("hosted: reopening a board whose marks are already saved writes nothing, on this device or a fresh one", async () => {
+  const storage = new Map();
+  const first = await hosted(exploring(), { storage });
+  click(button(byData(first.app, "C1"), "Not this one"));
+  await flushTimers(first.timers);
+  assert.strictEqual(first.claude.writes.length, 1);
+  const rows = first.claude.rows, KEY = "envision:Freelance money:4";
+  storage.set(KEY, JSON.stringify({ ...JSON.parse(storage.get(KEY)), sent: false })); // the tab closed before it noted the save
+  const again = await hosted(exploring(), { storage, rows });
+  await flushTimers(again.timers);
+  assert.strictEqual(again.claude.writes.length, 0, "the same marks over the same row are not a change");
+  assert.match(allText(again.app), /Your marks are saved as you make them\./);
+  const next = open(R.renderHtml(TEMPLATE, Object.assign(exploring(), { round: 5 })), { storage });
+  assert.doesNotMatch(words(next.app), /You marked the round 4 page/, "marks the row holds are sent, not offered back");
+  const fresh = await hosted(exploring(), { rows });
+  await flushTimers(fresh.timers);
+  assert.strictEqual(button(byData(fresh.app, "C1"), "Not this one").attrs["aria-pressed"], "true", "the row's marks come back");
+  assert.strictEqual(fresh.claude.writes.length, 0, "restoring a row does not write it back");
+});
+
+test("hosted: on the first read the owner's newer local marks are saved by the timer, never by the read itself", async () => {
+  const rows = new Map([["marks/owner", { v: 1, round: 4, n: 1, text: "envision · round 4 · from: me\npicked: Paid on booking [C3]", marks: { pick: "C3" } }]]);
+  const storage = new Map([["envision:Freelance money:4", JSON.stringify({ marks: { pick: "C1" }, from: "me", text: "x", sent: false })]]);
+  const { claude, timers } = await hosted(exploring(), { rows, storage });
+  assert.strictEqual(claude.writes.length, 0, "the snapshot callback writes nothing");
+  assert.strictEqual(timers.length, 1, "it only schedules the save a change would");
+  await flushTimers(timers);
+  assert.strictEqual(claude.writes.length, 1);
+  assert.match(claude.writes[0][1].text, /picked: Client hub \[C1\]/);
+});
+
+test("hosted: a first snapshot from the cache restores nothing and saves nothing; the settled one does both jobs", async () => {
+  const rows = new Map([["marks/u_ana", { v: 1, round: 4, n: 1, text: "…", marks: { "b:F5": "first" } }]]);
+  const page = await ana({ rows, cacheFirst: true });
+  assert.strictEqual(button(byData(page.app, "F5"), "First version").attrs["aria-pressed"], "false");
+  assert.strictEqual(button(dockOf(page.app), "Send").hidden, true, "nothing to send until the page has read its own row");
+  assert.doesNotMatch(allText(page.app), /press Send/, "the page promises Send only once it can");
+  page.claude.hear("marks/u_ana");
+  await flushTimers(page.timers);
+  assert.strictEqual(button(byData(page.app, "F5"), "First version").attrs["aria-pressed"], "true", "another device's marks come back");
+  assert.strictEqual(button(dockOf(page.app), "Send").hidden, false);
+  assert.strictEqual(page.claude.writes.length, 0);
+  const owner = await hosted(exploring(), { cacheFirst: true });
+  click(button(byData(owner.app, "C2"), "Not this one"));
+  await flushTimers(owner.timers);
+  assert.strictEqual(owner.claude.writes.length, 0, "no write before the page knows what the row holds");
+  owner.claude.rows.set("marks/owner", { v: 1, round: 5, n: 1, text: "…", marks: { pick: "C1" } });
+  owner.claude.hear("marks/owner");
+  await flushTimers(owner.timers);
+  assert.strictEqual(owner.claude.writes.length, 0, "a newer round's row is never overwritten");
+  assert.match(allText(owner.app), /newer round of this page/);
+  const later = await hosted(exploring(), { cacheFirst: true });
+  click(button(byData(later.app, "C2"), "Not this one"));
+  await flushTimers(later.timers);
+  later.claude.hear("marks/owner");
+  await flushTimers(later.timers);
+  assert.strictEqual(later.claude.writes.length, 1, "the settled read lets the waiting save go");
+});
+
+test("hosted: a subscription that fails, or a viewer with no id, leaves Copy alone and writes nothing", async () => {
+  for (const opts of [{ snapError: "invalid_argument" }, { id: null }]) {
+    const { app, claude, timers } = await ana(opts);
+    click(button(byData(app, "F5"), "First version"));
+    await flushTimers(timers);
+    assert.strictEqual(claude.writes.length, 0);
+    const send = button(dockOf(app), "Send");
+    assert.ok(!send || send.hidden, "no Send where nothing can be sent");
+    assert.match(allText(app), opts.id === null ? /Marks stay in this browser/ : /Marks can't be saved here/);
+  }
 });
 
 test("hosted: marks saved to the row are not offered back as unsent when the next round opens", async () => {
@@ -652,16 +742,50 @@ test("hosted: a transient failure is retried once with the newest state, a secon
   assert.match(allText(twice.app), /Couldn't save your marks/);
 });
 
+test("hosted: a person's Send that fails for a moment waits for their next press: no timer, no write, no comment box", async () => {
+  const { app, claude, timers } = await ana({ failWith: "unavailable", failTimes: 1 });
+  click(button(byData(app, "F5"), "First version"));
+  click(button(dockOf(app), "Send"));
+  await settle();
+  assert.strictEqual(claude.writes.length, 0);
+  assert.strictEqual(timers.length, 0, "a person's page never sends on a timer");
+  assert.match(allText(app), /Couldn't send just now\. Press Send again\./);
+  click(button(byData(app, "F4"), "No"));
+  await flushTimers(timers);
+  assert.strictEqual(claude.writes.length, 0, "a mark made meanwhile stays on the page");
+  assert.strictEqual(claude.composers.length, 0);
+  click(button(dockOf(app), "Send"));
+  await settle();
+  assert.strictEqual(claude.writes.length, 1);
+  assert.strictEqual(claude.writes[0][1].n, 2, "the press sends what is marked now");
+  assert.strictEqual(claude.composers.length, 1);
+});
+
 test("hosted: no db or no user leaves the offline page whole, and says so", async () => {
   for (const missing of [{ db: false }, { user: false }]) {
-    const { app, claude, timers, clip } = await hosted(exploring(), missing);
-    click(button(byData(app, "C1"), "Not this one"));
+    for (const page of [await hosted(exploring(), missing), await ana(missing)]) {
+      const { app, claude, timers, clip } = page;
+      click(button(byData(app, "C1"), "Not this one"));
+      await flushTimers(timers);
+      assert.strictEqual(claude.writes.length, 0);
+      assert.match(allText(app), /Marks stay in this browser/);
+      assert.doesNotMatch(allText(app), /saved for me|press Send/, "the header promises nothing the page cannot do");
+      click(button(app, "Copy"));
+      await settle();
+      assert.match(clip[0], /not this one: Client hub \[C1\]/);
+    }
+  }
+});
+
+test("plain words: the hosted owner's and person's pages too, notes included", async () => {
+  const pages = [await hosted(exploring()), await ana(), await ana({ failWith: "unavailable", failTimes: 1 })];
+  for (const { app, timers } of pages) {
+    click(button(byData(app, "F5"), "First version"));
+    const send = button(dockOf(app), "Send");
+    if (send) click(send);
     await flushTimers(timers);
-    assert.strictEqual(claude.writes.length, 0);
-    assert.match(allText(app), /Marks stay in this browser/);
-    click(button(app, "Copy"));
-    await settle();
-    assert.match(clip[0], /not this one: Client hub \[C1\]/);
+    const hit = allText(app).match(BANNED);
+    assert.ok(!hit, `"${hit && hit[0]}" reaches the reader`);
   }
 });
 
@@ -675,6 +799,8 @@ test("hosted: every card has a DOM id of its own and is a comment target; a Comm
   const card = byData(app, "F4");
   assert.strictEqual(card.attrs.id, "k-F4");
   assert.ok("data-comment-target" in card.attrs);
+  assert.strictEqual(dockOf(app).attrs.id, "answer", "a comment on the answer box has an anchor the agent can name");
+  assert.ok("data-comment-target" in dockOf(app).attrs);
   click(button(card, "Comment"));
   await settle();
   assert.strictEqual(claude.composers[0].element, card);
@@ -683,6 +809,30 @@ test("hosted: every card has a DOM id of its own and is a comment target; a Comm
 test("hosted: without the comments capability there are no Comment buttons", async () => {
   const { app } = await hosted(exploring(), { comments: false });
   assert.ok(!all(app).some((n) => n.tagName === "BUTTON" && n.textContent === "Comment"));
+});
+
+test("hosted: a view with no comment box takes every Comment button away, and a Send stops asking for one", async () => {
+  const shown = (app) => all(app).filter((n) => n.tagName === "BUTTON" && n.textContent === "Comment" && !n.hidden).length;
+  const owner = await hosted(exploring(), { composeFail: "unavailable" });
+  assert.ok(shown(owner.app) > 0);
+  click(button(byData(owner.app, "F4"), "Comment"));
+  await settle();
+  assert.strictEqual(shown(owner.app), 0, "no button that does nothing");
+  const person = await ana({ composeFail: "unavailable" });
+  click(button(byData(person.app, "F5"), "First version"));
+  click(button(dockOf(person.app), "Send"));
+  await settle();
+  assert.strictEqual(person.claude.composers.length, 1);
+  assert.strictEqual(shown(person.app), 0);
+  click(button(byData(person.app, "F4"), "No"));
+  click(button(dockOf(person.app), "Send"));
+  await settle();
+  assert.strictEqual(person.claude.writes.length, 2);
+  assert.strictEqual(person.claude.composers.length, 1, "not asked again in this view");
+  const busy = await hosted(exploring(), { composeFail: "rate_limited" });
+  click(button(byData(busy.app, "F4"), "Comment"));
+  await settle();
+  assert.ok(shown(busy.app) > 0, "only a view with no comment box loses the buttons");
 });
 
 test("hosted: relative links to the project's files are not drawn as links", async () => {
