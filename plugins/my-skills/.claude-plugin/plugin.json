@@ -1,6 +1,6 @@
 {
   "name": "my-skills",
-  "description": "Project-context bootstrap (context-builder), clean-code quality gates, commit/PR helper (base main), validation-error fixer, code-cleanup simplify pass, design-to-code translator, multi-agent pipeline orchestrator with opt-in parallel lane execution, autonomous product-manager for roadmap story execution, interactive PR review reports, interactive codebase explanations, and a vendored spec-driven-eval grader (CC-BY-4.0, Waldemar Neto).",
+  "description": "Pre-spec idea boards with an agreement and a provisional look (envision), project-context bootstrap (context-builder), clean-code quality gates, commit/PR helper (base main), validation-error fixer, code-cleanup simplify pass, design-to-code translator, multi-agent pipeline orchestrator with opt-in parallel lane execution, autonomous product-manager for roadmap story execution, interactive PR review reports, interactive codebase explanations, and a vendored spec-driven-eval grader (CC-BY-4.0, Waldemar Neto).",
   "author": {
     "name": "Kainã Terto",
     "email": "kaintp@gmail.com"
@@ -21,6 +21,7 @@
     "spec-driven-development",
     "evaluation",
     "project-bootstrap",
+    "product-discovery",
     "context"
   ]
 }

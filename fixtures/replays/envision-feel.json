@@ -1,0 +1,14 @@
+{
+  "id": "envision-feel",
+  "kind": "synthetic",
+  "class": "the look first reaches the user in built code, or a first-look screen loads from the network, drops one of design-to-code's channels, or reads as final",
+  "caught_by": "Feel, offered only after agreement and never blocking: render refuses a look on a board that is not agreed, and render.cjs check fails a first-look screen with no offline CSP where the browser honours it, any network load or navigation, a missing marker for any of design-to-code's five channels (the PANEL component gallery among them), an inline handler, the skeleton's example text, or no visible PROVISIONAL banner",
+  "missed_by": "context-builder, which never opens an image and has no .html row, so nothing visual reaches the record before code (M1); the owner's ask for a proposed design system and an initial prototype before anything is specified had no step at all",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/envision/__tests__/render.test.cjs",
+  "evidence": "docs/adr/0033-envision-a-divergent-step-before-context-builder.md#10-feel-comes-after-agreement-and-never-blocks"
+}

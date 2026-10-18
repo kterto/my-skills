@@ -1,6 +1,6 @@
 # my-skills for Prime Agent
 
-Prime Agent distribution of the twelve `my-skills` marketplace workflows. It retains
+Prime Agent distribution of the fourteen `my-skills` marketplace workflows. It retains
 the bundled scripts, templates, tests, and references required by each skill.
 
 ## Install

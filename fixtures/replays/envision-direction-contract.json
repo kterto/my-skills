@@ -1,0 +1,14 @@
+{
+  "id": "envision-direction-contract",
+  "kind": "synthetic",
+  "class": "framing settled inside the user's first frame: a single direction, or several that differ only on the surface, so an agreeable \"I guess 1\" settles a reserved decision",
+  "caught_by": "render.cjs refuses a board without 2-4 directions, exactly one marked outside what the user said and at most one in the user's own words, and shuffles them by a fixed seed so the user's own frame is never first",
+  "missed_by": "context-builder's convergent grill, as the role-play showed it: nothing concrete is shown to compare, and framing is reserved yet \"I guess 1\" settled it (M1, M8)",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/envision/__tests__/render.test.cjs",
+  "evidence": "docs/adr/0033-envision-a-divergent-step-before-context-builder.md#7-the-direction-contract-two-to-four-directions-exactly-one-outside"
+}

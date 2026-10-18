@@ -61,8 +61,9 @@ other skill in this framework reads: `.orchestrator/PROJECT-CONTEXT.md`, plus th
 auxiliary documents under `docs/foundation/` that the orchestrator's role templates
 follow by pointer.
 
-This skill is **project-agnostic**. It **never commits and never pushes** — it stops at
-a handoff line naming what it wrote and the exact next command.
+This skill is **project-agnostic**. It **never commits and never pushes** — it leaves its
+files uncommitted for review and stops at a handoff line naming what it wrote and the
+exact next command.
 
 **Host.** This is the Prime Agent port of a skill whose source serves several hosts from
 one `SKILL.md`. Where the body below names a host construct, use the Prime equivalent:
@@ -99,8 +100,8 @@ Resolve the source materials in this order (full rules: `references/ingestion.md
 2. `docs/foundation/` — the documented default.
 3. Fallback union: `docs/superpowers/specs/*`, every `SPEC-*.md` **anywhere under
    `plans/`**, `docs/adr/*`, `docs/design-prompts/*`, root `PRD-*` / `SPEC-*`.
-4. Nothing found — ask the user where the materials are, and offer to proceed
-   **interview-only**.
+4. Nothing found — ask where the materials are; offer **interview-only**, or `/envision`
+   to see 2-4 rough versions of the idea before anything is written.
 
 **Resolve the `plans/` leg with a quoted recursive `find`, never a shell glob.** The
 orchestrator writes each run's artifacts flat inside that run's own folder,
@@ -226,9 +227,6 @@ Convergence: 0.96 (confirmed by you)
 Next:  /roadmap
   then /orchestrator "<first story>"   — its bootstrap will skip the interview
 ```
-
-This skill **never commits and never pushes**. The files are left in the working tree for
-the user to review and commit.
 
 ## Output contract
 

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<!-- envision prototype skeleton: one screen in design-to-code's five channels. Copy it to
+     docs/vision/prototype/<flow>-<screen>.html and replace every example. Keep, per channel:
+     1 the TOKENS :root block, 2 an intent comment quoting the user with round and source, plus
+     "out of scope here" notes, 3 the PANEL 2 gallery with every state, 4 behaviour wired with
+     addEventListener only, 5 the "mirrored from" path to tokens.css. Also keep the network-denying
+     CSP and the visible PROVISIONAL banner. After a script edit: node scripts/render.cjs bake <file>;
+     then node scripts/render.cjs check <file> must pass. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-MWBM10dh21ze1ztI3jS1k5PIIXO7ERAWDmkecYYQGyk='; style-src 'unsafe-inline'; img-src data:; font-src data:; base-uri 'none'; form-action 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Screen name · first look</title>
+<style>
+/* TOKENS — mirrored from ../design/tokens.css (PROVISIONAL) */
+:root {
+  --paper: #ffffff; --surface: #f4f4f2; --ink: #1c1c1a; --muted: #6b6b66; --accent: #33332f; --rule: #d9d9d4; --danger: #8a1c1c;
+  --space-1: 4px; --space-2: 8px; --space-3: 16px; --space-4: 24px;
+  --r-1: 4px; --r-2: 10px;
+  --font-display: Georgia, serif; --font-body: system-ui, sans-serif;
+}
+/* MEASUREMENTS — the type ramp and layout design-to-code reproduces exactly */
+.t-display { font: 600 28px/1.2 var(--font-display); margin: 0 0 var(--space-3); }
+.t-body { font: 16px/1.5 var(--font-body); }
+.t-caption { font: 13px/1.4 var(--font-body); color: var(--muted); }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.5 var(--font-body); }
+.provisional { padding: var(--space-2) var(--space-3); background: var(--surface); border-bottom: 1px solid var(--rule); font-size: 13px; }
+.variants, .screen { max-width: 390px; margin: var(--space-4) auto; padding: 0 var(--space-3); }
+button { font: inherit; min-height: 44px; padding: var(--space-2) var(--space-3); border: 1px solid var(--rule); border-radius: var(--r-1); background: var(--paper); color: var(--ink); }
+button[aria-pressed="true"], .primary { background: var(--accent); border-color: var(--accent); color: var(--paper); }
+.sheet { margin-top: var(--space-3); padding: var(--space-3); border: 1px solid var(--rule); border-radius: var(--r-2); box-shadow: 0 6px 16px rgba(0, 0, 0, .15); }
+[data-state] { margin-bottom: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px dashed var(--rule); border-radius: var(--r-1); }
+[data-state="error"] { color: var(--danger); }
+</style>
+</head>
+<body>
+<div class="provisional" role="note">PROVISIONAL: a first look from envision (round N). The look can still change.</div>
+
+<!-- VARIANTS — /envision detail only: 2-3 interaction variants of one behaviour. Delete this nav and
+     the data-variant wrappers for a first-look screen. -->
+<nav class="variants" aria-label="Variants">
+  <button type="button" data-variant-pick="a" aria-pressed="true">A: act at once</button>
+  <button type="button" data-variant-pick="b" aria-pressed="false">B: confirm first</button>
+</nav>
+
+<!-- PANEL 1 — Screen on phone -->
+<main class="screen" data-screen="screen-name">
+  <h1 class="t-display">Screen title</h1>
+  <p class="t-body">The screen's real wording goes here, in the user's tone words.</p>
+  <!-- primary action, because "the user's own words go here" (R2, said) -->
+  <section data-variant="a">
+    <button type="button" class="primary" data-action="primary">Primary action</button>
+  </section>
+  <section data-variant="b" hidden>
+    <button type="button" class="primary" data-open-sheet>Primary action</button>
+    <!-- confirm sheet: closes on Cancel or Esc -->
+    <div class="sheet" role="dialog" aria-label="Confirm" data-sheet hidden>
+      <p class="t-body">Do it now? You can undo it right after.</p>
+      <button type="button" class="primary" data-action="primary">Do it</button>
+      <button type="button" data-close-sheet>Cancel</button>
+    </div>
+  </section>
+  <p class="t-caption" role="status" data-done hidden>Done. <button type="button" data-undo>Undo</button></p>
+  <!-- secondary action: out of scope here (Later: the card's title) -->
+</main>
+
+<!-- PANEL 2 — Component gallery: every state of the main component, including find, change and undo -->
+<section class="screen" data-gallery>
+  <div data-state="empty">Nothing here yet. The first one shows up here.</div>
+  <div data-state="one">One item, with its real wording</div>
+  <div data-state="many">The first three items, then "and 12 more"</div>
+  <div data-state="error">That didn't work. Nothing was lost; try again.</div>
+  <div data-state="find">Find it again: the list filtered by what you typed</div>
+  <div data-state="change">Change it: the item open for editing</div>
+  <div data-state="undo">Done. <button type="button">Undo</button></div>
+</section>
+
+<!-- EDITMODE-BEGIN: the demo data this screen shows; design-to-code reads it as default props -->
+<script type="application/json" id="editmode">{"title": "Screen title", "items": 3, "state": "many"}</script>
+<!-- EDITMODE-END -->
+
+<script>
+(function () {
+  "use strict";
+  // Interaction table for design-to-code: one listener per behaviour, keyboard included.
+  var sheet = document.querySelector("[data-sheet]"), done = document.querySelector("[data-done]");
+  function show(el, on) { if (el) el.hidden = !on; }
+  document.querySelectorAll("[data-action='primary']").forEach(function (b) {
+    b.addEventListener("click", function () { show(sheet, false); show(done, true); });
+  });
+  document.querySelector("[data-undo]").addEventListener("click", function () { show(done, false); });
+  document.querySelectorAll("[data-open-sheet], [data-close-sheet]").forEach(function (b) {
+    b.addEventListener("click", function () { show(sheet, b.hasAttribute("data-open-sheet")); });
+  });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") show(sheet, false); });
+  // VARIANTS (detail only): the picked variant shows, the others hide.
+  var picks = document.querySelectorAll("[data-variant-pick]");
+  picks.forEach(function (p) {
+    p.addEventListener("click", function () {
+      picks.forEach(function (x) { x.setAttribute("aria-pressed", String(x === p)); });
+      document.querySelectorAll("[data-variant]").forEach(function (v) { v.hidden = v.getAttribute("data-variant") !== p.getAttribute("data-variant-pick"); });
+    });
+  });
+}());
+</script>
+</body>
+</html>

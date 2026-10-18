@@ -20,8 +20,12 @@ Resolve exactly one source set, in this order. Stop at the first that yields mat
    - `docs/design-prompts/*`
    - `PRD-*` and `SPEC-*` at the repo root
 4. **Nothing found** — ask the user where the materials are. Offer to proceed
-   **interview-only**; a project with no written material is a normal starting state, not
-   an error.
+   **interview-only**, or `/envision` to see 2-4 rough versions of the idea before
+   anything is written; a project with no written material is a normal starting state,
+   not an error.
+
+`docs/vision/**` is envision's working state, never a source — not even under a `--from`
+that contains it; its agreement arrives as `docs/foundation/PRD-*.md`.
 
 Report which branch was taken. "Ingested 6 documents from `docs/foundation/`" and
 "No materials found — interview only" are both fine outcomes; a silent choice is not.
@@ -88,12 +92,16 @@ subagent — the document itself stays on disk.
 | `.md`, `.txt`, `.rst` | read and digested |
 | `.pdf`, exported `.docx`/`.odt` | read and digested; cite the page or section in `source:` |
 | `.png`, `.jpg`, `.svg`, `.fig`, Figma / Miro links | **pointer only** — never opened |
+| `.html` | **pointer only** — never digested; a same-stem `.md` companion beside it is digested instead |
 
 **Images are never opened.** Record the path, then ask the user during the interview:
 *"what does this mockup settle that the text doesn't?"* Their one-line answer becomes the
 record's `summary`, with `source: interview`. This is deliberate: reading an image
 produces claims nothing can verify against the source, and the capability is not
 guaranteed on every host this skill ships to.
+
+**`.html` is never read as text** — design and review exports run to megabytes of markup.
+Its same-stem `.md` companion carries the claims; a lone `.html` is treated like an image.
 
 ## Conflict rule
 

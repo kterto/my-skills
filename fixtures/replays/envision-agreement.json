@@ -1,0 +1,14 @@
+{
+  "id": "envision-agreement",
+  "kind": "synthetic",
+  "class": "a vision far from the user's hidden need recorded as \"0.95 (confirmed by you)\" in a file every downstream role trusts, or a session that stops with no record of why",
+  "caught_by": "status is agreed or draft and nothing else: render refuses agreed with an empty agreement.yes, so only the user's own yes copied from chat makes a board agreed and writes the PRD; a draft must carry an outcome (On hold, Not building it: <why>, Solved without building: <how>), and only a draft may",
+  "missed_by": "context-builder's final check, which verifies transcription on a text list, so in both role-play sessions the confirmed restatement agreed to a vision far from the hidden need (M3, M5)",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/envision/__tests__/render.test.cjs",
+  "evidence": "docs/adr/0033-envision-a-divergent-step-before-context-builder.md#9-agreement-is-agreed-or-draft-and-only-a-yes-in-chat-makes-it-agreed"
+}
