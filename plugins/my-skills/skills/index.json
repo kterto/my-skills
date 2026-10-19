@@ -137,9 +137,12 @@
       "files": [
         "__tests__/fixtures/prototype-good.html",
         "__tests__/fixtures/sample-board.json",
+        "__tests__/fixtures/sample-live.json",
         "__tests__/render.test.cjs",
         "__tests__/template.test.cjs",
+        "references/claude-design.md",
         "references/design.md",
+        "references/live.md",
         "references/rounds.md",
         "scripts/render.cjs",
         "SKILL.md",

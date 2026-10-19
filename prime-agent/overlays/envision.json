@@ -12,6 +12,34 @@
       "count": 1,
       "find": "**Dual-host.** This single `SKILL.md` serves both Claude Code and opencode via the\nin-place dual-host pattern — there is **no** `.opencode/skills/envision/` override port.\nWhere a host construct differs, both variants are named inline: `AskUserQuestion`\n(Claude) / `question` (opencode); `Skill` (Claude) / `skill` (opencode) to invoke\nimpeccable. The `allowed-tools` frontmatter lists both host variants of every tool the\nbody uses.",
       "replace": "**Host.** This is the Prime Agent port of a skill whose source serves several hosts from\none `SKILL.md`. Where the body below names a host construct, use the Prime equivalent:\nask the user normally in the conversation, as numbered choices, instead of\n`AskUserQuestion`/`question`. `Skill`/`skill` does not exist here, so impeccable is never\ninvoked at Feel: say so in one line, print no command, and go on to the tiles. Text mode is\nthe default, and the board's path is printed rather than opened. This port carries **no** `allowed-tools` frontmatter —\nPrime Agent does not read one — so the tools the body uses are the ordinary shell and file\ntools the session already has. The skill still never commits and never pushes."
+    },
+    {
+      "why": "The live tier and Claude Design need the Artifact tool, which Prime does not have. references/live.md and references/claude-design.md still ship, since an overlay cannot exclude a file, so nothing may point at them: this removes the live-tier paragraph, and the entries below remove every other pointer.",
+      "count": 1,
+      "find": "**Live tier (Claude Code).** Only when the `Artifact` tool is listed, and before Phase 0's\ntext-mode default or on resume: `references/live.md` → **Offer**. Otherwise skip this.\n\n",
+      "replace": ""
+    },
+    {
+      "why": "The Feel chain's third branch in SKILL.md points into claude-design.md; Prime has no Artifact tool, so it skips the branch as the pre-1b text did.",
+      "count": 1,
+      "find": "3. **Claude Design**, when `Artifact` is listed: `references/claude-design.md` → **Flow**.",
+      "replace": "3. **Claude Design**: Claude Code only; skipped here."
+    },
+    {
+      "why": "The Files table lists live.json, which only the Claude Code live tier writes.",
+      "count": 1,
+      "find": "| `docs/vision/live.json` | live pages, who is who, what was applied | you |\n",
+      "replace": ""
     }
-  ]
+  ],
+  "fileReplacements": {
+    "references/design.md": [
+      {
+        "why": "The resolve chain's third branch in design.md is the last pointer into claude-design.md; Prime skips it, as SKILL.md's Feel line does.",
+        "count": 1,
+        "find": "3. **Claude Design** (`claude-design`), Claude Code only, when the `Artifact` tool is listed:\n   `claude-design.md` → **Flow**. A missing type, a \"no\" or a failed call: one line, and go on to 4.",
+        "replace": "3. **Claude Design** (`claude-design`): Claude Code only; skipped here."
+      }
+    ]
+  }
 }

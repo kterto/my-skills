@@ -46,7 +46,7 @@ from `docs/design_files/home.html`"). The chain never blocks and never installs 
    When the host does not list it, print no command: say "impeccable isn't installed here,
    so I'll propose 3 looks" and go on.
 
-3. **Claude Design** (`claude-design`): Inc 1b, Claude Code only. Not in this version.
+3. **Claude Design** (`claude-design`): Claude Code only; skipped here.
 4. **In session** (`in-session`), on every host: *In-session tiles*.
 
 ## In-session tiles
@@ -79,8 +79,9 @@ user's pick sets `feel.pick`; a note on a tile proposes, and changes nothing unt
 ```
 
 - The header is `/* PROVISIONAL — envision R<n>, source: <tile id | adopted path |
-  impeccable> */`. It becomes `LOCKED` only when the user says lock in chat, which also
-  sets `feel.locked: true`.
+  impeccable | claude-design> */`, `claude-design` once values come back from claude.ai.
+  It becomes `LOCKED` only when the user says lock in chat, which also sets
+  `feel.locked: true`.
 - Prototypes mirror it; none keeps values of its own.
 - If impeccable later writes a `DESIGN.md` that supersedes it, propose adopting that.
   Never overwrite either file.
@@ -90,7 +91,7 @@ user's pick sets `feel.pick`; a note on a tile proposes, and changes nothing unt
 - The root `DESIGN.md`, `PRODUCT.md` or anything in `.impeccable/`: impeccable's init and
   document own them.
 - `docs/design_files/` or `docs/design-files/`: those are human design exports.
-- A second token file.
+- A second token file (a staged copy for claude.ai is a publish input, not the look).
 
 ## Prototypes
 

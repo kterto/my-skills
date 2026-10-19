@@ -394,6 +394,11 @@ const CHECK_CASES = [
   ["net.url", (h) => h.replace("<style>", '<style>body{background-image:image-set("https://example.com/a.png" 1x)}')],
   ["net.url", (h) => h.replace("<style>", String.raw`<style>body{background:\75rl(https://example.com/a.png)}`)],
   ["net.url", (h) => h.replace("<style>", "<style>body{background:url(/**/https://example.com/a.png)}")],
+  // A token value mirrored by hand into a screen's :root (adopt, impeccable, or Claude Design's "use my edits"):
+  // check is the backstop when one tries to load something or to break out of the block.
+  ["net.url", (h) => h.replace(":root {", ":root { --color-bg: url(//example.com/a.png);")],
+  ["net.import", (h) => h.replace(":root {", ":root { --color-bg: #fff; } @import 'look.css'; :root {")],
+  ["net.script", (h) => h.replace(":root {", ':root { --color-bg: </style><script src="app.js"></script><style>')],
   ["net.api", (h) => inScript(h, "fetch('/log')")],
   ["net.api", (h) => inScript(h, "fetch.call(window, '/log')")],
   ["net.api", (h) => inScript(h, "new RTCPeerConnection({})")],
@@ -521,4 +526,74 @@ test("section pointers: each `references/<file>.md` → **Section** names a head
     assert.ok(headings.has(file), `${at}: points into ${file}, which is not one of envision's docs`);
     assert.ok(headings.get(file).some((h) => h === section || h.startsWith(`${section} — `)), `${at}: ${file} has no heading "${section}"`);
   }
+});
+
+// --- The live tier and Claude Design: the parts that are data, not prose ------------------------
+
+const doc = (f) => fs.readFileSync(path.join(SKILL, f), "utf8");
+
+test("live.json sample: every key, claude.ai addresses only, and per page what was applied and who is who", () => {
+  const live = JSON.parse(doc("__tests__/fixtures/sample-live.json"));
+  assert.deepStrictEqual(Object.keys(live).filter((k) => k !== "$comment"), ["schema", "board", "people", "design"]);
+  assert.strictEqual(live.schema, 1);
+  assert.ok(live.people.length > 0, "an empty list would hide the shape of a person's entry");
+  assert.deepStrictEqual(Object.keys(live.board), ["name", "url", "round", "seen", "threads"]);
+  assert.strictEqual(live.board.name, "me");
+  assert.ok("owner" in live.board.seen, "the owner's own row is the one applied on the board");
+  for (const p of live.people) {
+    assert.deepStrictEqual(Object.keys(p), ["name", "url", "round", "viewer", "seen", "threads"]);
+    assert.match(p.viewer, /^u_[A-Za-z0-9_-]+$/, "viewer is the claude.ai id the owner confirmed");
+    assert.ok(p.viewer in p.seen, "the bound id's rows are the ones applied");
+    assert.ok(Object.keys(p.seen).every((id) => /^u_[A-Za-z0-9_-]+$/.test(id)), "a person's page has no owner row");
+  }
+  assert.ok(live.people.some((p) => Object.keys(p.seen).length > 1), "a row not applied is recorded too, so it is reported once");
+  for (const page of [live.board, ...live.people]) {
+    assert.ok(Object.values(page.seen).every((v) => Number.isInteger(v) && v > 0), "seen holds row versions");
+    assert.ok(page.threads && typeof page.threads === "object" && !Array.isArray(page.threads), "threads maps a thread to the comments read in it");
+    assert.ok(Object.values(page.threads).every((n) => Number.isInteger(n) && n > 0));
+  }
+  assert.ok(Object.keys(live.board.threads).length > 0, "an empty map would hide the shape of a thread entry");
+  assert.deepStrictEqual(Object.keys(live.design), ["system", "canvas", "round"]);
+  const urls = [live.board.url, ...live.people.map((p) => p.url), live.design.system, live.design.canvas];
+  for (const u of urls) assert.match(u, /^https:\/\/claude\.ai\/artifact\/[A-Za-z0-9_-]+$/);
+  assert.doesNotMatch(JSON.stringify(sample()), /claude\.ai/, "board.json never carries an address");
+});
+
+test("live.md: the offer is the owner's consent sentence word for word, with no size to keep in sync", () => {
+  const offer = /## Offer\n([\s\S]*?)\n## /.exec(doc("references/live.md"))[1].replace(/\s+/g, " "); // prose wraps anywhere
+  assert.ok(offer.includes("This copies your idea to claude.ai, private until you share it."), "the consent line is quoted verbatim");
+  assert.match(offer, /each round I read the whole page again/i);
+  assert.doesNotMatch(offer, /\d\s*(?:KB|kB|bytes|tokens)\b/, "a number here would be a hand-synced fact");
+  assert.match(offer, /^ ?1\. `docs\/vision\/live\.json` has a `board\.url`/, "a live.json that Claude Design wrote is not consent to a live board");
+  assert.match(offer, /run \*\*Collect\*\*/, "a resume reads the marks left since before anything else");
+});
+
+test("SKILL.md points at live.md only behind the Artifact condition; Prime's port, which has no such tool, carries no pointer", () => {
+  const skill = doc("SKILL.md"), tools = /^allowed-tools:(.*)$/m.exec(skill.split("---")[1]); // the Prime port drops the key
+  const mentions = skill.split("\n\n").filter((p) => p.includes("references/live.md"));
+  if (!tools) return assert.strictEqual(mentions.length, 0);
+  assert.match(tools[1], /\bArtifact, ArtifactData, ArtifactComments\b/);
+  assert.strictEqual(mentions.length, 1);
+  assert.match(mentions[0], /Only when the `Artifact` tool is listed/);
+});
+
+test("no other file points into the live tier's files except behind the Artifact condition, and in Prime's port none does", () => {
+  const tools = /^allowed-tools:/m.test(doc("SKILL.md").split("---")[1]), own = ["references/live.md", "references/claude-design.md"];
+  const walk = (d) => fs.readdirSync(path.join(SKILL, d), { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]));
+  const files = walk(".").map((f) => f.split(path.sep).join("/").replace(/^\.\//, "")).filter((f) => !f.startsWith("__tests__/") && !own.includes(f) && f !== "SKILL.md");
+  assert.ok(files.includes("references/design.md") && files.includes("templates/board.html"));
+  for (const f of files) {
+    const hits = doc(f).split("\n\n").filter((p) => /\blive\.md\b|claude-design\.md|live\.json/.test(p));
+    if (!tools) assert.deepStrictEqual(hits, [], `${f} points into the live tier, which this host cannot run`);
+    else for (const p of hits) assert.match(p, /when the `Artifact` tool is listed/, `${f} points into the live tier unconditionally`);
+  }
+});
+
+test("claude-design.md: the mapping covers every variable the token file example in design.md defines", () => {
+  const example = /```css\n([\s\S]*?)```/.exec(doc("references/design.md"))[1];
+  const rows = doc("references/claude-design.md").split("\n").filter((l) => /^\s*\| `--/.test(l)).flatMap((l) => l.match(/`--[^`]+`/g).slice(0, 3));
+  const patterns = rows.map((r) => new RegExp("^" + r.slice(1, -1).replace("<n>", "[\\w-]+") + "$"));
+  const vars = example.match(/--[\w-]+(?=\s*:)/g);
+  assert.ok(vars.length >= 10);
+  for (const v of vars) assert.ok(patterns.some((p) => p.test(v)), `${v} is in the token file example but not in the Claude Design mapping`);
 });

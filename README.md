@@ -7,7 +7,7 @@ Authored agent skills for [Claude Code](https://code.claude.com), [opencode](htt
 | Skill | What it does |
 |---|---|
 | `context-builder` | **Start here.** Bootstraps a new project's shared context: ingests pre-existing materials (pitch, PRD, specs, mockups) from `docs/foundation/` or `--from <path>` via a read-only digest fan-out, grills the user until project intent converges two-sided (self-rated threshold **plus** a confirmed restatement), then writes `.orchestrator/PROJECT-CONTEXT.md` — nine required sections plus an optional intent block — with auxiliary docs under `docs/foundation/` the pipeline roles follow by pointer. Re-runnable: `--refresh` proposes per-section updates and never rewrites curated prose outside its managed fence. Stops at a handoff line; never commits. |
-| `envision` | **Optional step 0, before `context-builder`.** For someone who cannot yet say what they want: starts from one real recent episode, shows 2-4 rough directions that genuinely differ (exactly one outside what the user said) on an offline HTML board, then a clickable greyscale walk of the pick with real wording. Agreement is the user's own "yes" in chat, held back by seven `ready()` checks until the agent's side is complete, and it writes `docs/foundation/PRD-<slug>.md` for `context-builder` to ingest. Right after it comes a provisional look (the project's own design system, impeccable on consent, or three in-session tiles) and 1-3 first-look prototypes in `design-to-code`'s format. Others answer through untracked share copies. Dual-host (Claude Code + opencode) from a single SKILL.md. Never commits. |
+| `envision` | **Optional step 0, before `context-builder`.** For someone who cannot yet say what they want: starts from one real recent episode, shows 2-4 rough directions that genuinely differ (exactly one outside what the user said) on an offline HTML board, then a clickable greyscale walk of the pick with real wording. Agreement is the user's own "yes" in chat, held back by seven `ready()` checks until the agent's side is complete, and it writes `docs/foundation/PRD-<slug>.md` for `context-builder` to ingest. Right after it comes a provisional look (the project's own design system, impeccable on consent, Claude Design on Claude Code, or three in-session tiles) and 1-3 first-look prototypes in `design-to-code`'s format. Others answer through untracked share copies. On Claude Code, an opt-in live board on claude.ai saves marks without a paste. Dual-host (Claude Code + opencode) from a single SKILL.md. Never commits. |
 | `clean-code-gates` | Runs Clean Code quality gates (G1–G7: coverage, complexity, length/nesting, naming, no-comments, mutation, dependency-structure) and emits an agnostic JSON + Markdown report. Portable across stacks (node-ts, dart-flutter). |
 | `spec-driven-eval` | Scores a spec-driven implementation requirement by requirement, with separately evidenced implementation and test coverage grades. Two report profiles — `full` for cross-implementation benchmarking, `in-loop` for a pipeline caller — selecting sections only: no scoring rule, threshold, or number changes between them. |
 | `commit-pr` | Stage, commit, push the current branch, and open a PR targeting `main`. Confirms before any remote mutation. |
@@ -131,7 +131,8 @@ their own words, becomes a PRD that `context-builder` ingests like any other doc
    refuses `agreed` until its seven `ready()` checks pass. Stopping early is a `draft` with
    an outcome: on hold, not building it, or solved without building.
 6. **Feel** — right after the yes, a look: the project's existing design system, impeccable
-   on consent, or a pick from three in-session tiles. "Later" is fine.
+   on consent, Claude Design on Claude Code (the picked look as a design system and a page
+   on claude.ai), or a pick from three in-session tiles. "Later" is fine.
 
 Each round is one board. The agent echoes every change it applied, with an undo, before
 anything else, and asks at most three questions between boards. The board's **Copy**
@@ -144,6 +145,7 @@ button turns marks into readable lines to paste, but plain prose in chat always 
 | `docs/vision/board.json` | the state the agent keeps; `render.cjs` validates it every round |
 | `docs/vision/index.html` | the board: one self-contained page under an offline CSP |
 | `docs/vision/share/<slug>.html` | one person's copy, untracked |
+| `docs/vision/live.json` | the live pages, who is who and which marks were applied (Claude Code, opt-in) |
 | `docs/foundation/PRD-<slug>.md` | the agreement, written once at `agreed` |
 | `docs/vision/design/tokens.css` | the look, PROVISIONAL until the user locks it |
 | `docs/vision/prototype/<flow>-<screen>.html` | first-look and detail screens in `design-to-code`'s format, each passing `render.cjs check` |
@@ -156,9 +158,21 @@ It never writes under `.orchestrator/` or into `context-builder`'s own files, an
 
 It stops at a printed block naming what it wrote and the next command: `/context-builder`,
 which ingests the PRD and asks only what is still open, then `/roadmap`. It invokes nothing
-except impeccable at Feel, on consent, and never commits. On Claude Code, an opt-in live
-tier (the board as a private claude.ai artifact) and Claude Design come in the next
-increment.
+except impeccable at Feel, on consent, and never commits.
+
+### Live tier and Claude Design (Claude Code, opt-in)
+
+When the `Artifact` tool is listed, envision offers once to put the board on claude.ai ("This
+copies your idea to claude.ai, private until you share it."). Your marks are then saved as
+you make them, as the page's own Copy lines, so no paste is needed; a comment on a card
+reaches the agent through the shell's composer; and the page shows where no browser exists
+(SSH, the web). Each person whose reaction you want gets their own page, built like their
+share copy and shared by you from claude.ai's share menu; nothing they mark leaves it until
+they press Send, and the agent applies their marks only after you confirm who sent them.
+Your own page is never shared. Copy and the local page stay the floor. At Feel, Claude
+Design also puts the picked look on claude.ai as a design system and a page of the first
+screens, with `tokens.css` still the only token file. opencode and Prime have neither
+(ADR-0034).
 
 ## orchestrator
 

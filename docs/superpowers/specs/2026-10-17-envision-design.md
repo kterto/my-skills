@@ -622,6 +622,20 @@ from the agreed principles and the pick, plus a Design artifact holding the home
 flow, then exports the tokens to `tokens.css` and re-authors the screens in five channels.
 Whether those types' files are design-to-code input is unverified, so Inc 1b checks it first.
 
+**As built (ADR-0034).** Inc 1b shipped as
+[ADR-0034](../../adr/0034-envision-live-tier-and-claude-design.md). Where it differs from this
+plan:
+
+- Claude Design exports nothing to the repo. `tokens.css` is written first, from the picked
+  tile, and the design system on claude.ai is derived from it by a fixed name mapping; a value
+  comes back only on an explicit "use my edits", through an allowlist and a yes.
+- The Design canvas is not design-to-code input, and no screen is re-authored from it: the
+  first-look screens stay envision's own five-channel prototypes.
+- `render.cjs` did not change. The published page is `render`'s own output and finds its host
+  itself; the addresses live in `docs/vision/live.json`, not in `board.json`.
+- A person's page saves only when they press Send, and their claude.ai id counts only after
+  the owner confirms who it is.
+
 **What Inc 1 does so nothing blocks Inc 1b:**
 
 - `board.json` is the one state both tiers read and write; live rows carry the same fields as

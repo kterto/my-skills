@@ -111,6 +111,9 @@
     {"id": "envision.gate.ready", "skill": "envision", "enum": "gate", "name": "ready()", "fixture": "fixtures/replays/envision-ready.json"},
     {"id": "envision.gate.direction-contract", "skill": "envision", "enum": "gate", "name": "direction contract", "fixture": "fixtures/replays/envision-direction-contract.json"},
     {"id": "envision.result.agreed", "skill": "envision", "enum": "board.status", "name": "agreed", "fixture": "fixtures/replays/envision-agreement.json"},
-    {"id": "envision.result.draft", "skill": "envision", "enum": "board.status", "name": "draft", "fixture": "fixtures/replays/envision-agreement.json"}
+    {"id": "envision.result.draft", "skill": "envision", "enum": "board.status", "name": "draft", "fixture": "fixtures/replays/envision-agreement.json"},
+    {"id": "envision.touchpoint.live", "skill": "envision", "enum": "touchpoint", "name": "live", "fixture": "fixtures/replays/envision-live.json"},
+    {"id": "envision.gate.live-audience", "skill": "envision", "enum": "gate", "name": "live audience", "fixture": "fixtures/replays/envision-live-privacy.json"},
+    {"id": "envision.touchpoint.claude-design", "skill": "envision", "enum": "touchpoint", "name": "claude design", "fixture": "fixtures/replays/envision-claude-design.json"}
   ]
 }
