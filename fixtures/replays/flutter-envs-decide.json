@@ -1,0 +1,14 @@
+{
+  "id": "flutter-envs-decide",
+  "kind": "synthetic",
+  "class": "a setup that asks what the project already answers, asks in several rounds, or records a default as if the owner had chosen it",
+  "caught_by": "the spec draft with provenance: every field is derived, defaulted or asked; at most four questions go out in one round; a default stays marked as a default in flutter_envs.json's draft and in the report",
+  "missed_by": "the earlier wizard, which prompted for every value interactively and could not tell a value the project already held from one it needed",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/flutter-envs/__tests__/spec.test.cjs",
+  "evidence": "docs/adr/0035-flutter-envs-edits-a-target-project-against-a-committed-spec.md#2-one-committed-spec-flutter_envsjson-checked-against-every-artifact-on-every-run"
+}

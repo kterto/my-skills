@@ -1,0 +1,14 @@
+{
+  "id": "flutter-envs-proof",
+  "kind": "synthetic",
+  "class": "a check reported as passing that never ran, such as an Xcode check on a machine without Xcode",
+  "caught_by": "verify gives every check pass, fail or not-run with its reason, and a missing tool yields not-run, never pass",
+  "missed_by": "an acceptance step that was never run on a build, as with the earlier wizard",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/flutter-envs/__tests__/verify.test.cjs",
+  "evidence": "docs/adr/0035-flutter-envs-edits-a-target-project-against-a-committed-spec.md#11-verification-reads-real-artifacts-and-not-run-is-never-pass"
+}

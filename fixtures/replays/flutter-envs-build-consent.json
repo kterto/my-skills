@@ -1,0 +1,14 @@
+{
+  "id": "flutter-envs-build-consent",
+  "kind": "synthetic",
+  "class": "a multi-minute simulator or APK build started without the owner asking for it",
+  "caught_by": "verify runs the config tier by default and the build tier only on --tier build, which the agent offers once",
+  "missed_by": "a verification step with one tier, which either never builds or always does",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/flutter-envs/__tests__/verify.test.cjs",
+  "evidence": "docs/adr/0035-flutter-envs-edits-a-target-project-against-a-committed-spec.md#11-verification-reads-real-artifacts-and-not-run-is-never-pass"
+}

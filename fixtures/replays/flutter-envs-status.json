@@ -1,0 +1,15 @@
+{
+  "id": "flutter-envs-status",
+  "kind": "synthetic",
+  "class": "a criterion reported as met when only some environments or platforms meet it, or as missing when it does not apply",
+  "caught_by": "the matrix: each criterion's status is ok, partial, absent or n/a from the findings over every environment and platform, and every finding code has one exact-set case",
+  "missed_by": "a checklist read by eye, which the reference app passed while carrying 30 defects",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/flutter-envs/__tests__/criteria.test.cjs",
+  "evidence": "docs/adr/0035-flutter-envs-edits-a-target-project-against-a-committed-spec.md#3-the-evaluator-one-matrix-one-closed-registry-exact-set-cases",
+  "private_ref": "flutter-envs-history-replay"
+}

@@ -1,0 +1,14 @@
+{
+  "id": "flutter-envs-managed-conflict",
+  "kind": "synthetic",
+  "class": "a hand edit inside a generated block silently overwritten on the next run",
+  "caught_by": "the managed-block marker records the body's sha; a recorded sha that differs from the body means someone edited inside, which is a conflict and is never overwritten; one function writes and reads every comment syntax",
+  "missed_by": "the earlier wizard, which wrote its marker with // and checked for it with #, so every re-run appended a second block (fault W5)",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/flutter-envs/__tests__/managed.test.cjs",
+  "evidence": "docs/adr/0035-flutter-envs-edits-a-target-project-against-a-committed-spec.md#4-writes-have-an-ownership-class-and-apply-rolls-back-on-red"
+}

@@ -1,0 +1,17 @@
+{
+  "skill": "flutter-envs",
+  "dropFrontmatterKeys": [
+    "allowed-tools"
+  ],
+  "insertAfterFrontmatter": [
+    "preamble.md"
+  ],
+  "replacements": [
+    {
+      "why": "The dual-host paragraph names Claude Code and opencode, neither of which is the Prime Agent host, and Prime has no picker tool. Prime asks in numbered prose, as the Hosts table already says. The overlay drops allowed-tools, so the port must not imply one.",
+      "count": 1,
+      "find": "**Dual-host.** This one `SKILL.md` serves Claude Code and opencode in place. There is no `.opencode/skills/flutter-envs/` port. Questions use `AskUserQuestion` (Claude) / `question` (opencode). With `--text` or no picker, ask numbered questions in prose.",
+      "replace": "**Host.** This is the Prime Agent port of a skill whose source serves several hosts from one `SKILL.md`. Where the body below names `AskUserQuestion`/`question`, ask the user normally in the conversation, as numbered choices. This port carries **no** `allowed-tools` frontmatter, because Prime Agent does not read one. The tools the body uses are the ordinary shell and file tools the session already has. The skill still never commits and never pushes."
+    }
+  ]
+}
