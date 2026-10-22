@@ -1,0 +1,14 @@
+{
+  "id": "flutter-envs-rollback",
+  "kind": "synthetic",
+  "class": "a half-applied setup left behind when an edit did not achieve what it claimed",
+  "caught_by": "the in-memory journal: after the writes apply re-evaluates, and when a finding one of its edits claimed to fix is still open it restores every touched file and exits 1 naming the finding",
+  "missed_by": "a write-only setup step, which reports success from its own exit code",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/flutter-envs/__tests__/converge.test.cjs",
+  "evidence": "docs/adr/0035-flutter-envs-edits-a-target-project-against-a-committed-spec.md#4-writes-have-an-ownership-class-and-apply-rolls-back-on-red"
+}

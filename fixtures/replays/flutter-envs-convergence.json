@@ -1,0 +1,14 @@
+{
+  "id": "flutter-envs-convergence",
+  "kind": "synthetic",
+  "class": "a second run that changes bytes, so the setup drifts with every invocation",
+  "caught_by": "apply re-reads and re-plans until the plan is empty, and the suite applies twice on every fixture bundle and asserts byte-identical trees",
+  "missed_by": "hand surgery and generator scripts, which carry no idempotency argument",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/flutter-envs/__tests__/converge.test.cjs",
+  "evidence": "docs/adr/0035-flutter-envs-edits-a-target-project-against-a-committed-spec.md#4-writes-have-an-ownership-class-and-apply-rolls-back-on-red"
+}

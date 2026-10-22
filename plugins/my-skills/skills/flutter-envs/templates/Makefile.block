@@ -1,0 +1,33 @@
+env ?= {{default}}
+device ?=
+args ?=
+FLUTTER ?= $(shell [ -f .fvmrc ] && command -v fvm >/dev/null 2>&1 && echo "fvm flutter" || echo flutter)
+FLAGS = --flavor $(env) -t lib/main.dart --dart-define-from-file=env/$(env).json $(args)
+
+env/%.json:
+	@echo "error: env/$*.json is missing; copy env/sample.json to it and fill the values" >&2; exit 1
+
+run-debug: env/$(env).json
+	$(FLUTTER) run $(if $(device),-d $(device)) $(FLAGS)
+run-profile: env/$(env).json
+	$(FLUTTER) run --profile $(if $(device),-d $(device)) $(FLAGS)
+run-release: env/$(env).json
+	$(FLUTTER) run --release $(if $(device),-d $(device)) $(FLAGS)
+run-debug-envless:
+	$(FLUTTER) run $(if $(device),-d $(device)){{envless}}
+run-release-envless:
+	$(FLUTTER) run --release $(if $(device),-d $(device)){{envless}}
+build-apk: env/$(env).json
+	$(FLUTTER) build apk $(FLAGS)
+build-obfuscate-apk: env/$(env).json
+	$(FLUTTER) build apk --obfuscate --split-debug-info=build/symbols-apk-$(env) $(FLAGS)
+build-appbundle: env/$(env).json
+	$(FLUTTER) build appbundle $(FLAGS)
+build-obfuscate-appbundle: env/$(env).json
+	$(FLUTTER) build appbundle --obfuscate --split-debug-info=build/symbols-appbundle-$(env) $(FLAGS)
+build-ipa: env/$(env).json
+	$(FLUTTER) build ipa $(FLAGS)
+build-obfuscate-ipa: env/$(env).json
+	$(FLUTTER) build ipa --obfuscate --split-debug-info=build/symbols-ipa-$(env) $(FLAGS)
+xcode-config: env/$(env).json
+	$(FLUTTER) build ios --config-only $(FLAGS)

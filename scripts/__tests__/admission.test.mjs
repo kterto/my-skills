@@ -5,7 +5,8 @@
 // what caught it, what the kept core did instead, and what the mechanism costs per
 // run. This test fails when an entry has no such fixture, when a fixture is missing a
 // field or its link to the real history it was admitted from, and when a value
-// clean-code-gates' instruments can emit (src/instruments/vocab.cjs) has no entry.
+// clean-code-gates' instruments can emit (src/instruments/vocab.cjs) has no entry, or
+// when a value flutter-envs' vocab.cjs lists in ADMITTED has none (ADR-0035).
 //
 // The rules live in audit(), a pure function, so each one is proved against a broken
 // registry below, beside the check of the real one: a registry test that cannot fail
@@ -25,6 +26,11 @@ const REGISTRY = "fixtures/admission.json"
 const REPLAYS = "fixtures/replays"
 const VOCAB = "plugins/my-skills/skills/clean-code-gates/src/instruments/vocab.cjs"
 const vocab = createRequire(import.meta.url)(join(REPO, ...VOCAB.split("/")))
+// A skill here holds only the arrays its ADMITTED names to an entry. Its finding codes are
+// held by its own case suite instead (ADR-0035).
+const FLUTTER_ENVS_VOCAB = "plugins/my-skills/skills/flutter-envs/scripts/lib/vocab.cjs"
+const flutterEnvs = createRequire(import.meta.url)(join(REPO, ...FLUTTER_ENVS_VOCAB.split("/")))
+const admitted = { "flutter-envs": flutterEnvs.ADMITTED }
 
 // The one form a cost may take before anyone has measured it. ADR-0030 lists every
 // mechanism that carries it; any other cost is a number with a unit and a source.
@@ -61,10 +67,11 @@ function anchors(text) {
 
 /**
  * Every rule, over plain data: `registry` is admission.json, `fixtures` maps a file
- * name in fixtures/replays/ to its parsed JSON, `vocab` is vocab.cjs's exports, and
- * `read(path)` returns a repo file's text or null. Returns one line per problem.
+ * name in fixtures/replays/ to its parsed JSON, `vocab` is vocab.cjs's exports, `admitted`
+ * maps a skill to its vocab.cjs ADMITTED, and `read(path)` returns a repo file's text or
+ * null. Returns one line per problem.
  */
-function audit({ registry, fixtures, vocab, read }) {
+function audit({ registry, fixtures, vocab, admitted = {}, read }) {
   const problems = []
   const hasFixture = (entry) => isText(entry?.fixture) && Object.hasOwn(fixtures, entry.fixture.replace(`${REPLAYS}/`, ""))
   if (registry?.version !== 1 || !Array.isArray(registry.entries)) return [`${REGISTRY} must be { "version": 1, "entries": [] }`]
@@ -81,6 +88,10 @@ function audit({ registry, fixtures, vocab, read }) {
     // An entry for a value the vocabulary no longer has would register nothing.
     if (entry.skill === "clean-code-gates" && Array.isArray(vocab[entry.enum]) && !vocab[entry.enum].includes(entry.name)) {
       problems.push(`${where}: names ${entry.enum}.${entry.name}, which vocab.cjs does not export`)
+    }
+    const listed = admitted[entry.skill]
+    if (isMap(listed) && Array.isArray(listed[entry.enum]) && !listed[entry.enum].includes(entry.name)) {
+      problems.push(`${where}: names ${entry.enum}.${entry.name}, which ${entry.skill} vocab.cjs ADMITTED does not export`)
     }
   }
 
@@ -124,6 +135,17 @@ function audit({ registry, fixtures, vocab, read }) {
       if (!covered) problems.push(`vocab.cjs ${name}.${value} has no admission entry with a fixture`)
     }
   }
+
+  for (const [skill, arrays] of Object.entries(admitted)) {
+    if (!isMap(arrays)) { problems.push(`${skill} vocab.cjs exports no ADMITTED`); continue }
+    for (const [name, values] of Object.entries(arrays)) {
+      if (!Array.isArray(values)) continue
+      for (const value of values) {
+        const covered = registry.entries.some((entry) => entry?.skill === skill && entry.enum === name && entry.name === value && hasFixture(entry))
+        if (!covered) problems.push(`${skill} vocab.cjs ADMITTED ${name}.${value} has no admission entry with a fixture`)
+      }
+    }
+  }
   return problems
 }
 
@@ -138,7 +160,7 @@ function load() {
     const file = join(REPO, ...path.split("/"))
     return path && existsSync(file) && statSync(file).isFile() ? readFileSync(file, "utf8") : null
   }
-  return { registry, fixtures, vocab, read }
+  return { registry, fixtures, vocab, admitted, read }
 }
 
 const clone = (value) => JSON.parse(JSON.stringify(value))
@@ -162,6 +184,15 @@ test("the vocabulary is read from vocab.cjs itself, the twelve arrays and any ad
       assert.ok(registry.entries.some((entry) => entry.skill === "clean-code-gates" && entry.enum === name && entry.name === value), `${name}.${value}`)
     }
   }
+})
+
+// flutter-envs is the second vocabulary the rule reads (ADR-0035). Its statuses and proof
+// results are the vocabulary's own arrays, so a value added there needs an entry here.
+test("flutter-envs' ADMITTED is read from its vocab.cjs: touchpoints, gates, statuses and proof results", () => {
+  assert.ok(isMap(flutterEnvs.ADMITTED), "flutter-envs vocab.cjs exports no ADMITTED")
+  for (const name of ["TOUCHPOINTS", "GATES", "STATUSES", "RESULTS"]) assert.ok(flutterEnvs.ADMITTED[name]?.length > 0, `ADMITTED.${name} is empty`)
+  assert.equal(flutterEnvs.ADMITTED.STATUSES, flutterEnvs.STATUSES, "ADMITTED.STATUSES is the vocabulary's own STATUSES")
+  assert.equal(flutterEnvs.ADMITTED.RESULTS, flutterEnvs.RESULTS, "ADMITTED.RESULTS is the vocabulary's own RESULTS")
 })
 
 test("Increments 1 and 2 stay registered, through history fixtures that cite their ADRs", () => {
@@ -261,6 +292,19 @@ test("fails: a vocabulary value with no entry, in any array, or an entry of the 
   breaks((i) => { i.vocab.KINDS = ["barrier"] }, "vocab.cjs KINDS.barrier has no admission entry")
   breaks((i) => { i.registry.entries[0].skill = "orchestrator" }, "vocab.cjs REASONS.timeout has no admission entry")
   breaks((i) => { i.registry.entries[0].enum = "RESULTS" }, "vocab.cjs REASONS.timeout has no admission entry")
+})
+
+test("fails: an ADMITTED value with no entry, an entry ADMITTED no longer lists, and a skill with no ADMITTED", () => {
+  const withSkill = (i) => {
+    i.admitted = { "demo-skill": { GATES: ["clean-tree"], note: "not an array, so not admitted" } }
+    i.registry.entries.push({ id: "demo.gate.clean-tree", skill: "demo-skill", enum: "GATES", name: "clean-tree", fixture: "fixtures/replays/bounds.json" })
+  }
+  const passing = minimal()
+  withSkill(passing)
+  assert.deepEqual(audit(passing), [])
+  breaks((i) => { withSkill(i); i.admitted["demo-skill"].GATES.push("rollback") }, "demo-skill vocab.cjs ADMITTED GATES.rollback has no admission entry")
+  breaks((i) => { withSkill(i); i.registry.entries.push({ ...i.registry.entries[1], id: "demo.gate.gone", name: "gone" }) }, "names GATES.gone, which demo-skill vocab.cjs ADMITTED does not export")
+  breaks((i) => { withSkill(i); i.admitted["demo-skill"] = undefined }, "demo-skill vocab.cjs exports no ADMITTED")
 })
 
 test("fails: an entry for a value the vocabulary no longer exports, and a fixture whose id is not its file name", () => {

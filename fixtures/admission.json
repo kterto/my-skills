@@ -114,6 +114,21 @@
     {"id": "envision.result.draft", "skill": "envision", "enum": "board.status", "name": "draft", "fixture": "fixtures/replays/envision-agreement.json"},
     {"id": "envision.touchpoint.live", "skill": "envision", "enum": "touchpoint", "name": "live", "fixture": "fixtures/replays/envision-live.json"},
     {"id": "envision.gate.live-audience", "skill": "envision", "enum": "gate", "name": "live audience", "fixture": "fixtures/replays/envision-live-privacy.json"},
-    {"id": "envision.touchpoint.claude-design", "skill": "envision", "enum": "touchpoint", "name": "claude design", "fixture": "fixtures/replays/envision-claude-design.json"}
+    {"id": "envision.touchpoint.claude-design", "skill": "envision", "enum": "touchpoint", "name": "claude design", "fixture": "fixtures/replays/envision-claude-design.json"},
+    {"id": "flutter-envs.touchpoint.decide", "skill": "flutter-envs", "enum": "TOUCHPOINTS", "name": "decide", "fixture": "fixtures/replays/flutter-envs-decide.json"},
+    {"id": "flutter-envs.touchpoint.firebase-consent", "skill": "flutter-envs", "enum": "TOUCHPOINTS", "name": "firebase-consent", "fixture": "fixtures/replays/flutter-envs-firebase-consent.json"},
+    {"id": "flutter-envs.touchpoint.build-consent", "skill": "flutter-envs", "enum": "TOUCHPOINTS", "name": "build-consent", "fixture": "fixtures/replays/flutter-envs-build-consent.json"},
+    {"id": "flutter-envs.gate.clean-tree", "skill": "flutter-envs", "enum": "GATES", "name": "clean-tree", "fixture": "fixtures/replays/flutter-envs-clean-tree.json"},
+    {"id": "flutter-envs.gate.managed-conflict", "skill": "flutter-envs", "enum": "GATES", "name": "managed-conflict", "fixture": "fixtures/replays/flutter-envs-managed-conflict.json"},
+    {"id": "flutter-envs.gate.convergence", "skill": "flutter-envs", "enum": "GATES", "name": "convergence", "fixture": "fixtures/replays/flutter-envs-convergence.json"},
+    {"id": "flutter-envs.gate.rollback", "skill": "flutter-envs", "enum": "GATES", "name": "rollback", "fixture": "fixtures/replays/flutter-envs-rollback.json"},
+    {"id": "flutter-envs.gate.production-isolation", "skill": "flutter-envs", "enum": "GATES", "name": "production-isolation", "fixture": "fixtures/replays/flutter-envs-production-isolation.json"},
+    {"id": "flutter-envs.status.ok", "skill": "flutter-envs", "enum": "STATUSES", "name": "ok", "fixture": "fixtures/replays/flutter-envs-status.json"},
+    {"id": "flutter-envs.status.partial", "skill": "flutter-envs", "enum": "STATUSES", "name": "partial", "fixture": "fixtures/replays/flutter-envs-status.json"},
+    {"id": "flutter-envs.status.absent", "skill": "flutter-envs", "enum": "STATUSES", "name": "absent", "fixture": "fixtures/replays/flutter-envs-status.json"},
+    {"id": "flutter-envs.status.na", "skill": "flutter-envs", "enum": "STATUSES", "name": "n/a", "fixture": "fixtures/replays/flutter-envs-status.json"},
+    {"id": "flutter-envs.result.pass", "skill": "flutter-envs", "enum": "RESULTS", "name": "pass", "fixture": "fixtures/replays/flutter-envs-proof.json"},
+    {"id": "flutter-envs.result.fail", "skill": "flutter-envs", "enum": "RESULTS", "name": "fail", "fixture": "fixtures/replays/flutter-envs-proof.json"},
+    {"id": "flutter-envs.result.not-run", "skill": "flutter-envs", "enum": "RESULTS", "name": "not-run", "fixture": "fixtures/replays/flutter-envs-proof.json"}
   ]
 }

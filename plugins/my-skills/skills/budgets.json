@@ -41,6 +41,18 @@
       "maxBytes": 41571,
       "adr": "docs/adr/0026-skill-byte-budgets-and-the-admission-rule.md"
     },
+    "flutter-envs/SKILL.md": {
+      "maxBytes": 12288,
+      "adr": "docs/adr/0035-flutter-envs-edits-a-target-project-against-a-committed-spec.md"
+    },
+    "flutter-envs/references/firebase.md": {
+      "maxBytes": 6144,
+      "adr": "docs/adr/0035-flutter-envs-edits-a-target-project-against-a-committed-spec.md"
+    },
+    "flutter-envs/references/recipes.md": {
+      "maxBytes": 6144,
+      "adr": "docs/adr/0035-flutter-envs-edits-a-target-project-against-a-committed-spec.md"
+    },
     "orchestrator-flash/SKILL.md": {
       "maxBytes": 16384,
       "adr": "docs/adr/0029-flash-fits-the-smallest-window-and-runs-one-live-check.md"
@@ -75,6 +87,12 @@
     }
   },
   "code": {
+    "flutter-envs": {
+      "maxLines": 7372,
+      "include": ["scripts/**/*.cjs"],
+      "exclude": ["__tests__/**"],
+      "adr": "docs/adr/0035-flutter-envs-edits-a-target-project-against-a-committed-spec.md"
+    },
     "clean-code-gates": {
       "maxLines": 6300,
       "include": ["bin/**/*.cjs", "bin/**/*.js", "bin/**/*.mjs", "src/**/*.cjs", "src/**/*.js", "src/**/*.mjs", "*.cjs", "*.js", "*.mjs"],

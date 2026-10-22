@@ -1,0 +1,14 @@
+{
+  "id": "flutter-envs-production-isolation",
+  "kind": "synthetic",
+  "class": "production sharing a Firebase project with another environment, so test data, logins and push tokens mix with production's",
+  "caught_by": "parseSpec refuses a production firebase id equal to any other environment's, so no writer ever sees a spec that shares production's project; check reports a production env file that names another environment's project as a defect",
+  "missed_by": "the reference app's own setup, whose local production env file named the non-production project",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/flutter-envs/__tests__/spec.test.cjs",
+  "evidence": "docs/adr/0035-flutter-envs-edits-a-target-project-against-a-committed-spec.md#2-one-committed-spec-flutter_envsjson-checked-against-every-artifact-on-every-run"
+}

@@ -20,6 +20,7 @@ Authored agent skills for [Claude Code](https://code.claude.com), [opencode](htt
 | `product-manager` | Autonomously drives roadmap stories to completion and manages roadmap planning PRs — runs story briefs through the orchestrator, commits with `Roadmap-Story:`, syncs the roadmap, pushes/opens PRs, and exposes `assign`/`park`/`add-spec`/`add-milestone`/`add-phase`/`add-ticket`/`revise`/release-management verbs. |
 | `pr-review-report` | Reviews the current branch against an auto-detected base and emits paired `docs/reviews/<branch_slug>-<date>.{html,md}` artifacts — a self-contained interactive HTML report (architecture with recommend-only ADR flags, security, bugs/improvements lenses; rendered diff with inline annotations; severity-coded findings) plus a Markdown findings backlog shaped to hand off to `validation-fixer`. Reconciles triage across runs via a reviewer-local `.pr-review/review-state.json`, merges an existing backlog by fingerprint on re-review, and proposes optional review memory. |
 | `explain-codebase` | Read-only: reads a target project's source (never running, committing, or mutating it) and emits ONE self-contained, CSP-safe interactive HTML report at `docs/explain/<scope-slug>-<date>.html` explaining how the software works across four lenses — data model, business logic, data flow, and inferred user stories. A four-phase subagent fan-out analyzes the scope module by module; every asserted claim links to a `file:line` source anchor. Dual-host (Claude Code + opencode) from a single SKILL.md. |
+| `flutter-envs` | Evaluates a Flutter app's environment separation and completes it. Dev, staging and production install side by side with their own application ids, launcher icons and display names. A top-left banner names the environment (`ENVLESS` when none is set, none in production). Each environment gets its own Firebase setup, and production always gets its own project. Variables live in gitignored `env/<env>.json` files passed with `--dart-define-from-file`. A Node engine reads Gradle, the Xcode project, plists, icons, env files, the Makefile and Dart into one matrix of facets by environment. It writes what code can close: marked blocks it never overwrites once someone edits them, pbxproj text splices validated as a delta, and badged icons. It proves the result against real build settings and builds. It runs Firebase CLI writes only behind a confirmed plan id, and prints the steps only a person can do. Dual-host (Claude Code + opencode) from a single SKILL.md. Never commits. |
 
 ## Getting started
 
@@ -459,6 +460,81 @@ Together with `pr-review-report` this forms a resumable **review → fix → re-
 
 ---
 
+## flutter-envs
+
+Separates a Flutter app's environments the owner's way, and checks the separation on every
+run. Dev, staging and production install side by side with their own ids, launcher icons and
+names. A top-left banner names the environment (`ENVLESS` when none is set, none in
+production). Each environment gets its own Firebase setup, and production always gets its
+own project. Environment variables live in gitignored `env/<env>.json` files. It is the
+first skill here that edits a target project's native configuration, and it stands alone:
+run it on any Flutter app after `flutter create`.
+
+### Usage
+
+```bash
+/flutter-envs                  # check, ask what is open, converge, prove, print the checklist
+/flutter-envs check            # evaluate only; writes nothing
+/flutter-envs add qa           # add an environment everywhere
+/flutter-envs verify --build   # build every flavor and read the artifacts
+/flutter-envs --app apps/mobile  # pick the app in a monorepo
+```
+
+### How it works
+
+1. **Check.** A Node engine reads Gradle (Kotlin or Groovy), the Xcode project, schemes,
+   plists, icons, env files, the Makefile and the Dart sources into one matrix (facet by
+   environment). It reports each criterion as `ok`, `partial`, `absent` or `n/a`. Every
+   finding is one code in a closed registry, with its `path:line`.
+2. **Decide.** On the first run it drafts `flutter_envs.json` from the project: the
+   environments, their ids and names, each one's Firebase project, and which one is
+   production. It asks at most four questions, and on a fresh app only the ones the
+   project cannot answer. It records each default as a default. The spec refuses a
+   production that shares a Firebase project.
+3. **Apply.** It writes only absent files, its own marked blocks (`flutter-envs:begin <id>
+   sha=…`) and shapes it recognises. A block someone edited is never overwritten.
+   - **Android.** One `env` dimension, `strings.xml` names, and a guard for a missing
+     `google-services.json`.
+   - **iOS.** The template configurations are renamed to `*-production` and cloned per
+     environment, with one shared scheme per environment. The pbxproj is edited by a Node
+     text splice, not Ruby, and validated as a delta.
+   - **Icons.** Badged in pure Node, with an opaque iOS marketing icon.
+   - **Dart.** `Env`, `EnvBanner`, and Firebase options read from `Env`.
+   - **Project files.** `env/` files, a managed Make block and `default-flavor`.
+
+   It refuses to touch tracked files with uncommitted changes. When a check its edits
+   should satisfy stays red, it rolls back.
+4. **Firebase.** It runs the `firebase` CLI behind a plan id. `firebase --plan` shows the
+   exact app registrations and downloads, and `--confirm <id>` runs nothing unless the plan
+   is unchanged. The `FIREBASE_*` env keys are derived from the native files and compared by
+   digest on every run. It never creates a project.
+5. **Prove.** The `config` tier checks `xcodebuild -showBuildSettings` per flavor,
+   `flutter build ios --config-only`, the Gradle variants, the banner test and `make -n`.
+   The `build` tier reads the built APKs and apps: ids, names and the bundled Firebase
+   plist. A check that did not run is `not-run`, never `pass`.
+
+### Output
+
+| Path (app root) | Content |
+|---|---|
+| `flutter_envs.json` | the decisions, committed with the app |
+| `android/`, `ios/`, `pubspec.yaml`, `Makefile`, `.gitignore` | flavors, configurations, schemes, icons, names, Firebase wiring, `default-flavor`, run and build targets |
+| `env/` | `.gitignore`, `sample.json` and one `<env>.json` skeleton per environment |
+| `lib/env/`, `test/env_banner_test.dart`, `lib/firebase_options.dart` | `Env`, `EnvBanner`, its test, and the Firebase options read from `Env` |
+
+### Handoff
+
+It stops at a printed block that says:
+- what changed, and how to undo it;
+- which proof tier ran and which did not;
+- the steps left for you;
+- the steps nothing in the repository can check, such as Apple Developer ids, APNs keys,
+  store records and CI secrets.
+
+It never commits (ADR-0035).
+
+---
+
 ## Layout
 
 ```
@@ -486,9 +562,10 @@ my-skills/
 │           ├── product-manager/SKILL.md
 │           ├── pr-review-report/SKILL.md
 │           ├── explain-codebase/SKILL.md
+│           ├── flutter-envs/SKILL.md
 │           └── spec-driven-eval/    # vendored, CC-BY-4.0 — see its UPSTREAM.md
 ├── prime-agent/               # self-contained Prime Agent distribution
-│   ├── skills/                 # generated — the fourteen Prime-compatible skill directories
+│   ├── skills/                 # generated — the fifteen Prime-compatible skill directories
 │   ├── overlays/               # per-skill Prime adaptations the generator applies
 │   ├── tests/                  # install + bootstrap + build-parity tests (npm test)
 │   ├── install.sh              # project/global installer (runs from a checkout)
@@ -568,7 +645,7 @@ minus the fetch:
 ./prime-agent/install.sh --global
 ```
 
-Either way the fourteen skills are copied, and an existing skill is never replaced
+Either way the fifteen skills are copied, and an existing skill is never replaced
 unless `--force` is passed. Restart Prime Agent or run `/reload`, then invoke a
 skill with `/skill:<name>` — for example `/skill:orchestrator`.
 

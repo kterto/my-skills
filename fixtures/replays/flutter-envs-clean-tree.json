@@ -1,0 +1,14 @@
+{
+  "id": "flutter-envs-clean-tree",
+  "kind": "synthetic",
+  "class": "the skill's edits mixed into the owner's uncommitted changes, so git diff no longer shows exactly what it did",
+  "caught_by": "the clean-target gate: apply lists every tracked file it would modify and exits 2 when one has uncommitted changes, unless --allow-dirty",
+  "missed_by": "the earlier wizard, which edited a dirty tree and left its changes indistinguishable from the owner's",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/flutter-envs/__tests__/safety.test.cjs",
+  "evidence": "docs/adr/0035-flutter-envs-edits-a-target-project-against-a-committed-spec.md#4-writes-have-an-ownership-class-and-apply-rolls-back-on-red"
+}

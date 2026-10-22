@@ -1,0 +1,14 @@
+{
+  "id": "flutter-envs-firebase-consent",
+  "kind": "synthetic",
+  "class": "a Firebase write the owner did not see, or a consent that outlives a change in the account, an app or a config file",
+  "caught_by": "the plan id: firebase --plan runs only read-only lookups and prints the writes with an id hashed from the steps and the signed-in account; --confirm <id> recomputes the plan and runs nothing unless it still hashes to that id",
+  "missed_by": "the host's per-command prompt, which consents to one command at a time and never to the whole set of writes",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/flutter-envs/__tests__/firebase-cli.test.cjs",
+  "evidence": "docs/adr/0035-flutter-envs-edits-a-target-project-against-a-committed-spec.md#10-the-firebase-leg-the-cli-a-plan-id-derived-env-keys"
+}
