@@ -143,6 +143,19 @@ test('writeStrykerConfig: the per-mutant cap reaches the generated config', () =
   assert.equal(written.timeoutMS, 30000);
 });
 
+test('writeStrykerConfig: the initial test run is bounded by the total budget, not Stryker\'s 5-minute default', () => {
+  for (const [totalSeconds, minutes] of [[3600, 60], [300, 5], [90, 2], [30, 1]]) {
+    const p = writeStrykerConfig(['src/a.ts'], '/tmp/out.json', [], 'vitest', {
+      perMutantSeconds: 10,
+      totalSeconds,
+      maxMutants: 400,
+    });
+    const written = JSON.parse(fs.readFileSync(p, 'utf8'));
+    fs.rmSync(path.dirname(p), { recursive: true, force: true });
+    assert.equal(written.dryRunTimeoutMinutes, minutes, `totalSeconds ${totalSeconds}`);
+  }
+});
+
 test('runG6: Stryker runs under the group leader, bounded by the total budget, with SIGKILL as the last resort', () => {
   const root = tmpProject();
   let seen = null;
@@ -159,6 +172,46 @@ test('runG6: Stryker runs under the group leader, bounded by the total budget, w
   assert.equal(seen.o.killSignal, 'SIGKILL');
   assert.equal(seen.o.maxBuffer, 16 * 1024 * 1024, 'the leader relays at most a tail of each stream, far below it');
   assert.equal(seen.o.stdio[2], 'pipe', 'the leader\'s markers arrive on stderr');
+  assert.equal(seen.o.stdio[1], 'pipe', 'Stryker logs its errors on stdout, so a failed run can say why');
+});
+
+test('runG6: a run that died before writing a report names Stryker\'s own error', () => {
+  const root = tmpProject();
+  const execFileSync = () => {
+    const e = new Error('Command failed');
+    Object.assign(e, {
+      status: 1,
+      signal: null,
+      stdout: [
+        '\u001b[32m10:30:10 (97705) INFO DryRunExecutor\u001b[39m Starting initial test run (vitest test runner with "perTest" coverage analysis). This may take a while.',
+        '\u001b[91m10:38:23 (97705) ERROR DryRunExecutor\u001b[39m Initial test run timed out!',
+        '\u001b[91m10:38:23 (97705) ERROR Stryker\u001b[39m Unexpected error occurred while running Stryker Error: Something went wrong in the initial test run',
+        '\u001b[32m10:38:23 (97705) INFO Stryker\u001b[39m This might be a known problem with a solution documented in our troubleshooting guide.',
+      ].join('\n'),
+      stderr: 'Error: Something went wrong in the initial test run\n    at DryRunExecutor.validateResultCompleted (file:///x.js:76:15)',
+    });
+    throw e;
+  };
+  const r = runG6(['src/a.ts'], cfg, { root }, { execFileSync });
+  assert.equal(r.status, 'error');
+  assert.equal(r.measurement.reason, 'no-report');
+  const { message } = r.findings[0];
+  assert.match(message, /Initial test run timed out!/);
+  assert.match(message, /Something went wrong in the initial test run/);
+  assert.doesNotMatch(message, /\u001b\[/, 'colour codes are stripped');
+  assert.doesNotMatch(message, /troubleshooting guide/, 'only ERROR lines are kept when there are any');
+});
+
+test('runG6: a silent failure keeps the generic no-report wording', () => {
+  const root = tmpProject();
+  const execFileSync = () => {
+    const e = new Error('Command failed');
+    Object.assign(e, { status: 1, signal: null, stdout: '', stderr: '' });
+    throw e;
+  };
+  const r = runG6(['src/a.ts'], cfg, { root }, { execFileSync });
+  assert.equal(r.measurement.reason, 'no-report');
+  assert.match(r.findings[0].message, /did not produce a scorable report \(no-report\)/);
 });
 
 /** A leader that exited `status`, its markers written with the nonce it was handed unless `nonce` forges one. */

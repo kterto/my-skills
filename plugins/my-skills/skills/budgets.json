@@ -68,7 +68,7 @@
   },
   "code": {
     "clean-code-gates": {
-      "maxLines": 6300,
+      "maxLines": 6310,
       "include": ["bin/**/*.cjs", "bin/**/*.js", "bin/**/*.mjs", "src/**/*.cjs", "src/**/*.js", "src/**/*.mjs", "*.cjs", "*.js", "*.mjs"],
       "exclude": ["__tests__/**"],
       "adr": "docs/adr/0031-the-engine-runs-from-a-pinned-copy-and-measures-its-base-in-place.md"

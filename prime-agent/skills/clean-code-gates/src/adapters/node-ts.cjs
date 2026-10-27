@@ -5,6 +5,7 @@ const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { g6Budget, g6OnBound } = require('./g6-budget.cjs');
 const { leaderSync } = require('../instruments/proc.cjs');
+const { redact } = require('../instruments/envelope.cjs');
 const { G1_EXEMPTIONS } = require('../../defaults.cjs');
 const { toPosix } = require('../scope.cjs');
 
@@ -538,6 +539,7 @@ function writeStrykerConfig(targets, reportPath, excludedMutations, runner, budg
     // loop is bounded only by the whole-run timeout below, which spends the
     // entire budget proving one thing.
     timeoutMS: budget.perMutantSeconds * 1000,
+    dryRunTimeoutMinutes: Math.ceil(budget.totalSeconds / 60),
   };
   if (runner === 'jest') {
     cfg.jest = { configFile: 'package.json', enableFindRelatedTests: true };
@@ -719,6 +721,12 @@ function g6Verdict(report, opts) {
   });
 }
 
+function strykerFailure(output) {
+  const lines = (output || '').split('\n').map((l) => redact(l).trim()).filter(Boolean);
+  const errors = lines.filter((l) => /\bERROR\b/.test(l));
+  return lines.length ? (errors.length ? errors : lines).slice(-2).join(' ').slice(0, 300) : null;
+}
+
 function runG6(files, stackCfg, io, deps = {}) {
   const exec = deps.execFileSync || execFileSync;
   const strykerBin = binPath(io.root, 'stryker');
@@ -758,9 +766,9 @@ function runG6(files, stackCfg, io, deps = {}) {
     // The leader bounds Stryker's whole process group, so its test workers die with it (D9). Stryker exits
     // non-zero on a break threshold and still writes the report, so only being stopped counts: the report is
     // then partial. Our own bound is `bounded` (with the policy in force), anyone else's signal `killed`.
-    const { stop } = leaderSync(exec, [strykerBin, 'run', cfgPath], { boundSeconds: budget.totalSeconds, cwd: io.root });
+    const { stop, output } = leaderSync(exec, [strykerBin, 'run', cfgPath], { boundSeconds: budget.totalSeconds, cwd: io.root, stdout: 'pipe' });
     if (stop) return g6Verdict(null, { ...opts, unmeasured: stop.reason === 'bounded' ? { ...stop, onBound: g6OnBound(g6Cfg) } : stop });
-    if (!fs.existsSync(reportPath)) return g6Verdict(null, opts);
+    if (!fs.existsSync(reportPath)) return g6Verdict(null, { ...opts, unmeasured: { reason: 'no-report', detail: strykerFailure(output) } });
     let report;
     try {
       report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
