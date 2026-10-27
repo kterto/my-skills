@@ -519,7 +519,7 @@ function runG4(files, stackCfg, io) {
 
 // ---- G6: mutation (stryker) --------------------------------------------
 
-function writeStrykerConfig(targets, reportPath, excludedMutations, runner, budget) {
+function writeStrykerConfig(targets, reportPath, excludedMutations, runner, budget, ignoreStatic) {
   const cfg = {
     testRunner: runner,
     // Name the runner plugin explicitly rather than leaning on Stryker's
@@ -540,6 +540,7 @@ function writeStrykerConfig(targets, reportPath, excludedMutations, runner, budg
     // entire budget proving one thing.
     timeoutMS: budget.perMutantSeconds * 1000,
     dryRunTimeoutMinutes: Math.ceil(budget.totalSeconds / 60),
+    ignoreStatic: !!ignoreStatic,
   };
   if (runner === 'jest') {
     cfg.jest = { configFile: 'package.json', enableFindRelatedTests: true };
@@ -680,12 +681,14 @@ function g6Verdict(report, opts) {
   if (!report) return g6Unmeasured({ reason: 'no-report', budget: opts.budget }, opts);
 
   const findings = [];
-  const totals = { mutants: 0, valid: 0, unrun: 0, excluded: 0 };
+  const totals = { mutants: 0, valid: 0, unrun: 0, excluded: 0, ignoredStatic: 0 };
   for (const key of Object.keys(report.files || {})) {
     const rel = toPosix(path.isAbsolute(key) ? path.relative(opts.root || '', key) : key);
-    const mutants = report.files[key].mutants || [];
+    const all = report.files[key].mutants || [];
+    const mutants = opts.ignoreStatic ? all.filter((m) => !m.static) : all;
+    totals.ignoredStatic += all.length - mutants.length;
     const s = g6Score(mutants);
-    totals.mutants += mutants.length;
+    totals.mutants += all.length;
     totals.valid += s.valid;
     totals.unrun += s.unrun;
     totals.excluded += s.excluded;
@@ -717,6 +720,7 @@ function g6Verdict(report, opts) {
       measured: totals.valid,
       unrun: totals.unrun,
       excluded: totals.excluded,
+      ...(opts.ignoreStatic ? { ignoredStatic: totals.ignoredStatic } : {}),
     },
   });
 }
@@ -755,12 +759,12 @@ function runG6(files, stackCfg, io, deps = {}) {
   const targets = scopedTargets(files, stackCfg, 'G6');
   const command = 'stryker run';
   const budget = g6Budget(g6Cfg);
-  const opts = { targets, threshold, command, budget, root: io.root };
+  const opts = { targets, threshold, command, budget, root: io.root, ignoreStatic: g6Cfg.ignoreStatic === true };
   if (!targets.length) return g6Verdict(null, opts);
 
   const reportDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccg-mutation-'));
   const reportPath = path.join(reportDir, 'mutation.json');
-  const cfgPath = writeStrykerConfig(targets, reportPath, excludedMutations, runner, budget);
+  const cfgPath = writeStrykerConfig(targets, reportPath, excludedMutations, runner, budget, opts.ignoreStatic);
 
   try {
     // The leader bounds Stryker's whole process group, so its test workers die with it (D9). Stryker exits

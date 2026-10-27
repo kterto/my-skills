@@ -114,6 +114,31 @@ test('g6Verdict: a fully scored file is measured', () => {
   assert.equal(v.status, 'fail', '50% is below the 70 threshold');
 });
 
+test('g6Verdict: with ignoreStatic, static mutants leave the score whatever their status and are counted', () => {
+  const report = {
+    files: {
+      'src/a.ts': {
+        mutants: [mutant('Killed'), { ...mutant('Survived', 's1'), static: true }, { ...mutant('Ignored', 's2'), static: true }],
+      },
+    },
+  };
+  const v = g6Verdict(report, opts({ ignoreStatic: true }));
+  assert.equal(v.status, 'pass');
+  assert.equal(v.measurement.state, 'measured');
+  assert.equal(v.measurement.mutants, 3);
+  assert.equal(v.measurement.measured, 1);
+  assert.equal(v.measurement.ignoredStatic, 2);
+});
+
+test('g6Verdict: without ignoreStatic, a surviving static mutant counts against the score', () => {
+  const report = {
+    files: { 'src/a.ts': { mutants: [mutant('Killed'), { ...mutant('Survived', 's1'), static: true }] } },
+  };
+  const v = g6Verdict(report, opts());
+  assert.equal(v.status, 'fail');
+  assert.equal(v.measurement.ignoredStatic, undefined);
+});
+
 test('g6Verdict: a run that produced no report is unmeasured, never pass', () => {
   const v = g6Verdict(null, opts({ unmeasured: { reason: 'no-report' } }));
   assert.equal(v.status, 'error');
@@ -153,6 +178,15 @@ test('writeStrykerConfig: the initial test run is bounded by the total budget, n
     const written = JSON.parse(fs.readFileSync(p, 'utf8'));
     fs.rmSync(path.dirname(p), { recursive: true, force: true });
     assert.equal(written.dryRunTimeoutMinutes, minutes, `totalSeconds ${totalSeconds}`);
+  }
+});
+
+test('writeStrykerConfig: ignoreStatic reaches Stryker only when asked for', () => {
+  for (const flag of [true, undefined]) {
+    const p = writeStrykerConfig(['src/a.ts'], '/tmp/out.json', [], 'vitest', { perMutantSeconds: 10, totalSeconds: 60, maxMutants: 400 }, flag);
+    const written = JSON.parse(fs.readFileSync(p, 'utf8'));
+    fs.rmSync(path.dirname(p), { recursive: true, force: true });
+    assert.equal(written.ignoreStatic, flag === true);
   }
 });
 
