@@ -183,11 +183,44 @@ test('writeStrykerConfig: the initial test run is bounded by the total budget, n
 
 test('writeStrykerConfig: ignoreStatic reaches Stryker only when asked for', () => {
   for (const flag of [true, undefined]) {
-    const p = writeStrykerConfig(['src/a.ts'], '/tmp/out.json', [], 'vitest', { perMutantSeconds: 10, totalSeconds: 60, maxMutants: 400 }, flag);
+    const p = writeStrykerConfig(['src/a.ts'], '/tmp/out.json', [], 'vitest', { perMutantSeconds: 10, totalSeconds: 60, maxMutants: 400 }, { ignoreStatic: flag });
     const written = JSON.parse(fs.readFileSync(p, 'utf8'));
     fs.rmSync(path.dirname(p), { recursive: true, force: true });
     assert.equal(written.ignoreStatic, flag === true);
   }
+});
+
+test('writeStrykerConfig: ignoreStyling loads an ignorer that skips className, style and class-helper calls only', () => {
+  const budget = { perMutantSeconds: 10, totalSeconds: 60, maxMutants: 400 };
+  const plain = writeStrykerConfig(['src/a.tsx'], '/tmp/out.json', [], 'vitest', budget);
+  const plainCfg = JSON.parse(fs.readFileSync(plain, 'utf8'));
+  fs.rmSync(path.dirname(plain), { recursive: true, force: true });
+  assert.equal(plainCfg.ignorers, undefined);
+  assert.deepEqual(plainCfg.plugins, ['@stryker-mutator/vitest-runner']);
+
+  const p = writeStrykerConfig(['src/a.tsx'], '/tmp/out.json', [], 'vitest', budget, { ignoreStyling: true });
+  const written = JSON.parse(fs.readFileSync(p, 'utf8'));
+  const [plugin] = require(written.plugins[1]).strykerPlugins;
+  fs.rmSync(path.dirname(p), { recursive: true, force: true });
+  assert.deepEqual(written.ignorers, [plugin.name]);
+  assert.equal(plugin.kind, 'Ignore');
+  const ignore = (node) => plugin.value.shouldIgnore({ node });
+  const call = (name) => ({ type: 'CallExpression', callee: { type: 'Identifier', name } });
+  for (const attr of ['className', 'style']) assert.ok(ignore({ type: 'JSXAttribute', name: { name: attr } }), attr);
+  for (const fn of ['cn', 'cva', 'clsx', 'twMerge']) assert.ok(ignore(call(fn)), fn);
+  assert.equal(ignore({ type: 'JSXAttribute', name: { name: 'aria-label' } }), undefined);
+  assert.equal(ignore(call('formatDate')), undefined);
+  assert.equal(ignore({ type: 'StringLiteral', value: 'text-sm' }), undefined);
+});
+
+test('g6Verdict: with ignoreStyling, styling-ignored mutants are counted apart from other exclusions', () => {
+  const styling = { ...mutant('Ignored', 'i1'), statusReason: 'styling (gates.G6.ignoreStyling)' };
+  const report = { files: { 'src/a.tsx': { mutants: [mutant('Killed'), styling, mutant('CompileError', 'c1')] } } };
+  const v = g6Verdict(report, opts({ ignoreStyling: true }));
+  assert.equal(v.status, 'pass');
+  assert.equal(v.measurement.ignoredStyling, 1);
+  assert.equal(v.measurement.excluded, 2);
+  assert.equal(g6Verdict(report, opts()).measurement.ignoredStyling, undefined);
 });
 
 test('runG6: Stryker runs under the group leader, bounded by the total budget, with SIGKILL as the last resort', () => {
