@@ -114,6 +114,31 @@ test('g6Verdict: a fully scored file is measured', () => {
   assert.equal(v.status, 'fail', '50% is below the 70 threshold');
 });
 
+test('g6Verdict: with ignoreStatic, static mutants leave the score whatever their status and are counted', () => {
+  const report = {
+    files: {
+      'src/a.ts': {
+        mutants: [mutant('Killed'), { ...mutant('Survived', 's1'), static: true }, { ...mutant('Ignored', 's2'), static: true }],
+      },
+    },
+  };
+  const v = g6Verdict(report, opts({ ignoreStatic: true }));
+  assert.equal(v.status, 'pass');
+  assert.equal(v.measurement.state, 'measured');
+  assert.equal(v.measurement.mutants, 3);
+  assert.equal(v.measurement.measured, 1);
+  assert.equal(v.measurement.ignoredStatic, 2);
+});
+
+test('g6Verdict: without ignoreStatic, a surviving static mutant counts against the score', () => {
+  const report = {
+    files: { 'src/a.ts': { mutants: [mutant('Killed'), { ...mutant('Survived', 's1'), static: true }] } },
+  };
+  const v = g6Verdict(report, opts());
+  assert.equal(v.status, 'fail');
+  assert.equal(v.measurement.ignoredStatic, undefined);
+});
+
 test('g6Verdict: a run that produced no report is unmeasured, never pass', () => {
   const v = g6Verdict(null, opts({ unmeasured: { reason: 'no-report' } }));
   assert.equal(v.status, 'error');
@@ -143,6 +168,61 @@ test('writeStrykerConfig: the per-mutant cap reaches the generated config', () =
   assert.equal(written.timeoutMS, 30000);
 });
 
+test('writeStrykerConfig: the initial test run is bounded by the total budget, not Stryker\'s 5-minute default', () => {
+  for (const [totalSeconds, minutes] of [[3600, 60], [300, 5], [90, 2], [30, 1]]) {
+    const p = writeStrykerConfig(['src/a.ts'], '/tmp/out.json', [], 'vitest', {
+      perMutantSeconds: 10,
+      totalSeconds,
+      maxMutants: 400,
+    });
+    const written = JSON.parse(fs.readFileSync(p, 'utf8'));
+    fs.rmSync(path.dirname(p), { recursive: true, force: true });
+    assert.equal(written.dryRunTimeoutMinutes, minutes, `totalSeconds ${totalSeconds}`);
+  }
+});
+
+test('writeStrykerConfig: ignoreStatic reaches Stryker only when asked for', () => {
+  for (const flag of [true, undefined]) {
+    const p = writeStrykerConfig(['src/a.ts'], '/tmp/out.json', [], 'vitest', { perMutantSeconds: 10, totalSeconds: 60, maxMutants: 400 }, { ignoreStatic: flag });
+    const written = JSON.parse(fs.readFileSync(p, 'utf8'));
+    fs.rmSync(path.dirname(p), { recursive: true, force: true });
+    assert.equal(written.ignoreStatic, flag === true);
+  }
+});
+
+test('writeStrykerConfig: ignoreStyling loads an ignorer that skips className, style and class-helper calls only', () => {
+  const budget = { perMutantSeconds: 10, totalSeconds: 60, maxMutants: 400 };
+  const plain = writeStrykerConfig(['src/a.tsx'], '/tmp/out.json', [], 'vitest', budget);
+  const plainCfg = JSON.parse(fs.readFileSync(plain, 'utf8'));
+  fs.rmSync(path.dirname(plain), { recursive: true, force: true });
+  assert.equal(plainCfg.ignorers, undefined);
+  assert.deepEqual(plainCfg.plugins, ['@stryker-mutator/vitest-runner']);
+
+  const p = writeStrykerConfig(['src/a.tsx'], '/tmp/out.json', [], 'vitest', budget, { ignoreStyling: true });
+  const written = JSON.parse(fs.readFileSync(p, 'utf8'));
+  const [plugin] = require(written.plugins[1]).strykerPlugins;
+  fs.rmSync(path.dirname(p), { recursive: true, force: true });
+  assert.deepEqual(written.ignorers, [plugin.name]);
+  assert.equal(plugin.kind, 'Ignore');
+  const ignore = (node) => plugin.value.shouldIgnore({ node });
+  const call = (name) => ({ type: 'CallExpression', callee: { type: 'Identifier', name } });
+  for (const attr of ['className', 'style']) assert.ok(ignore({ type: 'JSXAttribute', name: { name: attr } }), attr);
+  for (const fn of ['cn', 'cva', 'clsx', 'twMerge']) assert.ok(ignore(call(fn)), fn);
+  assert.equal(ignore({ type: 'JSXAttribute', name: { name: 'aria-label' } }), undefined);
+  assert.equal(ignore(call('formatDate')), undefined);
+  assert.equal(ignore({ type: 'StringLiteral', value: 'text-sm' }), undefined);
+});
+
+test('g6Verdict: with ignoreStyling, styling-ignored mutants are counted apart from other exclusions', () => {
+  const styling = { ...mutant('Ignored', 'i1'), statusReason: 'styling (gates.G6.ignoreStyling)' };
+  const report = { files: { 'src/a.tsx': { mutants: [mutant('Killed'), styling, mutant('CompileError', 'c1')] } } };
+  const v = g6Verdict(report, opts({ ignoreStyling: true }));
+  assert.equal(v.status, 'pass');
+  assert.equal(v.measurement.ignoredStyling, 1);
+  assert.equal(v.measurement.excluded, 2);
+  assert.equal(g6Verdict(report, opts()).measurement.ignoredStyling, undefined);
+});
+
 test('runG6: Stryker runs under the group leader, bounded by the total budget, with SIGKILL as the last resort', () => {
   const root = tmpProject();
   let seen = null;
@@ -159,6 +239,46 @@ test('runG6: Stryker runs under the group leader, bounded by the total budget, w
   assert.equal(seen.o.killSignal, 'SIGKILL');
   assert.equal(seen.o.maxBuffer, 16 * 1024 * 1024, 'the leader relays at most a tail of each stream, far below it');
   assert.equal(seen.o.stdio[2], 'pipe', 'the leader\'s markers arrive on stderr');
+  assert.equal(seen.o.stdio[1], 'pipe', 'Stryker logs its errors on stdout, so a failed run can say why');
+});
+
+test('runG6: a run that died before writing a report names Stryker\'s own error', () => {
+  const root = tmpProject();
+  const execFileSync = () => {
+    const e = new Error('Command failed');
+    Object.assign(e, {
+      status: 1,
+      signal: null,
+      stdout: [
+        '\u001b[32m10:30:10 (97705) INFO DryRunExecutor\u001b[39m Starting initial test run (vitest test runner with "perTest" coverage analysis). This may take a while.',
+        '\u001b[91m10:38:23 (97705) ERROR DryRunExecutor\u001b[39m Initial test run timed out!',
+        '\u001b[91m10:38:23 (97705) ERROR Stryker\u001b[39m Unexpected error occurred while running Stryker Error: Something went wrong in the initial test run',
+        '\u001b[32m10:38:23 (97705) INFO Stryker\u001b[39m This might be a known problem with a solution documented in our troubleshooting guide.',
+      ].join('\n'),
+      stderr: 'Error: Something went wrong in the initial test run\n    at DryRunExecutor.validateResultCompleted (file:///x.js:76:15)',
+    });
+    throw e;
+  };
+  const r = runG6(['src/a.ts'], cfg, { root }, { execFileSync });
+  assert.equal(r.status, 'error');
+  assert.equal(r.measurement.reason, 'no-report');
+  const { message } = r.findings[0];
+  assert.match(message, /Initial test run timed out!/);
+  assert.match(message, /Something went wrong in the initial test run/);
+  assert.doesNotMatch(message, /\u001b\[/, 'colour codes are stripped');
+  assert.doesNotMatch(message, /troubleshooting guide/, 'only ERROR lines are kept when there are any');
+});
+
+test('runG6: a silent failure keeps the generic no-report wording', () => {
+  const root = tmpProject();
+  const execFileSync = () => {
+    const e = new Error('Command failed');
+    Object.assign(e, { status: 1, signal: null, stdout: '', stderr: '' });
+    throw e;
+  };
+  const r = runG6(['src/a.ts'], cfg, { root }, { execFileSync });
+  assert.equal(r.measurement.reason, 'no-report');
+  assert.match(r.findings[0].message, /did not produce a scorable report \(no-report\)/);
 });
 
 /** A leader that exited `status`, its markers written with the nonce it was handed unless `nonce` forges one. */
