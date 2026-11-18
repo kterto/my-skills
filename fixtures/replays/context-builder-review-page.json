@@ -1,0 +1,15 @@
+{
+  "id": "context-builder-review-page",
+  "kind": "synthetic",
+  "class": "a user asked to agree to a project context sees only a numbered text list, which verifies transcription rather than understanding, and a hand-made page meant to fix that showed its diagrams as raw source, lost its colours and could not tell an unreviewed section from a reviewed one",
+  "caught_by": "context-builder's page-or-text question before \"Is this 100% accurate?\", asked only when a browser is reachable: Page writes an offline review page from references/review-page.md, whose loop lists every unmarked item as not reviewed and whose Copy block never says yes or agree; the agreement question is still asked in chat and only a typed yes agrees",
+  "missed_by": "Phase 5 as it was: the restatement in chat and nothing to look at, so conflicts, defaults and open decisions read as one flat list",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/context-builder/__tests__/review-page-reference.test.cjs",
+  "private_ref": "owner-review-page-2026-11-17",
+  "evidence": "docs/adr/0036-agreement-steps-offer-an-offline-review-page.md#1-a-separate-page-or-text-question-right-before-agreement"
+}

@@ -129,6 +129,10 @@
     {"id": "flutter-envs.status.na", "skill": "flutter-envs", "enum": "STATUSES", "name": "n/a", "fixture": "fixtures/replays/flutter-envs-status.json"},
     {"id": "flutter-envs.result.pass", "skill": "flutter-envs", "enum": "RESULTS", "name": "pass", "fixture": "fixtures/replays/flutter-envs-proof.json"},
     {"id": "flutter-envs.result.fail", "skill": "flutter-envs", "enum": "RESULTS", "name": "fail", "fixture": "fixtures/replays/flutter-envs-proof.json"},
-    {"id": "flutter-envs.result.not-run", "skill": "flutter-envs", "enum": "RESULTS", "name": "not-run", "fixture": "fixtures/replays/flutter-envs-proof.json"}
+    {"id": "flutter-envs.result.not-run", "skill": "flutter-envs", "enum": "RESULTS", "name": "not-run", "fixture": "fixtures/replays/flutter-envs-proof.json"},
+    {"id": "context-builder.touchpoint.page-or-text", "skill": "context-builder", "enum": "touchpoint", "name": "page or text", "fixture": "fixtures/replays/context-builder-review-page.json"},
+    {"id": "roadmap.touchpoint.page-or-text", "skill": "roadmap", "enum": "touchpoint", "name": "page or text", "fixture": "fixtures/replays/roadmap-review-page.json"},
+    {"id": "context-builder.gate.review-page-check", "skill": "context-builder", "enum": "gate", "name": "review page check", "fixture": "fixtures/replays/review-page-check.json"},
+    {"id": "roadmap.gate.review-page-check", "skill": "roadmap", "enum": "gate", "name": "review page check", "fixture": "fixtures/replays/review-page-check.json"}
   ]
 }

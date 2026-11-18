@@ -115,8 +115,15 @@
     {
       "name": "context-builder",
       "files": [
+        "__tests__/fixtures/review-page-bad.html",
+        "__tests__/fixtures/review-page-good.html",
+        "__tests__/review-page-reference.test.cjs",
+        "__tests__/review-page-wiring.test.cjs",
+        "__tests__/review-page.test.cjs",
         "references/convergence.md",
         "references/ingestion.md",
+        "references/review-page.md",
+        "scripts/review-page.cjs",
         "SKILL.md",
         "templates/ACTORS.template.md",
         "templates/INTENT.template.md",
@@ -390,13 +397,16 @@
     {
       "name": "roadmap",
       "files": [
+        "__tests__/review-page-wiring.test.cjs",
         "references/config.md",
         "references/directory-layout.md",
         "references/item-schema.md",
         "references/mutation-ops.md",
+        "references/review-page.md",
         "references/sync-and-reeval.md",
         "scripts/check-timestamp-parity.cjs",
         "scripts/check-timestamp-parity.test.cjs",
+        "scripts/review-page.cjs",
         "SKILL.md",
         "templates/milestone-readme.template.html",
         "templates/milestone-readme.template.md",

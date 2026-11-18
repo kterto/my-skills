@@ -77,6 +77,16 @@ here reads, and it is the only place product intent is recorded.
    to a numbered restatement. An early exit records the confidence actually achieved and
    names the sections still thin.
 
+**Page or text?** Right before *"Is this 100% accurate?"*, and only when a browser is
+reachable, it asks whether you want to review the restatement as text (as always) or as an
+offline HTML page in your browser. The page is laid out for your project, in its own design
+system's colours and fonts when it has one: conflicts first, sources and certainty on every
+claim, diagrams as inline SVG or tables. You mark each part correct or to fix, press Copy and
+paste the lines back; unmarked parts read "not reviewed". The page lives outside the project
+in a temp folder, passes `scripts/review-page.cjs check` (offline skeleton, a network-denying
+CSP, no outside loads, no diagram runtime) before it opens, and is never agreement: only a
+yes typed in chat is (ADR-0036).
+
 ### Output
 
 | Path | Content |
@@ -303,6 +313,8 @@ A doc-only skill that turns a project spec or PRD into an auditable, traceable i
 ```
 
 On the first run the skill runs a **context gate**: if `.orchestrator/PROJECT-CONTEXT.md` exists it reads it as the base context; otherwise it spawns an `Explore`/`explore` subagent, then loops `AskUserQuestion` in Claude Code or `question` in opencode until holistic confidence ≥ `context_threshold` (default 0.95). It then grills only roadmap-specific gaps (milestone boundaries, sequencing, release targets, definition of done) before proposing a decomposition for user confirmation.
+
+Right before that confirmation, and only when a browser is reachable, it asks **page or text?**: the tree as text in chat, as always, or as an offline review page you mark up and paste back, with the same rules and checker as context-builder's (ADR-0036). Approval stays a reply typed in chat.
 
 Existing roadmaps can also be changed through doc-only mutation operations. They all stage a diff, require approval unless explicitly bypassed by the caller, write `/roadmap/`, and stop without committing:
 
