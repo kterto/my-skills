@@ -336,7 +336,7 @@ Declaring a key "integer" constrains its **type**, not its **usability**, and bo
 
 Non-integers, non-finite values (`NaN`, `Infinity`), and non-numeric types are rejected the same way an out-of-range integer is.
 
-**Validation happens at config resolution (Step 0b), before any dispatch, and fails closed.** A value outside its range does **not** halt the run and is **never clamped silently** — it resolves to the key's **canonical default** — `max_parallel_lanes` `6`, `max_family_cycles` `6`, `max_eval_cycles` `2`, `max_contract_amendments` `2`, `max_run_minutes` `0`, `gate_wall_clock_minutes` `15`, `max_spec_requirements` `0`, `review_page` `"ask"` — with the reason printed:
+**Validation happens at config resolution (Step 0b), before any dispatch, and fails closed.** A value outside its range does **not** halt the run and is **never clamped silently** — it resolves to the key's **canonical default** — `max_parallel_lanes` `6`, `max_family_cycles` `6`, `max_eval_cycles` `2`, `max_contract_amendments` `2`, `max_run_minutes` `0`, `gate_wall_clock_minutes` `15`, `max_spec_requirements` `0` — with the reason printed. **`review_page` is checked the same way, falling back to `"ask"`, but when Step 1r resolves it, not at Step 0b:** a run that never reaches the step (`autonomous`, a reused spec, a `DRAFT` stop) never reads the key and prints nothing about it. The lines read:
 
 ```
 config: max_parallel_lanes {value} out of range (finite integer ≥ 1) — using default 6

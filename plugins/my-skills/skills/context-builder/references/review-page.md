@@ -1,7 +1,7 @@
 # Review page — reference
 
 An opt-in, self-contained HTML page that shows a result before the user agrees to it, so they
-can look at it visually, mark it up and paste their marks back. Read **Page or text?** before
+can mark it up and paste their marks back. Read **Page or text?** before
 asking that question; read the rest only after the user picks **page**. Each skill in the
 table below ships this file byte for byte, with `scripts/review-page.cjs`; a skill never
 reads another skill's files at run time.
@@ -12,7 +12,7 @@ reads another skill's files at run time.
   review this as a page in your browser, or as text here?" Options: **Page** (opens an
   offline page; you mark it and paste your marks back) and **Text** (the list in chat, as
   always). Ask once per session; the answer holds for later drafts, and the user can switch
-  at any time by saying "page" or "text".
+  by saying "page" or "text".
 - **Ask only when a browser is reachable**: `$SSH_CONNECTION` is empty, `node` runs, and on
   macOS (`uname` is `Darwin`) `open` exists, or on Linux `xdg-open` exists and `$DISPLAY` or
   `$WAYLAND_DISPLAY` is set. Otherwise skip the question without a word: the step runs as
@@ -20,7 +20,7 @@ reads another skill's files at run time.
 - **Host:** `AskUserQuestion` (Claude Code) / `question` (opencode) with the two options; with
   no structured question tool (Prime Agent) or a text-only run, ask in prose as a numbered
   list: `1. Page` `2. Text`.
-- Add "(recommended)" to **Page** when the skill's row below says so.
+- Add "(recommended)" to **Page** when its row below says so.
 - **Text** is the step exactly as it was. **Page** adds the page; the step's own question is
   still asked in chat, word for word.
 
@@ -77,8 +77,9 @@ the only fixed part.
   and read it with `JSON.parse`; the checker reads a plain script as code.
 - **Ids are stable across drafts**, and every count is computed by the script, never typed.
 - **Use the project's design system.** Look for `DESIGN.md` or `docs/design*`; token files
-  (`*tokens.json`, Style Dictionary); CSS custom properties; a Tailwind theme; Flutter
-  `ThemeData` (`lib/**/theme*.dart`); Android `res/values/colors.xml`; iOS colour sets; envision's
+  (`*tokens.json`, Style Dictionary); CSS custom properties in the project's stylesheets; a
+  Tailwind theme; Flutter `ThemeData`/`ColorScheme`/`TextTheme` (`lib/**/theme*.dart`,
+  `*colors*.dart`); Android `res/values/colors.xml`; iOS colour sets; envision's
   `docs/vision/design/tokens.css`. Copy the values into `:root` custom properties and name
   the source file in a CSS comment. Name its fonts with a system fallback stack; never load
   or embed a font file. With none found, use a plain system palette.
@@ -111,9 +112,8 @@ the only fixed part.
 Each section can be marked **correct** or **fix** with a note, each item inside one **not
 quite** with a note, each conflict picked (with a **neither — other** choice and a note), each
 open decision answered. **Unmarked means "not reviewed", never correct.** Mark sections, list
-items or cards, never table rows (off-screen on a phone): a table stays a figure and its section takes the
-marks. Marks stay in this
-browser under `review:<project>:<stage>:draft<N>`, inside `try`/`catch`; another draft starts
+items or cards, never table rows: a table stays a figure and its section takes the marks. Marks
+stay in this browser under `review:<project>:<stage>:draft<N>`, inside `try`/`catch`; another draft starts
 clean. Reset asks first and never reloads. The Copy block, in this order:
 
 ```text
@@ -148,7 +148,7 @@ restate and ask the agreement question again.
 | `not reviewed: …` | nothing is inferred; name these again in the next restatement |
 
 A header naming another draft, or an id the page did not have: say so and apply nothing from
-it silently. Then write draft N+1, check it, say "reload", and ask the agreement question
+it. Then write draft N+1, check it, say "reload", and ask the agreement question
 again.
 
 ## Reference snippet
