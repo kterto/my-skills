@@ -140,6 +140,9 @@
     {"id": "context-builder.touchpoint.page-or-text", "skill": "context-builder", "enum": "touchpoint", "name": "page or text", "fixture": "fixtures/replays/context-builder-review-page.json"},
     {"id": "roadmap.touchpoint.page-or-text", "skill": "roadmap", "enum": "touchpoint", "name": "page or text", "fixture": "fixtures/replays/roadmap-review-page.json"},
     {"id": "context-builder.gate.review-page-check", "skill": "context-builder", "enum": "gate", "name": "review page check", "fixture": "fixtures/replays/review-page-check.json"},
-    {"id": "roadmap.gate.review-page-check", "skill": "roadmap", "enum": "gate", "name": "review page check", "fixture": "fixtures/replays/review-page-check.json"}
+    {"id": "roadmap.gate.review-page-check", "skill": "roadmap", "enum": "gate", "name": "review page check", "fixture": "fixtures/replays/review-page-check.json"},
+    {"id": "orchestrator.touchpoint.spec-review", "skill": "orchestrator", "enum": "touchpoint", "name": "spec review: page, text or plan now", "fixture": "fixtures/replays/orchestrator-spec-review.json"},
+    {"id": "orchestrator.touchpoint.spec-agreement", "skill": "orchestrator", "enum": "touchpoint", "name": "Is this spec 100% accurate?", "fixture": "fixtures/replays/orchestrator-spec-review.json"},
+    {"id": "orchestrator.gate.review-page-check", "skill": "orchestrator", "enum": "gate", "name": "review page check", "fixture": "fixtures/replays/review-page-check.json"}
   ]
 }
