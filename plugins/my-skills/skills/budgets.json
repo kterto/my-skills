@@ -18,7 +18,7 @@
       "adr": "docs/adr/0036-agreement-steps-offer-an-offline-review-page.md"
     },
     "context-builder/references/review-page.md": {
-      "maxBytes": 15103,
+      "maxBytes": 16498,
       "adr": "docs/adr/0036-agreement-steps-offer-an-offline-review-page.md"
     },
     "design-to-code/SKILL.md": {
@@ -78,7 +78,7 @@
       "adr": "docs/adr/0036-agreement-steps-offer-an-offline-review-page.md"
     },
     "roadmap/references/review-page.md": {
-      "maxBytes": 15103,
+      "maxBytes": 16498,
       "adr": "docs/adr/0036-agreement-steps-offer-an-offline-review-page.md"
     },
     "simplify/SKILL.md": {

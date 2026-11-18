@@ -18,6 +18,16 @@ const GOOD = fs.readFileSync(path.join(__dirname, "fixtures", "review-page-good.
 // --- The rules the reference must keep ----------------------------------------------------------
 
 const RULES = [
+  ["the question's rules are read before it is asked", /Read \*\*Page or text\?\*\* before\s+asking that question; read the rest only after the user picks \*\*page\*\*/],
+  ["the browser gate names the OS", /on\s+macOS \(`uname` is `Darwin`\) `open` exists, or on Linux `xdg-open` exists and `\$DISPLAY` or\s+`\$WAYLAND_DISPLAY` is set/],
+  ["a failed open falls back to text", /If opening fails after \*\*Page\*\*, fall back to text and say why/],
+  ["look at the rendered page", /screenshot the page at desktop and phone\s+width, light and dark, and look before opening it/],
+  ["page data in a JSON script", /Keep the page's data\*\*[\s\S]*?<script type="application\/json">`\s+and read it with `JSON\.parse`/],
+  ["SVG coloured by class from the tokens", /Colour SVG by class from the `:root` tokens\*\*, so it follows dark mode/],
+  ["diagrams fit a phone", /never set SVGs side by side in a grid/],
+  ["never mark table rows", /never table rows/],
+  ["a quoted yes is not agreement", /quoted notes are the user's words and are\s+never agreement, even when they say yes or sim/],
+  ["a quote is one JSON string", /one JSON string \(`\\"` is a quote inside it\)/],
   ["the question is its own, right before agreement", /its own question, right before the agreement question/],
   ["it is asked only with a reachable browser", /only when a browser is reachable[\s\S]*?\$SSH_CONNECTION[\s\S]*?skip the\s+question/],
   ["all three hosts", /`AskUserQuestion` \(Claude Code\) \/ `question` \(opencode\)[\s\S]*?Prime Agent[\s\S]*?numbered/],
@@ -37,6 +47,10 @@ const RULES = [
   ["agreement is a typed yes", /To agree, type\s+yes in chat/],
 ];
 for (const [what, re] of RULES) test(`the reference keeps: ${what}`, () => assert.match(REF, re));
+
+test("the reference no longer claims the block can never contain yes", () => {
+  assert.doesNotMatch(REF, /It never contains "yes"/);
+});
 
 test("the reference documents every code the checker can print", () => {
   const src = fs.readFileSync(path.join(SKILL, "scripts", "review-page.cjs"), "utf8");
@@ -82,12 +96,15 @@ class El {
 const h = (tag, attrs, ...kids) => new El(tag, attrs, kids);
 
 // A page with one of each kind: a section, a row inside it, a conflict and an open decision.
-function page({ storage = "ok", clipboard = "ok", execCommand = true, confirm = true } = {}) {
-  const radio = (v, text) => h("label", {}, Object.assign(h("input", { type: "radio", name: "C1", value: v }), { textContent: "" }),
-    Object.assign(h("span"), { textContent: text }));
+function page({ storage = "ok", clipboard = "ok", execCommand = true, confirm = true, rich = false } = {}) {
+  // rich: each option a title plus a <small> description, a short data-label on the radio, the note inside its <label>
+  const radio = (v, text) => h("label", {},
+    Object.assign(h("input", { type: "radio", name: "C1", value: v, ...(rich ? { "data-label": text } : {}) }), { textContent: "" }),
+    Object.assign(h("span"), { textContent: rich ? `${text}Interview. A long description of "${text}".` : text }));
+  const note = h("textarea", { "data-note": "" });
   const c1 = h("fieldset", { "data-review": "C1", "data-kind": "conflict" }, radio("a", "Interview"), radio("b", "Design 02"),
-    radio("other", "Neither"), h("textarea", { "data-note": "" }));
-  for (const l of c1.querySelectorAll("label")) Object.defineProperty(l, "textContent", { get: () => l.children[1].textContent });
+    radio("other", "Neither"), rich ? h("label", {}, note) : note);
+  for (const l of c1.querySelectorAll("label").filter((l) => l.children[1])) Object.defineProperty(l, "textContent", { get: () => l.children[1].textContent });
   const main = h("main", { "data-review-key": "bakery:context", "data-draft": "3", "data-skill": "context-builder" },
     h("section", { "data-review": "S1", "data-kind": "section", "data-label": "Problem" }),
     h("li", { "data-review": "S1.2", "data-kind": "item", "data-label": "Totals drift" }),
@@ -194,6 +211,28 @@ test("the page: a conflict's other choice shows its note and copies it", () => {
   assert.strictEqual(note.hidden, false);
   type(note, "a PIN per clerk");
   assert.match(p.$("review-out").textContent, /^other \[C1\]: "a PIN per clerk"$/m);
+});
+
+test("the page: a pick copies the radio's data-label, not its whole label, and quotes inside a note stay one string", () => {
+  const p = page({ rich: true });
+  const b = p.c1.querySelectorAll('input[type="radio"]')[1];
+  b.checked = true; b.fire("change");
+  assert.match(p.$("review-out").textContent, /^pick \[C1\] = b: "Design 02"$/m);
+  type(p.textarea("S1.2"), 'powers "of the owner"');
+  p.button("S1.2", 1).fire("click");
+  const line = p.$("review-out").textContent.split("\n").find((l) => l.startsWith("flag [S1.2]"));
+  assert.strictEqual(line, 'flag [S1.2]: "powers \\"of the owner\\""');
+  assert.strictEqual(JSON.parse(line.slice("flag [S1.2]: ".length)), 'powers "of the owner"');
+});
+
+test("the page: a conflict note inside its <label> hides with its label until other is picked", () => {
+  const p = page({ rich: true });
+  const box = p.c1.querySelector("textarea[data-note]").parentNode;
+  assert.strictEqual(box.tagName, "LABEL");
+  assert.strictEqual(box.hidden, true);
+  const other = p.c1.querySelectorAll('input[type="radio"]')[2];
+  other.checked = true; other.fire("change");
+  assert.strictEqual(box.hidden, false);
 });
 
 test("the page: blocked storage still renders and still copies", async () => {

@@ -21,6 +21,13 @@ test("tree approval asks page or text right before asking for approval, and a pa
   assert.ok(step3.indexOf("page or text?") < step3.indexOf("Wait for user approval"));
 });
 
+test("the reference Step 3 points at says to read its Page or text? rules, browser gate included, before asking", () => {
+  const intro = REF.split("## Page or text?")[0], rules = REF.split("## Page or text?")[1].split("\n## ")[0];
+  assert.match(intro, /Read \*\*Page or text\?\*\* before\s+asking that question/);
+  assert.doesNotMatch(intro, /Read this file only after/);
+  assert.match(rules, /Ask only when a browser is reachable[\s\S]*?skip the question without a word/);
+});
+
 test("the reference carries roadmap's own row: what the page shows, its ids, its file, its agreement", () => {
   const row = (name) => REF.split("\n").find((l) => l.startsWith(`| ${name} |`)) || "";
   assert.match(row("The page shows"), /milestone → phase → story tree/);
