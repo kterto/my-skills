@@ -1,0 +1,15 @@
+{
+  "id": "roadmap-review-page",
+  "kind": "synthetic",
+  "class": "a user approving a roadmap tree sees per-milestone counts and a sequence as terminal text, and approves a structure whose dependencies and done criteria they never saw laid out",
+  "caught_by": "roadmap's page-or-text question before tree approval, asked only when a browser is reachable: Page writes the tree as an offline review page from roadmap's own copy of references/review-page.md; a pasted Copy block is an edit to the tree and never approval",
+  "missed_by": "Decomposition Step 3 as it was: the tree summary in chat, approved or edited in prose",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/roadmap/__tests__/review-page-wiring.test.cjs",
+  "private_ref": "owner-review-page-2026-11-17",
+  "evidence": "docs/adr/0036-agreement-steps-offer-an-offline-review-page.md#1-a-separate-page-or-text-question-right-before-agreement"
+}

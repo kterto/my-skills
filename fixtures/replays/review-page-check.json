@@ -1,0 +1,15 @@
+{
+  "id": "review-page-check",
+  "kind": "synthetic",
+  "class": "a review page written for a host that adds the skeleton, opened from file://: no doctype, lang, charset or viewport, web fonts, no CSP, location.reload, seven Mermaid blocks shown as raw source and a CSS rule repainting its SVG colours",
+  "caught_by": "review-page.cjs check, which the agent must see exit 0 before it opens a page; on the made-up copy of the owner's page (review-page-bad.html) it prints the same eleven codes it prints on the original",
+  "missed_by": "nothing checked a hand-written page: the owner found the faults by opening it",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/context-builder/__tests__/review-page.test.cjs",
+  "private_ref": "owner-review-page-2026-11-17",
+  "evidence": "docs/adr/0036-agreement-steps-offer-an-offline-review-page.md#4-the-checker-enforces-reliability-and-safety-only"
+}

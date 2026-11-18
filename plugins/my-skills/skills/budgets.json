@@ -14,8 +14,12 @@
       "adr": "docs/adr/0026-skill-byte-budgets-and-the-admission-rule.md"
     },
     "context-builder/SKILL.md": {
-      "maxBytes": 12661,
-      "adr": "docs/adr/0033-envision-a-divergent-step-before-context-builder.md"
+      "maxBytes": 12643,
+      "adr": "docs/adr/0036-agreement-steps-offer-an-offline-review-page.md"
+    },
+    "context-builder/references/review-page.md": {
+      "maxBytes": 15103,
+      "adr": "docs/adr/0036-agreement-steps-offer-an-offline-review-page.md"
     },
     "design-to-code/SKILL.md": {
       "maxBytes": 3711,
@@ -70,8 +74,12 @@
       "adr": "docs/adr/0026-skill-byte-budgets-and-the-admission-rule.md"
     },
     "roadmap/SKILL.md": {
-      "maxBytes": 35148,
-      "adr": "docs/adr/0026-skill-byte-budgets-and-the-admission-rule.md"
+      "maxBytes": 35142,
+      "adr": "docs/adr/0036-agreement-steps-offer-an-offline-review-page.md"
+    },
+    "roadmap/references/review-page.md": {
+      "maxBytes": 15103,
+      "adr": "docs/adr/0036-agreement-steps-offer-an-offline-review-page.md"
     },
     "simplify/SKILL.md": {
       "maxBytes": 11760,
@@ -98,6 +106,18 @@
       "include": ["bin/**/*.cjs", "bin/**/*.js", "bin/**/*.mjs", "src/**/*.cjs", "src/**/*.js", "src/**/*.mjs", "*.cjs", "*.js", "*.mjs"],
       "exclude": ["__tests__/**"],
       "adr": "docs/adr/0031-the-engine-runs-from-a-pinned-copy-and-measures-its-base-in-place.md"
+    },
+    "context-builder": {
+      "maxLines": 222,
+      "include": ["scripts/**/*.cjs"],
+      "exclude": ["__tests__/**"],
+      "adr": "docs/adr/0036-agreement-steps-offer-an-offline-review-page.md"
+    },
+    "roadmap": {
+      "maxLines": 222,
+      "include": ["scripts/review-page.cjs"],
+      "exclude": ["__tests__/**"],
+      "adr": "docs/adr/0036-agreement-steps-offer-an-offline-review-page.md"
     },
     "envision": {
       "maxLines": 539,
