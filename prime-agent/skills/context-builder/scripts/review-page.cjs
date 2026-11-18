@@ -3,7 +3,7 @@
 // rules that keep it readable offline from file:// (references/review-page.md → *The checker*): a full skeleton,
 // a network-denying CSP, no outside load, no diagram runtime, an explicit background and text colour, a size cap.
 // It judges reliability and safety only, never the page's structure or look. The file ships byte for byte in
-// context-builder and roadmap, because a skill never loads another skill's code at run time; the net.* and js.*
+// context-builder, roadmap and orchestrator: a skill never loads another skill's code at run time; the net.* and js.*
 // rules are envision's (envision/scripts/render.cjs), and a repository test keeps them in step.
 // Exit 0 clean · 1 problems, one "<file>: <code>: <reason>" line each on stderr · 2 usage or I/O.
 

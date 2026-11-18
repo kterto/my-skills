@@ -1,0 +1,14 @@
+{
+  "id": "orchestrator-spec-review",
+  "kind": "synthetic",
+  "class": "a manual run plans straight from the brainstormer's READY spec: nobody looks at the written spec before the architect starts, and a question the brainstormer could ask about it reaches nobody, because a subagent cannot hold a turn with the user",
+  "caught_by": "Step 1r, run by the orchestrator's main loop after a READY spec: review_page \"ask\" asks page, text or plan now; the page is built from the spec file and checked by .orchestrator/review-page.cjs; only a typed yes to \"Is this spec 100% accurate?\" proceeds, and a pasted block re-briefs the brainstormer through its spawn prompt, three revisions at most",
+  "missed_by": "Step 1 as it was: the spec went to the architect unread, and ADR-0036 deferred the orchestrator behind a relay probe that the main loop does not need",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/orchestrator/scripts/spec-review-prose.test.cjs",
+  "evidence": "docs/adr/0038-the-orchestrator-reviews-its-spec-before-planning.md#1-the-main-loop-runs-the-step-after-a-ready-spec-and-before-the-architect"
+}

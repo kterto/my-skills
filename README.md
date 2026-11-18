@@ -196,6 +196,7 @@ A project-agnostic 6-agent pipeline that takes a plain-language task description
 /orchestrator "<task description>" --setup          # force re-bootstrap (re-interview + regenerate context)
 /orchestrator "<task description>" --mode autonomous # no prompts: resolve open questions with recorded defaults
 /orchestrator "<task description>" --clarity 0.95    # lower the brainstormer's manual-mode interview target
+/orchestrator "<task description>" --review-page true # review the spec on an offline page before planning (ask|true|false)
 /orchestrator "<task description>" --parallel lanes  # fan architect+coder out across lanes (off|ask|lanes|full)
 /orchestrator "<task description>" --resume          # continue a prior halted parallel run instead of restarting
 ```
@@ -276,6 +277,7 @@ Stored in `.orchestrator/config.json`; overridable per-run via CLI args.
 | `clarity_threshold` | `0.99` | `--clarity` | Brainstormer's per-spec interview target (0–1) in `manual` mode — it keeps asking, one answer at a time, until self-rated spec clarity reaches this. No question cap. Ignored in `autonomous` mode. |
 | `output_format` | `"md"` | `--format` | Final report format: `md` or `html` |
 | `automation_level` | `"manual"` | `--mode` | `manual` runs the brainstormer interview + confirmation gates; `autonomous` resolves open questions with recorded defaults and runs without prompting. Only the brainstormer changes behavior on it. |
+| `review_page` | `"ask"` | `--review-page` | Step 1r, after a `READY_FOR_PLANNING` spec and before the architect: `"ask"` (also `null` or absent) asks whether to review the spec as an offline page, as text, or to plan now; `true` opens the page; `false` goes straight to planning. Only a typed yes proceeds; a pasted page block re-briefs the brainstormer, three revisions at most. Never gates in `autonomous` mode. Invalid values (`"yes"`, `"no"`) fall back to `"ask"`. |
 | `max_review_cycles` | `10` | `--max-review` | Upper bound on architect→coder→reviewer cycles. The cap actually tested is `review_budget = min(max_review_cycles, max_family_cycles − family_cr_count)`, bound at Step 0b |
 | `max_eval_cycles` | `2` | — | Max in-loop spec-eval cycles (Step 4e) before the pipeline hard-stops |
 | `max_family_cycles` | `6` | — | Max code reviews one **run family** — every artifact answering the same `SPEC-*`, across every run that touched it — may accumulate before the orchestrator refuses to start another. The only budget that survives a new run; `--override-family-budget` continues past it for one invocation, on the record |

@@ -1,5 +1,6 @@
-// review-page-parity.test.mjs — ADR-0036. context-builder and roadmap each ship the review page reference
-// and checker, because a skill never loads another skill's files at run time. This test holds the copies
+// review-page-parity.test.mjs — ADR-0036, ADR-0038. context-builder, roadmap and the orchestrator each ship the
+// review page reference and checker, because a skill never loads another skill's files at run time; the
+// orchestrator's bootstrap materializes its copies into a project's .orchestrator/. This test holds the copies
 // byte for byte, and holds the checker's net.*, js.* and csp.* rules to envision's render.cjs, which they
 // were lifted from: a fix made in one place and not the others fails here. One divergence is deliberate
 // (ADR-0036 decision 4): the checker reads only a page's code, never the text between tags, so prose that
@@ -15,12 +16,19 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const SKILLS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "plugins", "my-skills", "skills")
-const COPIES = ["context-builder", "roadmap"]
+const COPIES = ["context-builder", "roadmap", "orchestrator"]
 const FILES = ["references/review-page.md", "scripts/review-page.cjs"]
 const require = createRequire(import.meta.url)
 
+test("the orchestrator's copies are in its materialized set, so a project's .orchestrator/ copy goes stale loudly", async () => {
+  assert.ok(COPIES.includes("orchestrator"))
+  const { SKILL_FILES } = await import(join(dirname(fileURLToPath(import.meta.url)), "..", "stamp-orchestrator-version.mjs"))
+  for (const file of FILES) assert.ok(SKILL_FILES.includes(file), `the orchestrator stamp does not digest ${file}`)
+  assert.ok(!SKILL_FILES.includes("references/spec-review.md"), "the spec review step is the orchestrator's own, never a role's")
+})
+
 for (const file of FILES) {
-  test(`${file} is the same in ${COPIES.join(" and ")}`, () => {
+  test(`${file} is the same in ${COPIES.join(", ")}`, () => {
     const [first, ...rest] = COPIES.map((skill) => readFileSync(join(SKILLS, skill, ...file.split("/"))))
     for (const [i, other] of rest.entries()) assert.ok(first.equals(other), `${COPIES[i + 1]}/${file} differs from ${COPIES[0]}'s; copy it over`)
   })

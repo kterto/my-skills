@@ -39,6 +39,7 @@ const RULES = [
   ["no fixed template", /There is no template/],
   ["the user's language", /Write in the user's language/],
   ["the project's design system", /Use the project's design system[\s\S]*?DESIGN\.md[\s\S]*?ThemeData/],
+  ["every design-system lookup target", /CSS custom properties in the project's\s+stylesheets[\s\S]*?Flutter\s+`ThemeData`\/`ColorScheme`\/`TextTheme` \(`lib\/\*\*\/theme\*\.dart`,\s+`\*colors\*\.dart`\)/],
   ["no Mermaid, SVG or tables", /Inline SVG[\s\S]*?Tables[\s\S]*?Never Mermaid/],
   ["dark mode", /prefers-color-scheme: dark/],
   ["unmarked is not reviewed", /Unmarked means "not reviewed", never correct/],

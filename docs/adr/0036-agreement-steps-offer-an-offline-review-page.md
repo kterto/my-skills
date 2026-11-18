@@ -160,7 +160,9 @@ Lowered ceilings and new entries print no `BUDGET MOVED`; the change lands green
   probe: ADR-0025 records that a question asked inside a subagent spawn reached nobody, and
   `orchestrator/SKILL.md` only says "return control to the user". Once a probe shows a Step 3
   reply reaching the brainstormer, the reference and checker are materialized through
-  bootstrap B3 and the orchestrator stamp, with the same parity test.
+  bootstrap B3 and the orchestrator stamp, with the same parity test. *Taken up by
+  [ADR-0038](0038-the-orchestrator-reviews-its-spec-before-planning.md) without the probe: the
+  orchestrator's main loop runs the step, so nothing is relayed.*
 - roadmap's other approval gates (re-evaluation diffs, mutation ops) and context-builder's
   `--refresh` section approvals keep text only.
 

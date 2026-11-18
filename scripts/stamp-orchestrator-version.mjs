@@ -6,7 +6,7 @@
 //   node scripts/stamp-orchestrator-version.mjs --check   # verify it, exit 1 on drift
 //
 // Bootstrap (references/bootstrap.md → B3) copies the six role templates into the
-// host's agent directory and the six references, the html scaffolds and the seven
+// host's agent directory and the seven references, the html scaffolds and the eight
 // runtime .cjs into `target/.orchestrator/`, and pins the clean-code-gates engine
 // into `target/.orchestrator/engine/`. It re-runs when one of those files is
 // MISSING — a trigger that by construction cannot see a file that is present but
@@ -69,6 +69,7 @@ export const SKILL_FILES = [
   "references/config.md",
   "references/gate-config.md",
   "references/lane-protocol.md",
+  "references/review-page.md",
   "scripts/render-artifact.cjs",
   "scripts/index-plans.cjs",
   "scripts/check-artifact-pairing.cjs",
@@ -76,6 +77,7 @@ export const SKILL_FILES = [
   "scripts/check-artifact-home.cjs",
   "scripts/gate-scope.cjs",
   "scripts/run-state.cjs",
+  "scripts/review-page.cjs",
 ]
 
 const HTML_TEMPLATE_DIR = "templates/html"

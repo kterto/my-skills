@@ -8,6 +8,7 @@
 | `clarity_threshold` | float (0–1) | `0.99` | `--clarity` |
 | `output_format` | string (`md` \| `html`) | `"md"` | `--format` |
 | `automation_level` | string (`autonomous` \| `manual`) | `"manual"` | `--mode` |
+| `review_page` | `"ask"` \| `true` \| `false`; `null` or absent = `"ask"` | `"ask"` | `--review-page` |
 | `max_review_cycles` | integer | `10` | `--max-review` |
 | `max_qa_cycles` | integer | `5` | `--max-qa` |
 | `max_eval_cycles` | integer | `2` | — |
@@ -29,6 +30,8 @@
 `automation_level` governs whether the brainstormer stops to interview the user. `manual` (default) runs the full interview loop and confirmation gate. `autonomous` resolves every open question with the brainstormer's own stated default (recorded under "Decisions resolved by Brainstormer default") and produces a `READY_FOR_PLANNING` spec with no prompts. Only the brainstormer acts on this key; all other roles ignore it.
 
 `clarity_threshold` is the brainstormer's per-spec interview target in `manual` mode: it keeps asking the user questions — one answer at a time, re-rating clarity after each reply — until its self-rated spec clarity reaches this value, with **no cap on the number of questions**. Distinct from `context_threshold`, which gates only the bootstrap PROJECT-CONTEXT interview. Ignored in `autonomous` mode (no interview) and by all non-brainstormer roles.
+
+`review_page` decides whether the user reviews a brainstormer's `READY_FOR_PLANNING` spec before the architect plans it (SKILL.md → Step 1r, `references/spec-review.md`). `"ask"` (the default, and what `null` or an absent key means) asks one question with three choices: review it as a page, as text, or go straight to planning. `true` writes the page, opens it and waits for agreement. `false` is the pipeline as it was before the step existed: straight to the architect. Both reviews end in an agreement question, and only a typed yes proceeds. `"yes"`, `"no"` and every other spelling are invalid, never synonyms: an invalid value, from the file or from `--review-page`, resolves to `"ask"` with the reason printed (*Bounds*). Resolved once per run, CLI `--review-page` > `.orchestrator/config.json` > `"ask"`. Ignored when `automation_level` is `autonomous`: nobody is there to answer, so the step never gates, whatever this key says.
 
 `max_family_cycles` bounds how many code reviews one **run family** — every artifact answering the same `SPEC-*`, across every run that touched it (`artifact-format.md` → *The run family*) — may accumulate before the orchestrator refuses to start another. It is the only budget that survives a new run: `max_review_cycles`, `max_qa_cycles` and `max_eval_cycles` all reset to zero on a fresh invocation, so work that overflows a run leaves the reach of every one of them. On the run this key was written for, the in-run review counter peaked at 4 of a permitted 10 while the family reached 13 reviews across 11 slugs. Those 11 are **artifact** slugs, spread across runs that each mint their own run folder (`plans/<YYYYMMDD>T<HHMMSS>Z-<4hex>-<slug>/`): **family membership is resolved by artifact ID and front matter, never by which folder an artifact sits in.** A feature's story spans two to four run folders and 94% of families use more than one slug, so a count read off a single folder's contents would under-count exactly the families this key exists to stop. Reaching it is a `STALLED` stop with the family's history printed, and `--override-family-budget` continues past it for one invocation, on the record. Calibrated against both reference projects: across 63 real families the median is **2** reviews, while the eight-hour cascade this key exists to stop reached **9**. At `6` the gate fires on 4 of 63 families; at `8`, on the cascade alone. It keys on the raw review **count**, not on G8's rework ratio — the ratio converges as a family worsens (that same cascade scores 0.67) and so cannot discriminate, while the count separates cleanly.
 
@@ -327,15 +330,17 @@ Declaring a key "integer" constrains its **type**, not its **usability**, and bo
 | `max_run_minutes` | a **finite integer ≥ 0** | `0` disables the run **stop**, which is the default; the elapsed number is reported either way. A **negative** budget is spent before the run starts, so it would stop every run at its first boundary — the intent it expresses is already `0`'s, without `0`'s explicit disable. |
 | `gate_wall_clock_minutes` | a **finite integer ≥ 0** | `0` disables the per-gate bound, restoring the unbounded behavior for a project whose gates are trusted to terminate. A **negative** bound makes every gate stale before it runs, which would report `BLOCKED_STALE` on a run where nothing timed out. |
 | `max_spec_requirements` | a **finite integer ≥ 0** | `0` disables the scope gate, which is the default. A **negative** ceiling stops every spec including an empty one, so it expresses nothing `0` does not. |
+| `review_page` | `"ask"`, `true` or `false`; `null` or absent means `"ask"` | The set is closed, and a JSON boolean is not a string: `"true"`, `"yes"`, `"no"`, `"page"` are typos or another skill's spelling, not intents. It fails closed to **`"ask"`**, the one value that neither skips the review nor commits the user to a page: the user still chooses. |
 | `rigor` | one of `sketch`, `delivery`, `hardened` | The set is closed — there is nothing a project can invent, so an unrecognised value is a typo, not an intent. It fails closed to **`hardened`**, never to the lowest bar: a config that cannot be read must not be the cheapest way to clear a gate. |
 | `max_contract_amendments` | a **finite integer ≥ 0** | `0` is meaningful and supported: amendment is disabled, and the first `contract violation` falls straight back to sequential. A **negative** cap makes the `amendment_count` comparison undefined — already at or past the cap before any amendment is attempted — so the intent it expresses is already `0`'s. |
 
 Non-integers, non-finite values (`NaN`, `Infinity`), and non-numeric types are rejected the same way an out-of-range integer is.
 
-**Validation happens at config resolution (Step 0b), before any dispatch, and fails closed.** A value outside its range does **not** halt the run and is **never clamped silently** — it resolves to the key's **canonical default** — `max_parallel_lanes` `6`, `max_family_cycles` `6`, `max_eval_cycles` `2`, `max_contract_amendments` `2`, `max_run_minutes` `0`, `gate_wall_clock_minutes` `15`, `max_spec_requirements` `0` — with the reason printed:
+**Validation happens at config resolution (Step 0b), before any dispatch, and fails closed.** A value outside its range does **not** halt the run and is **never clamped silently** — it resolves to the key's **canonical default** — `max_parallel_lanes` `6`, `max_family_cycles` `6`, `max_eval_cycles` `2`, `max_contract_amendments` `2`, `max_run_minutes` `0`, `gate_wall_clock_minutes` `15`, `max_spec_requirements` `0` — with the reason printed. **`review_page` is checked the same way, falling back to `"ask"`, but when Step 1r resolves it, not at Step 0b:** a run that never reaches the step (`autonomous`, a reused spec, a `DRAFT` stop) never reads the key and prints nothing about it. The lines read:
 
 ```
 config: max_parallel_lanes {value} out of range (finite integer ≥ 1) — using default 6
+config: review_page "yes" invalid (one of "ask", true, false) — using default "ask"
 ```
 
 Failing closed rather than halting keeps a malformed config from bricking a run, and printing rather than clamping quietly keeps the operator aware that the value they wrote is not the value in force. This matters more than usual for `max_parallel_lanes` and `max_contract_amendments`: they load from the **merge-base** (see *Precedence*), so an out-of-range value may well come from a file the invoking user is not currently looking at.
@@ -349,7 +354,7 @@ A lane coder may never unilaterally change the contract: discovering a frozen in
 ## Canonical Default Object
 
 ```json
-{ "context_threshold": 0.95, "clarity_threshold": 0.99, "output_format": "md", "automation_level": "manual", "max_review_cycles": 10, "max_qa_cycles": 5, "max_eval_cycles": 2, "max_family_cycles": 6, "max_run_minutes": 0, "gate_wall_clock_minutes": 15, "max_spec_requirements": 0, "rigor": "hardened", "agent_sync_targets": [], "parallelism": "off", "lanes": [], "max_parallel_lanes": 6, "max_contract_amendments": 2, "baseline_sweep": "auto", "join_digest": true }
+{ "context_threshold": 0.95, "clarity_threshold": 0.99, "output_format": "md", "automation_level": "manual", "review_page": "ask", "max_review_cycles": 10, "max_qa_cycles": 5, "max_eval_cycles": 2, "max_family_cycles": 6, "max_run_minutes": 0, "gate_wall_clock_minutes": 15, "max_spec_requirements": 0, "rigor": "hardened", "agent_sync_targets": [], "parallelism": "off", "lanes": [], "max_parallel_lanes": 6, "max_contract_amendments": 2, "baseline_sweep": "auto", "join_digest": true }
 ```
 
 `sublanes` does not appear in the default object because it is a **property of a `lanes[]` entry**, not a top-level key, and `lanes` defaults to `[]` — so there is no entry to carry it. `templates/config.template.json` is byte-identical to the object above in key set and defaults.
@@ -362,6 +367,7 @@ A lane coder may never unilaterally change the contract: discovering a frozen in
 | `--clarity` | `clarity_threshold` |
 | `--format` | `output_format` |
 | `--mode` | `automation_level` |
+| `--review-page` | `review_page` (`ask`, `true` or `false`) |
 | `--max-review` | `max_review_cycles` |
 | `--max-qa` | `max_qa_cycles` |
 | `--parallel` | `parallelism` |
@@ -387,7 +393,7 @@ ignored unless named. Two files are tracked, and only two.
 | `PROJECT-CONTEXT.md` | **yes** | Hand-curated shared project knowledge a teammate's fresh clone must already have. Prose, so it three-way merges. |
 | `eval-baselines/**` | **yes** | Durable comparability anchors, not per-run output. |
 | `run-manifest.json`, `verification-ledger.json`, `tmp/` | no | Per-run, branch-scoped, rewritten **whole** on every run. Two branches hold two mutually exclusive snapshots, not two mergeable sets of rows — a silent three-way auto-merge would produce a state no run ever emitted. |
-| `artifact-format.md`, `artifact-format-html.md`, `artifact-format-parallel.md`, `config.md`, `gate-config.md`, `lane-protocol.md`, `html-templates/`, the seven `.cjs`, rendered role files | no | Copies of the installed skill. Lifecycle item 2 re-materializes them the moment one goes missing, so a fresh clone self-heals. Tracking them lands a four-figure diff in a product PR on every skill upgrade. |
+| `artifact-format.md`, `artifact-format-html.md`, `artifact-format-parallel.md`, `config.md`, `gate-config.md`, `lane-protocol.md`, `review-page.md`, `html-templates/`, the seven `.cjs` and `review-page.cjs`, rendered role files | no | Copies of the installed skill. Lifecycle item 2 re-materializes them the moment one goes missing, so a fresh clone self-heals. Tracking them lands a four-figure diff in a product PR on every skill upgrade. |
 
 **Why an allow-list rather than a list of ignores.** A deny-list has to be extended every time the
 pipeline learns to write a new file, and it is extended *after* the file has already been committed
@@ -454,6 +460,6 @@ A key that moved and is not in this table prints `(changed)` with both values. G
 
 #### What is *not* anchored, and why
 
-`output_format`, `automation_level`, `context_threshold`, `clarity_threshold` and `max_run_minutes` read the working tree. (`automation_level` has a per-level preset, but it is not itself anchored: it decides whether the brainstormer interviews, which a branch cannot turn into a pass.) None of them weakens what the run measures: the first two change how artifacts render and whether the brainstormer interviews, the thresholds govern an interview the branch cannot shorten into a pass, and `max_run_minutes` caps a **stop** while the meter reports unconditionally either way (see its entry above). A branch that sets `max_run_minutes: 0` buys itself a longer run and a fully reported cost — nothing is hidden by it.
+`output_format`, `automation_level`, `review_page`, `context_threshold`, `clarity_threshold` and `max_run_minutes` read the working tree. (`automation_level` has a per-level preset, but it is not itself anchored: it decides whether the brainstormer interviews, which a branch cannot turn into a pass.) None of them weakens what the run measures: the first two change how artifacts render and whether the brainstormer interviews, `review_page` only decides whether the user looks at the spec before planning, the thresholds govern an interview the branch cannot shorten into a pass, and `max_run_minutes` caps a **stop** while the meter reports unconditionally either way (see its entry above). A branch that sets `max_run_minutes: 0` buys itself a longer run and a fully reported cost — nothing is hidden by it.
 
 **Absent-key tolerance (backward compatibility).** Every key is nullable/absent-tolerant, and this is explicitly load-bearing for `parallelism`, `lanes`, `lanes[].sublanes`, `max_parallel_lanes`, and `max_contract_amendments`: an existing `.orchestrator/config.json` written before those keys existed resolves them to `"off"`, `[]`, absent (`[]`-equivalent — "derive per run"), `6`, and `2` respectively, and the pipeline behaves **exactly as it does today** — no `PACT` and no sub-contract is created, no new prompt fires, and Steps 2p/2c/2s/2L/3L/3s/3j are skipped entirely. **No migration is forced**; legacy config files and existing `plans/` trees render and execute unchanged. A legacy `PACT` artifact carrying no `Sub-contract` column likewise resolves as **all-flat**, never an error (`artifact-format-parallel.md` → `PACT` ID resolution).

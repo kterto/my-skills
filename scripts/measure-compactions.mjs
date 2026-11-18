@@ -82,7 +82,7 @@ const Z95 = 1.959963984540054
 const ORCHESTRATOR_REFERENCES = new Set([
   "artifact-format.md", "artifact-format-html.md", "artifact-format-parallel.md", "bootstrap.md",
   "config.md", "config-parallel.md", "context-schema.md", "gate-config.md", "html-mode.md",
-  "lane-protocol.md", "parallel.md",
+  "lane-protocol.md", "parallel.md", "review-page.md", "spec-review.md",
 ])
 // Where the orchestrator's bootstrap and scripts/sync-agents.sh write role files.
 const ROLE_DIRS = new Set([".claude/agents", ".agents/agents", ".opencode/agent", ".opencode/agents"])
