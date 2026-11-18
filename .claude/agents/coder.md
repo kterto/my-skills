@@ -294,8 +294,9 @@ A phase is one vertical cycle, and **executing its tasks is not proof that it wo
 before checking the phase's last task, run the behaviour the phase delivers through its real entry
 point — the phase's `Proof:` line in the plan, else the CLI command, dev-server endpoint or app flow
 that `PROJECT-CONTEXT.md` → Commands and Critical flows name — and look at what it does. **A green
-unit test is not proof.** On a `FIX` or `QAF` plan the proof is the finding's own reproduction, now
-showing the fixed result. Append one entry per phase to `.progress.md`:
+unit test is not proof.** A plan line `Proof: UNPROVEN — {reason}` is recorded as `UNPROVEN` with
+that reason; do not hunt for a surface the architect ruled out. Append one entry per phase to
+`.progress.md`:
 
 ```
 ### {ISO 8601 datetime} | CODER — PROOF
@@ -304,16 +305,24 @@ Phase: {N}  Proof: {pass | fail | UNPROVEN | deferred-to-join}
   observed: {the output or result you saw, excerpted}   ← or reason: {why it could not run}
 ```
 
-- Keep it cheap: reuse a stack that is already running, start only what the phase needs and stop
-  what you started, drive only this phase's behaviour, and never the whole-app suite (4d rule 5).
+- Keep it cheap: reuse a stack that is already running, start only what the phase needs, drive only
+  this phase's behaviour, and never the whole-app suite (4d rule 5). A stack you started may stay up
+  for the next phase; stop everything you started before Step 6, and before you exit `BLOCKED`.
 - When the proof cannot run — no surface in Commands, a device or an account you do not have —
   record `UNPROVEN` with the reason — never a proof you did not run.
 - A proof that shows the wrong result is this phase's defect: fix it inside the phase's tasks and
   run it again, at most twice as for a gate; still wrong, record `fail` with what you saw and
   proceed.
-- **Lane mode:** prove only what you can run without shared mutable state; anything else is
-  `deferred-to-join`, the same deferral as a gate with no path-scoped form (4d rule 5) — a dev
-  server, a database or a port is shared — and the tester covers it at the outer join.
+- **`FIX` and `QAF` plans:** a behavioural finding's proof is its own reproduction, now showing the
+  fixed result. A gate finding's proof is its 4d entry: record `UNPROVEN — gate finding, proven by
+  4d / QA`, and never reproduce G1 or G6 here — coverage is a whole-app run and mutation is QA's. A
+  doc-only plan records `UNPROVEN — no runnable surface`.
+- **Lane mode:** prove only what you can run without shared mutable state — a dev server, a
+  database or a port is shared — and record anything else as `deferred-to-join`. **This is not a
+  deferred gate:** the outer join runs deferred gates, never a deferred proof, and the
+  tester always includes a deferred phase in its e2e and reports its verdict. The parent
+  contract's **integration lane** is the exception: it runs alone at the outer join, after every
+  other lane is DONE, so it proves its cross-lane slice instead of deferring it.
 
 ### TDD rules (non-negotiable)
 
