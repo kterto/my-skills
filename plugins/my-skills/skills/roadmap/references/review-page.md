@@ -2,8 +2,8 @@
 
 An opt-in, self-contained HTML page that shows a result before the user agrees to it, so they
 can look at it visually, mark it up and paste their marks back. Read **Page or text?** before
-asking that question; read the rest only after the user picks **page**. context-builder and
-roadmap each ship this file byte for byte, with `scripts/review-page.cjs`; a skill never
+asking that question; read the rest only after the user picks **page**. Each skill in the
+table below ships this file byte for byte, with `scripts/review-page.cjs`; a skill never
 reads another skill's files at run time.
 
 ## Page or text?
@@ -24,17 +24,17 @@ reads another skill's files at run time.
 - **Text** is the step exactly as it was. **Page** adds the page; the step's own question is
   still asked in chat, word for word.
 
-| | context-builder (Phase 5) | roadmap (tree approval) |
-|---|---|---|
-| The page shows | the numbered restatement; conflicts first; defaults assumed; reserved decisions still open; actors and entities | the milestone → phase → story tree; sequence; `depends_on`; per-milestone counts and done criteria |
-| Ids | `S1`… per restatement item, `S1.2` per item inside one, `C1`… conflicts, `O1`… open decisions | the tree's own ids: `001-bootstrap`, `001.1`, `001.1.1` |
-| File name | `context-draft.html` | `roadmap-tree.html` |
-| Agreement | a typed yes to "Is this 100% accurate?" | a typed approval of the tree |
-| Recommended when | ≥1 conflict or open reserved decision, or ≥3 defaults assumed | ≥3 milestones, or any `depends_on` |
+| | context-builder (Phase 5) | roadmap (tree approval) | orchestrator (spec review) |
+|---|---|---|---|
+| The page shows | the numbered restatement; conflicts first; defaults assumed; reserved decisions still open; actors and entities | the milestone → phase → story tree; sequence; `depends_on`; per-milestone counts and done criteria | goals, numbered requirements, any stated acceptance criteria, defaults, open questions |
+| Ids | `S1`… per restatement item, `S1.2` per item inside one, `C1`… conflicts, `O1`… open decisions | the tree's own ids: `001-bootstrap`, `001.1`, `001.1.1` | `G1`… goals, `FR1`… requirements, `AC1`… criteria, `D1`… defaults, `O1`… open questions |
+| File name | `context-draft.html` | `roadmap-tree.html` | `spec-review.html` |
+| Agreement | a typed yes to "Is this 100% accurate?" | a typed approval of the tree | a typed yes to "Is this spec 100% accurate?" |
+| Recommended when | ≥1 conflict or open reserved decision, or ≥3 defaults assumed | ≥3 milestones, or any `depends_on` | ≥1 default, or ≥15 requirements |
 
 ## Where the page lives
 
-Never in the project. Use the scratch directory the host names in its system prompt; with
+Never in the project. Use the scratch directory the host names; with
 none, `${TMPDIR:-/tmp}/my-skills-review/<project folder name>-<first 8 hex of the sha256 of
 the project's absolute path>/<file name>`. One file per session: each new draft rewrites
 it. Open it the first time only (`open <file>` on macOS, `xdg-open <file>` on Linux;
@@ -62,8 +62,8 @@ width, light and dark, and look before opening it. It enforces reliability and s
 
 ## Building the page
 
-There is no template. Decide the structure and visuals for this project and this result; the
-rules above are the only fixed part.
+There is no template: decide the structure and visuals for this result; the rules above are
+the only fixed part.
 
 - **Write in the user's language** and set `<html lang>` to it. Only the copy-back verbs
   below stay in English.
@@ -74,28 +74,24 @@ rules above are the only fixed part.
 - **Every claim shows where it came from** (`source:` a document, page or interview turn)
   and how sure it is: decided by the user, a default you assumed, a guess, or open.
 - **Keep the page's data** (stories, items, decisions) in `<script type="application/json">`
-  and read it with `JSON.parse`; in a plain script a title such as "Store location" reads
-  as code to the checker.
-- **Ids are stable across drafts**, and every count (progress, conflicts, items) is computed
-  by the script, never typed.
+  and read it with `JSON.parse`; the checker reads a plain script as code.
+- **Ids are stable across drafts**, and every count is computed by the script, never typed.
 - **Use the project's design system.** Look for `DESIGN.md` or `docs/design*`; token files
-  (`tokens.json`, `*.tokens.json`, Style Dictionary); CSS custom properties in the project's
-  stylesheets; a Tailwind theme; Flutter `ThemeData`/`ColorScheme`/`TextTheme` (`lib/**/theme*.dart`,
-  `*colors*.dart`); Android `res/values/colors.xml`; iOS colour sets; envision's
+  (`*tokens.json`, Style Dictionary); CSS custom properties; a Tailwind theme; Flutter
+  `ThemeData` (`lib/**/theme*.dart`); Android `res/values/colors.xml`; iOS colour sets; envision's
   `docs/vision/design/tokens.css`. Copy the values into `:root` custom properties and name
   the source file in a CSS comment. Name its fonts with a system fallback stack; never load
   or embed a font file. With none found, use a plain system palette.
 
 ### Diagrams
 
-- **Inline SVG**, drawn as you write the page: a `viewBox`, `width:100%` with a `max-width`,
+- **Inline SVG**: a `viewBox`, `width:100%` with a `max-width`,
   `role="img"` and a `<title>`; wide figures scroll inside their own box
   (`overflow-x:auto`). Keep the `viewBox` at most about 2.2× the narrowest display width, or
   stack the figure vertically for phones; never set SVGs side by side in a grid.
 - **Colour SVG by class from the `:root` tokens**, so it follows dark mode. Hard-coded
   attribute colours only on a deliberately light figure with its own light background
-  `<rect>`, said in its caption. Never a blanket `svg text { fill }` rule, which repaints
-  every attribute colour.
+  `<rect>`, said in its caption. Never a blanket `svg text { fill }` rule.
 - **Tables** for entity relations, sequences, state transitions and permission matrices;
   CSS bars for simple charts.
 - Never Mermaid or any library that draws at run time, and never diagram source in a `<pre>`.
@@ -115,8 +111,8 @@ rules above are the only fixed part.
 Each section can be marked **correct** or **fix** with a note, each item inside one **not
 quite** with a note, each conflict picked (with a **neither — other** choice and a note), each
 open decision answered. **Unmarked means "not reviewed", never correct.** Mark sections, list
-items or cards, never table rows: in a `<tr>` the controls become a stray column, off-screen
-on a phone; a table stays a figure and its section takes the marks. Marks stay in this
+items or cards, never table rows (off-screen on a phone): a table stays a figure and its section takes the
+marks. Marks stay in this
 browser under `review:<project>:<stage>:draft<N>`, inside `try`/`catch`; another draft starts
 clean. Reset asks first and never reloads. The Copy block, in this order:
 
@@ -145,7 +141,7 @@ restate and ask the agreement question again.
 | Line | Effect |
 |---|---|
 | `ok [id]` | reviewed, no change |
-| `fix [id]` / `flag [id]` | a correction to that item; without a note, ask what is wrong. context-builder folds it in per `references/convergence.md`; roadmap edits the tree |
+| `fix [id]` / `flag [id]` | a correction to that item; without a note, ask what is wrong. context-builder folds it in per `references/convergence.md`; roadmap edits the tree; the orchestrator's brainstormer revises the spec |
 | `pick [C] = x` | the conflict is settled on that variant; record `source: review page, draft N` |
 | `other [C]` | neither variant: ask one follow-up question with the note |
 | `answer [O]` | the user's own answer to the open decision, recorded as theirs |
@@ -157,7 +153,7 @@ again.
 
 ## Reference snippet
 
-Adapt freely; it only shows the loop working under the CSP. Markup it reads: `<main
+Adapt freely. Markup it reads: `<main
 data-review-key="<project>:<stage>" data-draft="N" data-skill="<skill>">`; `data-review="<id>"`
 with `data-kind="section"`, `"item"` or `"open"` and a `data-label`; a conflict is a
 `<fieldset data-review="C1" data-kind="conflict">` holding radios `name="C1"`, each with a
@@ -195,7 +191,7 @@ function copyBlock(meta, entries) {
   var meta = { skill: main.dataset.skill, project: main.dataset.reviewKey.split(":")[0], draft: main.dataset.draft };
   var key = "review:" + main.dataset.reviewKey + ":draft" + meta.draft, marks = {}, paints = [];
   try { marks = JSON.parse(localStorage.getItem(key) || "{}") || {}; } catch (e) { marks = {}; }
-  function save() { try { localStorage.setItem(key, JSON.stringify(marks)); } catch (e) { /* blocked: marks live until reload */ } }
+  function save() { try { localStorage.setItem(key, JSON.stringify(marks)); } catch (e) { /* storage blocked */ } }
   function el(tag, parent, text) { var n = document.createElement(tag); if (text) n.textContent = text; parent.appendChild(n); return n; }
   function mark(id) { return marks[id] || (marks[id] = {}); }
   var nodes = [].slice.call(main.querySelectorAll("[data-review]"));

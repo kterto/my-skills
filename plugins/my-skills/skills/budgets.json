@@ -65,6 +65,10 @@
       "maxBytes": 179160,
       "adr": "docs/adr/0026-skill-byte-budgets-and-the-admission-rule.md"
     },
+    "orchestrator/references/review-page.md": {
+      "maxBytes": 16498,
+      "adr": "docs/adr/0038-the-orchestrator-reviews-its-spec-before-planning.md"
+    },
     "pr-review-report/SKILL.md": {
       "maxBytes": 44127,
       "adr": "docs/adr/0026-skill-byte-budgets-and-the-admission-rule.md"
@@ -124,6 +128,12 @@
       "include": ["scripts/**/*.cjs"],
       "exclude": ["__tests__/**"],
       "adr": "docs/adr/0033-envision-a-divergent-step-before-context-builder.md"
+    },
+    "orchestrator": {
+      "maxLines": 262,
+      "include": ["scripts/review-page.cjs"],
+      "exclude": ["__tests__/**"],
+      "adr": "docs/adr/0038-the-orchestrator-reviews-its-spec-before-planning.md"
     }
   }
 }
