@@ -1,0 +1,45 @@
+<title>Corner Bakery — context draft</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible&display=swap">
+<style>
+/* Synthetic fixture. It reproduces, on made-up content, every fault of the hand-made review page that
+   motivated ADR-0036: written for a host that adds the skeleton, then opened from file://. */
+:root{--bg:#f7f5f1;--text:#1c1b1a;--warn:#b3261e}
+body{background:var(--bg);color:var(--text);font-family:"Atkinson Hyperlegible",system-ui,sans-serif}
+svg text{fill:var(--text)}
+.mermaid{background:#fff;padding:12px}
+</style>
+<main>
+<section id="s1">
+  <h2>Problem</h2>
+  <p>Orders are taken on paper and the totals drift.</p>
+  <svg viewBox="0 0 200 60" role="img" aria-label="Paper notebook">
+    <rect x="1" y="1" width="198" height="58" fill="#fbf8ef" stroke="#c9b48a"/>
+    <text x="12" y="36" fill="#b3261e">totals differ!</text>
+  </svg>
+  <div class="review" data-sec="s1"></div>
+</section>
+<section id="s2">
+  <h2>Data model</h2>
+  <pre class="mermaid">
+erDiagram
+  CUSTOMER ||--o{ ORDER : places
+  ORDER ||--|{ LINE : contains
+  </pre>
+  <pre class="mermaid">
+flowchart LR
+  A[Counter] --> B[(Ledger)]
+  </pre>
+</section>
+<pre id="out"></pre>
+<button type="button" id="reset">Clear marks</button>
+</main>
+<script>
+(function(){
+  var KEY='bakery-ctx-v1', st={sec:{}};
+  try{var s=localStorage.getItem(KEY); if(s){st=JSON.parse(s);}}catch(e){}
+  document.getElementById('out').textContent='0/12';
+  document.getElementById('reset').addEventListener('click',function(){st={sec:{}}; location.reload();});
+})();
+</script>
