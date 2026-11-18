@@ -110,6 +110,7 @@
     {"id": "orchestrator.coder.proof-pass", "skill": "orchestrator", "enum": "proof", "name": "pass", "fixture": "fixtures/replays/coder-phase-proof.json"},
     {"id": "orchestrator.coder.proof-fail", "skill": "orchestrator", "enum": "proof", "name": "fail", "fixture": "fixtures/replays/coder-phase-proof.json"},
     {"id": "orchestrator.coder.proof-unproven", "skill": "orchestrator", "enum": "proof", "name": "UNPROVEN", "fixture": "fixtures/replays/coder-phase-proof.json"},
+    {"id": "orchestrator.coder.proof-deferred", "skill": "orchestrator", "enum": "proof", "name": "deferred-to-join", "fixture": "fixtures/replays/coder-phase-proof.json"},
     {"id": "orchestrator.coder.done-needs-proof", "skill": "orchestrator", "enum": "gate", "name": "DONE needs a proof entry per phase", "fixture": "fixtures/replays/coder-phase-proof.json"},
     {"id": "orchestrator-flash.coder.proof-line", "skill": "orchestrator-flash", "enum": "plan.line", "name": "Proof:", "fixture": "fixtures/replays/flash-cycle-proof.json"},
     {"id": "envision.touchpoint.round", "skill": "envision", "enum": "touchpoint", "name": "round", "fixture": "fixtures/replays/envision-round.json"},

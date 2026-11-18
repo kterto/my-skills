@@ -2,7 +2,7 @@
   "id": "coder-phase-proof",
   "kind": "synthetic",
   "class": "a phase whose tasks are checked, gates green and unit tests passing while the behaviour it delivers does not work, because nothing ran the software until the tester",
-  "caught_by": "coder Step 4e runs each phase's behaviour through its real entry point and records a CODER — PROOF entry with the command and what it showed, or UNPROVEN with the reason; the plan never goes DONE while a phase has no entry, and the reviewer files a fail as a Must Fix",
+  "caught_by": "coder Step 4e runs each phase's behaviour through its real entry point and records a CODER — PROOF entry with the command and what it showed, or UNPROVEN with the reason; the plan never goes DONE while a phase has no entry, a lane's deferred-to-join proof is always run by the tester at the outer join, and the reviewer files a fail as a Must Fix",
   "missed_by": "the kept core's phase exit, which checked gates and unit tests only, and the tester, which runs after the last phase and selects only high-criticality flows",
   "cost": {
     "value": 0,

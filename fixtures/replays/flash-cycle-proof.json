@@ -2,7 +2,7 @@
   "id": "flash-cycle-proof",
   "kind": "synthetic",
   "class": "a flash plan whose cycles are all checked while no cycle was ever run, so the one live check is the first and only execution of the software",
-  "caught_by": "the flash coder runs each cycle's Proof: line through the real entry point before its last box and rewrites it with the command and what it showed, or UNPROVEN with the reason",
+  "caught_by": "the flash architect opens each vertical cycle with a Proof (planned): line; the coder runs it through the real entry point before the cycle's last box and replaces it with the command and what it showed, or UNPROVEN with the reason, and never flips DONE while a planned line remains",
   "missed_by": "the kept flash core, whose coder ran changed-scope unit tests only and left every execution to the live check",
   "cost": {
     "value": 0,
