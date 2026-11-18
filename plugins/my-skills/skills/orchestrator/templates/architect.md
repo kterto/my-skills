@@ -167,8 +167,12 @@ cite a criterion number.}
 
 > Tasks are ordered TDD-first: write/update tests before implementation.
 > The coder will check off [ ] → [x] as each task is verified.
+> Each phase is one vertical cycle: it cuts through every layer one user-visible behaviour needs (e.g. the backend endpoint and the mobile screen that calls it) and ends in something runnable; later phases close the gaps. Never phase horizontally — all backend first, then all UI — unless Technical Notes say why a slice is impossible. Each phase's `Proof:` line names what the coder runs and records before checking its last task.
 > Each phase ends with a `### Phase N verification` checklist the coder MUST run and RECORD the verdict of before checking the last task in the phase — exit 0, or a carried `CODER — GATE` entry naming the fix it rejected and why. A gate it cannot clear never blocks the phase. The exact commands per phase come from `## Verification (per phase)` below.
 
+### Phase 1 — {the user-visible behaviour this cycle delivers}
+
+- Proof: {the real entry point — a CLI command, an endpoint on the dev server, an app flow} → {the observable result that shows this cycle works}
 - [ ] Write failing test(s) for {first unit of work}
 - [ ] Implement {first unit of work} to pass tests
 - [ ] Write failing test(s) for {second unit of work}
@@ -404,7 +408,7 @@ Status: PLANNED. Ready for coder.
 - A `PACT` carries no `## Tasks` and no `## Verification (per phase)` section — it is a contract, not a plan. The work it governs lives in the lane `FEAT` plans.
 - Never emit a `PACT` with an unvalidated, unbounded, `..`-escaping, or overlapping path glob. Reject and repair before writing; drop and report a lane you cannot bound.
 - Never fill in the `PACT` lane-status table — the orchestrator owns it.
-- A lane `FEAT` plan never plans an edit outside its lane's owned globs.
+- A lane `FEAT` plan never plans an edit outside its lane's owned globs. Its vertical cycles are bounded by the lane's owned globs, and a `Proof:` the lane cannot run alone reads `deferred-to-join`. A `Proof:` with no runnable surface reads `none — {reason}`; on a `FIX` or `QAF` plan it is the finding's reproduction.
 
 ## Output to user
 

@@ -42,7 +42,7 @@ Your one addition on top of that: add the `PACT`'s **interface points** to your 
 
 ## Step 2 — Critical-flow triage
 
-From the plan's acceptance criteria and PROJECT-CONTEXT Critical flows, list candidate flows. For each, score criticality (user impact × breakage likelihood × not-covered-by-unit). Select ONLY high-criticality flows for e2e — e2e is expensive; justify each inclusion and each deliberate exclusion in the report.
+From the plan's acceptance criteria and PROJECT-CONTEXT Critical flows, list candidate flows. Read the coder's `CODER — PROOF` entries in each plan's `.progress.md`: a phase recorded `UNPROVEN` or `deferred-to-join` is a candidate you score first, and a `pass` is evidence, never a substitute for your e2e. For each, score criticality (user impact × breakage likelihood × not-covered-by-unit). Select ONLY high-criticality flows for e2e — e2e is expensive; justify each inclusion and each deliberate exclusion in the report.
 
 **Rigor decides whether an unobserved flow stops you — never whether the triage is written.** At every level, list the candidates, score them, and record every inclusion and every deliberate exclusion with its reason: that list is the report's most honest section and it costs nothing to produce.
 
