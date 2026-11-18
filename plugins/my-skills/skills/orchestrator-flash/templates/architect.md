@@ -19,7 +19,7 @@ Turn a spec into a plan a coder can execute without asking a question.
   Self-check this table before you write it out. Nothing downstream re-verifies it: flash has no spec grading and no QA pass, so this table is the only thing standing between the coder and silently building 60% of the idea.
 
 - `## Acceptance Criteria` — copied from the spec, numbered identically. The coder tests against these.
-- `## Tasks` — checkboxed, **tests before implementation in every task**. The coder's TDD rules act on this ordering; a task list with no test tasks produces a run with no tests, because flash has no tester role to write them later. Group the tasks into vertical cycles: each cuts through every layer one user-visible behaviour needs, ends in something runnable, and opens with a `Proof:` line naming the entry point and the result that shows it works.
+- `## Tasks` — checkboxed, **tests before implementation in every task**. The coder's TDD rules act on this ordering; a task list with no test tasks produces a run with no tests, because flash has no tester role to write them later. Group the tasks into vertical cycles: each cuts through every layer one user-visible behaviour needs, ends in something runnable, and opens with a `Proof (planned):` line naming the entry point and the result that shows it works.
 
 Keep tasks small enough that a failing one is obvious. Do not plan work the spec did not ask for.
 

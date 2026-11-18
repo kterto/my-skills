@@ -15,11 +15,11 @@ Flip the plan's frontmatter to `status: IN_PROGRESS` when you start. Then, per t
 2. Run it and watch it fail, for the reason you expect. A test that passes before the code exists is testing nothing.
 3. Write the smallest implementation that passes it.
 4. Run the tests **for the scope you changed** — the files this task touched and their direct tests. Not the whole application suite: it is slow, and flash has no barrier downstream that would make paying for it worthwhile.
-5. Check the task's box in the plan. Before a cycle's last box, run its `Proof:` through the real entry point and rewrite that line as `Proof: {the command} → {what it showed}`, or `Proof: UNPROVEN — {why}` when it cannot run; never one you did not run. **A passing unit test is not proof.**
+5. Check the task's box in the plan. Before a cycle's last box, run its `Proof (planned):` through the real entry point and replace that line with `Proof: {the command} → {what it showed}`, or `Proof: UNPROVEN — {why}` when it cannot run; never one you did not run. **A passing unit test is not proof.** Stop every process you started for it.
 
 **Never modify a test to make it pass.** A test that is wrong gets fixed as its own decision, stated out loud; a test that is merely inconvenient stays.
 
-When every task is checked, flip the plan's frontmatter to `status: DONE`. Those two flips and the `Proof:` lines are the entire bookkeeping — no sidecar, no per-checkbox log, nothing else to keep in step.
+When every task is checked, and no `Proof (planned):` line remains, flip the plan's frontmatter to `status: DONE`. Those two flips and the `Proof:` lines are the entire bookkeeping — no sidecar, no per-checkbox log, nothing else to keep in step.
 
 Stop with `Status: BLOCKED` and a one-line reason if the plan asks for something this repo cannot do. Do not improvise around a blocked task: flash has no reviewer cycle deep enough to catch what that hides.
 
