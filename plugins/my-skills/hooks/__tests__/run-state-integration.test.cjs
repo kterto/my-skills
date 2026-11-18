@@ -308,7 +308,7 @@ test('a run in a new worktree: the copy Step 0a makes lets it start there, and b
   fs.writeFileSync(path.join(orch, 'config.json'), '{}\n');
   fs.writeFileSync(path.join(orch, 'PROJECT-CONTEXT.md'), '# context\n');
   fs.copyFileSync(RUN_STATE, path.join(orch, 'run-state.cjs'));
-  for (const name of ['artifact-format.md', 'artifact-format-html.md', 'config.md', 'gate-config.md', 'lane-protocol.md']) {
+  for (const name of ['artifact-format.md', 'artifact-format-html.md', 'config.md', 'gate-config.md', 'lane-protocol.md', 'review-page.md']) {
     fs.writeFileSync(path.join(orch, name), `# ${name}\n`);
   }
   fs.writeFileSync(path.join(orch, 'html-templates', 'spec.template.html'), '<html></html>\n');
@@ -328,7 +328,7 @@ test('a run in a new worktree: the copy Step 0a makes lets it start there, and b
   assert.ok(copy, 'SKILL.md Step 0a copies the untracked materialized files into a new worktree');
   const r = cp.spawnSync('bash', ['-c', copy[1].replaceAll('{path}', wt)], { cwd: main, encoding: 'utf8', env: childEnv() });
   assert.strictEqual(r.status, 0, r.stderr);
-  for (const name of ['run-state.cjs', 'gate-config.md', 'artifact-format-html.md', 'html-templates/spec.template.html', 'engine/bin/gates.cjs']) {
+  for (const name of ['run-state.cjs', 'gate-config.md', 'artifact-format-html.md', 'review-page.md', 'html-templates/spec.template.html', 'engine/bin/gates.cjs']) {
     assert.ok(fs.existsSync(path.join(wt, '.orchestrator', name)), name);
   }
   assert.strictEqual(fs.readFileSync(path.join(wt, '.orchestrator', 'PROJECT-CONTEXT.md'), 'utf8'), '# context\n');
