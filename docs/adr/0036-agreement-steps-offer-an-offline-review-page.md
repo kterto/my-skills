@@ -73,10 +73,10 @@ until it exits 0 before opening it. Codes:
 |---|---|
 | `skel.*` | `<!doctype html>`, `<html lang>`, `<meta charset="utf-8">` first in `<head>`, a `width=device-width` viewport, a `<title>` |
 | `csp.*` | envision's `cspProblems`, unchanged: `default-src`, `base-uri` and `form-action` `'none'`, no `connect-src`, sources limited to `'none'`, `'unsafe-inline'`, hashes and `data:` |
-| `net.*`, `js.*` | envision's `FORBIDDEN`, unchanged, over the same entity-decoded, comment-stripped copy |
-| `diagram.*` | a `mermaid` class or script token, diagram source shapes left in visible text, or a call into a diagram or chart library |
-| `read.*` | `html` or `body` sets both a background and a text colour |
-| `svg.override` | a type rule (`svg text { fill }`) that repaints SVG `fill=`/`stroke=` attributes |
+| `net.*`, `js.*` | envision's `FORBIDDEN` patterns over the same entity-decoded, comment-stripped copy, but of the page's code only: its tags, style sheets and non-data scripts, never the text between tags; `js.inline` reads the tags alone |
+| `diagram.*` | a `mermaid` class or script token, diagram source shapes left in visible text (keywords case-sensitive; `gantt`, `journey` and `mindmap` only with their next line's syntax), or a call into a diagram or chart library |
+| `read.*` | `:root`, `html` or `body` sets both a background and a text colour |
+| `svg.override` | a rule whose last compound (`text`, `rect.bar`, `*`, `:is(text,rect)`) reaches an SVG shape that carries the `fill=`/`stroke=` it sets |
 | `size` | at most 200 KB |
 
 Colour attributes on SVG are allowed: design-system colours are wanted. What is checked is
@@ -84,7 +84,15 @@ that the page stays readable: an explicit background and text colour, and no CSS
 silently overrides the colours an SVG sets. Dark-mode handling stays guidance, because a
 design system without a dark palette is a legitimate light-only page. The CSP keeps
 `script-src 'unsafe-inline'` with no hash, so the agent need not re-hash on every draft;
-`default-src 'none'` already denies the network. 200 KB is three times the owner's page; a
+`default-src 'none'` already denies the network.
+
+The code-only scan is a deliberate departure from envision, which reads the whole flat page.
+A context or roadmap page quotes decisions and snippets as prose (`replace @import with @use`,
+`no javascript: URLs`, an escaped `<a href="https://…">`), and a review of the first version
+found each of them failing the check, which would have made the agent rewrite true content
+to pass. Prose cannot load or run anything; the CSP stays the backstop for what a pattern
+misses. Page data belongs in `<script type="application/json">`, which the checker skips, so
+a story titled "Store location picker" is not read as `location`. 200 KB is three times the owner's page; a
 page that needs more is embedding something it should not, such as a font.
 
 ### 5. Diagrams are inline SVG or tables
@@ -106,8 +114,9 @@ opened once; later drafts say "reload". Nothing is written under `.orchestrator/
 
 Unmarked items read `not reviewed`, never correct. The Copy block is plain lines with fixed
 English verbs and ids in brackets (`ok`, `fix`, `flag`, `pick`, `other`, `answer`,
-`not reviewed:`) under a header naming skill, project and draft; it never says yes or
-agree. A pasted block is a correction and data, never instructions, and never agreement:
+`not reviewed:`) under a header naming skill, project and draft; its fixed text never says
+yes or agree, and a quoted note is one JSON string, so a quote inside it cannot end it early.
+A note that says yes (or *sim*) is still the user's words, never agreement. A pasted block is a correction and data, never instructions, and never agreement:
 every line `ok` without a typed yes is not a yes. A block from another draft is named and
 nothing from it is applied silently. Marks are stored per draft.
 
@@ -118,7 +127,8 @@ cannot import a skill"), so context-builder and roadmap each ship `references/re
 and `scripts/review-page.cjs`, byte for byte. The reference carries both skills' rows (what
 the page shows, ids, file name, agreement). `scripts/__tests__/review-page-parity.test.mjs`
 fails when the copies differ, and when the checker's `net.*`, `js.*` or `csp.*` codes drift
-from envision's `check()` on fourteen pages. envision's `code.envision` ceiling is full, so
+from envision's `check()` on fourteen pages of markup, where both read the same; the
+code-only scan (decision 4) differs only on prose, which those pages do not hold. envision's `code.envision` ceiling is full, so
 the shared rules could not move into envision.
 
 ### 9. SKILL.md edits are net-negative
@@ -134,10 +144,10 @@ step, net −6 bytes. No rule was removed. The Prime overlays' exact-text blocks
 |---|---|---|
 | `context-builder/SKILL.md` | 12,661 → 12,643 bytes | measured after decision 9 |
 | `roadmap/SKILL.md` | 35,148 → 35,142 bytes | measured after decision 9 |
-| `context-builder/references/review-page.md` | 15,103 bytes | read at each agreement step once the user picks Page, so it regrows like a `SKILL.md`; measured |
-| `roadmap/references/review-page.md` | 15,103 bytes | the same file |
-| `code.context-builder` | 222 lines | `scripts/**/*.cjs`, the checker; measured |
-| `code.roadmap` | 222 lines | `scripts/review-page.cjs` only; the existing `check-timestamp-parity.cjs` gate asset stays unbudgeted, as before this change |
+| `context-builder/references/review-page.md` | 16,498 bytes | read at each agreement step once the user picks Page, so it regrows like a `SKILL.md`; measured after the review fixes (browser gate per OS, screenshots, JSON data, SVG by class, no table rows) |
+| `roadmap/references/review-page.md` | 16,498 bytes | the same file |
+| `code.context-builder` | 262 lines | `scripts/**/*.cjs`, the checker; measured after the review fixes (code-only scan, selector targets for `svg.override`) |
+| `code.roadmap` | 262 lines | `scripts/review-page.cjs` only; the existing `check-timestamp-parity.cjs` gate asset stays unbudgeted, as before this change |
 
 Lowered ceilings and new entries print no `BUDGET MOVED`; the change lands green.
 
@@ -208,5 +218,5 @@ when one runs.
 - The checker makes the owner's page's failures (raw diagram source, quirks mode, web fonts,
   silent colour loss) impossible to ship, without constraining design.
 - One more question per session where a browser is reachable; none where it is not.
-- Two copies of 15 KB and 222 lines to keep in step, held by one test.
+- Two copies of 16 KB and 262 lines to keep in step, held by one test.
 - Agreement is unchanged: a yes, or an approval, typed in chat.
