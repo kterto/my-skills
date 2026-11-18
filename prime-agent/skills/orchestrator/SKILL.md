@@ -70,7 +70,7 @@ On invocation with a plain-language task description (and optional `--setup`):
 > **Already loaded? Do not reload.** A caller running several tasks in one session — the `product-manager` skill does exactly this, one run per user story — needs this protocol **once**, not once per task. If its text is still visible in your context, a second task is a **new pipeline run starting here at the Lifecycle**, not a re-read of the skill. **A new run rebinds everything**: `base_sha`, the spec, the cycle counters, the family counts. "Capture once" anywhere below means once per *run*, never once per session — carrying story 1's base into story 2 would diff the wrong tree. Re-invoking would copy the whole protocol into the context once per task. Reload only when you genuinely cannot see this text any more — after compaction, or in a fresh session. Presence is the test, not recollection.
 
 1. Resolve config (see `references/config.md`): CLI args > `.orchestrator/config.json` > defaults.
-2. If `--setup` is present, OR `.orchestrator/config.json` does not exist, OR `.orchestrator/.materialized-version` does not exist, OR its contents differ from the skill's own `MATERIALIZED-VERSION` file — a sibling of this `SKILL.md` in the skill directory, read with the same mechanism you read this file — OR any file B3 materializes is missing — currently `.orchestrator/.gitignore`, `.orchestrator/artifact-format.md`, `.orchestrator/artifact-format-html.md`, `.orchestrator/artifact-format-parallel.md`, `.orchestrator/config.md`, `.orchestrator/gate-config.md`, `.orchestrator/lane-protocol.md`, the seven scaffolds in `.orchestrator/html-templates/`, the seven runtime scripts `.orchestrator/{render-artifact,check-artifact-pairing,check-artifact-links,check-artifact-home,gate-scope,index-plans,run-state}.cjs`, and the six role files in `.orchestrator/roles/` — → run **Bootstrap** (Steps B1–B3), then continue. **A project bootstrapped by an older skill version has `config.json` and none of the files added since**, so keying only on `config.json` would leave every role pointing at a reference that is not there. **The version compare exists because a materialized copy that is present but old is invisible to a missing-file test**, and every role reads those copies rather than the skill's own. **When the skill's own `MATERIALIZED-VERSION` is the file that is missing, the compare is not stale — it is unavailable**: treat the version condition as not met, say so in one line, and fall through to the missing-file tests. An install route that did not ship the stamp would otherwise bootstrap on every single run, and re-materializing the whole skill once per invocation is a worse failure than the staleness it is trying to catch.
+2. If `--setup` is present, OR `.orchestrator/config.json` does not exist, OR `.orchestrator/.materialized-version` does not exist, OR its contents differ from the skill's own `MATERIALIZED-VERSION` file — a sibling of this `SKILL.md` in the skill directory, read with the same mechanism you read this file — OR any file B3 materializes is missing — currently `.orchestrator/.gitignore`, `.orchestrator/artifact-format.md`, `.orchestrator/artifact-format-html.md`, `.orchestrator/artifact-format-parallel.md`, `.orchestrator/config.md`, `.orchestrator/gate-config.md`, `.orchestrator/lane-protocol.md`, `.orchestrator/review-page.md`, the seven scaffolds in `.orchestrator/html-templates/`, the eight runtime scripts `.orchestrator/{render-artifact,check-artifact-pairing,check-artifact-links,check-artifact-home,gate-scope,index-plans,run-state,review-page}.cjs`, and the six role files in `.orchestrator/roles/` — → run **Bootstrap** (Steps B1–B3), then continue. **A project bootstrapped by an older skill version has `config.json` and none of the files added since**, so keying only on `config.json` would leave every role pointing at a reference that is not there. **The version compare exists because a materialized copy that is present but old is invisible to a missing-file test**, and every role reads those copies rather than the skill's own. **When the skill's own `MATERIALIZED-VERSION` is the file that is missing, the compare is not stale — it is unavailable**: treat the version condition as not met, say so in one line, and fall through to the missing-file tests. An install route that did not ship the stamp would otherwise bootstrap on every single run, and re-materializing the whole skill once per invocation is a worse failure than the staleness it is trying to catch.
 3. Run **Pipeline** (Steps 0–6).
 4. Spec eval runs inside the review loop (Step 4e), before the QA exit gate.
 5. On `READY_TO_COMMIT` → run **Final report** (Step 7).
@@ -86,7 +86,7 @@ On invocation with a plain-language task description (and optional `--setup`):
 
 Bootstrap runs when `--setup` is passed, when `.orchestrator/config.json` is absent, when `.orchestrator/.materialized-version` is absent or differs from the skill's own `MATERIALIZED-VERSION`, or when any file B3 materializes is missing — from `.orchestrator/` or from `.orchestrator/roles/` (Lifecycle item 2 above is the trigger, and it is the only place that decision is made). It has three steps: B1 context gate, B2 dependency check, B3 materialize.
 
-**When it is triggered, read `references/bootstrap.md` now and execute B1–B3 in full, then continue to Step 0 below. When it is not, do not open that file.** An already-bootstrapped project takes this branch on no run at all, and ~14KB of setup protocol read on every run to skip it was 14KB the pipeline paid to learn nothing.
+**When it is triggered, read `references/bootstrap.md` now and execute B1–B3 in full, then continue to Step 0 below. When it is not, do not open that file.**
 
 **Read it from the skill directory.** B3 is what creates `.orchestrator/`, so bootstrap cannot be read from its own output, and it is deliberately not in B3's materialized set — no role reads it.
 
@@ -104,7 +104,7 @@ brainstormer → architect → coder → tester → reviewer ──(APPROVED)─
                                 [review_budget review cycles]     [max_eval_cycles eval cycles]     [max_qa_cycles QA cycles]
 ```
 
-Brainstormer runs once at the start of every pipeline. It produces a spec, which the architect turns into a plan. The fix and QA-remediation loops do not re-run brainstormer — they reuse the original spec via the plan's `related_to` field.
+Brainstormer runs once at the start of every pipeline (Step 1r may revise its spec). It produces a spec, which the architect turns into a plan. The fix and QA-remediation loops do not re-run brainstormer — they reuse the original spec via the plan's `related_to` field.
 
 **Parallel branch (opt-in, `parallelism` ≠ `off`).** The sequential path above is what runs by default and is **unchanged**. When `parallelism` is not `off`, Steps 2 and 3 are replaced by a **leaf** fan-out that rejoins before the tester. Under `lanes` every leaf is a lane; under `full` a lane that clears the inner gate is sliced into sub-lanes governed by a sub-contract, with its own inner join:
 
@@ -355,7 +355,7 @@ If the current branch is also protected (dirty + protected), drop option 1 from 
 
 - **Use current branch:** no-op. Continue to Step 0b.
 - **New branch:** ask for a branch name. Default: `orch/{YYYY-MM-DD-HHMM}-{first-3-or-4-kebab-words-of-input}` (e.g. `orch/2026-05-21-1430-add-list-sharing`). Run `git checkout -b {name}`. Verify with `git rev-parse --abbrev-ref HEAD`.
-- **New worktree:** ask for branch name (same default as above) and worktree path. Default path: `../{repo-name}-{slug}`, or `.worktrees/{slug}` if `.worktrees/` already exists in the repo. Run `git worktree add {path} -b {name}`; a checkout holds only tracked files, so copy B3's in: `mkdir -p {path}/.orchestrator && cp -R .orchestrator/{*.cjs,artifact-format*.md,config.md,gate-config.md,lane-protocol.md,html-templates,engine} {path}/.orchestrator/`. `cd {path}` for the rest of the pipeline — every subagent invocation, every file path, every `git` call from here on is rooted at the worktree, and so is the run state the watchdog follows.
+- **New worktree:** ask for branch name (same default as above) and worktree path. Default path: `../{repo-name}-{slug}`, or `.worktrees/{slug}` if `.worktrees/` already exists in the repo. Run `git worktree add {path} -b {name}`; a checkout holds only tracked files, so copy B3's in: `mkdir -p {path}/.orchestrator && cp -R .orchestrator/{*.cjs,artifact-format*.md,config.md,gate-config.md,lane-protocol.md,review-page.md,html-templates,engine} {path}/.orchestrator/`. `cd {path}` for the rest of the pipeline — every subagent invocation, every file path, every `git` call from here on is rooted at the worktree, and so is the run state the watchdog follows.
 - **Commit first:** show `git diff --stat` and `git diff` (truncated) and propose a Conventional-Commit message based on the dirty diff. Confirm with the user, then `git add` the affected paths explicitly (never `git add -A`) and `git commit`. After commit, re-run the case detection.
 - **Stash:** run `git stash push -u -m "orchestrator pre-flight {ISO-timestamp}"`. Explicitly tell the user: *"Your changes are stashed as `{stash-ref}`. Run `git stash pop` after the pipeline finishes."* After the stash, re-run the case detection.
 - **Cancel:** stop. Print:
@@ -751,7 +751,7 @@ The escape is to move the instrument in a separate, earlier PR. That is a much h
 
 **The gate config is anchored the same way, by the gate runner rather than here.** `.cleancode-gates.json` holds every blocking number and is auto-written into the repo; its `roots`, `exclude`, per-gate `exempt` and `thresholds` resolve from `$mb` and print the same line — see `references/gate-config.md` → *The instrument is anchored to the merge-base*.
 
-Every other key (`output_format`, `automation_level`, `context_threshold`, `clarity_threshold`) keeps reading from the working tree as before — none of them widens a branch's blast radius or weakens what the run measures, which is what the merge-base anchor exists to contain.
+Every other key (`output_format`, `automation_level`, `review_page`, `context_threshold`, `clarity_threshold`) keeps reading from the working tree as before — none of them widens a branch's blast radius or weakens what the run measures, which is what the merge-base anchor exists to contain.
 
 **But `output_format` is project policy, not a per-developer preference — do not let its trust anchor suggest otherwise.** Reading it from the working tree is correct (a branch cannot escalate concurrency with it); *diverging* on it across a team is not. `scripts/check-artifact-pairing.cjs` never reads `output_format` or `config.json` at all: it scopes via `branchScope({auditPath: 'plans', ext: '.md', baseRef})` — **every** changed `.md` on the branch, whoever authored it — and unconditionally requires each one's `.html` sibling. So a developer running `html` is blocked by every md-only artifact a teammate added to the same branch, and cannot clear the gate without re-rendering work that is not theirs. The key therefore belongs in the **tracked** `.orchestrator/config.json`, identical for everyone on the branch, and a project that wants to change it should change it once, deliberately, for the whole team. `automation_level` and the thresholds are genuinely per-developer; `output_format` is not.
 
@@ -826,13 +826,11 @@ mint a new one. Bind `spec_id` and `spec_path` from it, read the file to confirm
 glob — since a reused spec was written by an **earlier** run and therefore lives in **that** run's
 folder, not in this one's. **Match the basename, never a directory prefix** — the id is in the
 filename and the directory is not part of the identity, so a `plans/specs/` prefix test stops
-recognising a spec the moment one is written anywhere else, which under this layout is every spec
-written from here on, and that turns a retry into exactly the brand-new family the next paragraph
-describes.
+recognising a spec the moment one is written anywhere else.
 
 **This is the only way a second run joins the first run's family.** A re-run that mints a fresh
 `SPEC-*` writes every artifact into a brand-new family, so the pre-flight budget and G8 both start from
-zero however much rework preceded them — the budget would measure one invocation and call it a family.
+zero however much rework preceded them.
 A brief that merely *resembles* an existing spec is **not** reuse: resemblance is a guess, and
 guessing wrong silently merges two features' histories. Only an explicit id or path counts.
 
@@ -882,6 +880,8 @@ Status: STALLED — resolve open questions and re-run the orchestrator
 Then `rmdir "$run_dir" 2>/dev/null || true` — Step 0a's run-folder cleanup, a no-op once anything was written.
 
 Only continue when `spec_status` is `READY_FOR_PLANNING`.
+
+**Step 1r — spec review.** Resolve `review_page` (CLI `--review-page` > `.orchestrator/config.json` > `"ask"`). Unless it is `false` or `automation_level` is `autonomous`, read `references/spec-review.md` and run it here, in this loop, never in a subagent.
 
 ### Step 2p — Slicing analysis and parallelization choice
 
