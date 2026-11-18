@@ -1,0 +1,14 @@
+{
+  "id": "flash-cycle-proof",
+  "kind": "synthetic",
+  "class": "a flash plan whose cycles are all checked while no cycle was ever run, so the one live check is the first and only execution of the software",
+  "caught_by": "the flash architect opens each vertical cycle with a Proof (planned): line; the coder runs it through the real entry point before the cycle's last box and replaces it with the command and what it showed, or UNPROVEN with the reason, and never flips DONE while a planned line remains",
+  "missed_by": "the kept flash core, whose coder ran changed-scope unit tests only and left every execution to the live check",
+  "cost": {
+    "value": 0,
+    "unit": "unmeasured",
+    "source": "not yet measured; first real run"
+  },
+  "test": "plugins/my-skills/skills/orchestrator-flash/__tests__/proof-prose.test.cjs",
+  "evidence": "docs/adr/0037-the-coder-proves-each-phase-through-its-entry-point.md#6-flash-takes-the-short-form"
+}

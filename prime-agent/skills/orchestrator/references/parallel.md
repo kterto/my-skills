@@ -192,6 +192,7 @@ Ask it for a digest containing, **per candidate lane**: the spec's functional re
 
 - **Minimize cross-slice interface rows and integration-slice size** when more than one partition of the same work is defensible. Overlaps are not merely reported, they are the thing being minimized: every overlap becomes an interface point the gate charges, and work that cannot be assigned to one slice becomes an integration slice, which `references/config-parallel.md` → *The makespan model* prices as **serial**. A split with fewer, fatter slices along a seam that nothing crosses beats a finer one whose slices all touch.
 - **Name the axis** — `feature`, `layer`, or `other` — in the digest, as a plain field. Step 2p.2 prints it.
+- **Prefer the `feature` axis** whenever the candidate lane set allows one: each slice then owns whole user stories across every layer they need, so each lane plan phases in vertical cycles and proves them alone (`templates/architect.md` → Tasks, ADR-0037). A `layer` split makes every lane plan horizontal and defers every proof to the join; propose it only when no feature partition is defensible.
 
 Without this, the analysis proposes whatever partition the directory tree makes most obvious, which for most projects is layer-wise (`models/`, `services/`, `ui/`). Layer slices touch each other by construction; feature slices mostly do not. The gate then measures the resulting interface count faithfully and rejects — correctly, and for a cause nothing upstream was ever told to avoid. Printing the axis is what puts a thin margin and its likely cause on the same screen. (ADR-0012.)
 
@@ -775,6 +776,8 @@ Then, in order:
 
    This is the last scope any gate can defer to; a gate unrunnable here is a `PROJECT-CONTEXT.md` → Commands gap to report, never a gate silently skipped.
 
+   **A `CODER — PROOF` entry recorded `deferred-to-join` is not a deferred gate and never runs here.** It is a behaviour proof, not a gate command: the tester, dispatched after this step, always includes that phase in its e2e and reports its verdict (`templates/tester.md` → Step 2). Collecting it here would start dev servers at a step whose red routes to `PARTIAL`.
+
 5. **Update the parent `PACT`'s lane-status table.** The **orchestrator is its sole writer** at both levels (Step 3s.1) — no subagent ever touches a `PACT` or a sub-contract — so the run-level view has exactly one writer and cannot be raced.
 
 Print:
@@ -897,7 +900,7 @@ every role's input instead of lowering it.
 | **C — union requirement map** | reviewer | one row per distinct spec requirement, its text verbatim, every claiming leaf's cell qualified `{leaf-id}:AC{n}`, and the contract's assignment resolved down to the owning leaf | the leaf `## Requirement Coverage` maps + both lane maps' `Spec requirements` cells |
 | **D — per-leaf gate posture** | QA | each leaf's `## Verification (per phase)` block and its `### Gate coverage` table, **verbatim and kept per leaf** | the leaf plans |
 | **E — acceptance criteria** | tester, reviewer, QA | each leaf's `## Acceptance Criteria`, copied byte-for-byte, `(QA-verified)` suffixes intact | the leaf plans |
-| **F — `GATE` index** | QA | per `CODER — GATE` entry: gate id, stack, verdict, **measured value**, threshold, `file:symbol`, and a **locator** (which `.progress.md`, which timestamp) — plus a positive scope assertion naming every log scanned and its content hash | every leaf `.progress.md` + the active `FIX`/`QAF` `.progress.md` |
+| **F — `GATE` and `PROOF` index** | QA (`GATE` rows); tester, reviewer (`PROOF` rows) | per `CODER — GATE` entry: gate id, stack, verdict, **measured value**, threshold, `file:symbol`, and a **locator** (which `.progress.md`, which timestamp); per `CODER — PROOF` entry: leaf, phase, verdict, its `cmd:` or `reason:` line verbatim, and the same locator — plus a positive scope assertion naming every log scanned and its content hash | every leaf `.progress.md` + the active `FIX`/`QAF` `.progress.md` |
 
 **Region A is an authorized-*write* map, not a glob table.** `Ownership governs writes` — a lane
 legitimately *reads* everywhere, and the carve-outs and assigned unowned files are writes no glob
@@ -913,6 +916,8 @@ satisfied on both sides at its frozen shape*. This is the one region that remove
 disjoint path set, so each leaf's table stands or falls alone. Unioning them erases the distinction
 between *the architect omitted the gate* and *the coder skipped its sub-step*, which are the two
 branches QA must choose between and which need different fixes.
+
+**Region F's `PROOF` rows are how the coder's per-phase proofs reach the join** (`templates/coder.md` → 4e, ADR-0037). The tester always includes a `deferred-to-join` row in its e2e and the reviewer files a `fail`, a missing phase, or a `pass` whose `cmd:` is only a test runner — so without these rows both roles would reopen every leaf log, the re-ingestion this digest removes.
 
 **Region F carries the measured value, and it is a pointer, not a copy.** A carried finding is one
 recorded *at no worse a measurement*; an index that records presence without the number lets a
@@ -990,7 +995,7 @@ exactly as they do today. There is no "built with warnings".
 ```
 DIGEST — .orchestrator/join-digest.md @ {tree}
   leaves {n}/{n} · requirements {d} distinct / {c} claims · interface {i} ({p}+{s}) · inherited {k}/{k}
-  authorizations {a} disjoint · AC {x} in {n} blocks (hash ✓) · gate rows {6n} · GATE entries {g} ({n} logs @ hash)
+  authorizations {a} disjoint · AC {x} in {n} blocks (hash ✓) · gate rows {6n} · GATE entries {g} · PROOF entries {q} ({n} logs @ hash)
 ```
 
 On failure, as a first-class line and never a silent omission:
