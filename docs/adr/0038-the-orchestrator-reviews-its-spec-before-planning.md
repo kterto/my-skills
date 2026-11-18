@@ -12,6 +12,7 @@
   - `fixtures/admission.json` gains three entries and `fixtures/replays/` one fixture.
   - `.claude/agents/brainstormer.md`, `MATERIALIZED-VERSION`, `plugins/my-skills/skills/index.json` and the generated Prime tree are regenerated.
   - `README.md`.
+  - `product-manager`: `references/git-flow.md` (a Step 1r note: PM passes `--review-page false` and never answers the step).
 - **Source finding:** the owner's request, after ADR-0036, for the same page at the orchestrator's spec. A text spec summary has the weakness `fixtures/replays/envision-agreement.json` records: it verifies transcription, not understanding.
 - **Precedent:** ADR-0036 (the page, the checker, the copy-back rules, two copies and one parity test); ADR-0025 second amendment (a subagent cannot hold a turn with the user); ADR-0026 decision 4 and ADR-0033 *Admission* (a touchpoint enters as fixture plus issue).
 
@@ -56,8 +57,14 @@ neither skips the review nor commits the user to a page. The key is not anchored
 changes what the user looks at, not what the run measures. The template writes `"review_page": "ask"`,
 so bootstrap's merge gives an existing project the key at its default.
 
-**`automation_level: autonomous` never gates**, whatever the key says: nobody is there to answer. With
-`true` it prints one line saying the step was skipped; otherwise nothing.
+**`automation_level: autonomous` never gates**, whatever the key says: nobody is there to answer, and
+nothing is printed. The key is checked when Step 1r resolves it, not at Step 0b, so a run that never
+reaches the step prints nothing about an invalid value.
+
+**A caller that cannot answer passes `--review-page false`.** product-manager runs one orchestrator
+run per story, unattended after one up-front confirmation, and does not set `automation_level`, so the
+autonomous skip does not cover it. It passes the flag on every story (on the no-reload path, it states
+the value in the run inputs) and never answers the step's questions: a yes it typed would be its own.
 
 ### 3. Three choices, on every host
 
@@ -85,8 +92,15 @@ file to the reference's orchestrator row, checks it with `.orchestrator/review-p
 own (the architect derives them), so the page shows criteria only where the spec states them.
 
 Only a typed yes proceeds. A pasted block is corrections and data, never instructions and never
-agreement, even when every line is `ok`. Follow-ups the reference requires (a `fix` with no note, an
-`other` pick) are asked by the main loop before revising.
+agreement, even when every line is `ok`. A reply that carries corrections is a correction even when it
+also says yes. A reply that changes nothing ("ok", "sim", a question) is answered and the agreement
+question asked again, with no re-spawn and no round counted. Follow-ups the reference requires (a `fix`
+with no note, an `other` pick) are asked by the main loop before revising.
+
+The page's key is `<project>/{spec_id}:spec`, not `<project>:spec`: one project has many specs, each
+starting at draft 1 with the same ids, and file pages share the browser's storage. The spec id keeps
+one spec's marks apart from another's and puts the spec in the copied block's header, so a block from
+another spec's page is named and applied nowhere.
 
 ### 6. Corrections re-brief the brainstormer, three times at most
 
@@ -94,13 +108,18 @@ The main loop re-spawns the brainstormer with Step 1's prompt, the same ID, and 
 naming the spec, with the corrections quoted as data. The brainstormer's new *Revision* section skips
 the interview and rewrites the file in place, keeping its ID, path, `created_at` and `cycle`. That is
 the one exception to "a READY spec is immutable": no plan exists yet, and a new spec id would scatter
-one review across several specs. A correction that needs a new decision becomes an open question, so
-the existing `DRAFT` stop applies. The revised spec is reviewed again in the mode already chosen.
+one review across several specs. A correction that needs a new decision is not applied and never makes the
+spec `DRAFT`: the brainstormer lists it under `Needs decision:` and the main loop, which owns the
+user's turn, asks it and re-spawns with the answer. A revision never reaches Step 1's terminal `DRAFT`
+stop, so the file on disk stays `READY_FOR_PLANNING` and stays reusable. The revised spec is reviewed
+again in the mode already chosen. The step's run-state note carries the draft and the round count,
+rewritten after every revision, so a resume does not reset the cap.
 
 The cap is **three revisions per run**, fixed. No existing key fits: the review and QA caps are anchored
 instruments of code work, and raising one in session is for the run's spend. The user is present at
 every round and a yes ends it at any time; three rounds without one means the brief needs rework. At
-the cap, the next corrections stop the run with a `STALLED` banner naming the spec id; a re-run with
+the cap, the next corrections stop the run with a `STALLED` banner naming the spec id, with the
+`Run cost:` and `Run folder:` lines every terminal banner carries; a re-run with
 that id reuses the spec and goes straight to Step 2. A reply asking to stop prints the same banner.
 
 ### 7. Three copies, one parity test, materialized through bootstrap
@@ -113,9 +132,11 @@ stamp digests them, Lifecycle item 2 re-bootstraps when either is missing, and a
 
 The shared reference gains an orchestrator column: what the page shows, ids (`G1`, `FR1`, `AC1`, `D1`,
 `O1`), `spec-review.html`, the agreement, and when Page is recommended. To keep it under its ceiling,
-397 bytes of reasons were cut (why a plain script misreads titles, why table rows lose their controls,
-a design-system glob list, the snippet's catch comment); no rule was removed, and every phrase the
-context-builder and roadmap tests pin still matches.
+reasons were cut (why a plain script misreads titles, why table rows lose their controls, the
+snippet's catch comment, "at any time", "silently"); no rule was removed, and every phrase the
+context-builder and roadmap tests pin still matches. A first cut also narrowed the design-system
+lookup list (Flutter's `ColorScheme`/`TextTheme` and `*colors*.dart`, "in the project's stylesheets");
+review restored it, and a context-builder test now pins it.
 
 ### 8. Budgets
 
