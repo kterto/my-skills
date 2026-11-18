@@ -154,8 +154,7 @@ prompt verbatim rather than inventing a second one:
 
 This is the same scan the orchestrator's bootstrap runs (`orchestrator/SKILL.md`, Step
 B1.1). **Do not extend it here.** If it needs to change, it changes there and both
-callers inherit the fix — this framework already carries more copies of this mechanic
-than it needs.
+callers inherit the fix.
 
 ## Phase 4 — Grill
 
@@ -206,11 +205,12 @@ both variants to the user and let them choose. Never merge silently.
 Convergence is **two-sided** (full rules: `references/convergence.md`): self-rated
 confidence must reach `context_threshold` **and** the user must confirm a numbered
 restatement of the project's intent with an explicit yes to *"Is this 100% accurate?"*.
+Right before that question, ask *page or text?* (`references/review-page.md`).
 
 On convergence, write the output contract below, then **stop**. Print what was written,
 the confidence achieved, and the exact next command. **Invoke nothing** — not
-`/orchestrator`, not `/roadmap`. Chaining would pull another skill's protocol into this
-session and collide with its own session-ownership guard.
+`/orchestrator`, not `/roadmap`. Chaining would pull another skill's protocol in and
+collide with its session-ownership guard.
 
 Handoff shape:
 
