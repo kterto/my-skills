@@ -117,9 +117,11 @@
       "files": [
         "__tests__/fixtures/review-page-bad.html",
         "__tests__/fixtures/review-page-good.html",
+        "__tests__/review-page-reference.test.cjs",
         "__tests__/review-page.test.cjs",
         "references/convergence.md",
         "references/ingestion.md",
+        "references/review-page.md",
         "scripts/review-page.cjs",
         "SKILL.md",
         "templates/ACTORS.template.md",
