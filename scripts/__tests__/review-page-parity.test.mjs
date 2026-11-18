@@ -1,7 +1,9 @@
 // review-page-parity.test.mjs — ADR-0036. context-builder and roadmap each ship the review page reference
 // and checker, because a skill never loads another skill's files at run time. This test holds the copies
 // byte for byte, and holds the checker's net.*, js.* and csp.* rules to envision's render.cjs, which they
-// were lifted from: a fix made in one place and not the others fails here.
+// were lifted from: a fix made in one place and not the others fails here. One divergence is deliberate
+// (ADR-0036 decision 4): the checker reads only a page's code, never the text between tags, so prose that
+// names @import or javascript: passes here and fails envision. The pages below hold no such prose.
 //
 //   node --test scripts/__tests__/review-page-parity.test.mjs
 

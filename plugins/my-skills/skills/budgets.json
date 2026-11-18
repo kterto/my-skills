@@ -108,13 +108,13 @@
       "adr": "docs/adr/0031-the-engine-runs-from-a-pinned-copy-and-measures-its-base-in-place.md"
     },
     "context-builder": {
-      "maxLines": 222,
+      "maxLines": 262,
       "include": ["scripts/**/*.cjs"],
       "exclude": ["__tests__/**"],
       "adr": "docs/adr/0036-agreement-steps-offer-an-offline-review-page.md"
     },
     "roadmap": {
-      "maxLines": 222,
+      "maxLines": 262,
       "include": ["scripts/review-page.cjs"],
       "exclude": ["__tests__/**"],
       "adr": "docs/adr/0036-agreement-steps-offer-an-offline-review-page.md"

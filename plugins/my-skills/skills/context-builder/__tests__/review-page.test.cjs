@@ -81,6 +81,10 @@ const CASES = [
   ["net.nav", (h) => inScript(h, "window.open('x')")],
   ["js.inline", (h) => h.replace('<button type="button" id="copy">', '<button type="button" id="copy" onclick="go()">')],
   ["js.url", (h) => h.replace("</main>", '<a href="javascript:go()">x</a></main>')],
+  ["js.url", (h) => inScript(h, "a.href = 'javascript:go()'")],
+  ["net.remote", (h) => inScript(h, "img.src = 'https://example.com/a.png'")],
+  ["net.import", (h) => h.replace("<main ", '<main style="@import url(x.css)" ')],
+  ["js.inline", (h) => h.replace("<main ", '<main title="a > b" onclick="go()" ')],
   // diagrams are drawn when the page is written, never by a runtime
   ["diagram.mermaid", (h) => h.replace("</main>", '<pre class="mermaid">A-->B</pre></main>')],
   ["diagram.mermaid", (h) => h.replace("</main>", '<pre><code class="language-mermaid">A-->B</code></pre></main>')],
@@ -90,6 +94,9 @@ const CASES = [
   ["diagram.source", (h) => h.replace("</main>", "<pre>sequenceDiagram\n  A->>B: hi</pre></main>")],
   ["diagram.source", (h) => h.replace("</main>", "<pre>digraph G { a -> b }</pre></main>")],
   ["diagram.source", (h) => h.replace("</main>", "<pre>@startuml\nA -> B\n@enduml</pre></main>")],
+  ["diagram.source", (h) => h.replace("</main>", "<pre>journey\n  title My day\n  section Work</pre></main>")],
+  ["diagram.source", (h) => h.replace("</main>", "<pre>gantt\n  dateFormat YYYY-MM-DD</pre></main>")],
+  ["diagram.source", (h) => h.replace("</main>", "<pre>mindmap\n  root((ideas))</pre></main>")],
   ["diagram.runtime", (h) => inScript(h, "d3.select('svg')")],
   ["diagram.runtime", (h) => inScript(h, "new Chart(el, {})")],
   // readable whatever the reader's theme
@@ -98,6 +105,10 @@ const CASES = [
   ["read.color", (h) => h.replace("body{background:var(--bg);color:var(--text);", "body{background:var(--bg);")],
   ["svg.override", (h) => h.replace("<style>", "<style>svg text{fill:var(--text)}")],
   ["svg.override", (h) => h.replace("<style>", "<style>.fig rect{stroke:#000}")],
+  ["svg.override", (h) => h.replace("<rect ", '<rect class="bar" ').replace("<style>", "<style>svg rect.bar{fill:#000}")],
+  ["svg.override", (h) => h.replace("<style>", "<style>svg *{fill:#f00}")],
+  ["svg.override", (h) => h.replace("<style>", "<style>svg :is(text,rect){fill:#f00}")],
+  ["svg.override", (h) => h.replace("<style>", "<style>svg :where(.x, text){stroke:#f00}").replace(' fill="#2b3a67"', ' stroke="#2b3a67"')],
   ["size", (h) => h.replace("</main>", `<p>${"x".repeat(R.MAX_BYTES)}</p></main>`)],
 ];
 
@@ -119,6 +130,24 @@ const ALLOWED = [
   ["a local anchor and a data: image", (h) => h.replace("</main>", '<a href="#S2">S2</a><img alt="" src="data:image/png;base64,iVBORw0KGgo="></main>')],
   ["location.hash", (h) => inScript(h, "var at = location.hash")],
   ["the word graph or flowchart in prose", (h) => h.replace("</main>", "<p>The flowchart below is a graph of who signs what.</p></main>")],
+  // headings and items that start with a diagram keyword are prose, not diagram source
+  ["a Journey heading", (h) => h.replace("</main>", "<h3>Journey</h3></main>")],
+  ["a list item starting with Journey", (h) => h.replace("</main>", "<ul>\n<li>Journey 1: the baker opens the shop</li>\n</ul></main>")],
+  ["a paragraph starting with Mindmap", (h) => h.replace("</main>", "<p>Mindmap of the ideas below</p></main>")],
+  ["a cell starting with Gantt", (h) => h.replace("<td>Customer</td>", "<td>\nGantt view of phases</td>")],
+  // ordinary script: a comparison then an identifier starting with on is no inline handler
+  ["a loop comparison in script", (h) => inScript(h, "for (let i=0;i<marks.length;i++) { const one = marks[i]; }")],
+  ["a comparison before an onTop variable", (h) => inScript(h, "var a = 1, b = 2; if (a<b) { let onTop = 1; }")],
+  // visible prose and quoted snippets are read, never loaded or run
+  ["@import named in prose", (h) => h.replace("</main>", "<p>Decision: replace @import with @use in the Sass files.</p></main>")],
+  ["javascript: named in prose", (h) => h.replace("</main>", "<p>Rule: no javascript: URLs in links.</p></main>")],
+  ["a quoted link in a code sample", (h) => h.replace("</main>", '<pre><code>&lt;a href="https://bakery.example/menu"&gt;</code></pre></main>')],
+  ["story titles kept as JSON data", (h) => h.replace("</body>", '<script type="application/json" id="data">' +
+    '[{"id":"S2","title":"Store location picker"},{"id":"S3","title":"Live orders over a WebSocket"},"not mermaid"]</script></body>')],
+  // colours set where the design tokens live
+  [":root carrying the colours", (h) => h.replace("body{background:var(--bg);color:var(--text);", ":root{background:#fff;color:#111}body{")],
+  // a type rule that reaches no coloured attribute
+  ["a classed shape rule when no shape has that class", (h) => h.replace("<style>", "<style>svg rect.bar{fill:#000}")],
   ["a hashed script in place of unsafe-inline", (h) => {
     const crypto = require("node:crypto");
     const token = `'sha256-${crypto.createHash("sha256").update(R.inlineScripts(h)[0], "utf8").digest("base64")}'`;

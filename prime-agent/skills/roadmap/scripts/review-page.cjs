@@ -108,7 +108,10 @@ function cspProblems(html) {
   return p;
 }
 
-// --- net.* and js.*: envision's FORBIDDEN, unchanged -------------------------------------------
+// --- net.* and js.*: envision's FORBIDDEN, read on code only ------------------------------------
+// envision scans the whole flat page; here prose and a quoted snippet are text a reader sees, never markup that
+// loads or runs, so a rule reads the tags, style sheets and scripts and never the text between tags.
+// js.inline reads the tags alone: `i<rows.length; onTop` in a script is no attribute.
 // Any scheme but data:, or a host-relative // (or \\), with the leading spaces and controls a browser skips.
 const AWAY = String.raw`["']?[\x00-\x20]*(?:(?!data:)[a-z][a-z0-9+.\t\n\r-]*:|[\\/][\t\n\r]*[\\/])`;
 const ATTR_URL = String.raw`\b(?:(?:src|href|action|formaction|poster|data)\s*=|srcset\s*=\s*["']?(?:[^"'>]*?,)?)\s*`;
@@ -125,16 +128,19 @@ const FORBIDDEN = [ // [code, pattern, what, "js" when it runs on the inline scr
   ["net.embed", /<(?:iframe|frame|object|embed|portal)\b/i, "embeds another document"],
   ["net.api", NET_API, "reaches the network from script", "js"],
   ["net.nav", /\bopen\s*\(|\blocation\b(?!\s*\.\s*hash\b)/, "navigates to another page from script", "js"],
-  ["js.inline", /<[a-z][\w-]*\b[^>]*[\s/"']on[a-z]+\s*=/i,
-    "has an inline on…= handler; wire behaviour with addEventListener"],
+  ["js.inline", /<[a-z][\w-]*\b(?:"[^"]*"|'[^']*'|[^'">])*?[\s/"']on[a-z]+\s*=/i,
+    "has an inline on…= handler; wire behaviour with addEventListener", "tags"],
   ["js.url", /javascript:/i, "has a javascript: URL"],
 ];
 
 // --- diagram.*: a diagram is inline SVG or a table, drawn when the page is written -------------
 // Diagram source left on screen is what a missing runtime shows, so the source shapes count as much as the runtime.
+// Case-sensitive, as the keywords are; gantt, journey and mindmap count only with their next line's syntax, so a
+// "Journey" heading or a "Mindmap of…" item stays prose.
 const SOURCE_SHAPES = new RegExp(String.raw`^\s*(?:(?:flowchart|graph)\s+(?:TB|TD|BT|RL|LR)\b|` +
-  String.raw`(?:sequenceDiagram|erDiagram|stateDiagram(?:-v2)?|classDiagram|gantt|journey|mindmap|gitGraph)\b|` +
-  String.raw`%%\{\s*init|@startuml\b|(?:strict\s+)?digraph\b[^\n{]*\{)`, "im");
+  String.raw`(?:sequenceDiagram|erDiagram|stateDiagram(?:-v2)?|classDiagram|gitGraph)\b|` +
+  String.raw`(?:gantt|journey|mindmap)[ \t]*\n\s*(?:title|dateFormat|section|root)\b|` +
+  String.raw`%%\{\s*init|@startuml\b|(?:strict\s+)?digraph\b[^\n{]*\{)`, "m");
 const RUNTIME = new RegExp(String.raw`\b(?:mermaid|d3|vega|vegaEmbed|Viz|graphviz|plantuml|nomnoml|echarts|` +
   String.raw`cytoscape|dagre|ELK|Chart|Plotly)\s*\.\s*[A-Za-z_$][\w$]*\s*\(|\bnew\s+(?:Chart|Viz|ELK)\s*\(`);
 function diagramProblems(html, js) {
@@ -146,7 +152,7 @@ function diagramProblems(html, js) {
     p.push("diagram.mermaid: Mermaid needs a runtime the page may not load; draw the diagram as inline SVG or a table");
   }
   const shape = decode(shown).match(SOURCE_SHAPES);
-  if (shape) p.push(`diagram.source: "${shape[0].trim()}" would show as raw text; draw it as inline SVG or a table`);
+  if (shape) p.push(`diagram.source: "${shape[0].trim().replace(/\s+/g, " ")}" would show as raw text; draw it as inline SVG or a table`);
   if (RUNTIME.test(js)) p.push("diagram.runtime: script calls a diagram or chart library; draw it as you write");
   return p;
 }
@@ -156,39 +162,73 @@ const SHAPES = /^(?:text|tspan|rect|circle|ellipse|line|polyline|polygon|path)$/
 function cssRules(html) {
   const css = [...html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style\s*>/gi)].map((m) => m[1]).join("\n")
     .replace(/\/\*[\s\S]*?\*\//g, "");
-  return [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sel: m[1].trim().split(/\s*,\s*/), body: m[2] }));
+  return [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sel: split(m[1], ","), body: m[2] }));
+}
+// Splits at a separator outside parentheses: a list's commas, not those inside :is(…).
+function split(s, seps) {
+  const out = [];
+  let depth = 0, at = 0;
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === "(" || s[i] === ")") depth += s[i] === "(" ? 1 : -1;
+    else if (!depth && seps.includes(s[i])) out.push(s.slice(at, at = i + 1).slice(0, -1));
+  }
+  return [...out, s.slice(at)].map((x) => x.trim()).filter(Boolean);
+}
+const last = (sel) => split(sel, " \t\n>+~").pop() || "";
+// What a selector's last compound picks: {tag, classes, id} each, `*` for any tag; :is() and :where() count.
+function targets(compound) {
+  const own = compound.replace(/:[\w-]+\([^()]*\)|\[[^\]]*\]/g, "");
+  const tag = (own.match(/^(\*|[a-z][\w-]*)/i) || [])[1], id = (own.match(/#([\w-]+)/) || [])[1];
+  const classes = [...own.matchAll(/\.([\w-]+)/g)].map((m) => m[1]);
+  const inner = [...compound.matchAll(/:(?:is|where|matches)\(([^()]*)\)/gi)]
+    .flatMap((m) => split(m[1], ",").flatMap((x) => targets(last(x))));
+  if (inner.length) return inner.map((t) => ({ tag: t.tag, classes: [...t.classes, ...classes], id: t.id ?? id }));
+  return tag || classes.length || id ? [{ tag: (tag || "*").toLowerCase(), classes, id }] : [];
 }
 const UNSET = String.raw`(?!\s*(?:transparent|initial|unset)\b)`;
 const declares = (body, prop) => new RegExp(String.raw`(?:^|;)\s*${prop}\s*:\s*${UNSET}\S`, "i").test(body);
 function readProblems(html) {
   const p = [], rules = cssRules(html), bodyTag = (html.match(/<body\b[^>]*>/i) || [""])[0];
-  const page = rules.filter((r) => r.sel.some((s) => /^(?:html|body)$/i.test(s))).map((r) => r.body);
+  const page = rules.filter((r) => r.sel.some((s) => /^(?::root|html|body)$/i.test(s))).map((r) => r.body);
   page.push(attrs(bodyTag || "<b>").style || "");
   if (!page.some((b) => declares(b, "background(?:-color)?"))) {
-    p.push("read.background: neither html nor body sets a background; a reader's dark default could hide dark text");
+    p.push("read.background: neither :root, html nor body sets a background; a reader's dark default could hide dark text");
   }
   if (!page.some((b) => declares(b, "color"))) {
-    p.push("read.color: neither html nor body sets a text colour; set it with the background so the two stay paired");
+    p.push("read.color: neither :root, html nor body sets a text colour; set it with the background so the two stay paired");
   }
   // CSS beats an SVG presentation attribute, so `svg text { fill: … }` silently repaints every fill="…" on <text>.
+  const shapes = [...html.replace(COMMENTS, " ").matchAll(new RegExp(`<(${SHAPES.source.slice(4, -2)})\\b[^>]*>`, "gi"))]
+    .map((m) => ({ tag: m[1].toLowerCase(), a: attrs(m[0]) }));
+  const hits = (t, prop) => shapes.find((e) => prop in e.a && (t.tag === "*" || t.tag === e.tag) && (!t.id || e.a.id === t.id) &&
+    t.classes.every((c) => (e.a.class || "").split(/\s+/).includes(c)));
   for (const { sel, body } of rules) {
     for (const prop of ["fill", "stroke"].filter((x) => declares(body, x))) {
       for (const s of sel) {
-        const tag = s.split(/[\s>+~]+/).pop();
-        if (SHAPES.test(tag) && new RegExp(String.raw`<${tag}\b[^>]*\s${prop}\s*=`, "i").test(html)) {
-          p.push(`svg.override: "${s} { ${prop} }" repaints every <${tag} ${prop}="…">; colour them by class`);
-        }
+        const e = targets(last(s)).map((t) => hits(t, prop)).find(Boolean);
+        const where = split(s, " \t\n>+~").length > 1 ? " wherever it reaches one" : "";
+        if (e) p.push(`svg.override: "${s} { ${prop} }" repaints <${e.tag} ${prop}="…">${where}; colour them by class`);
       }
     }
   }
   return p;
 }
 
+// A page's code, flattened: its tags with their attributes (not the text between them), its style sheets and its
+// scripts but data ones. A tag is read whole, quoted `>` included.
+const TAG = /<[a-z][\w-]*(?:"[^"]*"|'[^']*'|[^'">])*>/gi;
+function code(html) {
+  const s = html.replace(COMMENTS, " ");
+  const styles = [...s.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style\s*>/gi)].map((m) => m[1]);
+  const tags = [...s.replace(/<(script|style)\b([^>]*)>[\s\S]*?<\/\1\s*>/gi, "<$1$2>").matchAll(TAG)].map((m) => m[0]);
+  return { tags: flatten(tags.join("\n")), code: flatten([...tags, ...styles, ...inlineScripts(s)].join("\n")) };
+}
+
 // Problems as "<code>: <reason>" lines; [] means the page passes.
 function check(html) {
-  const js = inlineScripts(html).join("\n"), flat = flatten(html);
+  const js = inlineScripts(html).join("\n"), read = { js, ...code(html) };
   const p = [...skeletonProblems(html), ...cspProblems(html)];
-  for (const [code, re, what, on] of FORBIDDEN) if (re.test(on === "js" ? js : flat)) p.push(`${code}: ${what}`);
+  for (const [id, re, what, on = "code"] of FORBIDDEN) if (re.test(read[on])) p.push(`${id}: ${what}`);
   p.push(...diagramProblems(html, js), ...readProblems(html));
   const bytes = Buffer.byteLength(html, "utf8");
   if (bytes > MAX_BYTES) p.push(`size: ${bytes} bytes is over the ${MAX_BYTES}-byte cap; cut content, embed no font`);
