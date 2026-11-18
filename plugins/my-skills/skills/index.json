@@ -397,13 +397,16 @@
     {
       "name": "roadmap",
       "files": [
+        "__tests__/review-page-wiring.test.cjs",
         "references/config.md",
         "references/directory-layout.md",
         "references/item-schema.md",
         "references/mutation-ops.md",
+        "references/review-page.md",
         "references/sync-and-reeval.md",
         "scripts/check-timestamp-parity.cjs",
         "scripts/check-timestamp-parity.test.cjs",
+        "scripts/review-page.cjs",
         "SKILL.md",
         "templates/milestone-readme.template.html",
         "templates/milestone-readme.template.md",
