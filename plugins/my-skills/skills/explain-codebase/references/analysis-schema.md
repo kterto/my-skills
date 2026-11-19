@@ -55,8 +55,9 @@ promise is *true*, not aspirational:
 4. **Inferred synthesis — marked, not anchored to one line.** `SYSTEM_PURPOSE` is an
    inference across the whole scope; it is rendered in the provenance-bearing Overview
    (commit SHA + date) and labelled inferred, not pinned to a single `file:line`.
-5. **Diagram sources build only from already-anchored items.** The three Mermaid blocks
-   (`DATA_MODEL_MERMAID`, `BUSINESS_LOGIC_MERMAID`, `DATA_FLOW_MERMAID`) are visualizations
+5. **Diagrams build only from already-anchored items.** The three region diagrams
+   (`DATA_MODEL_DIAGRAM`, `BUSINESS_LOGIC_DIAGRAM`, `DATA_FLOW_DIAGRAM`) and the per-use-case
+   sequences are visualizations
    of the anchored `entities` / `dataFlowEdges` / `useCases`; every node/edge corresponds to
    an anchored row, so a diagram introduces **no** unanchored claim.
 

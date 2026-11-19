@@ -381,21 +381,34 @@ map + returns, not free-form prose.
 
 ### 5. Phase 4 — Render (deterministic fill)
 
-Fill the committed template — **never author HTML per run**. The escaping, **diagram
-construction**, REPEAT/scalar expansion, and literal runtime inlining are **implemented once**
-in [`references/render-report.cjs`](references/render-report.cjs) and the skill **invokes that
-module** (`node "$skill_dir/references/render-report.cjs" <template> <model.json> [runtime]`)
-rather than re-implementing them per run — the arch-3 executable rendering boundary. Crucially,
-the model carries **structured diagram data**, not prebuilt Mermaid:
+Fill the committed template — **never author HTML per run**. Escaping, **diagram drawing** and
+REPEAT/scalar expansion are **implemented once** in
+[`references/render-report.cjs`](references/render-report.cjs), and the skill **invokes that
+module** (`node "$skill_dir/references/render-report.cjs" <template> <model.json>`) rather than
+re-implementing them per run — the arch-3 executable rendering boundary. The model carries
+**structured diagram data**, never diagram markup:
 
-- `model.diagrams.{DATA_MODEL_MERMAID,BUSINESS_LOGIC_MERMAID,DATA_FLOW_MERMAID}` and each
-  `useCase.sequence` are `{ header, nodes:[{label}], edges:[{from,to,label?}] }` structures. The
-  renderer (`renderModel` → `buildDiagram`) constructs every Mermaid source itself with
-  **synthetic node ids** (`n0`, `n1`, …) and **`sanitizeMermaidLabel`d** labels, and the
-  `header` is chosen from a fixed allowlist — so repo-derived text can never *be* Mermaid syntax.
-- `renderModel` **rejects** a model that supplies a **prebuilt** `DATA_*_MERMAID` scalar or a
-  `useCase.mermaid` string — the sanitizer is unavoidably on the model→report path, not merely
-  exported. `__tests__/render-report.test.cjs` exercises malicious structured models through it.
+- `model.diagrams.{DATA_MODEL_DIAGRAM,BUSINESS_LOGIC_DIAGRAM,DATA_FLOW_DIAGRAM}` and each
+  `useCase.sequence` are graphs: `{ kind, direction?, nodes:[{label, shape?, fields?}],
+  edges:[{from, to, label?, style?}] }`, where `from`/`to` are node indexes. `kind` is `"er"`
+  for the data model (entity `fields` drawn as rows), `"flow"` for business logic
+  (`direction: "TD"`, `shape: "decision"` for a branch) and data flow (`direction: "LR"`,
+  `shape: "store"` for a table or queue); use-case graphs are always drawn as `"sequence"`
+  (participants as nodes, `shape: "actor"` for the human, messages as edges in order,
+  `style: "reply"` for a response).
+- [`references/svg-diagram.cjs`](references/svg-diagram.cjs) lays each graph out (layered
+  layout for flow and ER, lifelines for sequence) and draws it as **static inline SVG**. The
+  report has **no diagram runtime**: nothing parses diagram source in the browser, so a diagram
+  cannot fail to render or drift with a library version. Unknown kinds and shapes fall back to
+  defaults, edges with bad endpoints are dropped, labels are cut at 48 characters (a node's full
+  text stays in its hover `<title>`), parallel edges fan out, and a graph over 150 nodes or 300 edges is drawn
+  capped with a note naming what was left out.
+- Repo-derived text reaches the SVG **only as HTML-escaped `<text>`/`<title>` content**; ids,
+  classes, shapes and coordinates are minted by the module. `renderModel` **rejects** a model
+  that supplies a `DATA_*_DIAGRAM` scalar or a `useCase.diagram` itself, and only the markup it
+  drew goes into the page unescaped (`fillTemplate`'s trusted set is a code argument, never read
+  from the model). Hostile labels are exercised in `__tests__/svg-diagram.test.cjs` and
+  `__tests__/render-report.test.cjs`.
 
 The tests import the **same** functions, so the render path cannot drift while gates stay green.
 The steps below describe what that module does:
@@ -404,62 +417,29 @@ The steps below describe what that module does:
 2. Build the fill model per the contract in
    [`references/design-prompt.md`](references/design-prompt.md) §"The fill contract":
    the scalar placeholders (`{{SCOPE_LABEL}}`, `{{SYSTEM_PURPOSE}}`, `{{COMMIT_SHA}}`,
-   `{{GENERATED_DATE}}`, the counts, the three region Mermaid sources) and the
-   `<!-- REPEAT:block -->` rows (`entity`, `rule`, `flowEdge`, `useCase`, `dependency`,
-   `metric`, `glossaryTerm`, `fileIndex`, `stackBadge`).
-3. **Synthesize each Mermaid source from synthetic IDs + sanitized labels — never raw
-   source text (security, load-bearing).** The runtime reads each diagram back via
-   `pre.mermaid`'s `textContent`, which **decodes** HTML entities *before* Mermaid parses
-   it, so HTML-escaping (step 4) does **not** protect the diagram: repo-derived text placed
-   raw into a diagram can inject Mermaid **directives** (`%%{init: …}%%`), **frontmatter**
-   (a leading `---` block), `classDef` / `style` / `linkStyle`, `click` / `call` callbacks,
-   `href` links, URLs, or remote-loading CSS — active even under `securityLevel: "strict"`.
-   So build the four Mermaid sources (`DATA_MODEL_MERMAID`, `BUSINESS_LOGIC_MERMAID`,
-   `DATA_FLOW_MERMAID`, and each `useCase.mermaid`) structurally:
-   - **Nodes get synthetic ids** the skill mints (`n0`, `n1`, …) — never a repo-derived
-     string as a node id.
-   - **Any repo-derived text goes only inside a quoted node/edge label** (`n0["<label>"]`),
-     and only after the **label sanitizer**: reject/strip Mermaid directive & frontmatter
-     markers (`%%`, `%%{`, a leading `---`), the keywords `classDef`/`style`/`linkStyle`/
-     `click`/`call`/`class`/`href`, any URL scheme (`http:`/`https:`/`javascript:`/`data:`),
-     the structural metacharacters `"`,`[`,`]`,`{`,`}`,`(`,`)`,`<`,`>`,`;`,`#`, and all
-     control characters; then collapse to one line. A label that can't be safely represented
-     becomes a placeholder (`"(label omitted)"`) while its row keeps its `file:line` anchor.
-   The executable contract + adversarial payloads are in
-   [`__tests__/mermaid-safety.test.cjs`](__tests__/mermaid-safety.test.cjs); the
-   network-denying CSP in the template (`default-src 'none'`) is the outer guard if anything
-   slips through.
+   `{{GENERATED_DATE}}`, the counts) and the `<!-- REPEAT:block -->` rows (`entity`, `rule`,
+   `flowEdge`, `useCase`, `dependency`, `metric`, `glossaryTerm`, `fileIndex`, `stackBadge`),
+   plus the three region graphs and one `sequence` graph per use case.
+3. **Draw every diagram** from its graph (above). Every node and edge comes from an anchored
+   row (`analysis-schema.md` §"Provenance taxonomy" rule 5).
 4. **HTML-escape every substituted value** before injection (source text is untrusted):
-   `&`→`&amp;`, `<`→`&lt;`, `>`→`&gt;`, `"`→`&quot;`. List/multi-value fields
-   (`fields`, `steps`, `dataTouched`) are pre-joined to a string first.
+   `&`→`&amp;`, `<`→`&lt;`, `>`→`&gt;`, `"`→`&quot;`, braces to entities. List/multi-value
+   fields (`fields`, `steps`, `dataTouched`) are pre-joined to a string first.
 5. Substitute: expand each REPEAT block once per row (resolving its inner
    `{{block.field}}` tokens), then replace the scalar `{{PLACEHOLDER}}` tokens. No
    `{{…}}` or `REPEAT` markers may survive into the output.
-6. **Inline the Mermaid runtime** so diagrams render in a plain browser, offline. Replace
-   the `<!-- MERMAID_RUNTIME -->` marker with
-   `<script id="mermaid-runtime">` + the verbatim contents of
-   [`references/vendor/mermaid.min.js`](references/vendor/mermaid.min.js) + `</script>`.
-   Do this with a **literal** replacement (a function replacement, or a placeholder that
-   is not `$`-interpreted) — the minified runtime contains `$&`/`` $` ``/`$'` sequences
-   that a naive string-replace would expand and corrupt. Escape any `</script` in the
-   runtime to `<\/script` first (there are none in the vendored build, but stay safe). The
-   marker must not survive into the output. **Both the template and the shipped
-   `report-template.demo.html` carry the marker only (lean, reviewable); the runtime lives in
-   exactly one place, `references/vendor/mermaid.min.js`, and is inlined at render time**
-   (no duplicated 3.3 MB runtime in git). *(Repo-maintainer note, not a runtime step: the
-   my-skills repo can generate a fully-inlined demo for visual review with its own
-   `scripts/build-explain-inlined-demo.mjs`; that script is repo tooling — it is not shipped
-   in the installed skill package, so the runtime skill never invokes it.)*
+6. The template's network-denying CSP (`default-src 'none'`, no `unsafe-eval`) stays the outer
+   guard: the page loads nothing and evaluates no generated code.
 7. `references/report-template.demo.html` is a filled reference (sample data) for what the
    output should look like. If the template is somehow missing, fall back to authoring HTML
    directly against `design-prompt.md`'s region + contract spec so the skill stays
    functional.
 
 The seven rendered regions are: **Overview** (scope banner, inferred purpose, stack
-badges, counts, provenance), **Data model** (Mermaid ER + entity cards), **Business
-logic** (Mermaid flowchart + rule cards by domain), **Data flow** (Mermaid flow +
+badges, counts, provenance), **Data model** (ER diagram + entity cards), **Business
+logic** (flowchart + rule cards by domain), **Data flow** (flow diagram +
 ingress/transform/store/egress edges, cross-module highlighted), **User stories**
-(filterable cards + per-story Mermaid sequence), **Metrics** (vanilla-JS bar charts),
+(filterable cards + per-story sequence diagram), **Metrics** (vanilla-JS bar charts),
 **Appendix** (glossary, dependency + file index, provenance).
 
 ### 6. Write the report (HTML-only)
@@ -537,7 +517,7 @@ slug="$slug"                                      # injective + byte-bounded, bu
 dest="$outreal/$slug-$(date +%F).html"
 # Render to a SCRATCH file outside the repo (render-report.cjs — the arch-3 boundary):
 node "$skill_dir/references/render-report.cjs" "$skill_dir/references/report-template.html" \
-     "$scratch/model.json" "$skill_dir/references/vendor/mermaid.min.js" > "$scratch/report.html"
+     "$scratch/model.json" > "$scratch/report.html"
 # Final secret scan (Secret-redaction boundary) on the rendered bytes BEFORE publishing —
 # type + byte offset only, never the matched material (sec-2).
 node "$skill_dir/references/scan-secrets.cjs" "$scratch/report.html" \
@@ -581,7 +561,7 @@ redact; it only prevents markup breakage. Three layers keep secrets out of the r
    (portable JS regex — no POSIX `\s` bug), `password`/`api_key`-style **assignments**
    (value-length-**independent** — short and numeric values are caught; only explicit
    redaction/example markers are exempt), and high-entropy hex (≥64) / base64 (≥44) blobs,
-   while stripping the inlined Mermaid runtime and ignoring `«redacted»` markers, key names,
+   while ignoring `«redacted»` markers, key names,
    and 40-char git SHAs. It reports only detector **type + byte offset — never the matched
    material** (sec-2). A non-empty result **refuses** the write — redact and re-render; never
    publish a report that matches. Adversarial fixtures per class live in
@@ -613,9 +593,10 @@ redact; it only prevents markup breakage. Three layers keep secrets out of the r
   source snapshot (no-follow reads) the subagents read from; tests in
   `__tests__/snapshot-scope.test.cjs`.
 - [`references/render-report.cjs`](references/render-report.cjs) — the single executable render
-  boundary (escaping, Mermaid sanitization + synthetic ids, template fill, runtime inlining);
-  invoked by Phase 4 and imported by `__tests__/render-report.test.cjs` +
-  `__tests__/mermaid-safety.test.cjs` (arch-3).
+  boundary (escaping, diagram drawing, template fill); invoked by Phase 4 and imported by
+  `__tests__/render-report.test.cjs` (arch-3).
+- [`references/svg-diagram.cjs`](references/svg-diagram.cjs) — lays out and draws the ER,
+  flow and sequence diagrams as static SVG; tests in `__tests__/svg-diagram.test.cjs`.
 - [`references/write-report.cjs`](references/write-report.cjs) — the TOCTOU-safe single-process
   report writer (exclusive `O_NOFOLLOW` open → write/fsync/fstat → atomic rename); tests in
   `__tests__/write-report.test.cjs` (sec-2).
@@ -628,7 +609,3 @@ redact; it only prevents markup breakage. Three layers keep secrets out of the r
 - [`references/design-prompt.md`](references/design-prompt.md) — the Claude-design prompt
   that regenerates the template (a human step), plus the exact scalar + repeat-block fill
   contract the skill relies on.
-- [`references/vendor/mermaid.manifest.json`](references/vendor/mermaid.manifest.json) — the
-  reproducible-vendoring record for the offline Mermaid runtime (package, version, source
-  URL, sha256, license, update steps, compatibility gates); its checksum is enforced by
-  `__tests__/vendor-manifest.test.cjs`.

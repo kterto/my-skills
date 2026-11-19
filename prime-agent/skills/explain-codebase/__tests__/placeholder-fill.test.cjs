@@ -26,7 +26,7 @@ const SCALARS = [
   "SCOPE_LABEL", "SYSTEM_PURPOSE", "COMMIT_SHA", "GENERATED_DATE",
   "MODULE_COUNT", "ENTITY_COUNT", "RULE_COUNT", "USECASE_COUNT", "SUBAGENT_COUNT",
   "ANALYSIS_COMPLETE",
-  "DATA_MODEL_MERMAID", "BUSINESS_LOGIC_MERMAID", "DATA_FLOW_MERMAID",
+  "DATA_MODEL_DIAGRAM", "BUSINESS_LOGIC_DIAGRAM", "DATA_FLOW_DIAGRAM",
 ];
 // Provenance taxonomy (see references/analysis-schema.md §Provenance taxonomy):
 //   claim-bearing rows carry an `anchor` (entity, rule, flowEdge, useCase, dependency,
@@ -38,7 +38,7 @@ const BLOCKS = {
   entity: ["name", "fields", "invariants", "anchor"],
   rule: ["name", "what", "why", "domain", "anchor"],
   flowEdge: ["from", "to", "kind", "anchor", "crossModule"],
-  useCase: ["actor", "goal", "trigger", "steps", "dataTouched", "anchor", "mermaid"],
+  useCase: ["actor", "goal", "trigger", "steps", "dataTouched", "anchor", "diagram"],
   dependency: ["name", "kind", "anchor"],
   metric: ["label", "value", "max"],
   glossaryTerm: ["term", "definition", "anchor"],
@@ -73,13 +73,7 @@ const CONTRACT_TOKENS = new Set([
 assert.ok(fs.existsSync(TEMPLATE), "references/report-template.html must exist");
 assert.ok(fs.existsSync(DEMO), "references/report-template.demo.html must exist");
 const tpl = fs.readFileSync(TEMPLATE, "utf8");
-// The shipped demo carries the `<!-- MERMAID_RUNTIME -->` marker (like the template) and
-// does NOT inline the runtime — that lives only in references/vendor, and the fully-inlined
-// demo is a generated, non-shipped artifact (bug-6). This strip is kept as a no-op guard so
-// that IF an inlined runtime is ever present (its minified JS contains `{{...}}`-shaped
-// substrings), it is not mistaken for an unfilled placeholder.
-const RUNTIME_RE = /<script id="mermaid-runtime">[\s\S]*?<\/script>/i;
-const demo = fs.readFileSync(DEMO, "utf8").replace(RUNTIME_RE, "");
+const demo = fs.readFileSync(DEMO, "utf8");
 
 // `tpl` is constant, so its token set is derivable once and reused by every test.
 const TPL_TOKENS = new Set(allMatches(tpl, TOKEN_RE));

@@ -3,13 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <!-- Network-denying CSP: default-src 'none' blocks ALL network egress (no fetch/XHR/WS,
-     no remote script/style/img/font/frame). Inline styles + the inlined interaction JS and
-     vendored Mermaid runtime are the only things permitted (unsafe-inline; unsafe-eval for
-     the runtime's parser), and data: images/fonts for self-contained assets. This is what
+     no remote script/style/img/font/frame). Inline styles + the inline interaction JS are the
+     only things permitted (unsafe-inline), and data: images/fonts for self-contained assets.
+     Diagrams are static SVG drawn by the renderer, so nothing needs eval. This is what
      "self-contained + offline" means enforceably — it is NOT a strict CSP (inline is
-     allowed), and it is the outer guard against a Mermaid directive that slipped label
-     sanitization trying to load remote CSS/resources. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'; img-src data:; font-src data:; base-uri 'none'; form-action 'none'">
+     allowed), and it is the outer guard if escaped repo text ever slipped into markup. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Explain Codebase</title>
 <style>
@@ -335,7 +334,7 @@ main {
   white-space: nowrap;
 }
 
-/* --- Mermaid diagram frame --- */
+/* --- Diagram frame --- */
 .diagram {
   margin: 0 0 var(--sp-8);
   border: 1px solid var(--rule);
@@ -353,19 +352,26 @@ main {
   border-bottom: 1px solid var(--rule);
 }
 .diagram__scroll { overflow-x: auto; padding: var(--sp-4); }
-pre.mermaid {
-  margin: 0;
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  line-height: 1.6;
-  color: var(--text-secondary);
-  white-space: pre;
-  min-width: max-content;
-}
-/* When a Mermaid-capable viewer renders the block, it injects an <svg>;
-   drop the raw-text styling so the rendered graphic sits cleanly. */
-pre.mermaid[data-processed="true"],
-pre.mermaid > svg { white-space: normal; }
+/* Static SVG drawn by the renderer; coloured by class from the tokens, so it follows the theme.
+   Natural size: a wide diagram scrolls inside its frame instead of shrinking illegibly. */
+.dg { display: block; max-width: none; height: auto; margin: 0 auto;
+      font-family: var(--font-mono); font-size: 12px; }
+.dg-node rect, .dg-node polygon, .dg-node path { fill: var(--bg-page); stroke: var(--rule-heavy); stroke-width: 1.25; }
+.dg-node--decision polygon { fill: var(--accent-subtle); stroke: var(--accent); }
+.dg-node--store path { fill: var(--bg-overlay); }
+.dg-node--actor rect { fill: var(--accent-subtle); stroke: var(--accent); }
+.dg-label { fill: var(--text-primary); }
+.dg-label--head { font-weight: 600; }
+.dg-field { fill: var(--text-secondary); }
+.dg-divider { stroke: var(--rule-heavy); }
+.dg-edge { fill: none; stroke: var(--text-muted); stroke-width: 1.25; }
+.dg-edge--back, .dg-edge--reply { stroke-dasharray: 5 4; }
+.dg-arrow { fill: var(--text-muted); }
+.dg-edge-label { fill: var(--text-secondary); }
+.dg-edge-label-bg { fill: var(--bg-surface); }
+.dg-lifeline { stroke: var(--rule-heavy); stroke-dasharray: 3 4; }
+.diagram__empty, .diagram__note { margin: 0; font-size: var(--text-sm); color: var(--text-muted); }
+.diagram__note { margin-top: var(--sp-3); }
 .diagram--seq { margin-top: var(--sp-4); }
 
 /* --- Cards grid --- */
@@ -702,7 +708,7 @@ details.usecase { padding: 0; overflow: hidden; }
     <h2>Data model</h2>
     <figure class="diagram">
       <figcaption>Entity-relationship diagram</figcaption>
-      <div class="diagram__scroll"><pre class="mermaid">{{DATA_MODEL_MERMAID}}</pre></div>
+      <div class="diagram__scroll">{{DATA_MODEL_DIAGRAM}}</div>
     </figure>
     <div class="cards">
       <!-- REPEAT:entity -->
@@ -723,7 +729,7 @@ details.usecase { padding: 0; overflow: hidden; }
     <h2>Business logic</h2>
     <figure class="diagram">
       <figcaption>Rule / decision flowchart</figcaption>
-      <div class="diagram__scroll"><pre class="mermaid">{{BUSINESS_LOGIC_MERMAID}}</pre></div>
+      <div class="diagram__scroll">{{BUSINESS_LOGIC_DIAGRAM}}</div>
     </figure>
     <div class="cards" id="rule-cards">
       <!-- REPEAT:rule -->
@@ -748,7 +754,7 @@ details.usecase { padding: 0; overflow: hidden; }
     <h2>Data flow</h2>
     <figure class="diagram">
       <figcaption>Data-flow diagram</figcaption>
-      <div class="diagram__scroll"><pre class="mermaid">{{DATA_FLOW_MERMAID}}</pre></div>
+      <div class="diagram__scroll">{{DATA_FLOW_DIAGRAM}}</div>
     </figure>
     <div class="cards">
       <!-- REPEAT:flowEdge -->
@@ -789,7 +795,7 @@ details.usecase { padding: 0; overflow: hidden; }
           <div class="kv"><span class="kv__k">data touched</span><span class="kv__v mono">{{useCase.dataTouched}}</span></div>
           <figure class="diagram diagram--seq">
             <figcaption>Sequence</figcaption>
-            <div class="diagram__scroll"><pre class="mermaid">{{useCase.mermaid}}</pre></div>
+            <div class="diagram__scroll">{{useCase.diagram}}</div>
           </figure>
         </div>
       </details>
@@ -900,7 +906,6 @@ details.usecase { padding: 0; overflow: hidden; }
 
 </main>
 
-<!-- MERMAID_RUNTIME -->
 <script>
 /* ============================================================
    Explain Codebase report — interaction (vanilla JS only)
@@ -929,7 +934,6 @@ details.usecase { padding: 0; overflow: hidden; }
         if (on && focusTab) t.focus();
       });
       panels.forEach(function (p) { p.hidden = p.id !== id; });
-      renderMermaidIn(document.getElementById(id));  // lazy: diagrams can't lay out while hidden
       if (("#" + id) !== location.hash) {
         try { history.replaceState(null, "", "#" + id); } catch (e) {}
       }
@@ -1002,56 +1006,7 @@ details.usecase { padding: 0; overflow: hidden; }
         window.matchMedia("(prefers-color-scheme: dark)").matches;
       var effectiveDark = cur ? cur === "dark" : systemDark;
       root.setAttribute("data-theme", effectiveDark ? "light" : "dark");
-      resetMermaid();
-      renderMermaidIn(visibleRegion());
     });
-  }
-
-  /* ---------- mermaid diagrams (offline; runtime inlined by the skill) ----------
-     Rendered LAZILY, per tab: Mermaid cannot lay out a diagram inside a hidden
-     (display:none) panel, so each region's diagrams render the first time its tab is
-     shown (see activate()), and re-render on theme change. If the runtime is absent
-     (e.g. the unfilled template) the styled diagram source stays visible as a
-     graceful fallback. */
-  var mermaidSrc = typeof WeakMap === "function" ? new WeakMap() : null;
-  function mermaidTheme() {
-    var cur = document.documentElement.getAttribute("data-theme");
-    var dark = cur ? cur === "dark"
-      : (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
-    return dark ? "dark" : "neutral";
-  }
-  function renderMermaidIn(container) {
-    if (!window.mermaid || !container) return;
-    var nodes = $$("pre.mermaid", container).filter(function (n) {
-      return n.getAttribute("data-rendered") !== "1";
-    });
-    if (!nodes.length) return;
-    nodes.forEach(function (n) {
-      if (mermaidSrc && !mermaidSrc.has(n)) mermaidSrc.set(n, n.textContent);
-    });
-    try {
-      window.mermaid.initialize({
-        startOnLoad: false, securityLevel: "strict", theme: mermaidTheme(),
-      });
-      var done = function () {
-        nodes.forEach(function (n) { n.setAttribute("data-rendered", "1"); });
-      };
-      var p = window.mermaid.run({ nodes: nodes });
-      if (p && p.then) { p.then(done).catch(function () {}); } else { done(); }
-    } catch (e) { /* leave raw source visible on any render failure */ }
-  }
-  function resetMermaid() {   // restore original sources + clear flags so a new theme re-renders
-    if (!mermaidSrc) return;
-    $$("pre.mermaid").forEach(function (n) {
-      if (!mermaidSrc.has(n)) return;
-      n.removeAttribute("data-processed");
-      n.removeAttribute("data-rendered");
-      n.innerHTML = "";
-      n.textContent = mermaidSrc.get(n);
-    });
-  }
-  function visibleRegion() {
-    return $$(".region").filter(function (p) { return !p.hidden; })[0] || null;
   }
 
   /* Group business-rule cards under a deterministic per-domain heading (design contract:
@@ -1085,7 +1040,7 @@ details.usecase { padding: 0; overflow: hidden; }
   }
 
   function init() {
-    initTabs();      // activates the initial tab → renders its diagrams
+    initTabs();      // activates the initial tab
     initMetrics();
     initFilter();
     initTheme();

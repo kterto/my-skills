@@ -1,5 +1,7 @@
 # explain-codebase skill — design
 
+> **Superseded in part by [ADR-0039](adr/0039-explain-codebase-draws-its-diagrams-as-static-svg.md):** the report no longer ships Mermaid; diagrams are drawn as static SVG at render time. The Mermaid sections below are historical.
+
 **Status:** approved (brainstorm)
 **Date:** 2026-07-23
 **Author:** Kainã Terto

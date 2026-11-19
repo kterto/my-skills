@@ -89,11 +89,6 @@ test("false positives are avoided: git SHA, redacted markers, key names, colors"
   assert.deepStrictEqual(scanSecrets("color:#faf9f7; --accent:#3730a3;"), []);
 });
 
-test("the inlined mermaid runtime block is stripped before scanning", () => {
-  const report = `<p>ok</p><script id="mermaid-runtime">${"ab12cd34".repeat(20)}</script><p>end</p>`;
-  assert.deepStrictEqual(scanSecrets(report), [], "runtime block must not trip the scan");
-});
-
 test("an entity-escaped redacted assignment in rendered HTML is NOT refused (bug-1)", () => {
   // As the renderer emits it: value HTML-escaped, quotes → &quot;.
   const rendered = `<div class="kv">password: &quot;«redacted»&quot;</div>`;
