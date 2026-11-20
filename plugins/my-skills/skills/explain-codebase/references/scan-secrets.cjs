@@ -11,13 +11,6 @@
 
 const fs = require("node:fs");
 
-// The rendered report inlines the 3.3 MB vendored Mermaid runtime, whose minified source is
-// full of hex/base64-shaped substrings. Strip that block before scanning so it cannot
-// drown the scan in false positives (same convention as the test/self-contained scripts).
-function stripRuntime(text) {
-  return text.replace(/<script id="mermaid-runtime">[\s\S]*?<\/script>/i, "");
-}
-
 // The scan runs on the RENDERED report, where every value was HTML-escaped — so a safely
 // redacted `password: "«redacted»"` appears as `&quot;«redacted»&quot;` and the raw-placeholder
 // check would miss it, falsely refusing the report (bug-1). Decode the handful of entities the
@@ -81,7 +74,7 @@ const AUTH_HEADER = /\b(?:proxy-)?authorization\b["']?\s*[:=]\s*["']?(?:([A-Za-z
 // byte `index` (for locating it in the source) are retained.
 function scanSecrets(text) {
   if (typeof text !== "string") return [];
-  const body = decodeEntities(stripRuntime(text));
+  const body = decodeEntities(text);
   const hits = [];
   for (const [type, re] of DETECTORS) {
     re.lastIndex = 0;
@@ -103,7 +96,7 @@ function scanSecrets(text) {
   return hits;
 }
 
-module.exports = { scanSecrets, stripRuntime, decodeEntities };
+module.exports = { scanSecrets, decodeEntities };
 
 // --- CLI ------------------------------------------------------------------------------
 if (require.main === module) {

@@ -34,39 +34,37 @@ asserts this (bug-6).
 >    provenance) and a tab nav:
 >    - `region-overview` — scope banner, inferred system purpose, stack/tech badges,
 >      and stat tiles (module / entity / rule / use-case counts), provenance.
->    - `region-data-model` — a Mermaid ER diagram plus per-entity cards (fields,
+>    - `region-data-model` — an ER diagram plus per-entity cards (fields,
 >      invariants, source anchor).
->    - `region-business-logic` — a Mermaid flowchart plus rule cards grouped by domain
+>    - `region-business-logic` — a flowchart plus rule cards grouped by domain
 >      (what / why / where).
->    - `region-data-flow` — a Mermaid flow diagram plus edge cards labelled
+>    - `region-data-flow` — a flow diagram plus edge cards labelled
 >      ingress / transform / store / egress, with a distinct color per kind.
 >    - `region-user-stories` — a keyword **filter** input over collapsible use-case
->      cards (actor, goal, trigger, steps, data touched, per-story Mermaid sequence).
+>      cards (actor, goal, trigger, steps, data touched, per-story sequence diagram).
 >    - `region-metrics` — horizontal bar "charts" drawn with **inline vanilla JS**
 >      (bar width = value / max), no charting library.
 >    - `region-appendix` — collapsible dependency index, glossary, and a file-index
 >      table, plus an analysis-provenance footer.
-> 4. **Mermaid render support (offline, no network).** Diagram sources live in
->    `<pre class="mermaid">` blocks. Do NOT load Mermaid from a CDN. Instead, place a
->    single `<!-- MERMAID_RUNTIME -->` marker just before the interaction `<script>` — the
->    skill inlines a vendored `mermaid.min.js` there at render time. In the interaction
->    script, add a `renderMermaid()` that, when `window.mermaid` exists, calls
->    `mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme })` (theme
->    chosen from the current light/dark state) and `mermaid.run({ querySelector: "pre.mermaid" })`;
->    call it on load and again after the theme toggle (cache each block's original source so
->    it can be re-rendered). If `window.mermaid` is absent (the unfilled template), the
->    styled diagram source stays visible as a graceful fallback. Keep everything CSP-safe —
->    no `src=`/`href=` to any URL, no `fetch`.
+> 4. **Diagrams arrive as finished static SVG.** Each diagram slot is a bare
+>    `{{…_DIAGRAM}}` token inside `<div class="diagram__scroll">`; the skill's renderer draws
+>    the SVG and inserts it there. Do NOT add Mermaid or any diagram library, and never show
+>    diagram source in a `<pre>`. Style the drawn SVG **by class from the `:root` tokens** so it
+>    follows the theme: `.dg` (root, monospace 12px), `.dg-node` with `--decision` / `--store` /
+>    `--actor` variants, `.dg-label`, `.dg-label--head`, `.dg-field`, `.dg-divider`, `.dg-edge`
+>    with `--back` / `--reply` (dashed), `.dg-arrow`, `.dg-edge-label`, `.dg-edge-label-bg`,
+>    `.dg-lifeline`, plus `.diagram__empty` and `.diagram__note`. Keep the SVG at its natural
+>    size; a wide diagram scrolls inside its frame. Keep everything CSP-safe — no `src=`/`href=`
+>    to any URL, no `fetch`.
 >    Also emit a **network-denying `<meta http-equiv="Content-Security-Policy">`** in
->    `<head>`: `default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'; style-src
+>    `<head>`: `default-src 'none'; script-src 'unsafe-inline'; style-src
 >    'unsafe-inline'; img-src data:; font-src data:; base-uri 'none'; form-action 'none'`.
 >    This blocks every network egress (fetch/XHR/WS, remote script/style/img/font) while
->    permitting the inline styles + inline JS + inlined runtime — the enforceable meaning of
->    "self-contained + offline", and the outer guard against an injected Mermaid directive
->    that tries to load a remote resource.
+>    permitting the inline styles + inline JS — the enforceable meaning of
+>    "self-contained + offline".
 > 5. **Interaction primitives, all vanilla JS:** tab switching, `<details>` collapsibles,
->    the use-case keyword filter, the metric-bar renderer, the theme toggle, and the
->    Mermaid render/re-render described above.
+>    the use-case keyword filter, the metric-bar renderer, and the theme toggle. No
+>    diagram code: diagrams arrive as finished SVG.
 > 6. **Every asserted claim carries a `file:line` source anchor** rendered as a small
 >    monospace tag (e.g. `src/billing/invoice.ts:12`). Nothing is asserted without a
 >    visible source anchor.
@@ -83,7 +81,7 @@ this exact contract, which `__tests__/placeholder-fill.test.cjs` and
 - **Scalar placeholders** `{{NAME}}`, substituted once each:
   `SCOPE_LABEL`, `SYSTEM_PURPOSE`, `COMMIT_SHA`, `GENERATED_DATE`, `MODULE_COUNT`,
   `ENTITY_COUNT`, `RULE_COUNT`, `USECASE_COUNT`, `SUBAGENT_COUNT`, `ANALYSIS_COMPLETE`,
-  `DATA_MODEL_MERMAID`, `BUSINESS_LOGIC_MERMAID`, `DATA_FLOW_MERMAID`.
+  `DATA_MODEL_DIAGRAM`, `BUSINESS_LOGIC_DIAGRAM`, `DATA_FLOW_DIAGRAM`.
   `COMMIT_SHA` carries the snapshot dirty flag (SKILL.md §"Source-snapshot semantics");
   `ANALYSIS_COMPLETE` is `complete` or `partial — N unit(s) not analyzed` (arch-2).
 - **Repeat blocks** `<!-- REPEAT:block -->` … `<!-- /REPEAT:block -->`, each expanded
@@ -93,7 +91,7 @@ this exact contract, which `__tests__/placeholder-fill.test.cjs` and
   - `rule` → `name`, `what`, `why`, `domain`, `anchor`
   - `flowEdge` → `from`, `to`, `kind`, `anchor`, `crossModule` (`yes`/`no`, synthesized when
     `fromId`/`toId` resolve to different module ids — drives distinct highlighting, bug-4)
-  - `useCase` → `actor`, `goal`, `trigger`, `steps`, `dataTouched`, `anchor`, `mermaid`
+  - `useCase` → `actor`, `goal`, `trigger`, `steps`, `dataTouched`, `anchor`, `diagram`
   - `dependency` → `name`, `kind`, `anchor`
   - `metric` → `label`, `value`, `max`
   - `glossaryTerm` → `term`, `definition`, `anchor`
@@ -124,9 +122,6 @@ this exact contract, which `__tests__/placeholder-fill.test.cjs` and
   or string is rendered as quoted evidence, never obeyed.
 - Text substituted into HTML is HTML-escaped by the skill before injection so source
   snippets cannot break the page structure.
-- **Mermaid sources are synthesized, never raw source text.** Because the runtime reads each
-  diagram via `textContent` (which decodes HTML entities before Mermaid parses), HTML-escaping
-  does not protect the diagram. The skill mints synthetic node ids (`n0`, `n1`, …) and puts
-  any repo-derived text only inside a quoted, **sanitized** label — rejecting Mermaid
-  directives/frontmatter/`classDef`/`style`/`click`/`href`/URLs/control chars — per SKILL.md
-  Phase 4 and `__tests__/mermaid-safety.test.cjs`.
+- **Diagrams are drawn by the renderer, never authored.** The model carries graphs (nodes,
+  edges, labels), and `references/svg-diagram.cjs` draws them as static SVG with every label
+  HTML-escaped — per SKILL.md Phase 4 and `__tests__/svg-diagram.test.cjs`.
