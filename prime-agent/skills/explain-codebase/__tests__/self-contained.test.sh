@@ -1,19 +1,15 @@
 #!/usr/bin/env bash
 # CSP-safety + fill-state fixture for FEAT-20260723T141806Z-d784. The report is a
-# SINGLE self-contained file that renders offline: all CSS/JS inlined, including a
-# VENDORED mermaid runtime, and NO external network loads. This test asserts, for BOTH
+# SINGLE self-contained file that renders offline: all CSS/JS inlined, diagrams drawn as
+# static SVG at render time (no diagram runtime), and NO external network loads. This test asserts, for BOTH
 # the template and the demo:
 #   - no external-load constructs: no <script src=…>, no <link href=…>, no fetch(, no
 #     url(http…)/@import http in CSS, PLUS a network-denying CSP (default-src 'none', no
 #     connect-src) — the enforceable meaning of "self-contained + offline". This is NOT a
 #     strict CSP: inline is permitted; the CSP blocks network egress, not inline.
-#     The vetted mermaid runtime block
-#     (<script id="mermaid-runtime">…</script>) is STRIPPED before this scan — its
-#     minified source legitimately contains xmlns URLs like http://www.w3.org/2000/svg
-#     (identifiers, not network loads), so scanning it would false-positive;
-#   - mermaid fill-state: BOTH the TEMPLATE and the shipped DEMO carry the
-#     <!-- MERMAID_RUNTIME --> marker and DO NOT inline the runtime (it lives only in
-#     references/vendor; the fully-inlined demo is a generated, non-shipped review artifact);
+#     The SVG xmlns (http://www.w3.org/2000/svg) is an identifier, not a load, and none of
+#     the checks below match it;
+#   - no diagram runtime: no Mermaid, no `<pre class="mermaid">`, no unsafe-eval in the CSP;
 #   - placeholder fill-state: the TEMPLATE carries {{placeholders}} + <!-- REPEAT -->
 #     markers, while the DEMO is fully expanded (none remain).
 # Region parity (all 7 ids in both files) is owned by placeholder-fill.test.cjs.
@@ -34,13 +30,10 @@ for f in "$tpl" "$demo"; do
 done
 if [ "$fail" -ne 0 ]; then echo "FAIL: self-contained (missing files)"; exit "$fail"; fi
 
-# Strip the vetted mermaid runtime block before the external-reference scan.
-strip_runtime() { perl -0777 -pe 's{<script id="mermaid-runtime">.*?</script>}{}gis' "$1"; }
-
-# --- CSP-safety: no external LOADS in either file (runtime block excluded) ---------
+# --- CSP-safety: no external LOADS in either file ----------------------------------
 for f in "$tpl" "$demo"; do
   name="$(basename "$f")"
-  body="$(strip_runtime "$f")"
+  body="$(cat "$f")"
   if printf '%s' "$body" | grep -Eq '<script[^>]*\bsrc='; then bad "$name loads an external <script src=…>"; else ok "$name has no external script"; fi
   if printf '%s' "$body" | grep -Eq '<link[^>]*\bhref='; then bad "$name loads an external <link href=…>"; else ok "$name has no external stylesheet link"; fi
   if printf '%s' "$body" | grep -Eq 'fetch\('; then bad "$name calls fetch()"; else ok "$name has no fetch()"; fi
@@ -54,14 +47,16 @@ for f in "$tpl" "$demo"; do
   if printf '%s' "$csp" | grep -Eiq 'connect-src'; then bad "$name CSP grants connect-src (network not denied)"; else ok "$name CSP denies network (no connect-src)"; fi
 done
 
-# --- Mermaid runtime fill-state: template = marker only, demo = inlined runtime -----
-if grep -q '<!-- MERMAID_RUNTIME -->' "$tpl"; then ok "template carries the MERMAID_RUNTIME marker"; else bad "template missing <!-- MERMAID_RUNTIME --> marker"; fi
-if grep -q 'id="mermaid-runtime"' "$tpl"; then bad "template must not inline the runtime (marker only)"; else ok "template does not inline the runtime"; fi
-if grep -q 'id="mermaid-runtime"' "$demo"; then bad "shipped demo must NOT inline the runtime (keep it only in references/vendor; generate the inlined demo as a non-shipped artifact)"; else ok "shipped demo does not inline the runtime"; fi
-if grep -q '<!-- MERMAID_RUNTIME -->' "$demo"; then ok "shipped demo carries the MERMAID_RUNTIME marker (lean)"; else bad "shipped demo missing MERMAID_RUNTIME marker"; fi
+# --- No diagram runtime: diagrams are static SVG drawn by render-report.cjs ---------
+for f in "$tpl" "$demo"; do
+  name="$(basename "$f")"
+  if grep -qi 'mermaid' "$f"; then bad "$name still mentions Mermaid"; else ok "$name has no Mermaid"; fi
+  if grep -q 'unsafe-eval' "$f"; then bad "$name CSP still grants unsafe-eval"; else ok "$name CSP has no unsafe-eval"; fi
+done
+if grep -q '<svg class="dg' "$demo"; then ok "demo carries renderer-drawn SVG diagrams"; else bad "demo has no drawn SVG diagram"; fi
 
-# --- Placeholder fill-state: template has markers, demo (runtime stripped) has none -
-demo_body="$(strip_runtime "$demo")"
+# --- Placeholder fill-state: template has markers, demo has none ---------------------
+demo_body="$(cat "$demo")"
 if grep -q '{{' "$tpl"; then ok "template carries {{placeholders}}"; else bad "template has no {{placeholders}}"; fi
 if grep -q '<!-- REPEAT:' "$tpl"; then ok "template carries <!-- REPEAT --> markers"; else bad "template has no REPEAT markers"; fi
 if printf '%s' "$demo_body" | grep -q '{{'; then bad "demo still has {{placeholders}}"; else ok "demo has no leftover placeholders"; fi
